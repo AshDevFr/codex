@@ -1,6 +1,5 @@
 mod api;
 mod commands;
-mod db;
 mod observability;
 mod scanner;
 mod scheduler;

@@ -17,11 +17,11 @@ use std::sync::Arc;
 use tracing::{info, warn};
 use uuid::Uuid;
 
-use crate::db::entities::tasks;
-use crate::db::repositories::SeriesRepository;
 use crate::services::release::seed::{SeedReport, seed_tracking_for_series};
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::TaskResult;
+use codex_db::entities::tasks;
+use codex_db::repositories::SeriesRepository;
 use codex_events::EventBroadcaster;
 
 pub struct BackfillTrackingFromMetadataHandler;
@@ -150,12 +150,12 @@ async fn resolve_series_scope(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::ScanningStrategy;
-    use crate::db::repositories::{
+    use codex_db::ScanningStrategy;
+    use codex_db::repositories::{
         AlternateTitleRepository, LibraryRepository, SeriesAliasRepository, SeriesRepository,
         SeriesTrackingRepository,
     };
-    use crate::db::test_helpers::create_test_db;
+    use codex_db::test_helpers::create_test_db;
 
     async fn make_series(
         db: &DatabaseConnection,

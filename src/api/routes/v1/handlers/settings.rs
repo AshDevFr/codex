@@ -7,12 +7,12 @@ use crate::api::{
     extractors::{AuthContext, AuthState},
     permissions::Permission,
 };
-use crate::db::repositories::SettingsRepository;
 use crate::require_permission;
 use axum::{
     Json,
     extract::{Path, Query, State},
 };
+use codex_db::repositories::SettingsRepository;
 use std::collections::HashMap;
 use std::sync::Arc;
 

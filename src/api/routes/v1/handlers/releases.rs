@@ -40,8 +40,8 @@ use crate::api::{
     extractors::{AuthContext, AuthState},
     permissions::Permission,
 };
-use crate::db::entities::release_ledger::state as ledger_state;
-use crate::db::repositories::{
+use codex_db::entities::release_ledger::state as ledger_state;
+use codex_db::repositories::{
     LedgerInboxFilter, LibraryRepository, PluginsRepository, ReleaseLedgerRepository,
     ReleaseSourceRepository, ReleaseSourceUpdate, SeriesRepository,
 };
@@ -55,7 +55,7 @@ use codex_events::{EntityChangeEvent, EntityEvent};
 /// existing `SeriesRepository::get_by_ids` batch query.
 async fn hydrate_ledger_dtos(
     db: &sea_orm::DatabaseConnection,
-    rows: Vec<crate::db::entities::release_ledger::Model>,
+    rows: Vec<codex_db::entities::release_ledger::Model>,
 ) -> Result<Vec<ReleaseLedgerEntryDto>, ApiError> {
     let mut series_ids: Vec<Uuid> = rows.iter().map(|r| r.series_id).collect();
     series_ids.sort_unstable();

@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::db::entities::{series_aliases, series_tracking};
+use codex_db::entities::{series_aliases, series_tracking};
 
 // =============================================================================
 // Tracking config DTOs

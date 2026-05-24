@@ -5,14 +5,14 @@
 
 use super::super::dto::bulk_metadata::*;
 use crate::api::{AppState, error::ApiError, extractors::AuthContext, permissions::Permission};
-use crate::db::entities::{book_metadata, series_metadata};
-use crate::db::repositories::{
-    BookMetadataRepository, BookRepository, GenreRepository, SeriesMetadataRepository,
-    SeriesRepository, TagRepository,
-};
 use crate::require_permission;
 use axum::{Json, extract::State};
 use chrono::Utc;
+use codex_db::entities::{book_metadata, series_metadata};
+use codex_db::repositories::{
+    BookMetadataRepository, BookRepository, GenreRepository, SeriesMetadataRepository,
+    SeriesRepository, TagRepository,
+};
 use codex_events::{EntityChangeEvent, EntityEvent};
 use codex_utils::{
     json_merge_patch, parse_custom_metadata, serialize_custom_metadata,

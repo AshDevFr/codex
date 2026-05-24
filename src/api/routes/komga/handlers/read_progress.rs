@@ -10,13 +10,13 @@ use crate::api::{
     extractors::{AuthState, FlexibleAuthContext},
     permissions::Permission,
 };
-use crate::db::repositories::{BookRepository, ReadProgressRepository, SeriesRepository};
 use crate::require_permission;
 use axum::{
     extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use codex_db::repositories::{BookRepository, ReadProgressRepository, SeriesRepository};
 use std::sync::Arc;
 use uuid::Uuid;
 

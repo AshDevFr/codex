@@ -17,12 +17,12 @@ use std::sync::Arc;
 use tracing::{info, warn};
 use uuid::Uuid;
 
-use crate::db::entities::tasks;
 use crate::services::release::tracking_toggle::{
     ToggleOutcome, ToggleResult, track_one_series, untrack_one_series,
 };
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::TaskResult;
+use codex_db::entities::tasks;
 use codex_events::{EventBroadcaster, TaskProgressEvent};
 
 pub struct BulkTrackForReleasesHandler;
@@ -194,13 +194,13 @@ fn emit_progress(
 mod tests {
     use super::*;
 
-    use crate::db::ScanningStrategy;
-    use crate::db::repositories::{
+    use crate::tasks::types::TaskType;
+    use codex_db::ScanningStrategy;
+    use codex_db::repositories::{
         LibraryRepository, SeriesAliasRepository, SeriesRepository, SeriesTrackingRepository,
         TaskRepository, TrackingUpdate,
     };
-    use crate::db::test_helpers::create_test_db;
-    use crate::tasks::types::TaskType;
+    use codex_db::test_helpers::create_test_db;
 
     async fn fetch_task(db: &DatabaseConnection, id: Uuid) -> tasks::Model {
         TaskRepository::get_by_id(db, id)

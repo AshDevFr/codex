@@ -8,7 +8,7 @@ use super::common::PaginatedResponse;
 use super::read_progress::ReadProgressResponse;
 
 // Re-export BookType from entity for API use
-pub use crate::db::entities::book_metadata::BookType;
+pub use codex_db::entities::book_metadata::BookType;
 
 // =============================================================================
 // Book Type DTO (API representation)
@@ -209,8 +209,8 @@ pub struct BookExternalIdDto {
     pub updated_at: DateTime<Utc>,
 }
 
-impl From<crate::db::entities::book_external_ids::Model> for BookExternalIdDto {
-    fn from(model: crate::db::entities::book_external_ids::Model) -> Self {
+impl From<codex_db::entities::book_external_ids::Model> for BookExternalIdDto {
+    fn from(model: codex_db::entities::book_external_ids::Model) -> Self {
         Self {
             id: model.id,
             book_id: model.book_id,
@@ -272,8 +272,8 @@ pub struct BookCoverDto {
     pub updated_at: DateTime<Utc>,
 }
 
-impl From<crate::db::entities::book_covers::Model> for BookCoverDto {
-    fn from(model: crate::db::entities::book_covers::Model) -> Self {
+impl From<codex_db::entities::book_covers::Model> for BookCoverDto {
+    fn from(model: codex_db::entities::book_covers::Model) -> Self {
         Self {
             id: model.id,
             book_id: model.book_id,
@@ -356,8 +356,8 @@ pub struct BookExternalLinkDto {
     pub updated_at: DateTime<Utc>,
 }
 
-impl From<crate::db::entities::book_external_links::Model> for BookExternalLinkDto {
-    fn from(model: crate::db::entities::book_external_links::Model) -> Self {
+impl From<codex_db::entities::book_external_links::Model> for BookExternalLinkDto {
+    fn from(model: codex_db::entities::book_external_links::Model) -> Self {
         Self {
             id: model.id,
             book_id: model.book_id,
@@ -1628,9 +1628,9 @@ pub enum BookErrorTypeDto {
     Other,
 }
 
-impl From<crate::db::entities::book_error::BookErrorType> for BookErrorTypeDto {
-    fn from(t: crate::db::entities::book_error::BookErrorType) -> Self {
-        use crate::db::entities::book_error::BookErrorType;
+impl From<codex_db::entities::book_error::BookErrorType> for BookErrorTypeDto {
+    fn from(t: codex_db::entities::book_error::BookErrorType) -> Self {
+        use codex_db::entities::book_error::BookErrorType;
         match t {
             BookErrorType::FormatDetection => BookErrorTypeDto::FormatDetection,
             BookErrorType::Parser => BookErrorTypeDto::Parser,
@@ -1644,9 +1644,9 @@ impl From<crate::db::entities::book_error::BookErrorType> for BookErrorTypeDto {
     }
 }
 
-impl From<BookErrorTypeDto> for crate::db::entities::book_error::BookErrorType {
+impl From<BookErrorTypeDto> for codex_db::entities::book_error::BookErrorType {
     fn from(t: BookErrorTypeDto) -> Self {
-        use crate::db::entities::book_error::BookErrorType;
+        use codex_db::entities::book_error::BookErrorType;
         match t {
             BookErrorTypeDto::FormatDetection => BookErrorType::FormatDetection,
             BookErrorTypeDto::Parser => BookErrorType::Parser,

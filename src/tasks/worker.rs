@@ -16,7 +16,6 @@ use tokio::time::sleep;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
-use crate::db::repositories::TaskRepository;
 use crate::services::PdfPageCache;
 use crate::services::export_storage::ExportStorage;
 use crate::services::plugin::PluginManager;
@@ -37,6 +36,7 @@ use crate::tasks::handlers::{
     UserPluginSyncHandler,
 };
 use codex_config::FilesConfig;
+use codex_db::repositories::TaskRepository;
 use codex_events::{EventBroadcaster, RecordedEvent, TaskProgressEvent};
 
 /// RAII guard that increments the OTel in-flight task gauge on creation and
@@ -807,7 +807,7 @@ impl TaskWorker {
     /// Complete a task successfully, storing result and recorded events
     async fn complete_task(
         &self,
-        task: &crate::db::entities::tasks::Model,
+        task: &codex_db::entities::tasks::Model,
         task_result: crate::tasks::types::TaskResult,
         started_at: chrono::DateTime<Utc>,
         recorded_events: Option<Vec<RecordedEvent>>,
@@ -898,7 +898,7 @@ impl TaskWorker {
     /// a retry attempt. Otherwise, the task is marked as failed normally.
     async fn fail_task(
         &self,
-        task: &crate::db::entities::tasks::Model,
+        task: &codex_db::entities::tasks::Model,
         error: anyhow::Error,
         started_at: chrono::DateTime<Utc>,
     ) -> Result<()> {
@@ -1015,10 +1015,10 @@ impl TaskWorker {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::repositories::TaskRepository;
-    use crate::db::test_helpers::create_test_db;
     use crate::tasks::handlers::TaskHandler;
     use crate::tasks::types::{TaskResult, TaskType};
+    use codex_db::repositories::TaskRepository;
+    use codex_db::test_helpers::create_test_db;
     use codex_events::{EntityChangeEvent, EntityEvent, EntityType};
 
     /// Stub handler that returns whatever `TaskResult` it was constructed with.
@@ -1031,7 +1031,7 @@ mod tests {
     impl TaskHandler for StubHandler {
         fn handle<'a>(
             &'a self,
-            _task: &'a crate::db::entities::tasks::Model,
+            _task: &'a codex_db::entities::tasks::Model,
             _db: &'a sea_orm::DatabaseConnection,
             _event_broadcaster: Option<&'a Arc<EventBroadcaster>>,
         ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<TaskResult>> + Send + 'a>>

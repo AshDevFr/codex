@@ -17,10 +17,10 @@ use crate::api::{
     extractors::{AppState, AuthContext},
     permissions::Permission,
 };
-use crate::db::repositories::{BookRepository, SeriesRepository, TaskRepository};
 use crate::require_permission;
 use crate::services::file_cleanup::OrphanedFileType;
 use crate::tasks::types::TaskType;
+use codex_db::repositories::{BookRepository, SeriesRepository, TaskRepository};
 
 /// Get statistics about orphaned files
 ///

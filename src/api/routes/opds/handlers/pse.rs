@@ -5,7 +5,6 @@ use crate::api::{
     extractors::{AuthContext, AuthState, FlexibleAuthContext},
     permissions::Permission,
 };
-use crate::db::repositories::{BookMetadataRepository, BookRepository, SettingsRepository};
 use crate::require_permission;
 use axum::{
     extract::{Path, State},
@@ -13,6 +12,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use chrono::Utc;
+use codex_db::repositories::{BookMetadataRepository, BookRepository, SettingsRepository};
 use std::sync::Arc;
 use uuid::Uuid;
 

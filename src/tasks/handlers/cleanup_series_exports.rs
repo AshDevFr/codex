@@ -11,12 +11,12 @@ use serde_json::json;
 use std::sync::Arc;
 use tracing::{info, warn};
 
-use crate::db::entities::tasks;
-use crate::db::repositories::SeriesExportRepository;
 use crate::services::SettingsService;
 use crate::services::export_storage::ExportStorage;
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::TaskResult;
+use codex_db::entities::tasks;
+use codex_db::repositories::SeriesExportRepository;
 use codex_events::{EventBroadcaster, TaskProgressEvent};
 
 /// Default global storage cap: 2 GiB
@@ -150,8 +150,8 @@ impl TaskHandler for CleanupSeriesExportsHandler {
                 // Get ALL completed exports ordered oldest first, evict until under cap
                 // We use list_expired with a far-future date to get all completed, then sort
                 let all_completed = {
-                    use crate::db::entities::series_exports;
-                    use crate::db::entities::series_exports::Entity as SeriesExport;
+                    use codex_db::entities::series_exports;
+                    use codex_db::entities::series_exports::Entity as SeriesExport;
                     use sea_orm::*;
 
                     SeriesExport::find()

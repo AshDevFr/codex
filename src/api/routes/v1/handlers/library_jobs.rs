@@ -14,16 +14,16 @@ use crate::api::{
     extractors::{AppState, AuthContext},
     permissions::Permission,
 };
-use crate::db::entities::library_jobs;
-use crate::db::repositories::{
-    CreateLibraryJobParams, LibraryJobRepository, LibraryRepository, SeriesRepository,
-};
 use crate::require_permission;
 use crate::services::library_jobs::{
     LibraryJobConfig, MetadataRefreshJobConfig, parse_job_config, validation,
 };
 use crate::services::metadata::{FieldGroup, RefreshPlanner, fields_for_group};
 use crate::tasks::types::TaskType;
+use codex_db::entities::library_jobs;
+use codex_db::repositories::{
+    CreateLibraryJobParams, LibraryJobRepository, LibraryRepository, SeriesRepository,
+};
 
 use super::super::dto::patch::PatchValue;
 use super::super::dto::{
@@ -332,7 +332,7 @@ pub async fn run_job_now(
         ));
     }
 
-    let task_id = crate::db::repositories::TaskRepository::enqueue(
+    let task_id = codex_db::repositories::TaskRepository::enqueue(
         &state.db,
         TaskType::RefreshLibraryMetadata { job_id },
         None,

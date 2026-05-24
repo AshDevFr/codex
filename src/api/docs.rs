@@ -807,7 +807,7 @@ The following paths are exempt from rate limiting:
             v1::dto::UserSharingTagGrantDto,
             v1::dto::SetUserSharingTagGrantRequest,
             v1::dto::UserSharingTagGrantsResponse,
-            crate::db::entities::user_sharing_tags::AccessMode,
+            codex_db::entities::user_sharing_tags::AccessMode,
 
             v1::dto::BookDto,
             v1::dto::BookListResponse,

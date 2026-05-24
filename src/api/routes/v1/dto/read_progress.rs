@@ -67,8 +67,8 @@ pub struct ReadProgressResponse {
     pub completed_at: Option<DateTime<Utc>>,
 }
 
-impl From<crate::db::entities::read_progress::Model> for ReadProgressResponse {
-    fn from(model: crate::db::entities::read_progress::Model) -> Self {
+impl From<codex_db::entities::read_progress::Model> for ReadProgressResponse {
+    fn from(model: codex_db::entities::read_progress::Model) -> Self {
         Self {
             id: model.id,
             user_id: model.user_id,

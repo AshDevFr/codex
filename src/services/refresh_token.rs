@@ -17,8 +17,8 @@ use sha2::{Digest, Sha256};
 use thiserror::Error;
 use uuid::Uuid;
 
-use crate::db::entities::refresh_tokens;
-use crate::db::repositories::{NewRefreshToken, RefreshTokenRepository};
+use codex_db::entities::refresh_tokens;
+use codex_db::repositories::{NewRefreshToken, RefreshTokenRepository};
 
 /// 32 random bytes -> 43-character URL-safe base64 (no padding).
 const TOKEN_BYTES: usize = 32;
@@ -211,10 +211,10 @@ fn hex_encode(bytes: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::Database;
-    use crate::db::entities::users;
-    use crate::db::repositories::UserRepository;
     use codex_config::{DatabaseConfig, DatabaseType, SQLiteConfig};
+    use codex_db::Database;
+    use codex_db::entities::users;
+    use codex_db::repositories::UserRepository;
     use std::collections::HashMap;
     use tempfile::TempDir;
 

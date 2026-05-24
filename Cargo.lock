@@ -822,6 +822,7 @@ dependencies = [
  "chrono-tz",
  "clap",
  "codex-config",
+ "codex-db",
  "codex-events",
  "codex-models",
  "codex-parsers",
@@ -862,7 +863,6 @@ dependencies = [
  "resvg",
  "rust-embed",
  "sea-orm",
- "sea-orm-migration",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -902,6 +902,32 @@ dependencies = [
  "serde_yaml",
  "serial_test",
  "tempfile",
+]
+
+[[package]]
+name = "codex-db"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "codex-config",
+ "codex-events",
+ "codex-models",
+ "codex-utils",
+ "log",
+ "migration",
+ "rand 0.10.0",
+ "sea-orm",
+ "sea-orm-migration",
+ "serde",
+ "serde_json",
+ "serial_test",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "utoipa",
+ "uuid",
 ]
 
 [[package]]

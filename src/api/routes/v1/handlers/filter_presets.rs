@@ -14,7 +14,7 @@ use uuid::Uuid;
 
 use crate::api::error::ApiError;
 use crate::api::extractors::auth::{AppState, AuthContext};
-use crate::db::repositories::{
+use codex_db::repositories::{
     FilterPresetRepository, ListFilterPresetsQuery as RepoListQuery, UpdateFilterPreset,
 };
 

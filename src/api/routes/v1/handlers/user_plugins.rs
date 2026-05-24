@@ -13,9 +13,6 @@ use super::super::dto::user_plugins::{
 };
 use crate::api::extractors::auth::AuthContext;
 use crate::api::{error::ApiError, extractors::AppState};
-use crate::db::repositories::{
-    PluginsRepository, TaskRepository, UserPluginDataRepository, UserPluginsRepository,
-};
 use crate::services::plugin::protocol::{OAuthConfig, PluginManifest, methods};
 use crate::services::plugin::sync::SyncStatusResponse;
 use crate::tasks::handlers::user_plugin_sync::LAST_SYNC_RESULT_KEY;
@@ -25,13 +22,16 @@ use axum::{
     extract::{Path, Query, State},
     http::HeaderMap,
 };
+use codex_db::repositories::{
+    PluginsRepository, TaskRepository, UserPluginDataRepository, UserPluginsRepository,
+};
 use std::sync::Arc;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
 /// Parse a plugin's manifest JSON into a typed PluginManifest.
 /// Deserializes once and caches the result for callers that need multiple fields.
-fn parse_manifest(plugin: &crate::db::entities::plugins::Model) -> Option<PluginManifest> {
+fn parse_manifest(plugin: &codex_db::entities::plugins::Model) -> Option<PluginManifest> {
     plugin
         .manifest
         .as_ref()
@@ -40,7 +40,7 @@ fn parse_manifest(plugin: &crate::db::entities::plugins::Model) -> Option<Plugin
 
 /// Helper to extract OAuth config from a plugin's stored manifest
 fn get_oauth_config_from_plugin(
-    plugin: &crate::db::entities::plugins::Model,
+    plugin: &codex_db::entities::plugins::Model,
 ) -> Option<OAuthConfig> {
     parse_manifest(plugin).and_then(|m| m.oauth)
 }
@@ -48,7 +48,7 @@ fn get_oauth_config_from_plugin(
 /// Helper to get the OAuth client_id for a plugin.
 ///
 /// Priority: plugin config > manifest default
-fn get_oauth_client_id(plugin: &crate::db::entities::plugins::Model) -> Option<String> {
+fn get_oauth_client_id(plugin: &codex_db::entities::plugins::Model) -> Option<String> {
     // Check plugin config for client_id override
     if let Some(client_id) = plugin
         .config
@@ -64,7 +64,7 @@ fn get_oauth_client_id(plugin: &crate::db::entities::plugins::Model) -> Option<S
 }
 
 /// Helper to get OAuth client_secret from plugin config
-fn get_oauth_client_secret(plugin: &crate::db::entities::plugins::Model) -> Option<String> {
+fn get_oauth_client_secret(plugin: &codex_db::entities::plugins::Model) -> Option<String> {
     plugin
         .config
         .get("oauth_client_secret")
@@ -103,8 +103,8 @@ fn resolve_oauth_redirect_base(state: &AppState, headers: &HeaderMap) -> String 
 /// If `None`, fetches the last sync result from the database (1 query).
 async fn build_user_plugin_dto(
     db: &sea_orm::DatabaseConnection,
-    instance: &crate::db::entities::user_plugins::Model,
-    plugin: &crate::db::entities::plugins::Model,
+    instance: &codex_db::entities::user_plugins::Model,
+    plugin: &codex_db::entities::plugins::Model,
     prefetched_sync_result: Option<Option<serde_json::Value>>,
 ) -> UserPluginDto {
     let manifest = parse_manifest(plugin);

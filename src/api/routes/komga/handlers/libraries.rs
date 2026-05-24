@@ -8,9 +8,6 @@ use crate::api::{
     extractors::{AuthState, FlexibleAuthContext},
     permissions::Permission,
 };
-use crate::db::repositories::{
-    BookRepository, LibraryRepository, SeriesCoversRepository, SeriesRepository,
-};
 use crate::require_permission;
 use axum::{
     Json,
@@ -18,6 +15,9 @@ use axum::{
     extract::{Path, State},
     http::{StatusCode, header},
     response::Response,
+};
+use codex_db::repositories::{
+    BookRepository, LibraryRepository, SeriesCoversRepository, SeriesRepository,
 };
 use image::{ImageFormat, imageops::FilterType};
 use std::io::Cursor;

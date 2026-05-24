@@ -17,11 +17,11 @@ use super::super::dto::{
     TriggerDuplicateScanResponse,
 };
 use crate::api::{AppState, error::ApiError, extractors::AuthContext, permissions::Permission};
-use crate::db::entities::series_duplicates::{MATCH_TYPE_EXTERNAL_ID, MATCH_TYPE_TITLE};
-use crate::db::repositories::{
+use crate::tasks::types::TaskType;
+use codex_db::entities::series_duplicates::{MATCH_TYPE_EXTERNAL_ID, MATCH_TYPE_TITLE};
+use codex_db::repositories::{
     BookDuplicatesRepository, SeriesDuplicatesRepository, TaskRepository,
 };
-use crate::tasks::types::TaskType;
 
 /// List all duplicate book groups
 ///
@@ -99,7 +99,7 @@ pub async fn trigger_duplicate_scan(
     auth.require_permission(&Permission::BooksWrite)?;
 
     // Check if there's already a pending/processing duplicate scan
-    use crate::db::entities::{prelude::*, tasks};
+    use codex_db::entities::{prelude::*, tasks};
     use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 
     let existing_scan = Tasks::find()
@@ -157,7 +157,7 @@ pub async fn delete_duplicate_group(
     auth.require_permission(&Permission::BooksWrite)?;
 
     // Check if the duplicate group exists
-    use crate::db::entities::book_duplicates::Entity as BookDuplicates;
+    use codex_db::entities::book_duplicates::Entity as BookDuplicates;
     use sea_orm::EntityTrait;
 
     let exists = BookDuplicates::find_by_id(duplicate_id)
@@ -393,7 +393,7 @@ pub async fn delete_series_duplicate_group(
 ) -> Result<StatusCode, ApiError> {
     auth.require_permission(&Permission::SeriesWrite)?;
 
-    use crate::db::entities::prelude::SeriesDuplicates;
+    use codex_db::entities::prelude::SeriesDuplicates;
     use sea_orm::EntityTrait;
 
     let exists = SeriesDuplicates::find_by_id(duplicate_id)

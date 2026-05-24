@@ -8,16 +8,16 @@ use crate::api::{
     permissions::Permission,
     routes::opds::handlers::OpdsPaginationParams,
 };
-use crate::db::repositories::{
-    BookMetadataRepository, BookRepository, LibraryRepository, ReadProgressRepository,
-    SeriesMetadataRepository, SeriesRepository, SettingsRepository,
-};
 use crate::require_permission;
 use axum::{
     Json,
     extract::{Path, Query, State},
     http::{StatusCode, header},
     response::{IntoResponse, Response},
+};
+use codex_db::repositories::{
+    BookMetadataRepository, BookRepository, LibraryRepository, ReadProgressRepository,
+    SeriesMetadataRepository, SeriesRepository, SettingsRepository,
 };
 use std::sync::Arc;
 use uuid::Uuid;

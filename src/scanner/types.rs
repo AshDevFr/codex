@@ -274,7 +274,7 @@ impl ScannerConfig {
     ///
     /// Falls back to defaults if settings are not found or invalid.
     pub async fn load(db: &sea_orm::DatabaseConnection) -> Self {
-        use crate::db::repositories::SettingsRepository;
+        use codex_db::repositories::SettingsRepository;
 
         let batch_size = SettingsRepository::get_value::<i64>(db, "scanner.batch_size")
             .await

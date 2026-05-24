@@ -9,7 +9,7 @@
 //! Direct matches only. We do not infer chapter ownership from owned
 //! volumes (chapter→volume mapping is unreliable upstream) or vice versa.
 //!
-//! Inputs come from [`crate::db::repositories::SeriesRepository::get_owned_release_keys_for_series`]:
+//! Inputs come from [`codex_db::repositories::SeriesRepository::get_owned_release_keys_for_series`]:
 //! the set of `(volume, chapter)` pairs derived from book metadata, plus
 //! a count fallback used only when no book in the series has any volume
 //! metadata.

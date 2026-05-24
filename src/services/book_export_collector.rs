@@ -11,11 +11,11 @@ use std::collections::HashMap;
 use std::fmt;
 use uuid::Uuid;
 
-use crate::db::entities::{book_metadata, books, read_progress};
-use crate::db::repositories::{
+use crate::services::content_filter::ContentFilter;
+use codex_db::entities::{book_metadata, books, read_progress};
+use codex_db::repositories::{
     GenreRepository, LibraryRepository, ReadProgressRepository, SeriesRepository, TagRepository,
 };
-use crate::services::content_filter::ContentFilter;
 
 // =============================================================================
 // BookExportField enum
@@ -424,7 +424,7 @@ pub async fn resolve_book_ids(
     user_id: Uuid,
     library_ids: &[Uuid],
 ) -> Result<Vec<Uuid>> {
-    use crate::db::entities::books::Entity as Books;
+    use codex_db::entities::books::Entity as Books;
     use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 
     let content_filter = ContentFilter::for_user(db, user_id).await?;
@@ -664,7 +664,7 @@ async fn load_book_chunk(
     db: &DatabaseConnection,
     ids: &[Uuid],
 ) -> Result<HashMap<Uuid, books::Model>> {
-    use crate::db::entities::books::Entity as Books;
+    use codex_db::entities::books::Entity as Books;
     use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 
     let results = Books::find()
@@ -680,7 +680,7 @@ async fn load_metadata_chunk(
     db: &DatabaseConnection,
     book_ids: &[Uuid],
 ) -> Result<HashMap<Uuid, book_metadata::Model>> {
-    use crate::db::entities::book_metadata::Entity as BookMetadata;
+    use codex_db::entities::book_metadata::Entity as BookMetadata;
     use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 
     let results = BookMetadata::find()

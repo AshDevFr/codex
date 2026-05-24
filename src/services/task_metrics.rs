@@ -9,8 +9,8 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error};
 use uuid::Uuid;
 
-use crate::db::repositories::task_metrics::{TaskCompletionData, TaskMetricsRepository};
 use crate::services::SettingsService;
+use codex_db::repositories::task_metrics::{TaskCompletionData, TaskMetricsRepository};
 
 /// Number of recent completions to keep for percentile calculation
 const MAX_RECENT_COMPLETIONS: usize = 1000;
@@ -802,7 +802,7 @@ pub struct TaskMetricsDataPoint {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::test_helpers::setup_test_db;
+    use codex_db::test_helpers::setup_test_db;
 
     async fn create_test_service() -> TaskMetricsService {
         let db = setup_test_db().await;

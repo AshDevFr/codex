@@ -2,13 +2,13 @@ use super::super::dto::{
     MarkReadResponse, ReadProgressListResponse, ReadProgressResponse, UpdateProgressRequest,
 };
 use crate::api::{AppState, error::ApiError, extractors::AuthContext, permissions::Permission};
-use crate::db::repositories::{BookRepository, ReadProgressRepository};
 use axum::{
     Json,
     extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use codex_db::repositories::{BookRepository, ReadProgressRepository};
 use std::sync::Arc;
 use utoipa::OpenApi;
 use uuid::Uuid;

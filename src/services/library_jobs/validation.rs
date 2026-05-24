@@ -1,5 +1,5 @@
 //! Validators for [`super::types::LibraryJobConfig`] and the row-level
-//! fields ([`crate::db::entities::library_jobs`] common fields like name and
+//! fields ([`codex_db::entities::library_jobs`] common fields like name and
 //! cron).
 //!
 //! Validators are typed as `Result<_, ValidationError>` so callers can map
@@ -12,8 +12,8 @@ use thiserror::Error;
 
 use std::str::FromStr;
 
-use crate::db::repositories::PluginsRepository;
 use crate::services::metadata::FieldGroup;
+use codex_db::repositories::PluginsRepository;
 use codex_utils::cron::{validate_cron_expression, validate_timezone};
 
 use super::types::{

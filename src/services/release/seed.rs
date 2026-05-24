@@ -45,8 +45,8 @@ use anyhow::{Context, Result};
 use sea_orm::DatabaseConnection;
 use uuid::Uuid;
 
-use crate::db::entities::series_aliases::alias_source;
-use crate::db::repositories::{
+use codex_db::entities::series_aliases::alias_source;
+use codex_db::repositories::{
     AlternateTitleRepository, SeriesAliasRepository, SeriesMetadataRepository, SeriesRepository,
     SeriesTrackingRepository, TrackingUpdate,
 };
@@ -223,13 +223,13 @@ mod tests {
     use chrono::Utc;
     use sea_orm::{ActiveModelTrait, Set};
 
-    use crate::db::ScanningStrategy;
-    use crate::db::entities::{book_metadata, books};
-    use crate::db::repositories::{
+    use codex_db::ScanningStrategy;
+    use codex_db::entities::{book_metadata, books};
+    use codex_db::repositories::{
         AlternateTitleRepository, BookMetadataRepository, BookRepository, LibraryRepository,
         SeriesAliasRepository, SeriesRepository, SeriesTrackingRepository,
     };
-    use crate::db::test_helpers::create_test_db;
+    use codex_db::test_helpers::create_test_db;
 
     #[test]
     fn is_latin_alias_accepts_latin_strings() {

@@ -7,12 +7,12 @@ use tokio_cron_scheduler::{Job, JobScheduler};
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
-use crate::db::entities::library_jobs;
-use crate::db::repositories::{LibraryJobRepository, LibraryRepository, TaskRepository};
 use crate::scanner::{ScanMode, ScanningConfig};
 use crate::services::library_jobs::{LibraryJobConfig, parse_job_config};
 use crate::services::settings::SettingsService;
 use crate::tasks::types::TaskType;
+use codex_db::entities::library_jobs;
+use codex_db::repositories::{LibraryJobRepository, LibraryRepository, TaskRepository};
 use codex_utils::cron::{normalize_cron_expression, parse_timezone};
 
 /// Generic scheduler for managing scheduled tasks (library scans, deduplication, etc.)
@@ -770,7 +770,7 @@ impl crate::services::scheduler_handle::SchedulerReconciler for LockedSchedulerR
 ///
 /// `job_id` is stored inside `tasks.params` as JSON, so we use a backend-
 /// specific JSON path query — same pattern as
-/// [`crate::db::repositories::TaskRepository::has_pending_or_processing`].
+/// [`codex_db::repositories::TaskRepository::has_pending_or_processing`].
 pub async fn has_active_refresh_for_job(db: &DatabaseConnection, job_id: Uuid) -> Result<bool> {
     use sea_orm::{ConnectionTrait, DbBackend, Statement};
 
@@ -807,9 +807,9 @@ pub async fn has_active_refresh_for_job(db: &DatabaseConnection, job_id: Uuid) -
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::repositories::LibraryRepository;
-    use crate::db::test_helpers::setup_test_db;
     use crate::tasks::types::TaskType;
+    use codex_db::repositories::LibraryRepository;
+    use codex_db::test_helpers::setup_test_db;
     use codex_models::ScanningStrategy;
 
     #[test]

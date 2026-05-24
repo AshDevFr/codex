@@ -6,11 +6,11 @@ use std::collections::{HashMap, HashSet};
 use tracing::{debug, warn};
 use uuid::Uuid;
 
-use crate::db::repositories::{
+use crate::services::plugin::sync::{SyncEntry, SyncProgress, SyncReadingStatus};
+use codex_db::repositories::{
     BookRepository, ReadProgressRepository, SeriesExternalIdRepository, SeriesMetadataRepository,
     UserSeriesRatingRepository,
 };
-use crate::services::plugin::sync::{SyncEntry, SyncProgress, SyncReadingStatus};
 
 use super::settings::CodexSyncSettings;
 
@@ -100,7 +100,7 @@ pub(crate) async fn build_push_entries(
     };
 
     // 5. Batch-fetch all user ratings (1 query — already batched)
-    let ratings_map: HashMap<Uuid, crate::db::entities::user_series_ratings::Model> =
+    let ratings_map: HashMap<Uuid, codex_db::entities::user_series_ratings::Model> =
         if settings.sync_ratings {
             match UserSeriesRatingRepository::get_all_for_user(db, user_id).await {
                 Ok(ratings) => ratings.into_iter().map(|r| (r.series_id, r)).collect(),
@@ -393,7 +393,7 @@ async fn build_unmatched_entries(
             }
         };
 
-    let ratings_map: HashMap<Uuid, crate::db::entities::user_series_ratings::Model> =
+    let ratings_map: HashMap<Uuid, codex_db::entities::user_series_ratings::Model> =
         if settings.sync_ratings {
             match UserSeriesRatingRepository::get_all_for_user(db, user_id).await {
                 Ok(ratings) => ratings.into_iter().map(|r| (r.series_id, r)).collect(),

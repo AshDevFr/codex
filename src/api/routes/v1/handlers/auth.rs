@@ -8,10 +8,6 @@ use crate::api::{
     extractors::{AuthContext, AuthState, ClientInfo, FlexibleAuthContext},
     permissions::UserRole, // Used for creating users with default role
 };
-use crate::db::{
-    entities::users,
-    repositories::{EmailVerificationTokenRepository, SettingsRepository, UserRepository},
-};
 use crate::services::RefreshTokenError;
 use axum::{
     Json,
@@ -20,6 +16,10 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use chrono::Utc;
+use codex_db::{
+    entities::users,
+    repositories::{EmailVerificationTokenRepository, SettingsRepository, UserRepository},
+};
 use codex_utils::password;
 use sea_orm::ActiveModelTrait;
 use sea_orm::Set;
@@ -400,7 +400,7 @@ pub async fn register(
     Json(request): Json<RegisterRequest>,
 ) -> Result<Response, ApiError> {
     // Check if registration is enabled (from database settings)
-    use crate::db::repositories::SettingsRepository;
+    use codex_db::repositories::SettingsRepository;
     let registration_enabled =
         SettingsRepository::get_value::<bool>(&state.db, "auth.registration_enabled")
             .await

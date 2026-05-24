@@ -36,6 +36,7 @@ members = [
     "crates/codex-models",
     "crates/codex-utils",
     "crates/codex-parsers",
+    "crates/codex-db",
 ]
 
 # Shared dependencies inherited by workspace members. Only deps that are
@@ -59,6 +60,7 @@ uuid = { version = "1.0", features = ["v4", "serde"] }
 # Workspace-internal crates. Declaring them here keeps cross-crate path edges
 # in one place so members reference each other via `{ workspace = true }`.
 codex-config = { path = "crates/codex-config" }
+codex-db = { path = "crates/codex-db" }
 codex-events = { path = "crates/codex-events" }
 codex-models = { path = "crates/codex-models" }
 codex-parsers = { path = "crates/codex-parsers", default-features = false }
@@ -136,13 +138,11 @@ sea-orm = { version = "1.1", features = [
     "with-chrono",
     "with-uuid",
 ] }
-sea-orm-migration = { version = "1.1", features = [
-    "runtime-tokio-rustls",
-    "sqlx-postgres",
-    "sqlx-sqlite",
-] }
+# `sea-orm-migration` lives in codex-db; root reaches the `migration` crate
+# directly for the oidc handler's one-off Migrator::up call.
 migration = { path = "migration" }
 codex-config = { workspace = true }
+codex-db = { workspace = true }
 codex-events = { workspace = true }
 codex-models = { workspace = true }
 codex-parsers = { workspace = true }
@@ -243,6 +243,10 @@ http-body-util = "0.1"
 hyper = { version = "1.0", features = ["full"] }
 serial_test = { workspace = true }
 tracing-test = "0.2"
+# Enables codex_db::test_helpers (gated behind the `test-utils` feature) so
+# the root crate's `#[cfg(test)]` blocks and the `tests/` integration suite
+# can mint SQLite test databases.
+codex-db = { workspace = true, features = ["test-utils"] }
 # Used by tests/common/files.rs to mint PDF fixtures. The runtime PDF
 # rendering path lives in codex-parsers; tests reach for lopdf directly to
 # craft byte-level inputs.

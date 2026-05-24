@@ -8,8 +8,6 @@ use crate::api::{
     extractors::{AuthContext, AuthState},
     permissions::{Permission, UserRole},
 };
-use crate::db::entities::users;
-use crate::db::repositories::{SharingTagRepository, UserListFilter, UserRepository};
 use crate::require_permission;
 use axum::{
     Json,
@@ -17,6 +15,8 @@ use axum::{
     response::Response,
 };
 use chrono::Utc;
+use codex_db::entities::users;
+use codex_db::repositories::{SharingTagRepository, UserListFilter, UserRepository};
 use codex_utils::password;
 use std::sync::Arc;
 use uuid::Uuid;

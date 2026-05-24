@@ -4,10 +4,10 @@ use serde_json::json;
 use std::sync::Arc;
 use tracing::{error, info};
 
-use crate::db::entities::tasks;
-use crate::db::repositories::BookRepository;
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::TaskResult;
+use codex_db::entities::tasks;
+use codex_db::repositories::BookRepository;
 use codex_events::EventBroadcaster;
 
 pub struct PurgeDeletedHandler;

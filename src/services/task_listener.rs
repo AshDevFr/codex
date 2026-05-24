@@ -8,10 +8,10 @@
 //! result. This service replays those events when tasks complete, bridging
 //! events across process boundaries.
 
-use crate::db::repositories::TaskRepository;
 use anyhow::{Context, Result};
 use chrono::TimeZone;
 use chrono::Utc;
+use codex_db::repositories::TaskRepository;
 use codex_events::{
     EntityChangeEvent, EventBroadcaster, RecordedEvent, TaskProgressEvent, TaskStatus,
 };

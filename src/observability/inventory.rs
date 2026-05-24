@@ -14,7 +14,7 @@ use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
-use crate::db::repositories::MetricsRepository;
+use codex_db::repositories::MetricsRepository;
 
 /// Spawn the inventory snapshot poller. Runs every `interval` until the
 /// cancellation token fires.
@@ -68,7 +68,7 @@ mod tests {
         // queries return zero rather than erroring. The cheapest way to
         // exercise the refresh path end-to-end without coupling the test to
         // a fixture builder.
-        let db = crate::db::test_helpers::setup_test_db().await;
+        let db = codex_db::test_helpers::setup_test_db().await;
 
         // Pre-load known sentinel values so we can detect that the refresh
         // overwrote them with zeros (or any other DB count).

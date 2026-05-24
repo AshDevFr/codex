@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::db::entities::{release_ledger, release_sources};
+use codex_db::entities::{release_ledger, release_sources};
 
 // =============================================================================
 // Release ledger DTOs

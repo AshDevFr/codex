@@ -11,10 +11,10 @@ use std::sync::Arc;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
-use crate::db::entities::tasks;
-use crate::db::repositories::{SeriesRepository, TaskRepository};
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::{TaskResult, TaskType};
+use codex_db::entities::tasks;
+use codex_db::repositories::{SeriesRepository, TaskRepository};
 use codex_events::{EntityChangeEvent, EntityEvent, EventBroadcaster, TaskProgressEvent};
 
 // =============================================================================

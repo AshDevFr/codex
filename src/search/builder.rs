@@ -10,8 +10,8 @@ use serde_json::Value;
 use tracing::warn;
 use uuid::Uuid;
 
-use crate::db::entities::{book_metadata, books, prelude::*, series, series_metadata};
-use crate::db::repositories::AlternateTitleRepository;
+use codex_db::entities::{book_metadata, books, prelude::*, series, series_metadata};
+use codex_db::repositories::AlternateTitleRepository;
 
 use super::index::{BookEntry, BookSources, FuzzyIndex, SeriesEntry, SeriesSources};
 
@@ -256,14 +256,14 @@ fn parse_authors_names(authors_json: Option<&str>, series_id: Uuid) -> Vec<Strin
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::ScanningStrategy;
-    use crate::db::entities::books;
-    use crate::db::repositories::{
+    use chrono::Utc;
+    use codex_db::ScanningStrategy;
+    use codex_db::entities::books;
+    use codex_db::repositories::{
         AlternateTitleRepository as AltRepo, BookRepository, LibraryRepository,
         SeriesMetadataRepository, SeriesRepository,
     };
-    use crate::db::test_helpers::create_test_db;
-    use chrono::Utc;
+    use codex_db::test_helpers::create_test_db;
 
     fn book_model(series_id: Uuid, library_id: Uuid, path: &str, name: &str) -> books::Model {
         let now = Utc::now();

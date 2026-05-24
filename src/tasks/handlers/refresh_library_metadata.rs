@@ -11,7 +11,7 @@
 //! time so a job that somehow persisted with a deferred scope short-circuits
 //! with a clear failure status.
 //!
-//! [`library_jobs`]: crate::db::entities::library_jobs
+//! [`library_jobs`]: codex_db::entities::library_jobs
 
 use anyhow::{Context, Result};
 use sea_orm::DatabaseConnection;
@@ -20,11 +20,6 @@ use std::sync::Arc;
 use std::time::Duration;
 use tracing::{debug, error, info, warn};
 
-use crate::db::entities::tasks;
-use crate::db::repositories::{
-    LibraryJobRepository, LibraryRepository, PluginsRepository, RecordRunStatus,
-    SeriesExternalIdRepository, SeriesMetadataRepository, SeriesRepository,
-};
 use crate::services::ThumbnailService;
 use crate::services::library_jobs::{LibraryJobConfig, RefreshScope, parse_job_config};
 use crate::services::metadata::refresh_planner::{
@@ -36,6 +31,11 @@ use crate::services::plugin::PluginManager;
 use crate::services::plugin::protocol::{MetadataGetParams, MetadataMatchParams};
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::TaskResult;
+use codex_db::entities::tasks;
+use codex_db::repositories::{
+    LibraryJobRepository, LibraryRepository, PluginsRepository, RecordRunStatus,
+    SeriesExternalIdRepository, SeriesMetadataRepository, SeriesRepository,
+};
 use codex_events::{EntityChangeEvent, EntityEvent, EventBroadcaster, TaskProgressEvent};
 
 /// Soft cap to keep one job's refresh from monopolizing the worker.
@@ -168,7 +168,7 @@ impl TaskHandler for RefreshLibraryMetadataHandler {
             //    SeriesOnly requires `metadata_provider`.
             if let Some(plugin_name) = cfg.provider.strip_prefix("plugin:")
                 && let Ok(Some(plugin)) =
-                    crate::db::repositories::PluginsRepository::get_by_name(db, plugin_name).await
+                    codex_db::repositories::PluginsRepository::get_by_name(db, plugin_name).await
                 && let Some(manifest) = plugin.cached_manifest()
                 && !manifest.capabilities.can_provide_series_metadata()
             {
@@ -533,19 +533,19 @@ async fn rematch_external_id(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::ScanningStrategy;
-    use crate::db::entities::plugins::PluginPermission;
-    use crate::db::repositories::{
-        CreateLibraryJobParams, LibraryJobRepository, LibraryRepository, PluginsRepository,
-        SeriesRepository, TaskRepository,
-    };
-    use crate::db::test_helpers::setup_test_db;
     use crate::services::library_jobs::{
         LibraryJobConfig, MetadataRefreshJobConfig, RefreshScope, parse_job_config,
     };
     use crate::services::plugin::PluginManager;
     use crate::services::plugin::protocol::PluginScope;
     use crate::tasks::types::TaskType;
+    use codex_db::ScanningStrategy;
+    use codex_db::entities::plugins::PluginPermission;
+    use codex_db::repositories::{
+        CreateLibraryJobParams, LibraryJobRepository, LibraryRepository, PluginsRepository,
+        SeriesRepository, TaskRepository,
+    };
+    use codex_db::test_helpers::setup_test_db;
     use std::env;
     use std::sync::Once;
 

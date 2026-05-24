@@ -2,8 +2,8 @@ use anyhow::Result;
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 
-use crate::db::entities::tasks;
 use crate::tasks::types::TaskResult;
+use codex_db::entities::tasks;
 use codex_events::EventBroadcaster;
 
 pub mod analyze_book;

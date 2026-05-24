@@ -11,8 +11,6 @@ use super::super::dto::{
     parse_permission, parse_scope,
 };
 use crate::api::{AppState, error::ApiError, extractors::AuthContext, permissions::Permission};
-use crate::db::entities::plugins::{InternalPluginConfig, PluginPermission};
-use crate::db::repositories::{PluginFailuresRepository, PluginsRepository, UserPluginsRepository};
 use crate::services::PluginHealthStatus;
 use crate::services::plugin::process::{allowed_commands_description, is_command_allowed};
 use crate::services::plugin::protocol::PluginScope;
@@ -21,6 +19,8 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
 };
+use codex_db::entities::plugins::{InternalPluginConfig, PluginPermission};
+use codex_db::repositories::{PluginFailuresRepository, PluginsRepository, UserPluginsRepository};
 use codex_events::{EntityChangeEvent, EntityEvent};
 use std::sync::Arc;
 use std::time::Instant;
@@ -683,7 +683,7 @@ pub async fn delete_plugin(
     // Done before the plugin row is dropped to avoid the brief window
     // where the orphan would be visible. Cascade on
     // `fk_release_ledger_source_id` carries any associated ledger rows.
-    match crate::db::repositories::ReleaseSourceRepository::delete_by_plugin_uuid(&state.db, id)
+    match codex_db::repositories::ReleaseSourceRepository::delete_by_plugin_uuid(&state.db, id)
         .await
     {
         Ok(0) => {}

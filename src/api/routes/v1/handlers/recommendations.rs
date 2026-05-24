@@ -10,10 +10,6 @@ use super::super::dto::recommendations::{
 };
 use crate::api::extractors::auth::AuthContext;
 use crate::api::{error::ApiError, extractors::AppState};
-use crate::db::repositories::{
-    PluginsRepository, SeriesExternalIdRepository, TaskRepository, UserPluginDataRepository,
-    UserPluginsRepository,
-};
 use crate::services::plugin::protocol::PluginManifest;
 use crate::services::plugin::recommendations::RecommendationResponse;
 use crate::tasks::types::TaskType;
@@ -22,6 +18,10 @@ use axum::{
     extract::{Path, State},
 };
 use chrono::Utc;
+use codex_db::repositories::{
+    PluginsRepository, SeriesExternalIdRepository, TaskRepository, UserPluginDataRepository,
+    UserPluginsRepository,
+};
 use std::sync::Arc;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
@@ -35,8 +35,8 @@ async fn find_recommendation_plugin(
     user_id: Uuid,
 ) -> Result<
     (
-        crate::db::entities::plugins::Model,
-        crate::db::entities::user_plugins::Model,
+        codex_db::entities::plugins::Model,
+        codex_db::entities::user_plugins::Model,
     ),
     ApiError,
 > {
@@ -299,7 +299,7 @@ pub async fn refresh_recommendations(
 async fn enrich_and_filter_codex_presence(
     db: &sea_orm::DatabaseConnection,
     recommendations: &mut [RecommendationDto],
-    plugin: &crate::db::entities::plugins::Model,
+    plugin: &codex_db::entities::plugins::Model,
 ) {
     // Resolve the external_id_source from the plugin manifest
     let source = plugin
@@ -535,7 +535,7 @@ mod tests {
     /// when all optional fields are populated.
     #[test]
     fn test_to_recommendation_dto_full_fields() {
-        use crate::db::entities::SeriesStatus;
+        use codex_db::entities::SeriesStatus;
 
         let rec = Recommendation {
             external_id: "12345".to_string(),
@@ -638,7 +638,7 @@ mod tests {
     /// Verify the full RecommendationsResponse can be serialized with the expected JSON shape.
     #[test]
     fn test_recommendations_response_json_shape() {
-        use crate::db::entities::SeriesStatus;
+        use codex_db::entities::SeriesStatus;
 
         let recs = vec![
             to_recommendation_dto(Recommendation {

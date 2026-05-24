@@ -11,13 +11,13 @@ use std::collections::HashMap;
 use std::fmt;
 use uuid::Uuid;
 
-use crate::db::entities::series;
-use crate::db::repositories::{
+use crate::services::content_filter::ContentFilter;
+use codex_db::entities::series;
+use codex_db::repositories::{
     AlternateTitleRepository, BookRepository, ExternalRatingRepository, GenreRepository,
     LibraryRepository, SeriesMetadataRepository, SeriesRepository, TagRepository,
     UserSeriesRatingRepository,
 };
-use crate::services::content_filter::ContentFilter;
 
 // =============================================================================
 // ExportField enum
@@ -749,11 +749,11 @@ async fn load_series_chunk(
     db: &DatabaseConnection,
     ids: &[Uuid],
 ) -> Result<HashMap<Uuid, series::Model>> {
-    use crate::db::entities::series::Entity as Series;
+    use codex_db::entities::series::Entity as Series;
     use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 
     let results = Series::find()
-        .filter(crate::db::entities::series::Column::Id.is_in(ids.to_vec()))
+        .filter(codex_db::entities::series::Column::Id.is_in(ids.to_vec()))
         .all(db)
         .await?;
 

@@ -47,7 +47,7 @@ pub struct SeriesExportDto {
 }
 
 impl SeriesExportDto {
-    pub fn from_model(m: &crate::db::entities::series_exports::Model) -> Self {
+    pub fn from_model(m: &codex_db::entities::series_exports::Model) -> Self {
         let library_ids: Vec<Uuid> =
             serde_json::from_value(m.library_ids.clone()).unwrap_or_default();
         let fields: Vec<String> = serde_json::from_value(m.fields.clone()).unwrap_or_default();

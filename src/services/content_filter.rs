@@ -10,7 +10,7 @@
 //! 2. **Whitelist mode** (user has any `allow` grants): User only sees series with allowed tags
 //! 3. **No grants**: User sees everything (default-open behavior)
 
-use crate::db::repositories::SharingTagRepository;
+use codex_db::repositories::SharingTagRepository;
 use sea_orm::DatabaseConnection;
 use std::collections::HashSet;
 use uuid::Uuid;

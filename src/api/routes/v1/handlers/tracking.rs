@@ -25,12 +25,12 @@ use crate::api::{
     extractors::{AuthContext, AuthState},
     permissions::Permission,
 };
-use crate::db::entities::series_aliases::alias_source;
-use crate::db::repositories::{
-    SeriesAliasRepository, SeriesRepository, SeriesTrackingRepository, TrackingUpdate,
-};
 use crate::require_permission;
 use crate::services::release::seed::seed_tracking_for_series;
+use codex_db::entities::series_aliases::alias_source;
+use codex_db::repositories::{
+    SeriesAliasRepository, SeriesRepository, SeriesTrackingRepository, TrackingUpdate,
+};
 use codex_events::{EntityChangeEvent, EntityEvent};
 
 // =============================================================================

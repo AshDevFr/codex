@@ -11,11 +11,11 @@ use serde_json::json;
 use std::sync::Arc;
 use tracing::info;
 
-use crate::db::entities::tasks;
-use crate::db::repositories::UserPluginDataRepository;
 use crate::services::user_plugin::OAuthStateManager;
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::TaskResult;
+use codex_db::entities::tasks;
+use codex_db::repositories::UserPluginDataRepository;
 use codex_events::EventBroadcaster;
 
 /// Handler for cleaning up expired plugin storage data and OAuth state

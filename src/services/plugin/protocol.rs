@@ -840,7 +840,7 @@ pub struct AlternateTitle {
 }
 
 // Re-export SeriesStatus from db entities - this is the canonical source
-pub use crate::db::entities::SeriesStatus;
+pub use codex_db::entities::SeriesStatus;
 
 /// External rating from provider
 #[derive(Debug, Clone, Serialize, Deserialize)]

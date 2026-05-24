@@ -8,14 +8,14 @@
 //!    `confidence_threshold_override`).
 //!
 //! The actual ledger write goes through
-//! [`crate::db::repositories::ReleaseLedgerRepository::record`], which is
+//! [`codex_db::repositories::ReleaseLedgerRepository::record`], which is
 //! itself idempotent on `(source_id, external_release_id)` and `info_hash`.
 
 use chrono::Utc;
 use uuid::Uuid;
 
 use super::candidate::{CandidateReject, MAX_FUTURE_SKEW_S, ReleaseCandidate};
-use crate::db::repositories::NewReleaseEntry;
+use codex_db::repositories::NewReleaseEntry;
 
 /// Default confidence threshold (`0.7`).
 pub const DEFAULT_CONFIDENCE_THRESHOLD: f64 = 0.7;

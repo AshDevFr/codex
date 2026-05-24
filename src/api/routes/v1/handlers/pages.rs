@@ -3,7 +3,6 @@ use crate::api::{
     extractors::{AuthState, FlexibleAuthContext},
     permissions::Permission,
 };
-use crate::db::repositories::{BookCoversRepository, BookRepository, PageRepository};
 use crate::require_permission;
 use axum::{
     body::Body,
@@ -11,6 +10,7 @@ use axum::{
     http::{HeaderMap, StatusCode, header},
     response::Response,
 };
+use codex_db::repositories::{BookCoversRepository, BookRepository, PageRepository};
 use codex_utils::{DeadlineResult, with_deadline};
 use httpdate::fmt_http_date;
 use image::{ImageFormat, imageops::FilterType};
@@ -546,7 +546,7 @@ pub async fn get_book_thumbnail(
 /// Generate a thumbnail for a book (handles extraction, resizing, and caching)
 async fn generate_book_thumbnail(
     state: &Arc<AuthState>,
-    book: &crate::db::entities::books::Model,
+    book: &codex_db::entities::books::Model,
 ) -> Result<Vec<u8>, ApiError> {
     let book_id = book.id;
 

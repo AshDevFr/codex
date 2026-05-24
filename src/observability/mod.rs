@@ -28,8 +28,6 @@ pub use stub::{ObservabilityHandle, TraceContextFormat, init};
 mod http;
 pub use http::install_http_layers;
 
-pub mod repo;
-
 #[cfg(feature = "observability")]
 pub mod metrics;
 #[cfg(not(feature = "observability"))]

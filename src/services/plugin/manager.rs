@@ -46,12 +46,12 @@ use tokio::sync::{Mutex, RwLock};
 use tracing::{Span, debug, error, field::Empty, info, warn};
 use uuid::Uuid;
 
-use crate::db::entities::plugins;
-use crate::db::entities::user_plugins;
-use crate::db::repositories::{
+use crate::services::PluginMetricsService;
+use codex_db::entities::plugins;
+use codex_db::entities::user_plugins;
+use codex_db::repositories::{
     FailureContext, PluginFailuresRepository, PluginsRepository, UserPluginsRepository,
 };
-use crate::services::PluginMetricsService;
 
 use crate::services::user_plugin::token_refresh::{self, RefreshResult};
 

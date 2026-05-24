@@ -11,12 +11,12 @@ use crate::api::{
     extractors::{AuthState, FlexibleAuthContext},
     permissions::Permission,
 };
-use crate::db::repositories::{GenreRepository, TagRepository};
 use crate::require_permission;
 use axum::{
     Json,
     extract::{Query, State},
 };
+use codex_db::repositories::{GenreRepository, TagRepository};
 use std::sync::Arc;
 
 /// List collections (stub - always returns empty)

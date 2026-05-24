@@ -14,7 +14,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error};
 use uuid::Uuid;
 
-use crate::db::repositories::{ApiKeyRepository, UserRepository};
+use codex_db::repositories::{ApiKeyRepository, UserRepository};
 
 /// Default flush interval in seconds (longer than read progress since timestamps
 /// don't need to be as precise)
@@ -190,9 +190,9 @@ impl AuthTrackingService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::entities::{api_keys, users};
-    use crate::db::repositories::{ApiKeyRepository, UserRepository};
-    use crate::db::test_helpers::setup_test_db;
+    use codex_db::entities::{api_keys, users};
+    use codex_db::repositories::{ApiKeyRepository, UserRepository};
+    use codex_db::test_helpers::setup_test_db;
     use codex_utils::password;
     use std::time::Duration;
 

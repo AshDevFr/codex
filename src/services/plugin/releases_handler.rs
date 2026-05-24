@@ -23,17 +23,17 @@ use super::protocol::{
     JsonRpcError, JsonRpcRequest, JsonRpcResponse, ReleaseSourceCapability, RequestId, error_codes,
     methods,
 };
-use crate::db::entities::release_ledger::state as ledger_state;
-use crate::db::entities::release_sources::kind as source_kind;
-use crate::db::repositories::{
-    NewReleaseSource, ReleaseLedgerRepository, ReleaseSourceRepository, SeriesAliasRepository,
-    SeriesExternalIdRepository, SeriesRepository, SeriesTrackingRepository, TrackingUpdate,
-};
 use crate::services::release::auto_ignore::{is_outside_tracking_scope, should_auto_ignore};
 use crate::services::release::candidate::ReleaseCandidate;
 use crate::services::release::languages::{includes, resolve_for_series};
 use crate::services::release::matcher::{evaluate, resolve_threshold};
 use crate::services::scheduler_handle::SharedSchedulerReconciler;
+use codex_db::entities::release_ledger::state as ledger_state;
+use codex_db::entities::release_sources::kind as source_kind;
+use codex_db::repositories::{
+    NewReleaseSource, ReleaseLedgerRepository, ReleaseSourceRepository, SeriesAliasRepository,
+    SeriesExternalIdRepository, SeriesRepository, SeriesTrackingRepository, TrackingUpdate,
+};
 
 /// Default page size for `releases/list_tracked` when the caller doesn't
 /// specify one. Bounded to keep the response small on first load.
@@ -631,7 +631,7 @@ impl ReleasesRequestHandler {
     async fn advance_latest_known(
         &self,
         series_id: Uuid,
-        tracking_row: Option<&crate::db::entities::series_tracking::Model>,
+        tracking_row: Option<&codex_db::entities::series_tracking::Model>,
         candidate_chapter: Option<f64>,
         candidate_volume: Option<i32>,
         candidate_language: &str,
@@ -762,7 +762,7 @@ impl ReleasesRequestHandler {
         };
 
         use sea_orm::{ActiveModelTrait, Set};
-        let mut active: crate::db::entities::release_sources::ActiveModel = row.into();
+        let mut active: codex_db::entities::release_sources::ActiveModel = row.into();
         active.etag = Set(params.etag.clone());
         active.updated_at = Set(Utc::now());
         match active.update(&self.db).await {
@@ -1210,16 +1210,16 @@ pub fn is_releases_method(method: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::ScanningStrategy;
-    use crate::db::entities::release_sources::{self, kind};
-    use crate::db::repositories::{
+    use crate::services::plugin::protocol::ReleaseSourceKind;
+    use crate::services::release::candidate::{NumericSpan, SeriesMatch};
+    use codex_db::ScanningStrategy;
+    use codex_db::entities::release_sources::{self, kind};
+    use codex_db::repositories::{
         LibraryRepository, NewReleaseSource, ReleaseSourceRepository, ReleaseSourceUpdate,
         SeriesAliasRepository, SeriesExternalIdRepository, SeriesRepository,
         SeriesTrackingRepository, TrackingUpdate,
     };
-    use crate::db::test_helpers::create_test_db;
-    use crate::services::plugin::protocol::ReleaseSourceKind;
-    use crate::services::release::candidate::{NumericSpan, SeriesMatch};
+    use codex_db::test_helpers::create_test_db;
     use serde_json::json;
     use std::sync::Arc;
 

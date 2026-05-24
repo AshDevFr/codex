@@ -8,9 +8,9 @@ use chrono::{Duration, Utc};
 use sea_orm::DatabaseConnection;
 use tracing::{debug, info, warn};
 
-use crate::db::entities::user_plugins;
-use crate::db::repositories::UserPluginsRepository;
 use crate::services::plugin::protocol::OAuthConfig;
+use codex_db::entities::user_plugins;
+use codex_db::repositories::UserPluginsRepository;
 
 use super::oauth::OAuthTokenResponse;
 

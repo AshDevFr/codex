@@ -10,7 +10,6 @@ use crate::api::{
     extractors::{AuthState, FlexibleAuthContext},
     permissions::Permission,
 };
-use crate::db::repositories::{BookRepository, PageRepository};
 use crate::require_permission;
 use axum::{
     Json,
@@ -19,6 +18,7 @@ use axum::{
     http::{StatusCode, header},
     response::Response,
 };
+use codex_db::repositories::{BookRepository, PageRepository};
 use std::sync::Arc;
 use uuid::Uuid;
 

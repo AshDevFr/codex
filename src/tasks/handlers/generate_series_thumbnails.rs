@@ -9,11 +9,11 @@ use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 use tracing::{debug, info, warn};
 
-use crate::db::entities::tasks;
-use crate::db::repositories::{SeriesRepository, TaskRepository};
 use crate::services::ThumbnailService;
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::{TaskResult, TaskType};
+use codex_db::entities::tasks;
+use codex_db::repositories::{SeriesRepository, TaskRepository};
 use codex_events::{EventBroadcaster, TaskProgressEvent};
 
 pub struct GenerateSeriesThumbnailsHandler {

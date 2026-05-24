@@ -9,7 +9,6 @@ use crate::api::{
     extractors::{AuthState, FlexibleAuthContext},
     permissions::Permission,
 };
-use crate::db::repositories::{BookMetadataRepository, BookRepository, SeriesRepository};
 use crate::require_permission;
 use axum::{
     body::Body,
@@ -17,6 +16,7 @@ use axum::{
     http::{StatusCode, header},
     response::Response,
 };
+use codex_db::repositories::{BookMetadataRepository, BookRepository, SeriesRepository};
 use codex_parsers::epub::EpubParser;
 use std::collections::HashSet;
 use std::io::Read;

@@ -6,10 +6,10 @@ use std::collections::HashMap;
 use tracing::{debug, warn};
 use uuid::Uuid;
 
-use crate::db::repositories::{
+use crate::services::plugin::sync::{SyncEntry, SyncReadingStatus};
+use codex_db::repositories::{
     BookRepository, ReadProgressRepository, SeriesExternalIdRepository, UserSeriesRatingRepository,
 };
-use crate::services::plugin::sync::{SyncEntry, SyncReadingStatus};
 
 /// Match pulled sync entries to Codex series using external IDs and apply
 /// reading progress.
@@ -87,7 +87,7 @@ pub(crate) async fn match_and_apply_pulled_entries(
         };
 
     // 4. Batch-fetch existing ratings if sync_ratings is enabled (1 query instead of N)
-    let existing_ratings: HashMap<Uuid, crate::db::entities::user_series_ratings::Model> =
+    let existing_ratings: HashMap<Uuid, codex_db::entities::user_series_ratings::Model> =
         if sync_ratings {
             match UserSeriesRatingRepository::get_all_for_user(db, user_id).await {
                 Ok(ratings) => ratings.into_iter().map(|r| (r.series_id, r)).collect(),
@@ -188,8 +188,8 @@ async fn apply_pulled_entry(
     series_id: Uuid,
     entry: &SyncEntry,
     task_id: Uuid,
-    books_map: &HashMap<Uuid, Vec<crate::db::entities::books::Model>>,
-    progress_map: &HashMap<Uuid, crate::db::entities::read_progress::Model>,
+    books_map: &HashMap<Uuid, Vec<codex_db::entities::books::Model>>,
+    progress_map: &HashMap<Uuid, codex_db::entities::read_progress::Model>,
 ) -> u32 {
     let books = match books_map.get(&series_id) {
         Some(b) if !b.is_empty() => b,
@@ -204,7 +204,7 @@ async fn apply_pulled_entry(
         .unwrap_or(0);
 
     // Determine which books to mark as read
-    let books_to_mark: &[crate::db::entities::books::Model] =
+    let books_to_mark: &[codex_db::entities::books::Model] =
         if entry.status == SyncReadingStatus::Completed {
             // Mark all books as read
             books

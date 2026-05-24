@@ -7,7 +7,7 @@ use super::super::dto::{
     PluginMetricsSummaryDto,
 };
 use crate::api::{AppState, error::ApiError, extractors::AuthContext, permissions::Permission};
-use crate::db::repositories::MetricsRepository;
+use codex_db::repositories::MetricsRepository;
 
 /// Get inventory metrics (library/book counts)
 ///

@@ -11,10 +11,10 @@ use serde_json::json;
 use std::sync::Arc;
 use tracing::info;
 
-use crate::db::entities::tasks;
-use crate::db::repositories::RefreshTokenRepository;
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::TaskResult;
+use codex_db::entities::tasks;
+use codex_db::repositories::RefreshTokenRepository;
 use codex_events::EventBroadcaster;
 
 /// Days a revoked refresh-token row sticks around before cleanup deletes it.
@@ -57,11 +57,11 @@ impl TaskHandler for CleanupRefreshTokensHandler {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::Database;
-    use crate::db::entities::users;
-    use crate::db::repositories::{NewRefreshToken, UserRepository};
     use chrono::{Duration, Utc};
     use codex_config::{DatabaseConfig, DatabaseType, SQLiteConfig};
+    use codex_db::Database;
+    use codex_db::entities::users;
+    use codex_db::repositories::{NewRefreshToken, UserRepository};
     use std::collections::HashMap;
     use tempfile::TempDir;
     use uuid::Uuid;

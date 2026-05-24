@@ -295,21 +295,21 @@ impl Default for KomgaBookDto {
 impl KomgaBookDto {
     /// Create a KomgaBookDto from Codex book data
     pub fn from_codex(
-        book: &crate::db::entities::books::Model,
+        book: &codex_db::entities::books::Model,
         series_title: &str,
         number: i32,
-        read_progress: Option<&crate::db::entities::read_progress::Model>,
+        read_progress: Option<&codex_db::entities::read_progress::Model>,
     ) -> Self {
         Self::from_codex_with_metadata(book, series_title, number, read_progress, None)
     }
 
     /// Create a KomgaBookDto from Codex book data with optional book metadata
     pub fn from_codex_with_metadata(
-        book: &crate::db::entities::books::Model,
+        book: &codex_db::entities::books::Model,
         series_title: &str,
         number: i32,
-        read_progress: Option<&crate::db::entities::read_progress::Model>,
-        book_metadata: Option<&crate::db::entities::book_metadata::Model>,
+        read_progress: Option<&codex_db::entities::read_progress::Model>,
+        book_metadata: Option<&codex_db::entities::book_metadata::Model>,
     ) -> Self {
         let media = KomgaMediaDto::from_codex(
             &book.format,
@@ -354,9 +354,9 @@ impl KomgaBookDto {
 
 /// Build KomgaBookMetadataDto from book and optional book_metadata
 fn build_book_metadata(
-    book: &crate::db::entities::books::Model,
+    book: &codex_db::entities::books::Model,
     number: i32,
-    book_metadata: Option<&crate::db::entities::book_metadata::Model>,
+    book_metadata: Option<&codex_db::entities::book_metadata::Model>,
 ) -> KomgaBookMetadataDto {
     let Some(meta) = book_metadata else {
         return KomgaBookMetadataDto {

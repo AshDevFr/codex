@@ -19,11 +19,6 @@ use std::sync::Arc;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
-use crate::db::entities::tasks;
-use crate::db::repositories::{
-    BookExternalIdRepository, BookMetadataRepository, BookRepository, LibraryRepository,
-    PluginsRepository, SeriesExternalIdRepository, SeriesMetadataRepository, SeriesRepository,
-};
 use crate::services::ThumbnailService;
 use crate::services::metadata::preprocessing::{
     AutoMatchConditions, PreprocessingRule, SeriesContext, SeriesContextBuilder, apply_rules,
@@ -39,6 +34,11 @@ use crate::services::plugin::{PluginManager, PluginManagerError};
 use crate::services::settings::SettingsService;
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::TaskResult;
+use codex_db::entities::tasks;
+use codex_db::repositories::{
+    BookExternalIdRepository, BookMetadataRepository, BookRepository, LibraryRepository,
+    PluginsRepository, SeriesExternalIdRepository, SeriesMetadataRepository, SeriesRepository,
+};
 use codex_events::{EntityChangeEvent, EntityEvent, EventBroadcaster, TaskProgressEvent};
 
 /// Settings key for the auto-match confidence threshold
@@ -128,7 +128,7 @@ impl PluginAutoMatchHandler {
         series_id: Uuid,
         library_id: Uuid,
         plugin_id: Uuid,
-        plugin: &crate::db::entities::plugins::Model,
+        plugin: &codex_db::entities::plugins::Model,
         plugin_rules: &[PreprocessingRule],
         library_rules: &[PreprocessingRule],
     ) -> Result<TaskResult> {

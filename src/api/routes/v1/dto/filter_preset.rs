@@ -85,7 +85,7 @@ pub struct FilterPresetDto {
 }
 
 impl FilterPresetDto {
-    pub fn from_model(m: &crate::db::entities::filter_presets::Model) -> Self {
+    pub fn from_model(m: &codex_db::entities::filter_presets::Model) -> Self {
         Self {
             id: m.id,
             name: m.name.clone(),

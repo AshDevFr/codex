@@ -8,7 +8,7 @@ use std::sync::Arc;
 use tokio::sync::broadcast;
 use tracing::{debug, error, info, warn};
 
-use crate::db::repositories::TaskRepository;
+use codex_db::repositories::TaskRepository;
 use codex_events::{EntityChangeEvent, EntityEvent, EventBroadcaster};
 use codex_models::task::TaskType;
 
@@ -189,8 +189,8 @@ impl CleanupEventSubscriber {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::test_helpers::create_test_db;
     use chrono::Utc;
+    use codex_db::test_helpers::create_test_db;
     use codex_events::EventBroadcaster;
     use codex_models::task::TaskType;
     use uuid::Uuid;

@@ -14,8 +14,6 @@ use std::time::Duration;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
-use crate::db::entities::tasks;
-use crate::db::repositories::{PluginsRepository, UserPluginDataRepository, UserPluginsRepository};
 use crate::services::SettingsService;
 use crate::services::plugin::PluginManager;
 use crate::services::plugin::library::build_user_library;
@@ -27,6 +25,8 @@ use crate::services::plugin::recommendations::{
 };
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::TaskResult;
+use codex_db::entities::tasks;
+use codex_db::repositories::{PluginsRepository, UserPluginDataRepository, UserPluginsRepository};
 use codex_events::EventBroadcaster;
 
 /// Default plugin task timeout in seconds (5 minutes)

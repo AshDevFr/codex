@@ -12,15 +12,15 @@ use std::sync::Arc;
 use tracing::warn;
 use uuid::Uuid;
 
-use crate::db::entities::SeriesStatus;
-use crate::db::entities::plugins::{Model as Plugin, PluginPermission};
-use crate::db::entities::series_metadata::Model as SeriesMetadata;
-use crate::db::repositories::{
+use crate::services::ThumbnailService;
+use crate::services::plugin::PluginSeriesMetadata;
+use codex_db::entities::SeriesStatus;
+use codex_db::entities::plugins::{Model as Plugin, PluginPermission};
+use codex_db::entities::series_metadata::Model as SeriesMetadata;
+use codex_db::repositories::{
     AlternateTitleRepository, ExternalLinkRepository, ExternalRatingRepository, GenreRepository,
     SeriesExternalIdRepository, SeriesMetadataRepository, TagRepository,
 };
-use crate::services::ThumbnailService;
-use crate::services::plugin::PluginSeriesMetadata;
 use codex_events::EventBroadcaster;
 
 use super::CoverService;

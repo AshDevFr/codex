@@ -245,8 +245,8 @@ pub struct UserPluginTaskDto {
     pub completed_at: Option<DateTime<Utc>>,
 }
 
-impl From<crate::db::entities::tasks::Model> for UserPluginTaskDto {
-    fn from(task: crate::db::entities::tasks::Model) -> Self {
+impl From<codex_db::entities::tasks::Model> for UserPluginTaskDto {
+    fn from(task: codex_db::entities::tasks::Model) -> Self {
         Self {
             task_id: task.id,
             task_type: task.task_type,

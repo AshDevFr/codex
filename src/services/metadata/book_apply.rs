@@ -11,11 +11,11 @@ use std::sync::Arc;
 use tracing::warn;
 use uuid::Uuid;
 
-use crate::db::entities::book_metadata::Model as BookMetadata;
-use crate::db::entities::plugins::{Model as Plugin, PluginPermission};
-use crate::db::repositories::{BookExternalIdRepository, BookMetadataRepository};
 use crate::services::ThumbnailService;
 use crate::services::plugin::protocol::PluginBookMetadata;
+use codex_db::entities::book_metadata::Model as BookMetadata;
+use codex_db::entities::plugins::{Model as Plugin, PluginPermission};
+use codex_db::repositories::{BookExternalIdRepository, BookMetadataRepository};
 use codex_events::EventBroadcaster;
 
 use super::CoverService;
