@@ -6,11 +6,11 @@ use std::collections::{HashMap, HashSet};
 use tracing::{debug, warn};
 use uuid::Uuid;
 
-use crate::services::plugin::sync::{SyncEntry, SyncProgress, SyncReadingStatus};
 use codex_db::repositories::{
     BookRepository, ReadProgressRepository, SeriesExternalIdRepository, SeriesMetadataRepository,
     UserSeriesRatingRepository,
 };
+use codex_services::plugin::sync::{SyncEntry, SyncProgress, SyncReadingStatus};
 
 use super::settings::CodexSyncSettings;
 

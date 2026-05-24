@@ -20,15 +20,6 @@ use std::sync::Arc;
 use std::time::Duration;
 use tracing::{debug, error, info, warn};
 
-use crate::services::ThumbnailService;
-use crate::services::library_jobs::{LibraryJobConfig, RefreshScope, parse_job_config};
-use crate::services::metadata::refresh_planner::{
-    PlanFailure, PlannedRefresh, RefreshPlan, RefreshPlanner, SkipReason,
-    fields_filter_from_job_config,
-};
-use crate::services::metadata::{ApplyOptions, MatchingStrategy, MetadataApplier};
-use crate::services::plugin::PluginManager;
-use crate::services::plugin::protocol::{MetadataGetParams, MetadataMatchParams};
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::TaskResult;
 use codex_db::entities::tasks;
@@ -37,6 +28,15 @@ use codex_db::repositories::{
     SeriesExternalIdRepository, SeriesMetadataRepository, SeriesRepository,
 };
 use codex_events::{EntityChangeEvent, EntityEvent, EventBroadcaster, TaskProgressEvent};
+use codex_services::ThumbnailService;
+use codex_services::library_jobs::{LibraryJobConfig, RefreshScope, parse_job_config};
+use codex_services::metadata::refresh_planner::{
+    PlanFailure, PlannedRefresh, RefreshPlan, RefreshPlanner, SkipReason,
+    fields_filter_from_job_config,
+};
+use codex_services::metadata::{ApplyOptions, MatchingStrategy, MetadataApplier};
+use codex_services::plugin::PluginManager;
+use codex_services::plugin::protocol::{MetadataGetParams, MetadataMatchParams};
 
 /// Soft cap to keep one job's refresh from monopolizing the worker.
 const MAX_CONCURRENCY_HARD_CAP: usize = 16;
@@ -533,11 +533,6 @@ async fn rematch_external_id(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::services::library_jobs::{
-        LibraryJobConfig, MetadataRefreshJobConfig, RefreshScope, parse_job_config,
-    };
-    use crate::services::plugin::PluginManager;
-    use crate::services::plugin::protocol::PluginScope;
     use crate::tasks::types::TaskType;
     use codex_db::ScanningStrategy;
     use codex_db::entities::plugins::PluginPermission;
@@ -546,6 +541,11 @@ mod tests {
         SeriesRepository, TaskRepository,
     };
     use codex_db::test_helpers::setup_test_db;
+    use codex_services::library_jobs::{
+        LibraryJobConfig, MetadataRefreshJobConfig, RefreshScope, parse_job_config,
+    };
+    use codex_services::plugin::PluginManager;
+    use codex_services::plugin::protocol::PluginScope;
     use std::env;
     use std::sync::Once;
 

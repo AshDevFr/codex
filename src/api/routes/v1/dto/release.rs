@@ -213,7 +213,7 @@ impl ReleaseSourceDto {
     /// schedule. Use this in handlers that already have the default in
     /// hand (avoids a settings round-trip per row).
     pub fn from_model_with_default(m: release_sources::Model, server_default: &str) -> Self {
-        let effective = crate::services::release::schedule::resolve_cron_schedule(
+        let effective = codex_services::release::schedule::resolve_cron_schedule(
             m.cron_schedule.as_deref(),
             server_default,
         );
@@ -244,7 +244,7 @@ impl From<release_sources::Model> for ReleaseSourceDto {
     /// `DEFAULT_CRON_SCHEDULE` for resolution. Production handlers should
     /// prefer [`ReleaseSourceDto::from_model_with_default`].
     fn from(m: release_sources::Model) -> Self {
-        Self::from_model_with_default(m, crate::services::release::schedule::DEFAULT_CRON_SCHEDULE)
+        Self::from_model_with_default(m, codex_services::release::schedule::DEFAULT_CRON_SCHEDULE)
     }
 }
 

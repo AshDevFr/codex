@@ -27,9 +27,6 @@ use crate::api::{
     permissions::Permission,
 };
 use crate::require_permission;
-use crate::services::release::upstream_gap::{
-    UpstreamGap, UpstreamGapInputs, compute_upstream_gap,
-};
 use axum::{
     Json,
     body::Body,
@@ -46,6 +43,7 @@ use codex_db::repositories::{
     SeriesTrackingRepository, SharingTagRepository, TagRepository, UserSeriesRatingRepository,
 };
 use codex_events::{EntityChangeEvent, EntityEvent, EntityType};
+use codex_services::release::upstream_gap::{UpstreamGap, UpstreamGapInputs, compute_upstream_gap};
 use codex_utils::{
     json_merge_patch, normalize_for_search, parse_custom_metadata, serialize_custom_metadata,
     validate_custom_metadata_size,
@@ -1185,7 +1183,7 @@ pub async fn list_series_filtered(
     Json(request): Json<SeriesListRequest>,
 ) -> Result<Response, ApiError> {
     use crate::api::routes::v1::dto::series::{SeriesSortField, SortDirection};
-    use crate::services::FilterService;
+    use codex_services::FilterService;
     use std::collections::HashSet;
 
     require_permission!(auth, Permission::SeriesRead)?;
@@ -1417,7 +1415,7 @@ pub async fn list_series_alphabetical_groups(
     auth: AuthContext,
     Json(request): Json<SeriesListRequest>,
 ) -> Result<Json<Vec<AlphabeticalGroupDto>>, ApiError> {
-    use crate::services::FilterService;
+    use codex_services::FilterService;
     use std::collections::HashMap;
 
     require_permission!(auth, Permission::SeriesRead)?;

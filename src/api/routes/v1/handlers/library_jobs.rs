@@ -15,15 +15,15 @@ use crate::api::{
     permissions::Permission,
 };
 use crate::require_permission;
-use crate::services::library_jobs::{
-    LibraryJobConfig, MetadataRefreshJobConfig, parse_job_config, validation,
-};
-use crate::services::metadata::{FieldGroup, RefreshPlanner, fields_for_group};
 use crate::tasks::types::TaskType;
 use codex_db::entities::library_jobs;
 use codex_db::repositories::{
     CreateLibraryJobParams, LibraryJobRepository, LibraryRepository, SeriesRepository,
 };
+use codex_services::library_jobs::{
+    LibraryJobConfig, MetadataRefreshJobConfig, parse_job_config, validation,
+};
+use codex_services::metadata::{FieldGroup, RefreshPlanner, fields_for_group};
 
 use super::super::dto::patch::PatchValue;
 use super::super::dto::{
@@ -414,8 +414,8 @@ pub async fn dry_run_job(
     let mut est_skipped_recently = 0u32;
     for s in &plan.skipped {
         match s.reason {
-            crate::services::metadata::SkipReason::NoExternalId => est_skipped_no_id += 1,
-            crate::services::metadata::SkipReason::RecentlySynced { .. } => {
+            codex_services::metadata::SkipReason::NoExternalId => est_skipped_no_id += 1,
+            codex_services::metadata::SkipReason::RecentlySynced { .. } => {
                 est_skipped_recently += 1
             }
         }
@@ -506,7 +506,7 @@ fn human_label(g: FieldGroup) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::services::library_jobs::RefreshScope;
+    use codex_services::library_jobs::RefreshScope;
 
     #[test]
     fn auto_name_uses_provider_and_groups() {

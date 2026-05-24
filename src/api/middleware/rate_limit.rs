@@ -41,7 +41,7 @@ use tower::{Layer, Service};
 use tracing::{debug, trace};
 use uuid::Uuid;
 
-use crate::services::rate_limiter::{ClientId, RateLimiterService};
+use codex_services::rate_limiter::{ClientId, RateLimiterService};
 
 /// Rate limit response headers
 const HEADER_RATE_LIMIT: &str = "X-RateLimit-Limit";

@@ -4,7 +4,6 @@ mod observability;
 mod scanner;
 mod scheduler;
 mod search;
-mod services;
 mod tasks;
 mod web;
 

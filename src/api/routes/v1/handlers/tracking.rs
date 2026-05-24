@@ -26,12 +26,12 @@ use crate::api::{
     permissions::Permission,
 };
 use crate::require_permission;
-use crate::services::release::seed::seed_tracking_for_series;
 use codex_db::entities::series_aliases::alias_source;
 use codex_db::repositories::{
     SeriesAliasRepository, SeriesRepository, SeriesTrackingRepository, TrackingUpdate,
 };
 use codex_events::{EntityChangeEvent, EntityEvent};
+use codex_services::release::seed::seed_tracking_for_series;
 
 // =============================================================================
 // Tracking config handlers

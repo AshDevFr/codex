@@ -25,17 +25,17 @@ use std::time::Duration;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
-use crate::services::SettingsService;
-use crate::services::plugin::PluginManager;
-use crate::services::plugin::protocol::methods;
-use crate::services::plugin::sync::{
-    ExternalUserInfo, SyncPullRequest, SyncPullResponse, SyncPushRequest, SyncPushResponse,
-};
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::TaskResult;
 use codex_db::entities::tasks;
 use codex_db::repositories::{UserPluginDataRepository, UserPluginsRepository};
 use codex_events::{EventBroadcaster, TaskProgressEvent};
+use codex_services::SettingsService;
+use codex_services::plugin::PluginManager;
+use codex_services::plugin::protocol::methods;
+use codex_services::plugin::sync::{
+    ExternalUserInfo, SyncPullRequest, SyncPullResponse, SyncPushRequest, SyncPushResponse,
+};
 
 pub(crate) use settings::CodexSyncSettings;
 
@@ -201,10 +201,10 @@ impl TaskHandler for UserPluginSyncHandler {
                 Ok(result) => result,
                 Err(e) => {
                     let reason = match &e {
-                        crate::services::plugin::PluginManagerError::UserPluginNotFound {
+                        codex_services::plugin::PluginManagerError::UserPluginNotFound {
                             ..
                         } => "user_plugin_not_found",
-                        crate::services::plugin::PluginManagerError::PluginNotEnabled(_) => {
+                        codex_services::plugin::PluginManagerError::PluginNotEnabled(_) => {
                             "plugin_not_enabled"
                         }
                         _ => "plugin_start_failed",

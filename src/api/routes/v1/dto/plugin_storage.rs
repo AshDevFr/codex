@@ -20,8 +20,8 @@ pub struct PluginStorageStatsDto {
     pub total_bytes: u64,
 }
 
-impl From<crate::services::PluginStorageStats> for PluginStorageStatsDto {
-    fn from(stats: crate::services::PluginStorageStats) -> Self {
+impl From<codex_services::PluginStorageStats> for PluginStorageStatsDto {
+    fn from(stats: codex_services::PluginStorageStats) -> Self {
         Self {
             plugin_name: stats.plugin_name,
             file_count: stats.file_count,
@@ -67,8 +67,8 @@ pub struct PluginCleanupResultDto {
     pub errors: Vec<String>,
 }
 
-impl From<crate::services::PluginCleanupStats> for PluginCleanupResultDto {
-    fn from(stats: crate::services::PluginCleanupStats) -> Self {
+impl From<codex_services::PluginCleanupStats> for PluginCleanupResultDto {
+    fn from(stats: codex_services::PluginCleanupStats) -> Self {
         Self {
             files_deleted: stats.files_deleted,
             bytes_freed: stats.bytes_freed,

@@ -28,10 +28,9 @@ pub use stub::{ObservabilityHandle, TraceContextFormat, init};
 mod http;
 pub use http::install_http_layers;
 
-#[cfg(feature = "observability")]
-pub mod metrics;
-#[cfg(not(feature = "observability"))]
-#[path = "metrics_stub.rs"]
-pub mod metrics;
+// `metrics` lives in codex-services now (plugin/task lifecycle is a service
+// concern). Re-exported here so existing call sites that say
+// `observability::metrics::*` keep resolving.
+pub use codex_services::metrics;
 
 pub mod inventory;

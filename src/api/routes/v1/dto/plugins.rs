@@ -8,12 +8,12 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::services::plugin::protocol::{
-    CredentialField, MetadataContentType, PluginCapabilities, PluginScope,
-};
 use codex_db::entities::plugin_failures;
 use codex_db::entities::plugins::{self, InternalPluginConfig, PluginPermission};
 use codex_db::repositories::PluginsRepository;
+use codex_services::plugin::protocol::{
+    CredentialField, MetadataContentType, PluginCapabilities, PluginScope,
+};
 
 use super::common::deserialize_optional_nullable;
 
@@ -285,8 +285,8 @@ pub struct OAuthConfigDto {
     pub user_info_url: Option<String>,
 }
 
-impl From<crate::services::plugin::protocol::OAuthConfig> for OAuthConfigDto {
-    fn from(o: crate::services::plugin::protocol::OAuthConfig) -> Self {
+impl From<codex_services::plugin::protocol::OAuthConfig> for OAuthConfigDto {
+    fn from(o: codex_services::plugin::protocol::OAuthConfig) -> Self {
         Self {
             authorization_url: o.authorization_url,
             token_url: o.token_url,
@@ -346,8 +346,8 @@ pub struct PluginManifestDto {
     pub search_uri_template: Option<String>,
 }
 
-impl From<crate::services::plugin::protocol::PluginManifest> for PluginManifestDto {
-    fn from(m: crate::services::plugin::protocol::PluginManifest) -> Self {
+impl From<codex_services::plugin::protocol::PluginManifest> for PluginManifestDto {
+    fn from(m: codex_services::plugin::protocol::PluginManifest) -> Self {
         // Derive content types from capabilities
         let content_types: Vec<String> = m
             .capabilities
@@ -459,9 +459,9 @@ pub struct CredentialFieldDto {
 impl From<CredentialField> for CredentialFieldDto {
     fn from(f: CredentialField) -> Self {
         let credential_type = match f.credential_type {
-            crate::services::plugin::protocol::CredentialType::String => "string",
-            crate::services::plugin::protocol::CredentialType::Password => "password",
-            crate::services::plugin::protocol::CredentialType::OAuth => "oauth",
+            codex_services::plugin::protocol::CredentialType::String => "string",
+            codex_services::plugin::protocol::CredentialType::Password => "password",
+            codex_services::plugin::protocol::CredentialType::OAuth => "oauth",
         };
         Self {
             key: f.key,
@@ -1491,8 +1491,8 @@ pub struct EnqueueAutoMatchResponse {
 // Conversions from Protocol Types
 // =============================================================================
 
-impl From<crate::services::plugin::protocol::SearchResult> for PluginSearchResultDto {
-    fn from(r: crate::services::plugin::protocol::SearchResult) -> Self {
+impl From<codex_services::plugin::protocol::SearchResult> for PluginSearchResultDto {
+    fn from(r: codex_services::plugin::protocol::SearchResult) -> Self {
         Self {
             external_id: r.external_id,
             title: r.title,
@@ -1505,8 +1505,8 @@ impl From<crate::services::plugin::protocol::SearchResult> for PluginSearchResul
     }
 }
 
-impl From<crate::services::plugin::protocol::SearchResultPreview> for SearchResultPreviewDto {
-    fn from(p: crate::services::plugin::protocol::SearchResultPreview) -> Self {
+impl From<codex_services::plugin::protocol::SearchResultPreview> for SearchResultPreviewDto {
+    fn from(p: codex_services::plugin::protocol::SearchResultPreview) -> Self {
         Self {
             status: p.status,
             genres: p.genres,

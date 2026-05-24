@@ -19,19 +19,6 @@ use std::sync::Arc;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
-use crate::services::ThumbnailService;
-use crate::services::metadata::preprocessing::{
-    AutoMatchConditions, PreprocessingRule, SeriesContext, SeriesContextBuilder, apply_rules,
-    render_template, should_match,
-};
-use crate::services::metadata::{
-    ApplyOptions, BookApplyOptions, BookMetadataApplier, MetadataApplier, SkippedField,
-};
-use crate::services::plugin::protocol::{
-    BookSearchParams, MetadataGetParams, MetadataSearchParams,
-};
-use crate::services::plugin::{PluginManager, PluginManagerError};
-use crate::services::settings::SettingsService;
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::TaskResult;
 use codex_db::entities::tasks;
@@ -40,6 +27,17 @@ use codex_db::repositories::{
     PluginsRepository, SeriesExternalIdRepository, SeriesMetadataRepository, SeriesRepository,
 };
 use codex_events::{EntityChangeEvent, EntityEvent, EventBroadcaster, TaskProgressEvent};
+use codex_services::ThumbnailService;
+use codex_services::metadata::preprocessing::{
+    AutoMatchConditions, PreprocessingRule, SeriesContext, SeriesContextBuilder, apply_rules,
+    render_template, should_match,
+};
+use codex_services::metadata::{
+    ApplyOptions, BookApplyOptions, BookMetadataApplier, MetadataApplier, SkippedField,
+};
+use codex_services::plugin::protocol::{BookSearchParams, MetadataGetParams, MetadataSearchParams};
+use codex_services::plugin::{PluginManager, PluginManagerError};
+use codex_services::settings::SettingsService;
 
 /// Settings key for the auto-match confidence threshold
 const SETTING_AUTO_MATCH_CONFIDENCE_THRESHOLD: &str = "plugins.auto_match_confidence_threshold";
@@ -1216,7 +1214,7 @@ mod tests {
 
     #[test]
     fn test_apply_preprocessing_rules() {
-        use crate::services::metadata::preprocessing::PreprocessingRule;
+        use codex_services::metadata::preprocessing::PreprocessingRule;
 
         // Test with empty rules
         let result = apply_preprocessing_rules("One Piece (Digital)", &[], &[]);
@@ -1251,7 +1249,7 @@ mod tests {
 
     #[test]
     fn test_check_conditions() {
-        use crate::services::metadata::preprocessing::{
+        use codex_services::metadata::preprocessing::{
             AutoMatchConditions, ConditionMode, ConditionOperator, ConditionRule, MetadataContext,
         };
 

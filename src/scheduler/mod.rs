@@ -8,11 +8,11 @@ use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 use crate::scanner::{ScanMode, ScanningConfig};
-use crate::services::library_jobs::{LibraryJobConfig, parse_job_config};
-use crate::services::settings::SettingsService;
 use crate::tasks::types::TaskType;
 use codex_db::entities::library_jobs;
 use codex_db::repositories::{LibraryJobRepository, LibraryRepository, TaskRepository};
+use codex_services::library_jobs::{LibraryJobConfig, parse_job_config};
+use codex_services::settings::SettingsService;
 use codex_utils::cron::{normalize_cron_expression, parse_timezone};
 
 /// Generic scheduler for managing scheduled tasks (library scans, deduplication, etc.)
@@ -743,7 +743,7 @@ impl Scheduler {
 }
 
 /// Adapter that lets the `services` layer drive a `Scheduler` through the
-/// [`crate::services::scheduler_handle::SchedulerReconciler`] trait without
+/// [`codex_services::scheduler_handle::SchedulerReconciler`] trait without
 /// holding the concrete type. The trait inverts the layer dependency so
 /// `services` can ask for a reconcile without importing `scheduler`.
 pub struct LockedSchedulerReconciler {
@@ -756,7 +756,7 @@ impl LockedSchedulerReconciler {
     }
 }
 
-impl crate::services::scheduler_handle::SchedulerReconciler for LockedSchedulerReconciler {
+impl codex_services::scheduler_handle::SchedulerReconciler for LockedSchedulerReconciler {
     fn reconcile_release_sources(&self) -> futures::future::BoxFuture<'_, Result<()>> {
         Box::pin(async move {
             let mut guard = self.inner.lock().await;

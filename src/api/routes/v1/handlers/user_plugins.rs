@@ -13,8 +13,6 @@ use super::super::dto::user_plugins::{
 };
 use crate::api::extractors::auth::AuthContext;
 use crate::api::{error::ApiError, extractors::AppState};
-use crate::services::plugin::protocol::{OAuthConfig, PluginManifest, methods};
-use crate::services::plugin::sync::SyncStatusResponse;
 use crate::tasks::handlers::user_plugin_sync::LAST_SYNC_RESULT_KEY;
 use crate::tasks::types::TaskType;
 use axum::{
@@ -25,6 +23,8 @@ use axum::{
 use codex_db::repositories::{
     PluginsRepository, TaskRepository, UserPluginDataRepository, UserPluginsRepository,
 };
+use codex_services::plugin::protocol::{OAuthConfig, PluginManifest, methods};
+use codex_services::plugin::sync::SyncStatusResponse;
 use std::sync::Arc;
 use tracing::{debug, info, warn};
 use uuid::Uuid;

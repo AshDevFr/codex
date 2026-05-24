@@ -13,7 +13,6 @@ use crate::scanner::strategies::{
     BookMetadata, BookNamingContext, NumberContext, NumberMetadata, create_book_strategy,
     create_number_strategy,
 };
-use crate::tasks::types::TaskType;
 use codex_db::entities::book_error::{BookError, BookErrorType};
 use codex_db::entities::{book_metadata, books, pages};
 use codex_db::repositories::{
@@ -21,6 +20,7 @@ use codex_db::repositories::{
     LibraryRepository, PageRepository, SeriesMetadataRepository, SeriesRepository, TaskRepository,
 };
 use codex_events::EventBroadcaster;
+use codex_models::task::TaskType;
 use codex_models::{BookStrategy, CalibreStrategyConfig, NumberStrategy, SeriesStrategy};
 use codex_parsers::opf;
 use codex_utils::normalize_for_search;

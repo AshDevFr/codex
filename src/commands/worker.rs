@@ -59,14 +59,14 @@ pub async fn worker_command(config_path: PathBuf) -> anyhow::Result<()> {
     info!("Event broadcaster initialized");
 
     // Initialize thumbnail service
-    let thumbnail_service = Arc::new(crate::services::ThumbnailService::new(config.files.clone()));
+    let thumbnail_service = Arc::new(codex_services::ThumbnailService::new(config.files.clone()));
     info!(
         "Files service initialized (thumbnails: {}, uploads: {})",
         config.files.thumbnail_dir, config.files.uploads_dir
     );
 
     // Initialize task metrics service
-    let task_metrics_service = Arc::new(crate::services::TaskMetricsService::new(
+    let task_metrics_service = Arc::new(codex_services::TaskMetricsService::new(
         db.sea_orm_connection().clone(),
         settings_service.clone(),
     ));
@@ -79,7 +79,7 @@ pub async fn worker_command(config_path: PathBuf) -> anyhow::Result<()> {
     info!("Task metrics background jobs started");
 
     // Initialize PDF page cache service
-    let pdf_page_cache = Arc::new(crate::services::PdfPageCache::new(
+    let pdf_page_cache = Arc::new(codex_services::PdfPageCache::new(
         &config.pdf.cache_dir,
         config.pdf.cache_rendered_pages,
     ));
@@ -97,7 +97,7 @@ pub async fn worker_command(config_path: PathBuf) -> anyhow::Result<()> {
     // serve API requests, but the scanner still updates books and we want the
     // cache contract (open once) to hold across deployments that share state.
     let handle_cache_cfg = &config.pdf_handle_cache;
-    let pdf_handle_cache = Arc::new(crate::services::PdfHandleCache::new(
+    let pdf_handle_cache = Arc::new(codex_services::PdfHandleCache::new(
         handle_cache_cfg.capacity,
         std::time::Duration::from_secs(handle_cache_cfg.idle_ttl_minutes * 60),
         handle_cache_cfg.enabled,
@@ -125,7 +125,7 @@ pub async fn worker_command(config_path: PathBuf) -> anyhow::Result<()> {
 
     // Initialize plugin metrics service for plugin operation metrics
     info!("Initializing plugin metrics service...");
-    let plugin_metrics_service = Arc::new(crate::services::PluginMetricsService::new());
+    let plugin_metrics_service = Arc::new(codex_services::PluginMetricsService::new());
 
     // Initialize plugin manager for plugin auto-match tasks
     //
@@ -135,7 +135,7 @@ pub async fn worker_command(config_path: PathBuf) -> anyhow::Result<()> {
     // See `codex_events::with_recording_broadcaster`.
     info!("Initializing plugin manager...");
     let plugin_manager = Arc::new(
-        crate::services::plugin::PluginManager::with_defaults(Arc::new(
+        codex_services::plugin::PluginManager::with_defaults(Arc::new(
             db.sea_orm_connection().clone(),
         ))
         .with_metrics_service(plugin_metrics_service),
@@ -153,11 +153,11 @@ pub async fn worker_command(config_path: PathBuf) -> anyhow::Result<()> {
     let exports_dir = settings_service
         .get_string(
             "exports.dir",
-            crate::services::export_storage::DEFAULT_EXPORTS_DIR,
+            codex_services::export_storage::DEFAULT_EXPORTS_DIR,
         )
         .await
-        .unwrap_or_else(|_| crate::services::export_storage::DEFAULT_EXPORTS_DIR.to_string());
-    let export_storage = Arc::new(crate::services::ExportStorage::new(exports_dir));
+        .unwrap_or_else(|_| codex_services::export_storage::DEFAULT_EXPORTS_DIR.to_string());
+    let export_storage = Arc::new(codex_services::ExportStorage::new(exports_dir));
 
     // Spawn multiple workers for parallel task processing
     let (worker_handles, worker_shutdown_channels) = spawn_workers(

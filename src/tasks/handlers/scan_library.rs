@@ -5,8 +5,6 @@ use std::sync::Arc;
 use tracing::{debug, error, info, warn};
 
 use crate::scanner::{ScanMode, ScanningConfig, scan_library};
-use crate::services::plugin::protocol::PluginScope;
-use crate::services::settings::SettingsService;
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::{TaskResult, TaskType};
 use codex_db::entities::tasks;
@@ -14,6 +12,8 @@ use codex_db::repositories::{
     BookRepository, LibraryRepository, PluginsRepository, SeriesRepository, TaskRepository,
 };
 use codex_events::EventBroadcaster;
+use codex_services::plugin::protocol::PluginScope;
+use codex_services::settings::SettingsService;
 
 /// Settings key for enabling post-scan auto-match
 const SETTING_POST_SCAN_AUTO_MATCH_ENABLED: &str = "plugins.post_scan_auto_match_enabled";
@@ -22,7 +22,7 @@ const DEFAULT_POST_SCAN_AUTO_MATCH_ENABLED: bool = false;
 
 pub struct ScanLibraryHandler {
     settings_service: Option<Arc<SettingsService>>,
-    pdf_handle_cache: Option<Arc<crate::services::PdfHandleCache>>,
+    pdf_handle_cache: Option<Arc<codex_services::PdfHandleCache>>,
 }
 
 impl Default for ScanLibraryHandler {
@@ -47,7 +47,7 @@ impl ScanLibraryHandler {
 
     /// Wire the PDF handle cache so the scanner can invalidate cached open
     /// `PdfDocument` handles when book files change on disk.
-    pub fn with_pdf_handle_cache(mut self, cache: Arc<crate::services::PdfHandleCache>) -> Self {
+    pub fn with_pdf_handle_cache(mut self, cache: Arc<codex_services::PdfHandleCache>) -> Self {
         self.pdf_handle_cache = Some(cache);
         self
     }

@@ -16,11 +16,6 @@ use tokio::time::sleep;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
-use crate::services::PdfPageCache;
-use crate::services::export_storage::ExportStorage;
-use crate::services::plugin::PluginManager;
-use crate::services::user_plugin::OAuthStateManager;
-use crate::services::{SettingsService, TaskMetricsService, ThumbnailService};
 use crate::tasks::error::check_rate_limited;
 use crate::tasks::handlers::{
     AnalyzeBookHandler, AnalyzeSeriesHandler, BackfillTrackingFromMetadataHandler,
@@ -38,6 +33,11 @@ use crate::tasks::handlers::{
 use codex_config::FilesConfig;
 use codex_db::repositories::TaskRepository;
 use codex_events::{EventBroadcaster, RecordedEvent, TaskProgressEvent};
+use codex_services::PdfPageCache;
+use codex_services::export_storage::ExportStorage;
+use codex_services::plugin::PluginManager;
+use codex_services::user_plugin::OAuthStateManager;
+use codex_services::{SettingsService, TaskMetricsService, ThumbnailService};
 
 /// RAII guard that increments the OTel in-flight task gauge on creation and
 /// decrements it on drop. Used by `process_next_task` to track currently-
@@ -68,11 +68,11 @@ pub struct TaskWorker {
     thumbnail_service: Option<Arc<ThumbnailService>>,
     task_metrics_service: Option<Arc<TaskMetricsService>>,
     plugin_manager: Option<Arc<PluginManager>>,
-    pdf_handle_cache: Option<Arc<crate::services::PdfHandleCache>>,
+    pdf_handle_cache: Option<Arc<codex_services::PdfHandleCache>>,
     /// Shared per-host backoff state used by the `PollReleaseSourceHandler`.
     /// Exposed via [`Self::release_backoff`] so the scheduler can read the
     /// same multipliers when picking next-poll intervals.
-    release_backoff: crate::services::release::backoff::HostBackoff,
+    release_backoff: codex_services::release::backoff::HostBackoff,
     shutdown_tx: Option<broadcast::Sender<()>>,
 }
 
@@ -158,7 +158,7 @@ impl TaskWorker {
             task_metrics_service: None,
             plugin_manager: None,
             pdf_handle_cache: None,
-            release_backoff: crate::services::release::backoff::HostBackoff::new(),
+            release_backoff: codex_services::release::backoff::HostBackoff::new(),
             shutdown_tx: None,
         }
     }
@@ -166,7 +166,7 @@ impl TaskWorker {
     /// Shared per-host backoff used by `PollReleaseSourceHandler`. The
     /// scheduler reads this when computing the effective interval for the
     /// next poll.
-    pub fn release_backoff(&self) -> crate::services::release::backoff::HostBackoff {
+    pub fn release_backoff(&self) -> codex_services::release::backoff::HostBackoff {
         self.release_backoff.clone()
     }
 
@@ -221,7 +221,7 @@ impl TaskWorker {
 
     /// Set the PDF handle cache so the scanner can invalidate cached open
     /// `PdfDocument` handles when book files change during a scan.
-    pub fn with_pdf_handle_cache(mut self, cache: Arc<crate::services::PdfHandleCache>) -> Self {
+    pub fn with_pdf_handle_cache(mut self, cache: Arc<codex_services::PdfHandleCache>) -> Self {
         self.pdf_handle_cache = Some(cache);
         self.register_scan_library_handler();
         self

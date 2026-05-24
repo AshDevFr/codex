@@ -174,7 +174,7 @@ pub struct AppState {
     /// Refresh-token issuer / validator / rotator.
     /// Always present; the [`AuthConfig::refresh_token_enabled`] flag gates
     /// whether handlers actually call `issue` on login.
-    pub refresh_token_service: Arc<crate::services::RefreshTokenService>,
+    pub refresh_token_service: Arc<codex_services::RefreshTokenService>,
     pub auth_config: Arc<codex_config::AuthConfig>,
     /// Database configuration - used for operation deadlines and pool settings
     pub database_config: Arc<codex_config::DatabaseConfig>,
@@ -184,60 +184,60 @@ pub struct AppState {
     /// endpoint and the OTLP forwarding proxy. Always present; handlers gate
     /// behavior on `browser.enabled` / `otlp.endpoint`.
     pub observability_config: Arc<codex_config::ObservabilityConfig>,
-    pub email_service: Arc<crate::services::email::EmailService>,
+    pub email_service: Arc<codex_services::email::EmailService>,
     pub event_broadcaster: Arc<codex_events::EventBroadcaster>,
     /// Settings service - used for runtime configuration
     #[allow(dead_code)]
-    pub settings_service: Arc<crate::services::SettingsService>,
-    pub thumbnail_service: Arc<crate::services::ThumbnailService>,
+    pub settings_service: Arc<codex_services::SettingsService>,
+    pub thumbnail_service: Arc<codex_services::ThumbnailService>,
     /// File cleanup service for managing orphaned files
-    pub file_cleanup_service: Arc<crate::services::FileCleanupService>,
+    pub file_cleanup_service: Arc<codex_services::FileCleanupService>,
     /// Task metrics service for collecting task performance data
     /// None in test environments or when not needed
-    pub task_metrics_service: Option<Arc<crate::services::TaskMetricsService>>,
+    pub task_metrics_service: Option<Arc<codex_services::TaskMetricsService>>,
     /// Scheduler for managing scheduled tasks (library scans, deduplication, etc.)
     /// None when workers are disabled (CODEX_DISABLE_WORKERS=true) or in test environments
     pub scheduler: Option<Arc<tokio::sync::Mutex<crate::scheduler::Scheduler>>>,
     /// Read progress batching service for efficient page view tracking
     /// Batches progress updates in memory and flushes periodically to reduce DB load
-    pub read_progress_service: Arc<crate::services::ReadProgressService>,
+    pub read_progress_service: Arc<codex_services::ReadProgressService>,
     /// Auth tracking service for batched last_used/last_login timestamp updates
     /// Reduces DB load by batching API key usage and user login timestamps
-    pub auth_tracking_service: Arc<crate::services::AuthTrackingService>,
+    pub auth_tracking_service: Arc<codex_services::AuthTrackingService>,
     /// PDF page cache service for caching rendered PDF pages
     /// Reduces CPU load by caching expensive PDF page renders to disk
-    pub pdf_page_cache: Arc<crate::services::PdfPageCache>,
+    pub pdf_page_cache: Arc<codex_services::PdfPageCache>,
     /// PDF handle cache service for caching open PDFium document handles
     /// Avoids re-opening the same PDF on every page request; complements the
     /// on-disk JPEG cache by short-circuiting the cold-render path
-    pub pdf_handle_cache: Arc<crate::services::PdfHandleCache>,
+    pub pdf_handle_cache: Arc<codex_services::PdfHandleCache>,
     /// In-flight thumbnail request tracker to prevent thundering herd
     /// When multiple requests come in for the same uncached thumbnail,
     /// only the first generates it while others wait for the result
-    pub inflight_thumbnails: Arc<crate::services::InflightThumbnailTracker>,
+    pub inflight_thumbnails: Arc<codex_services::InflightThumbnailTracker>,
     /// User authentication cache to avoid hitting the database on every request
     /// Caches user permissions/role for 60 seconds to reduce DB load
     pub user_auth_cache: Arc<UserAuthCache>,
     /// Rate limiter service for API rate limiting
     /// None when rate limiting is disabled in config
-    pub rate_limiter_service: Option<Arc<crate::services::RateLimiterService>>,
+    pub rate_limiter_service: Option<Arc<codex_services::RateLimiterService>>,
     /// Plugin manager for coordinating external plugin processes
     /// Manages plugin lifecycle, spawning, and request routing
-    pub plugin_manager: Arc<crate::services::plugin::PluginManager>,
+    pub plugin_manager: Arc<codex_services::plugin::PluginManager>,
     /// Plugin metrics service for collecting plugin performance data
     /// Always available (in-memory only, no persistence)
-    pub plugin_metrics_service: Arc<crate::services::PluginMetricsService>,
+    pub plugin_metrics_service: Arc<codex_services::PluginMetricsService>,
     /// OIDC authentication service for external identity provider authentication
     /// None when OIDC is disabled in config
-    pub oidc_service: Option<Arc<crate::services::OidcService>>,
+    pub oidc_service: Option<Arc<codex_services::OidcService>>,
     /// OAuth state manager for user plugin OAuth flows
-    pub oauth_state_manager: Arc<crate::services::user_plugin::OAuthStateManager>,
+    pub oauth_state_manager: Arc<codex_services::user_plugin::OAuthStateManager>,
     /// Plugin file storage service for managing plugin data directories
     /// None when not configured (shouldn't happen in normal operation)
-    pub plugin_file_storage: Option<Arc<crate::services::PluginFileStorage>>,
+    pub plugin_file_storage: Option<Arc<codex_services::PluginFileStorage>>,
     /// Export storage service for managing series export files on disk
     /// None in test environments or when not configured
-    pub export_storage: Option<Arc<crate::services::ExportStorage>>,
+    pub export_storage: Option<Arc<codex_services::ExportStorage>>,
     /// Server-level default timezone for cron scheduling (IANA name, e.g. "America/Los_Angeles")
     pub scheduler_timezone: String,
     /// In-memory fuzzy search index over series and books.

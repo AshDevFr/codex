@@ -12,12 +12,12 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tracing::{debug, info, warn};
 
-use crate::services::{FileCleanupService, ThumbnailService};
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::TaskResult;
 use codex_config::FilesConfig;
 use codex_db::entities::tasks;
 use codex_events::EventBroadcaster;
+use codex_services::{FileCleanupService, ThumbnailService};
 
 /// Handler for cleaning up book files after deletion
 pub struct CleanupBookFilesHandler {
