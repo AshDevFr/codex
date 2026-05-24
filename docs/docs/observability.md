@@ -172,6 +172,22 @@ The proxy exists for three reasons:
 
 The proxy is a thin pass-through. It does not buffer, batch, transform, or sample. Body size is capped at 4 MiB and per-session rate limits apply.
 
+### gRPC backends and `otlp.proxy_endpoint`
+
+The browser RUM proxy always speaks **OTLP/HTTP**, regardless of the `otlp.protocol` used by the backend SDK exporter. If your `otlp.endpoint` points at a gRPC-only port (Jaeger's `:4317`, for example), browser exports will fail because that port does not accept HTTP POSTs.
+
+Set `observability.otlp.proxy_endpoint` to the matching HTTP collector to fix this without changing the SDK transport:
+
+```yaml
+observability:
+  otlp:
+    endpoint: http://jaeger:4317        # backend SDK uses gRPC
+    protocol: grpc
+    proxy_endpoint: http://jaeger:4318  # browser RUM proxy uses HTTP
+```
+
+When `proxy_endpoint` is unset (or empty), the proxy falls back to `endpoint`. Most managed collectors that accept HTTP and gRPC on the same hostname don't need this; it's specifically for split-protocol setups like the bundled Jaeger sidecar.
+
 ## Trace ID correlation in logs
 
 When observability is enabled, log lines pick up trace context:
@@ -227,8 +243,9 @@ Browser RUM has its own switch: `observability.browser.enabled: false` disables 
 
 **Browser traces don't show up.**
 
-- Confirm `GET /api/v1/observability/config` returns `enabled: true` in the response body. If it returns `enabled: false` while you have `browser.enabled: true` in YAML, the OTLP endpoint is probably empty.
+- Confirm `GET /api/v1/observability/config` returns `enabled: true` in the response body. If it returns `enabled: false` while you have `browser.enabled: true` in YAML, both `otlp.endpoint` and `otlp.proxy_endpoint` are probably empty.
 - Open the network panel. Successful proxy POSTs to `/api/v1/observability/otlp/v1/traces` return `204 No Content`. A `503` means the proxy is disabled.
+- A `500` with `"Failed to reach OTLP upstream"` in the Codex logs usually means the proxy is targeting a gRPC-only port. The proxy always speaks HTTP, so when `otlp.endpoint` is a gRPC URL (e.g. `:4317`), set `otlp.proxy_endpoint` to the collector's HTTP port (typically `:4318`).
 - The `tracer-*.js` chunk is loaded asynchronously. If it never appears in the network panel, the bootstrap probe failed or the chunk was blocked by an extension.
 
 **`cargo build --no-default-features` after enabling observability.**

@@ -181,6 +181,10 @@ koreader_api:
 #     # headers:                      # auth/tenant headers for hosted backends
 #     #   x-tenant: dev
 #     timeout_ms: 5000
+#     # The browser RUM proxy always speaks OTLP/HTTP. When `endpoint` above
+#     # uses gRPC (port 4317), set `proxy_endpoint` to the matching HTTP
+#     # collector (Jaeger exposes it on 4318). Leave unset to reuse `endpoint`.
+#     proxy_endpoint: http://jaeger:4318
 #   traces:
 #     enabled: true
 #     sample_ratio: 1.0

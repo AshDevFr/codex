@@ -302,6 +302,7 @@ mod tests {
                 protocol: OtlpProtocol::HttpProtobuf,
                 headers: Default::default(),
                 timeout_ms: 1000,
+                proxy_endpoint: None,
             },
             traces: codex_config::ObservabilityTracesConfig {
                 enabled: true,

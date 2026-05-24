@@ -128,6 +128,9 @@ services:
       CODEX_OBSERVABILITY_SERVICE_NAME: codex
       CODEX_OBSERVABILITY_OTLP_ENDPOINT: http://jaeger:4317
       CODEX_OBSERVABILITY_OTLP_PROTOCOL: grpc
+      # The browser RUM proxy always speaks OTLP/HTTP; point it at Jaeger's
+      # HTTP port (4318) instead of reusing the gRPC endpoint above.
+      CODEX_OBSERVABILITY_OTLP_PROXY_ENDPOINT: http://jaeger:4318
       CODEX_OBSERVABILITY_BROWSER_ENABLED: "true"
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]

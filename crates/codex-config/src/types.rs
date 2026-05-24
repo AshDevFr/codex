@@ -967,6 +967,27 @@ pub struct OtlpConfig {
 
     /// Per-export request timeout in milliseconds.
     pub timeout_ms: u64,
+
+    /// Optional override endpoint for the browser RUM forward proxy. The
+    /// proxy always speaks OTLP/HTTP, so when `endpoint` points at a
+    /// gRPC-only port (e.g. Jaeger on `:4317`) this lets operators target
+    /// the matching HTTP port (e.g. `:4318`) without changing the SDK
+    /// transport. When unset or empty, the proxy falls back to `endpoint`.
+    #[serde(default)]
+    pub proxy_endpoint: Option<String>,
+}
+
+impl OtlpConfig {
+    /// Endpoint the browser RUM proxy should POST to. Prefers
+    /// `proxy_endpoint` when set to a non-empty value, otherwise falls back
+    /// to `endpoint`.
+    pub fn effective_proxy_endpoint(&self) -> &str {
+        self.proxy_endpoint
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| self.endpoint.trim())
+    }
 }
 
 impl Default for OtlpConfig {
@@ -985,6 +1006,7 @@ impl Default for OtlpConfig {
                 .unwrap_or_default(),
             headers: HashMap::new(),
             timeout_ms: env_or("CODEX_OBSERVABILITY_OTLP_TIMEOUT_MS", 5000),
+            proxy_endpoint: env_string_opt("CODEX_OBSERVABILITY_OTLP_PROXY_ENDPOINT"),
         }
     }
 }
@@ -2329,6 +2351,7 @@ files:
             "CODEX_OBSERVABILITY_OTLP_ENDPOINT",
             "CODEX_OBSERVABILITY_OTLP_PROTOCOL",
             "CODEX_OBSERVABILITY_OTLP_TIMEOUT_MS",
+            "CODEX_OBSERVABILITY_OTLP_PROXY_ENDPOINT",
             "CODEX_OBSERVABILITY_TRACES_ENABLED",
             "CODEX_OBSERVABILITY_TRACES_SAMPLE_RATIO",
             "CODEX_OBSERVABILITY_METRICS_ENABLED",
@@ -2345,6 +2368,7 @@ files:
         assert!(matches!(config.otlp.protocol, OtlpProtocol::Grpc));
         assert!(config.otlp.endpoint.is_empty());
         assert_eq!(config.otlp.timeout_ms, 5000);
+        assert!(config.otlp.proxy_endpoint.is_none());
         assert!(config.traces.enabled);
         assert!((config.traces.sample_ratio - 1.0).abs() < f64::EPSILON);
         assert!(config.metrics.enabled);
@@ -2427,5 +2451,30 @@ observability:
         assert!(matches!(p, OtlpProtocol::HttpProtobuf));
         let p: OtlpProtocol = serde_yaml::from_str("http-json").unwrap();
         assert!(matches!(p, OtlpProtocol::HttpJson));
+    }
+
+    #[test]
+    fn test_otlp_effective_proxy_endpoint() {
+        // Unset → fall back to endpoint.
+        let mut cfg = OtlpConfig {
+            endpoint: "http://jaeger:4317".into(),
+            proxy_endpoint: None,
+            ..OtlpConfig::default()
+        };
+        assert_eq!(cfg.effective_proxy_endpoint(), "http://jaeger:4317");
+
+        // Empty / whitespace-only → fall back to endpoint.
+        cfg.proxy_endpoint = Some(String::new());
+        assert_eq!(cfg.effective_proxy_endpoint(), "http://jaeger:4317");
+        cfg.proxy_endpoint = Some("   ".into());
+        assert_eq!(cfg.effective_proxy_endpoint(), "http://jaeger:4317");
+
+        // Set → override wins.
+        cfg.proxy_endpoint = Some("http://jaeger:4318".into());
+        assert_eq!(cfg.effective_proxy_endpoint(), "http://jaeger:4318");
+
+        // Whitespace around the override is trimmed.
+        cfg.proxy_endpoint = Some("  http://collector:4318  ".into());
+        assert_eq!(cfg.effective_proxy_endpoint(), "http://collector:4318");
     }
 }

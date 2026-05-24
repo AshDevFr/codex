@@ -177,6 +177,11 @@ files:
 #     # headers:                        # auth/tenant headers (e.g. signoz-access-token)
 #     #   x-honeycomb-team: ...
 #     timeout_ms: 5000
+#     # Optional override for the browser RUM proxy, which always speaks
+#     # OTLP/HTTP. Set this when `endpoint` uses gRPC (e.g. Jaeger 4317) so
+#     # browser spans hit the matching HTTP port (e.g. 4318). Falls back to
+#     # `endpoint` when unset.
+#     # proxy_endpoint: http://localhost:4318
 #   traces:
 #     enabled: true
 #     sample_ratio: 1.0                 # tune down on busy deployments

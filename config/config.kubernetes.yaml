@@ -178,6 +178,11 @@ files:
 #     # headers:                        # auth/tenant headers
 #     #   x-honeycomb-team: ...
 #     timeout_ms: 5000
+#     # Optional HTTP override for the browser RUM proxy. Required when
+#     # `endpoint` above is gRPC-only (e.g. Jaeger :4317); point at the
+#     # collector's HTTP receiver (typically :4318). Falls back to
+#     # `endpoint` when unset.
+#     # proxy_endpoint: http://otel-collector.observability:4318
 #   traces:
 #     enabled: true
 #     sample_ratio: 0.25                # tune for cluster traffic volume

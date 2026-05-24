@@ -256,3 +256,74 @@ async fn otlp_proxy_forwards_body_and_headers() {
         "operator-configured header must win; browser-supplied value is dropped"
     );
 }
+
+/// When `otlp.proxy_endpoint` is set, the browser forward proxy must target
+/// it instead of `otlp.endpoint`. This is the gRPC-vs-HTTP split-protocol
+/// case: a gRPC-only backend endpoint must not be reused for the HTTP-only
+/// proxy path.
+#[tokio::test]
+async fn otlp_proxy_uses_proxy_endpoint_override_when_set() {
+    let (http_upstream_url, http_capture) = spawn_capture_upstream().await;
+
+    // Bogus address that nothing is listening on — if the proxy fell back to
+    // `endpoint` here the request would fail at the transport layer.
+    let unreachable_grpc_endpoint = "http://127.0.0.1:1";
+
+    let (db, _temp) = setup_test_db().await;
+    let mut obs = observability_config(unreachable_grpc_endpoint, true, vec![]);
+    obs.otlp.proxy_endpoint = Some(http_upstream_url);
+
+    let state = app_state_with_observability(db, obs).await;
+    let (user, _) = bootstrap_user(&state.db, "obs_proxy_endpoint").await;
+    let token = generate_test_token(&state, &user);
+    let app = router_for(state);
+
+    let payload = b"\x0aFAKE-OTLP-PROTO-BYTES".to_vec();
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/observability/otlp/v1/traces")
+        .header("authorization", format!("Bearer {token}"))
+        .header("content-type", "application/x-protobuf")
+        .body(String::from_utf8_lossy(&payload).to_string())
+        .unwrap();
+    let (status, _body) = make_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let captured = http_capture.captures.lock().await.clone();
+    assert_eq!(
+        captured.len(),
+        1,
+        "proxy must forward to proxy_endpoint, not to the (unreachable) endpoint"
+    );
+    assert_eq!(captured[0].path, "/v1/traces");
+    assert_eq!(captured[0].body, payload);
+}
+
+/// `observability/config` should advertise `enabled: true` whenever *either*
+/// `endpoint` or `proxy_endpoint` is set, since the proxy only needs the
+/// latter to function.
+#[tokio::test]
+async fn observability_config_enabled_when_only_proxy_endpoint_set() {
+    let (db, _temp) = setup_test_db().await;
+    let mut obs = ObservabilityConfig {
+        browser: ObservabilityBrowserConfig {
+            enabled: true,
+            proxy_path: "/api/v1/observability/otlp".to_string(),
+            sample_ratio: 0.1,
+        },
+        ..ObservabilityConfig::default()
+    };
+    obs.otlp.endpoint = String::new();
+    obs.otlp.proxy_endpoint = Some("http://collector:4318".to_string());
+
+    let state = app_state_with_observability(db, obs).await;
+    let (user, _) = bootstrap_user(&state.db, "obs_proxy_only").await;
+    let token = generate_test_token(&state, &user);
+    let app = router_for(state);
+
+    let request = get_request_with_auth("/api/v1/observability/config", &token);
+    let (status, body) = make_json_request::<serde_json::Value>(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+    let payload = body.expect("config payload");
+    assert_eq!(payload["enabled"], serde_json::Value::Bool(true));
+}

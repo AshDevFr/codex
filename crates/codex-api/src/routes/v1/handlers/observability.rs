@@ -81,7 +81,7 @@ pub async fn get_browser_config(
 ) -> Json<BrowserObservabilityConfigDto> {
     let cfg = &state.observability_config;
     Json(BrowserObservabilityConfigDto {
-        enabled: cfg.browser.enabled && !cfg.otlp.endpoint.trim().is_empty(),
+        enabled: cfg.browser.enabled && !cfg.otlp.effective_proxy_endpoint().is_empty(),
         service_name: cfg.service_name.clone(),
         proxy_path: cfg.browser.proxy_path.clone(),
         sample_ratio: cfg.browser.sample_ratio,
@@ -157,7 +157,7 @@ async fn forward_otlp(
         ));
     }
 
-    let upstream_base = cfg.otlp.endpoint.trim();
+    let upstream_base = cfg.otlp.effective_proxy_endpoint();
     if upstream_base.is_empty() {
         return Err(ApiError::ServiceUnavailable(
             "OTLP endpoint not configured".to_string(),

@@ -300,6 +300,13 @@ impl EnvOverride for OtlpConfig {
         {
             self.timeout_ms = ms;
         }
+        if let Ok(proxy_endpoint) = env::var(format!("{}_PROXY_ENDPOINT", prefix)) {
+            self.proxy_endpoint = if proxy_endpoint.is_empty() {
+                None
+            } else {
+                Some(proxy_endpoint)
+            };
+        }
     }
 }
 
@@ -1627,6 +1634,10 @@ mod tests {
                 "CODEX_OBSERVABILITY_OTLP_HEADERS",
                 "x-tenant=acme,x-key=secret",
             ),
+            (
+                "CODEX_OBSERVABILITY_OTLP_PROXY_ENDPOINT",
+                "http://collector.local:4318",
+            ),
             ("CODEX_OBSERVABILITY_TRACES_ENABLED", "false"),
             ("CODEX_OBSERVABILITY_TRACES_SAMPLE_RATIO", "0.3"),
             ("CODEX_OBSERVABILITY_METRICS_ENABLED", "false"),
@@ -1655,6 +1666,10 @@ mod tests {
         assert_eq!(config.otlp.timeout_ms, 9000);
         assert_eq!(config.otlp.headers.get("x-tenant"), Some(&"acme".into()));
         assert_eq!(config.otlp.headers.get("x-key"), Some(&"secret".into()));
+        assert_eq!(
+            config.otlp.proxy_endpoint.as_deref(),
+            Some("http://collector.local:4318")
+        );
         assert!(!config.traces.enabled);
         assert!((config.traces.sample_ratio - 0.3).abs() < f64::EPSILON);
         assert!(!config.metrics.enabled);

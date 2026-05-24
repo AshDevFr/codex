@@ -36,6 +36,7 @@ fn base_observability_cfg(enabled: bool) -> ObservabilityConfig {
             protocol: OtlpProtocol::HttpProtobuf,
             headers: Default::default(),
             timeout_ms: 100,
+            proxy_endpoint: None,
         },
         traces: codex::config::ObservabilityTracesConfig {
             enabled: true,
