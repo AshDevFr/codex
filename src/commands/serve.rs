@@ -108,9 +108,9 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
 
     // Create and start scheduler
     info!("Initializing job scheduler...");
-    let scheduler: Arc<tokio::sync::Mutex<crate::scheduler::Scheduler>> =
+    let scheduler: Arc<tokio::sync::Mutex<codex_scheduler::Scheduler>> =
         Arc::new(tokio::sync::Mutex::new(
-            crate::scheduler::Scheduler::new(
+            codex_scheduler::Scheduler::new(
                 db.sea_orm_connection().clone(),
                 &config.scheduler.timezone,
             )
@@ -342,7 +342,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     // Wrap the scheduler in the services-layer trait so plugin handles can
     // trigger reconciles without holding the concrete scheduler type.
     let scheduler_handle: codex_services::scheduler_handle::SharedSchedulerReconciler = Arc::new(
-        crate::scheduler::LockedSchedulerReconciler::new(scheduler.clone()),
+        codex_scheduler::LockedSchedulerReconciler::new(scheduler.clone()),
     );
     let plugin_manager = Arc::new(
         codex_services::plugin::PluginManager::with_defaults(Arc::new(

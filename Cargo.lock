@@ -827,6 +827,7 @@ dependencies = [
  "codex-models",
  "codex-parsers",
  "codex-scanner",
+ "codex-scheduler",
  "codex-search",
  "codex-services",
  "codex-tasks",
@@ -1009,6 +1010,29 @@ dependencies = [
  "uuid",
  "walkdir",
  "zip",
+]
+
+[[package]]
+name = "codex-scheduler"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "chrono-tz",
+ "codex-db",
+ "codex-models",
+ "codex-scanner",
+ "codex-services",
+ "codex-tasks",
+ "codex-utils",
+ "futures",
+ "sea-orm",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tokio-cron-scheduler",
+ "tracing",
+ "uuid",
 ]
 
 [[package]]

@@ -1,7 +1,6 @@
 mod api;
 mod commands;
 mod observability;
-mod scheduler;
 mod web;
 
 use clap::{Parser, Subcommand};

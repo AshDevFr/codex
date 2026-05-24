@@ -1016,7 +1016,7 @@ pub async fn poll_release_source_now(
         )));
     }
 
-    let outcome = crate::scheduler::release_sources::enqueue_poll_now(&state.db, source_id)
+    let outcome = codex_scheduler::release_sources::enqueue_poll_now(&state.db, source_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to enqueue poll task: {}", e)))?;
 
@@ -1076,7 +1076,7 @@ pub async fn poll_release_sources_now_all(
     let mut coalesced = 0usize;
     let mut failed = 0usize;
     for source in sources {
-        match crate::scheduler::release_sources::enqueue_poll_now(&state.db, source.id).await {
+        match codex_scheduler::release_sources::enqueue_poll_now(&state.db, source.id).await {
             Ok(outcome) => {
                 if outcome.coalesced {
                     coalesced += 1;
