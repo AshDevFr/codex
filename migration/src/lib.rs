@@ -182,6 +182,8 @@ mod m20260520_000087_create_filter_presets;
 mod m20260520_000088_add_filter_indexes;
 // Rename books.file_path to books.path for symmetry with series.path
 mod m20260521_000089_rename_books_file_path_to_path;
+// Access groups for sharing tag management
+pub mod m20260524_000090_create_access_groups;
 
 pub struct Migrator;
 
@@ -334,6 +336,8 @@ impl MigratorTrait for Migrator {
             // Indexes for the new BookCondition::Format / PageCount filter variants
             Box::new(m20260520_000088_add_filter_indexes::Migration),
             Box::new(m20260521_000089_rename_books_file_path_to_path::Migration),
+            // Access groups for sharing tag management
+            Box::new(m20260524_000090_create_access_groups::Migration),
         ]
     }
 }
