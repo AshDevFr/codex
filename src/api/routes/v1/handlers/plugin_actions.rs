@@ -20,13 +20,6 @@ use super::super::dto::{
     PreviewSummary, SearchTitleResponse, SkippedField, parse_scope,
 };
 use crate::api::{AppState, error::ApiError, extractors::AuthContext, permissions::Permission};
-use crate::db::entities::plugins::PluginPermission;
-use crate::db::repositories::{
-    AlternateTitleRepository, BookExternalIdRepository, BookMetadataRepository, BookRepository,
-    ExternalLinkRepository, ExternalRatingRepository, GenreRepository, LibraryRepository,
-    PluginsRepository, SeriesExternalIdRepository, SeriesMetadataRepository, SeriesRepository,
-    TagRepository, TaskRepository,
-};
 use crate::services::metadata::preprocessing::{
     PreprocessingRule, SeriesContextBuilder, apply_rules, render_template,
 };
@@ -42,6 +35,13 @@ use crate::tasks::types::TaskType;
 use axum::{
     Json,
     extract::{Path, Query, State},
+};
+use codex_db::entities::plugins::PluginPermission;
+use codex_db::repositories::{
+    AlternateTitleRepository, BookExternalIdRepository, BookMetadataRepository, BookRepository,
+    ExternalLinkRepository, ExternalRatingRepository, GenreRepository, LibraryRepository,
+    PluginsRepository, SeriesExternalIdRepository, SeriesMetadataRepository, SeriesRepository,
+    TagRepository, TaskRepository,
 };
 use sea_orm::prelude::Decimal;
 use serde::Deserialize;

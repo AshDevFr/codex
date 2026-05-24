@@ -14,11 +14,6 @@ use crate::api::{
     extractors::{AuthState, FlexibleAuthContext},
     permissions::Permission,
 };
-use crate::db::repositories::{
-    BookMetadataRepository, BookQueryOptions, BookQuerySort, BookRepository, BookSortField,
-    ReadProgressRepository, ReadStatusFilter, ReleaseDateFilter, ReleaseDateOperator,
-    SeriesMetadataRepository,
-};
 use crate::require_permission;
 use axum::{
     Json,
@@ -28,6 +23,11 @@ use axum::{
     response::Response,
 };
 use chrono::Datelike;
+use codex_db::repositories::{
+    BookMetadataRepository, BookQueryOptions, BookQuerySort, BookRepository, BookSortField,
+    ReadProgressRepository, ReadStatusFilter, ReleaseDateFilter, ReleaseDateOperator,
+    SeriesMetadataRepository,
+};
 use serde::Deserialize;
 use std::sync::Arc;
 use tokio_util::io::ReaderStream;
@@ -772,7 +772,7 @@ async fn get_series_title(state: &Arc<AuthState>, series_id: Uuid) -> Result<Str
         Ok(metadata.title)
     } else {
         // Fallback to series name
-        use crate::db::repositories::SeriesRepository;
+        use codex_db::repositories::SeriesRepository;
         if let Some(series) = SeriesRepository::get_by_id(&state.db, series_id)
             .await
             .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?

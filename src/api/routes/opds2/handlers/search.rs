@@ -7,12 +7,12 @@ use crate::api::{
     extractors::{AuthContext, AuthState},
     permissions::Permission,
 };
-use crate::db::repositories::{
+use crate::require_permission;
+use axum::extract::{Query, State};
+use codex_db::repositories::{
     BookMetadataRepository, BookRepository, ReadProgressRepository, SeriesMetadataRepository,
     SeriesRepository,
 };
-use crate::require_permission;
-use axum::extract::{Query, State};
 use serde::Deserialize;
 use std::sync::Arc;
 

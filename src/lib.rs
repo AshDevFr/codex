@@ -1,5 +1,4 @@
 pub mod api;
-pub mod db;
 pub mod observability;
 pub mod scanner;
 pub mod scheduler;
@@ -9,10 +8,11 @@ pub mod tasks;
 pub mod web;
 
 // Re-exports of workspace-leaf crates so existing `codex::config::*`,
-// `codex::events::*`, `codex::models::*`, `codex::parsers::*`, and
-// `codex::utils::*` paths (used pervasively in integration tests) keep
+// `codex::db::*`, `codex::events::*`, `codex::models::*`, `codex::parsers::*`,
+// and `codex::utils::*` paths (used pervasively in integration tests) keep
 // resolving without churn.
 pub use codex_config as config;
+pub use codex_db as db;
 pub use codex_events as events;
 pub use codex_models as models;
 pub use codex_parsers as parsers;

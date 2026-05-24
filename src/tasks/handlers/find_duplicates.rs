@@ -3,11 +3,11 @@ use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 use tracing::{info, warn};
 
-use crate::db::entities::tasks;
-use crate::db::repositories::{
+use crate::tasks::types::TaskResult;
+use codex_db::entities::tasks;
+use codex_db::repositories::{
     BookDuplicatesRepository, SeriesDuplicatesRepository, SettingsRepository,
 };
-use crate::tasks::types::TaskResult;
 use codex_events::EventBroadcaster;
 
 use super::TaskHandler;

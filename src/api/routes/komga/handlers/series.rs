@@ -15,12 +15,6 @@ use crate::api::{
     extractors::{AuthState, FlexibleAuthContext},
     permissions::Permission,
 };
-use crate::db::repositories::{
-    AlternateTitleRepository, BookMetadataRepository, BookQueryOptions, BookQuerySort,
-    BookRepository, BookSortField, ExternalLinkRepository, GenreRepository, ReadProgressRepository,
-    SeriesCoversRepository, SeriesMetadataRepository, SeriesQueryOptions, SeriesQuerySort,
-    SeriesRepository, SeriesSortFieldRepo, TagRepository,
-};
 use crate::require_permission;
 use axum::{
     Json,
@@ -28,6 +22,12 @@ use axum::{
     extract::{Path, Query, State},
     http::{StatusCode, header},
     response::Response,
+};
+use codex_db::repositories::{
+    AlternateTitleRepository, BookMetadataRepository, BookQueryOptions, BookQuerySort,
+    BookRepository, BookSortField, ExternalLinkRepository, GenreRepository, ReadProgressRepository,
+    SeriesCoversRepository, SeriesMetadataRepository, SeriesQueryOptions, SeriesQuerySort,
+    SeriesRepository, SeriesSortFieldRepo, TagRepository,
 };
 use serde::Deserialize;
 use std::sync::Arc;
@@ -747,7 +747,7 @@ pub async fn get_series_books(
 /// Build a KomgaSeriesDto from a series entity
 async fn build_series_dto(
     state: &Arc<AuthState>,
-    series: &crate::db::entities::series::Model,
+    series: &codex_db::entities::series::Model,
     user_id: Option<Uuid>,
 ) -> Result<KomgaSeriesDto, ApiError> {
     // Get metadata

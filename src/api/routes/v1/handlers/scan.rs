@@ -14,11 +14,9 @@ use uuid::Uuid;
 use super::super::dto::{ScanStatusDto, TriggerScanQuery};
 use super::task_queue::CreateTaskResponse;
 use crate::api::{AppState, error::ApiError, extractors::AuthContext, permissions::Permission};
-use crate::db::repositories::{
-    BookRepository, LibraryRepository, SeriesRepository, TaskRepository,
-};
 use crate::scanner::ScanMode;
 use crate::tasks::types::TaskType;
+use codex_db::repositories::{BookRepository, LibraryRepository, SeriesRepository, TaskRepository};
 
 /// Trigger a library scan
 ///
@@ -63,7 +61,7 @@ pub async fn trigger_scan(
     let mode = ScanMode::from_str(&params.mode).map_err(ApiError::BadRequest)?;
 
     // Check if there's already a pending/processing scan for this library
-    use crate::db::entities::{prelude::*, tasks};
+    use codex_db::entities::{prelude::*, tasks};
     use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 
     let existing_scan = Tasks::find()
@@ -139,7 +137,7 @@ pub async fn get_scan_status(
     auth.require_permission(&Permission::LibrariesRead)?;
 
     // Find the most recent scan task for this library
-    use crate::db::entities::{prelude::*, tasks};
+    use codex_db::entities::{prelude::*, tasks};
     use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryOrder};
 
     let task = Tasks::find()
@@ -199,7 +197,7 @@ pub async fn cancel_scan(
     auth.require_permission(&Permission::LibrariesWrite)?;
 
     // Find the active scan task for this library
-    use crate::db::entities::{prelude::*, tasks};
+    use codex_db::entities::{prelude::*, tasks};
     use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 
     let task = Tasks::find()
@@ -244,7 +242,7 @@ pub async fn list_active_scans(
     auth.require_permission(&Permission::LibrariesRead)?;
 
     // Get all active scan tasks
-    use crate::db::entities::{prelude::*, tasks};
+    use codex_db::entities::{prelude::*, tasks};
     use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 
     let tasks = Tasks::find()
@@ -531,7 +529,7 @@ pub async fn trigger_library_analysis(
         .ok_or_else(|| ApiError::NotFound("Library not found".to_string()))?;
 
     // Get all books in the library (including already analyzed)
-    use crate::db::repositories::SeriesRepository;
+    use codex_db::repositories::SeriesRepository;
     let series_list = SeriesRepository::list_by_library(&state.db, library_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to get series: {}", e)))?;

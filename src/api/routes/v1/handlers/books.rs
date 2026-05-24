@@ -18,10 +18,6 @@ use crate::api::{
     extractors::{AuthContext, AuthState, ContentFilter, FlexibleAuthContext},
     permissions::Permission,
 };
-use crate::db::repositories::{
-    BookMetadataRepository, BookRepository, GenreRepository, LibraryRepository, PageRepository,
-    ReadProgressRepository, SeriesMetadataRepository, TagRepository,
-};
 use crate::require_permission;
 use crate::services::FilterService;
 use axum::{
@@ -30,6 +26,10 @@ use axum::{
     extract::{Path, Query, State},
     http::{StatusCode, header},
     response::{IntoResponse, Response},
+};
+use codex_db::repositories::{
+    BookMetadataRepository, BookRepository, GenreRepository, LibraryRepository, PageRepository,
+    ReadProgressRepository, SeriesMetadataRepository, TagRepository,
 };
 use codex_utils::{
     json_merge_patch, normalize_for_search, parse_custom_metadata, serialize_custom_metadata,
@@ -180,7 +180,7 @@ pub struct BookGetQuery {
 pub async fn books_to_dtos(
     db: &sea_orm::DatabaseConnection,
     user_id: Uuid,
-    books: Vec<crate::db::entities::books::Model>,
+    books: Vec<codex_db::entities::books::Model>,
 ) -> Result<Vec<BookDto>, ApiError> {
     if books.is_empty() {
         return Ok(Vec::new());
@@ -316,7 +316,7 @@ pub async fn books_to_dtos(
 pub async fn books_to_full_dtos_batched(
     db: &sea_orm::DatabaseConnection,
     user_id: Uuid,
-    books: Vec<crate::db::entities::books::Model>,
+    books: Vec<codex_db::entities::books::Model>,
 ) -> Result<Vec<FullBookResponse>, ApiError> {
     use chrono::Utc;
 
@@ -883,7 +883,7 @@ pub async fn list_books_filtered(
         None
     };
 
-    let fuzzy_enabled = crate::db::repositories::SettingsRepository::get_value::<bool>(
+    let fuzzy_enabled = codex_db::repositories::SettingsRepository::get_value::<bool>(
         &state.db,
         "search.fuzzy.enabled",
     )
@@ -2134,8 +2134,8 @@ pub async fn get_book_file(
 use crate::api::routes::v1::dto::{
     BookMetadataResponse, PatchBookMetadataRequest, ReplaceBookMetadataRequest,
 };
-use crate::db::entities::book_metadata;
 use chrono::Utc;
+use codex_db::entities::book_metadata;
 use codex_events::{EntityChangeEvent, EntityEvent};
 use sea_orm::{ActiveModelTrait, Set};
 
@@ -3524,7 +3524,7 @@ pub async fn upload_book_cover(
         .ok()
         .flatten()
     {
-        let mut active: crate::db::entities::book_metadata::ActiveModel = meta.into();
+        let mut active: codex_db::entities::book_metadata::ActiveModel = meta.into();
         active.cover_lock = sea_orm::Set(true);
         active.updated_at = sea_orm::Set(Utc::now());
         let _ = active.update(&state.db).await;
@@ -3552,7 +3552,7 @@ pub async fn upload_book_cover(
 use super::super::dto::{
     BookCoverListResponse, BookExternalIdListResponse, CreateBookExternalIdRequest,
 };
-use crate::db::repositories::{BookCoversRepository, BookExternalIdRepository};
+use codex_db::repositories::{BookCoversRepository, BookExternalIdRepository};
 
 /// List all external IDs for a book
 #[utoipa::path(
@@ -3731,7 +3731,7 @@ pub async fn delete_book_external_id(
 use super::super::dto::{
     BookExternalLinkDto, BookExternalLinkListResponse, CreateBookExternalLinkRequest,
 };
-use crate::db::repositories::BookExternalLinkRepository;
+use codex_db::repositories::BookExternalLinkRepository;
 
 /// List all external links for a book
 #[utoipa::path(
@@ -3985,7 +3985,7 @@ pub async fn select_book_cover(
         .ok()
         .flatten()
     {
-        let mut active: crate::db::entities::book_metadata::ActiveModel = meta.into();
+        let mut active: codex_db::entities::book_metadata::ActiveModel = meta.into();
         active.cover_lock = sea_orm::Set(true);
         active.updated_at = sea_orm::Set(Utc::now());
         let _ = active.update(&state.db).await;
@@ -4299,9 +4299,9 @@ use super::super::dto::{
     BookErrorDto, BookErrorTypeDto, BookWithErrorsDto, BooksWithErrorsResponse, ErrorGroupDto,
     RetryAllErrorsRequest, RetryBookErrorsRequest, RetryErrorsResponse,
 };
-use crate::db::entities::book_error::{BookErrorType, parse_analysis_errors};
-use crate::db::repositories::TaskRepository;
 use crate::tasks::types::TaskType;
+use codex_db::entities::book_error::{BookErrorType, parse_analysis_errors};
+use codex_db::repositories::TaskRepository;
 
 /// Query parameters for listing books with analysis errors
 #[derive(Debug, Deserialize, utoipa::IntoParams)]

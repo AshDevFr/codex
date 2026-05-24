@@ -502,7 +502,7 @@ impl SeriesContext {
 use anyhow::Result;
 use sea_orm::DatabaseConnection;
 
-use crate::db::repositories::{
+use codex_db::repositories::{
     AlternateTitleRepository, BookRepository, ExternalLinkRepository, ExternalRatingRepository,
     GenreRepository, SeriesExternalIdRepository, SeriesMetadataRepository, TagRepository,
 };
@@ -996,7 +996,7 @@ impl BookContext {
 // Book Context Builder (async from database)
 // =============================================================================
 
-use crate::db::repositories::{
+use codex_db::repositories::{
     BookExternalIdRepository, BookExternalLinkRepository, BookMetadataRepository,
 };
 

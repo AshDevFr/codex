@@ -26,13 +26,6 @@ use crate::api::{
     extractors::{AuthContext, AuthState, ContentFilter, FlexibleAuthContext},
     permissions::Permission,
 };
-use crate::db::entities::{series, series_metadata};
-use crate::db::repositories::{
-    AlternateTitleRepository, BookRepository, ExternalLinkRepository, ExternalRatingRepository,
-    GenreRepository, LibraryRepository, ReadProgressRepository, SeriesCoversRepository,
-    SeriesExternalIdRepository, SeriesMetadataRepository, SeriesRepository,
-    SeriesTrackingRepository, SharingTagRepository, TagRepository, UserSeriesRatingRepository,
-};
 use crate::require_permission;
 use crate::services::release::upstream_gap::{
     UpstreamGap, UpstreamGapInputs, compute_upstream_gap,
@@ -45,6 +38,13 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use chrono::Utc;
+use codex_db::entities::{series, series_metadata};
+use codex_db::repositories::{
+    AlternateTitleRepository, BookRepository, ExternalLinkRepository, ExternalRatingRepository,
+    GenreRepository, LibraryRepository, ReadProgressRepository, SeriesCoversRepository,
+    SeriesExternalIdRepository, SeriesMetadataRepository, SeriesRepository,
+    SeriesTrackingRepository, SharingTagRepository, TagRepository, UserSeriesRatingRepository,
+};
 use codex_events::{EntityChangeEvent, EntityEvent, EntityType};
 use codex_utils::{
     json_merge_patch, normalize_for_search, parse_custom_metadata, serialize_custom_metadata,
@@ -1091,7 +1091,7 @@ pub async fn search_series(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
 
-    let fuzzy_enabled = crate::db::repositories::SettingsRepository::get_value::<bool>(
+    let fuzzy_enabled = codex_db::repositories::SettingsRepository::get_value::<bool>(
         &state.db,
         "search.fuzzy.enabled",
     )
@@ -1194,7 +1194,7 @@ pub async fn list_series_filtered(
     let (page, page_size) = pagination.validated();
     let offset = (page - 1) * page_size;
 
-    let fuzzy_enabled = crate::db::repositories::SettingsRepository::get_value::<bool>(
+    let fuzzy_enabled = codex_db::repositories::SettingsRepository::get_value::<bool>(
         &state.db,
         "search.fuzzy.enabled",
     )
@@ -1983,8 +1983,8 @@ pub async fn get_series_thumbnail(
     );
 
     // Queue the thumbnail generation task (fire and forget)
-    use crate::db::repositories::TaskRepository;
     use crate::tasks::types::TaskType;
+    use codex_db::repositories::TaskRepository;
 
     let task_type = TaskType::GenerateSeriesThumbnail {
         series_id,
@@ -2996,10 +2996,10 @@ pub async fn reset_series_metadata(
         .map_err(|e| ApiError::Internal(format!("Failed to clear sharing tags: {}", e)))?;
 
     // Delete metadata sources
-    use crate::db::entities::metadata_sources::Entity as MetadataSources;
+    use codex_db::entities::metadata_sources::Entity as MetadataSources;
     use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
     MetadataSources::delete_many()
-        .filter(crate::db::entities::metadata_sources::Column::SeriesId.eq(series_id))
+        .filter(codex_db::entities::metadata_sources::Column::SeriesId.eq(series_id))
         .exec(&state.db)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to clear metadata sources: {}", e)))?;
@@ -5887,8 +5887,8 @@ pub async fn get_series_cover_image(
 /// This should be called whenever a series cover is selected/unselected to ensure
 /// the cached thumbnail reflects the current cover selection.
 async fn regenerate_series_thumbnail(state: &AuthState, series_id: Uuid) {
-    use crate::db::repositories::TaskRepository;
     use crate::tasks::types::TaskType;
+    use codex_db::repositories::TaskRepository;
 
     // Delete the cached series thumbnail first
     if let Err(e) = state

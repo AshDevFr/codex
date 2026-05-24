@@ -8,7 +8,7 @@ use super::super::dto::{
     TaskMetricsSummaryDto, TaskTypeMetricsDto,
 };
 use crate::api::{AppState, error::ApiError, extractors::AuthContext, permissions::Permission};
-use crate::db::repositories::TaskRepository;
+use codex_db::repositories::TaskRepository;
 
 /// Get current task metrics
 ///

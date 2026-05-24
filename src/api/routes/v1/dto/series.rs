@@ -796,8 +796,8 @@ pub struct SeriesExternalIdDto {
     pub updated_at: DateTime<Utc>,
 }
 
-impl From<crate::db::entities::series_external_ids::Model> for SeriesExternalIdDto {
-    fn from(model: crate::db::entities::series_external_ids::Model) -> Self {
+impl From<codex_db::entities::series_external_ids::Model> for SeriesExternalIdDto {
+    fn from(model: codex_db::entities::series_external_ids::Model) -> Self {
         Self {
             id: model.id,
             series_id: model.series_id,

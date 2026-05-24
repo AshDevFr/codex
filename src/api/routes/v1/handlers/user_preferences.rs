@@ -5,11 +5,11 @@ use super::super::dto::{
     SetPreferencesResponse, UserPreferenceDto, UserPreferencesResponse,
 };
 use crate::api::{AppState, error::ApiError, extractors::AuthContext};
-use crate::db::repositories::UserPreferencesRepository;
 use axum::{
     Json,
     extract::{Path, State},
 };
+use codex_db::repositories::UserPreferencesRepository;
 use std::sync::Arc;
 use utoipa::OpenApi;
 

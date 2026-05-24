@@ -13,8 +13,8 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use uuid::Uuid;
 
-use crate::db::repositories::{SeriesRepository, SeriesTrackingRepository, TrackingUpdate};
 use crate::services::release::seed::seed_tracking_for_series;
+use codex_db::repositories::{SeriesRepository, SeriesTrackingRepository, TrackingUpdate};
 use codex_events::{EntityChangeEvent, EntityEvent, EventBroadcaster};
 
 /// Discrete outcomes for a single-series toggle attempt.
@@ -180,12 +180,12 @@ fn errored(series_id: Uuid, reason: impl Into<String>) -> ToggleResult {
 mod tests {
     use super::*;
 
-    use crate::db::ScanningStrategy;
-    use crate::db::repositories::{
+    use codex_db::ScanningStrategy;
+    use codex_db::repositories::{
         LibraryRepository, SeriesAliasRepository, SeriesRepository, SeriesTrackingRepository,
         TrackingUpdate,
     };
-    use crate::db::test_helpers::create_test_db;
+    use codex_db::test_helpers::create_test_db;
 
     async fn make_series(db: &DatabaseConnection, library_id: Uuid, name: &str) -> Uuid {
         SeriesRepository::create(db, library_id, name, None)

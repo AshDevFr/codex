@@ -13,8 +13,6 @@ use std::sync::Arc;
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
-use crate::db::entities::tasks;
-use crate::db::repositories::SeriesExportRepository;
 use crate::services::SettingsService;
 use crate::services::book_export_collector::{self, BookExportField, BookExportRow};
 use crate::services::export_storage::ExportStorage;
@@ -22,6 +20,8 @@ use crate::services::series_export_collector::{self, ExportField, SeriesExportRo
 use crate::services::series_export_writer;
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::TaskResult;
+use codex_db::entities::tasks;
+use codex_db::repositories::SeriesExportRepository;
 use codex_events::{EventBroadcaster, TaskProgressEvent};
 
 /// Default maximum number of completed exports kept per user.
@@ -151,7 +151,7 @@ impl ExportSeriesHandler {
         task_id: Uuid,
         export_id: Uuid,
         user_id: Uuid,
-        export: &crate::db::entities::series_exports::Model,
+        export: &codex_db::entities::series_exports::Model,
         db: &DatabaseConnection,
         event_broadcaster: Option<&Arc<EventBroadcaster>>,
         started_at: chrono::DateTime<Utc>,

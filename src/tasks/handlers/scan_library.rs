@@ -4,15 +4,15 @@ use serde_json::json;
 use std::sync::Arc;
 use tracing::{debug, error, info, warn};
 
-use crate::db::entities::tasks;
-use crate::db::repositories::{
-    BookRepository, LibraryRepository, PluginsRepository, SeriesRepository, TaskRepository,
-};
 use crate::scanner::{ScanMode, ScanningConfig, scan_library};
 use crate::services::plugin::protocol::PluginScope;
 use crate::services::settings::SettingsService;
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::{TaskResult, TaskType};
+use codex_db::entities::tasks;
+use codex_db::repositories::{
+    BookRepository, LibraryRepository, PluginsRepository, SeriesRepository, TaskRepository,
+};
 use codex_events::EventBroadcaster;
 
 /// Settings key for enabling post-scan auto-match

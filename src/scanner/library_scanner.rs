@@ -14,11 +14,9 @@ use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 use walkdir::WalkDir;
 
-use crate::db::entities::{books, series};
-use crate::db::repositories::{
-    BookRepository, LibraryRepository, SeriesRepository, TaskRepository,
-};
 use crate::tasks::types::TaskType;
+use codex_db::entities::{books, series};
+use codex_db::repositories::{BookRepository, LibraryRepository, SeriesRepository, TaskRepository};
 use codex_events::{EventBroadcaster, TaskProgressEvent};
 use codex_models::SeriesStrategy;
 
@@ -29,7 +27,7 @@ const SUPPORTED_EXTENSIONS: &[&str] = &["cbz", "cbr", "epub", "pdf"];
 
 /// Parse allowed_formats from library and convert to lowercase extensions
 /// Returns None if no restrictions (all formats allowed), or Some(Vec<String>) with allowed extensions
-fn parse_allowed_formats(library: &crate::db::entities::libraries::Model) -> Option<Vec<String>> {
+fn parse_allowed_formats(library: &codex_db::entities::libraries::Model) -> Option<Vec<String>> {
     library.allowed_formats.as_ref().and_then(|json| {
         serde_json::from_str::<Vec<String>>(json)
             .ok()
@@ -53,7 +51,7 @@ fn parse_allowed_formats(library: &crate::db::entities::libraries::Model) -> Opt
 /// - `_to_filter` → matches any directory/file named `_to_filter` at any depth
 /// - `*.tmp` → matches any `.tmp` file at any depth
 /// - `subdir/*` → matches everything inside `subdir/` relative to library root
-fn parse_excluded_patterns(library: &crate::db::entities::libraries::Model) -> Option<GlobSet> {
+fn parse_excluded_patterns(library: &codex_db::entities::libraries::Model) -> Option<GlobSet> {
     library.excluded_patterns.as_ref().and_then(|patterns| {
         let mut builder = GlobSetBuilder::new();
         let mut pattern_count = 0;
@@ -562,7 +560,7 @@ pub async fn scan_library(
 /// - Uses thread-safe shared state for progress tracking
 async fn scan_batched(
     db: &DatabaseConnection,
-    library: &crate::db::entities::libraries::Model,
+    library: &codex_db::entities::libraries::Model,
     mode: ScanMode,
     progress_tx: Option<mpsc::Sender<ScanProgress>>,
     event_broadcaster: Option<&Arc<EventBroadcaster>>,
@@ -953,7 +951,7 @@ async fn hash_files_parallel(
 #[allow(clippy::too_many_arguments)]
 async fn process_series_batched(
     db: &DatabaseConnection,
-    library: &crate::db::entities::libraries::Model,
+    library: &codex_db::entities::libraries::Model,
     detected_series: &DetectedSeries,
     existing_books_map: &HashMap<String, books::Model>,
     all_series_paths: &HashSet<String>,
@@ -1268,8 +1266,8 @@ async fn find_or_create_series(
     preprocessing_rules: &[crate::services::metadata::preprocessing::PreprocessingRule],
     event_broadcaster: Option<&Arc<EventBroadcaster>>,
 ) -> Result<series::Model> {
-    use crate::db::repositories::SeriesMetadataRepository;
     use crate::services::metadata::preprocessing::apply_rules;
+    use codex_db::repositories::SeriesMetadataRepository;
 
     debug!(
         "find_or_create_series: name='{}', path='{}', fingerprint={:?}",
@@ -1732,9 +1730,9 @@ mod tests {
     // Helper to create a minimal library model for testing
     fn create_test_library(
         excluded_patterns: Option<String>,
-    ) -> crate::db::entities::libraries::Model {
+    ) -> codex_db::entities::libraries::Model {
         use chrono::Utc;
-        crate::db::entities::libraries::Model {
+        codex_db::entities::libraries::Model {
             id: Uuid::new_v4(),
             name: "Test Library".to_string(),
             path: "/test/library".to_string(),

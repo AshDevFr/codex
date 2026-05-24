@@ -9,11 +9,11 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::api::{error::ApiError, extractors::AuthContext, permissions::Permission};
-use crate::db::repositories::{
-    LibraryRepository, SeriesMetadataRepository, SeriesRepository, TaskRepository,
-};
 use crate::require_permission;
 use crate::tasks::types::{TaskStats, TaskType};
+use codex_db::repositories::{
+    LibraryRepository, SeriesMetadataRepository, SeriesRepository, TaskRepository,
+};
 
 use super::super::dto::series::{
     EnqueueReprocessTitleRequest, EnqueueReprocessTitleResponse, ReprocessSeriesTitlesRequest,
@@ -143,8 +143,8 @@ pub struct TaskResponse {
     pub library_name: Option<String>,
 }
 
-impl From<crate::db::entities::tasks::Model> for TaskResponse {
-    fn from(task: crate::db::entities::tasks::Model) -> Self {
+impl From<codex_db::entities::tasks::Model> for TaskResponse {
+    fn from(task: codex_db::entities::tasks::Model) -> Self {
         Self {
             id: task.id,
             task_type: task.task_type,
@@ -171,8 +171,8 @@ impl From<crate::db::entities::tasks::Model> for TaskResponse {
     }
 }
 
-impl From<crate::db::repositories::task::TaskWithTargets> for TaskResponse {
-    fn from(enriched: crate::db::repositories::task::TaskWithTargets) -> Self {
+impl From<codex_db::repositories::task::TaskWithTargets> for TaskResponse {
+    fn from(enriched: codex_db::repositories::task::TaskWithTargets) -> Self {
         let mut response = Self::from(enriched.task);
         response.book_title = enriched.book_title;
         response.series_title = enriched.series_title;
@@ -655,7 +655,7 @@ pub async fn generate_book_thumbnails(
     // Validate scope IDs if no explicit book_ids or series_ids provided
     if request.book_ids.is_none() && request.series_ids.is_none() {
         if let Some(library_id) = request.library_id {
-            use crate::db::repositories::LibraryRepository;
+            use codex_db::repositories::LibraryRepository;
             LibraryRepository::get_by_id(&state.db, library_id)
                 .await
                 .map_err(|e| ApiError::Internal(format!("Failed to check library: {}", e)))?
@@ -663,7 +663,7 @@ pub async fn generate_book_thumbnails(
         }
 
         if let Some(series_id) = request.series_id {
-            use crate::db::repositories::SeriesRepository;
+            use codex_db::repositories::SeriesRepository;
             SeriesRepository::get_by_id(&state.db, series_id)
                 .await
                 .map_err(|e| ApiError::Internal(format!("Failed to check series: {}", e)))?
@@ -724,7 +724,7 @@ pub async fn generate_library_book_thumbnails(
     auth: AuthContext,
     Json(request): Json<ForceRequest>,
 ) -> Result<Json<CreateTaskResponse>, ApiError> {
-    use crate::db::repositories::LibraryRepository;
+    use codex_db::repositories::LibraryRepository;
 
     // Check permission
     auth.require_permission(&Permission::TasksWrite)?;
@@ -780,7 +780,7 @@ pub async fn generate_book_thumbnail(
     auth: AuthContext,
     Json(request): Json<ForceRequest>,
 ) -> Result<Json<CreateTaskResponse>, ApiError> {
-    use crate::db::repositories::BookRepository;
+    use codex_db::repositories::BookRepository;
 
     // Check permission
     auth.require_permission(&Permission::TasksWrite)?;
@@ -834,7 +834,7 @@ pub async fn generate_series_thumbnail(
     auth: AuthContext,
     Json(request): Json<ForceRequest>,
 ) -> Result<Json<CreateTaskResponse>, ApiError> {
-    use crate::db::repositories::SeriesRepository;
+    use codex_db::repositories::SeriesRepository;
 
     // Check permission
     auth.require_permission(&Permission::TasksWrite)?;
@@ -904,7 +904,7 @@ pub async fn generate_series_thumbnails(
     if request.series_ids.is_none()
         && let Some(library_id) = request.library_id
     {
-        use crate::db::repositories::LibraryRepository;
+        use codex_db::repositories::LibraryRepository;
         LibraryRepository::get_by_id(&state.db, library_id)
             .await
             .map_err(|e| ApiError::Internal(format!("Failed to check library: {}", e)))?

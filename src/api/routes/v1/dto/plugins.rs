@@ -8,12 +8,12 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::db::entities::plugin_failures;
-use crate::db::entities::plugins::{self, InternalPluginConfig, PluginPermission};
-use crate::db::repositories::PluginsRepository;
 use crate::services::plugin::protocol::{
     CredentialField, MetadataContentType, PluginCapabilities, PluginScope,
 };
+use codex_db::entities::plugin_failures;
+use codex_db::entities::plugins::{self, InternalPluginConfig, PluginPermission};
+use codex_db::repositories::PluginsRepository;
 
 use super::common::deserialize_optional_nullable;
 

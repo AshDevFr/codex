@@ -1,8 +1,8 @@
-use crate::db::Database;
 use crate::observability::ObservabilityHandle;
 use crate::services::{SettingsService, TaskMetricsService};
 use crate::tasks::TaskWorker;
 use codex_config::{Config, DatabaseConfig, DatabaseType, EnvOverride};
+use codex_db::Database;
 use codex_events::EventBroadcaster;
 use sea_orm::DatabaseConnection;
 use std::fs;
@@ -583,9 +583,9 @@ pub async fn shutdown_workers(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::test_helpers::create_test_db;
     use crate::services::SettingsService;
     use codex_config::{FilesConfig, SQLiteConfig, TaskConfig};
+    use codex_db::test_helpers::create_test_db;
     use tempfile::TempDir;
 
     #[test]

@@ -11,8 +11,6 @@ use crate::api::{
     extractors::{AuthContext, AuthState},
     permissions::Permission,
 };
-use crate::db::entities::libraries;
-use crate::db::repositories::{CreateLibraryParams, LibraryRepository};
 use crate::require_permission;
 use crate::scanner::strategies::create_strategy;
 use axum::{
@@ -21,6 +19,8 @@ use axum::{
     response::Response,
 };
 use chrono::Utc;
+use codex_db::entities::libraries;
+use codex_db::repositories::{CreateLibraryParams, LibraryRepository};
 use codex_models::{BookStrategy, NumberStrategy, SeriesStrategy};
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
@@ -29,10 +29,10 @@ use uuid::Uuid;
 /// Helper function to convert a library entity to a DTO
 async fn library_to_dto(db: &DatabaseConnection, library: libraries::Model) -> LibraryDto {
     // Get counts
-    let book_count = crate::db::repositories::BookRepository::count_by_library(db, library.id)
+    let book_count = codex_db::repositories::BookRepository::count_by_library(db, library.id)
         .await
         .ok();
-    let series_count = crate::db::repositories::SeriesRepository::count_by_library(db, library.id)
+    let series_count = codex_db::repositories::SeriesRepository::count_by_library(db, library.id)
         .await
         .ok();
 
@@ -309,7 +309,7 @@ pub async fn create_library(
             mode: "normal".to_string(),
         };
 
-        crate::db::repositories::TaskRepository::enqueue(&state.db, task_type, None)
+        codex_db::repositories::TaskRepository::enqueue(&state.db, task_type, None)
             .await
             .map_err(|e| ApiError::Internal(format!("Failed to trigger auto-scan: {}", e)))?;
     }
@@ -581,7 +581,7 @@ pub async fn purge_deleted_books(
         .ok_or_else(|| ApiError::NotFound("Library not found".to_string()))?;
 
     // Purge deleted books
-    let count = crate::db::repositories::BookRepository::purge_deleted_in_library(
+    let count = codex_db::repositories::BookRepository::purge_deleted_in_library(
         &state.db,
         library_id,
         Some(&state.event_broadcaster),

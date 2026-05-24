@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use utoipa::ToSchema;
 
-use crate::db::entities::user_preferences;
-use crate::db::repositories::UserPreferencesRepository;
+use codex_db::entities::user_preferences;
+use codex_db::repositories::UserPreferencesRepository;
 
 /// A single user preference
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

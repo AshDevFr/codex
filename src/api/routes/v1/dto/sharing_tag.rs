@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::db::entities::user_sharing_tags::AccessMode;
+use codex_db::entities::user_sharing_tags::AccessMode;
 
 /// Sharing tag data transfer object
 #[derive(Debug, Serialize, ToSchema)]
@@ -165,8 +165,8 @@ pub struct UserSharingTagGrantsResponse {
 
 // Conversion implementations
 
-impl From<crate::db::entities::sharing_tags::Model> for SharingTagSummaryDto {
-    fn from(model: crate::db::entities::sharing_tags::Model) -> Self {
+impl From<codex_db::entities::sharing_tags::Model> for SharingTagSummaryDto {
+    fn from(model: codex_db::entities::sharing_tags::Model) -> Self {
         Self {
             id: model.id,
             name: model.name,
@@ -178,7 +178,7 @@ impl From<crate::db::entities::sharing_tags::Model> for SharingTagSummaryDto {
 impl SharingTagDto {
     /// Create a DTO from model with counts
     pub fn from_model_with_counts(
-        model: crate::db::entities::sharing_tags::Model,
+        model: codex_db::entities::sharing_tags::Model,
         series_count: u64,
         user_count: u64,
     ) -> Self {
@@ -197,8 +197,8 @@ impl SharingTagDto {
 impl UserSharingTagGrantDto {
     /// Create a DTO from grant model and sharing tag model
     pub fn from_models(
-        grant: crate::db::entities::user_sharing_tags::Model,
-        tag: crate::db::entities::sharing_tags::Model,
+        grant: codex_db::entities::user_sharing_tags::Model,
+        tag: codex_db::entities::sharing_tags::Model,
     ) -> Self {
         Self {
             id: grant.id,

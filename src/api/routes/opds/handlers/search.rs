@@ -4,10 +4,6 @@ use crate::api::{
     extractors::{AuthContext, AuthState},
     permissions::Permission,
 };
-use crate::db::repositories::{
-    BookMetadataRepository, BookRepository, ReadProgressRepository, SeriesMetadataRepository,
-    SeriesRepository, SettingsRepository,
-};
 use crate::require_permission;
 use axum::{
     extract::{Query, State},
@@ -15,6 +11,10 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use chrono::Utc;
+use codex_db::repositories::{
+    BookMetadataRepository, BookRepository, ReadProgressRepository, SeriesMetadataRepository,
+    SeriesRepository, SettingsRepository,
+};
 use serde::Deserialize;
 use std::sync::Arc;
 

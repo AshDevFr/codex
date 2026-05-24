@@ -4,7 +4,7 @@
 //! column. Currently ships with `metadata_refresh`; future variants extend
 //! the enum.
 //!
-//! [`library_jobs`]: crate::db::entities::library_jobs
+//! [`library_jobs`]: codex_db::entities::library_jobs
 
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;

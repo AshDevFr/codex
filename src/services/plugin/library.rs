@@ -9,14 +9,14 @@ use std::collections::HashMap;
 use tracing::{debug, warn};
 use uuid::Uuid;
 
-use crate::db::entities::SeriesStatus;
-use crate::db::repositories::{
+use crate::services::plugin::protocol::{
+    UserLibraryEntry, UserLibraryExternalId, UserReadingStatus,
+};
+use codex_db::entities::SeriesStatus;
+use codex_db::repositories::{
     AlternateTitleRepository, BookRepository, GenreRepository, ReadProgressRepository,
     SeriesExternalIdRepository, SeriesMetadataRepository, SeriesRepository, TagRepository,
     UserSeriesRatingRepository,
-};
-use crate::services::plugin::protocol::{
-    UserLibraryEntry, UserLibraryExternalId, UserReadingStatus,
 };
 
 /// Build the full user library as `Vec<UserLibraryEntry>` for recommendation plugins.

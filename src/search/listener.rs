@@ -213,15 +213,15 @@ async fn upsert_book(index: &FuzzyIndex, db: &DatabaseConnection, book_id: uuid:
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::ScanningStrategy;
-    use crate::db::entities::books;
-    use crate::db::repositories::{
+    use crate::search::builder::build_from_db;
+    use chrono::Utc;
+    use codex_db::ScanningStrategy;
+    use codex_db::entities::books;
+    use codex_db::repositories::{
         AlternateTitleRepository, BookRepository, LibraryRepository, SeriesMetadataRepository,
         SeriesRepository,
     };
-    use crate::db::test_helpers::create_test_db;
-    use crate::search::builder::build_from_db;
-    use chrono::Utc;
+    use codex_db::test_helpers::create_test_db;
     use codex_events::EntityChangeEvent;
     use std::time::Duration;
     use uuid::Uuid;
@@ -255,7 +255,7 @@ mod tests {
     }
 
     async fn setup() -> (
-        crate::db::Database,
+        codex_db::Database,
         Arc<FuzzyIndex>,
         Arc<EventBroadcaster>,
         Uuid,

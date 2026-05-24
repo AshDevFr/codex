@@ -6,9 +6,9 @@ use std::path::PathBuf;
 use uuid::Uuid;
 
 use crate::commands::common::{init_database, load_config};
-use crate::db::entities::prelude::Tasks;
-use crate::db::entities::tasks;
-use crate::db::repositories::TaskRepository;
+use codex_db::entities::prelude::Tasks;
+use codex_db::entities::tasks;
+use codex_db::repositories::TaskRepository;
 
 /// Task queue management subcommands
 #[derive(Subcommand, Debug)]

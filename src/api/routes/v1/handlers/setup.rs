@@ -8,10 +8,6 @@ use crate::api::{
     extractors::{AuthContext, AuthState},
     permissions::Permission,
 };
-use crate::db::{
-    entities::users,
-    repositories::{SettingsRepository, UserRepository},
-};
 use crate::require_permission;
 use axum::{
     Json,
@@ -20,6 +16,10 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use chrono::Utc;
+use codex_db::{
+    entities::users,
+    repositories::{SettingsRepository, UserRepository},
+};
 use codex_utils::password;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -263,7 +263,7 @@ pub async fn configure_initial_settings(
     }
 
     // Import SettingsRepository to update settings
-    use crate::db::repositories::SettingsRepository;
+    use codex_db::repositories::SettingsRepository;
 
     let mut configured_count = 0;
 

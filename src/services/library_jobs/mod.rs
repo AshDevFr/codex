@@ -2,13 +2,13 @@
 //! [`library_jobs`] table.
 //!
 //! This module owns the typed shape of the per-job `config` JSON payload.
-//! The repository layer ([`crate::db::repositories::LibraryJobRepository`])
+//! The repository layer ([`codex_db::repositories::LibraryJobRepository`])
 //! persists strings; the parsing, default-filling, and validation lives here.
 //!
 //! Currently the `metadata_refresh` type is supported. Future job types extend
 //! [`LibraryJobConfig`] without schema changes.
 //!
-//! [`library_jobs`]: crate::db::entities::library_jobs
+//! [`library_jobs`]: codex_db::entities::library_jobs
 
 pub mod types;
 pub mod validation;

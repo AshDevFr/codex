@@ -90,7 +90,7 @@ dev-check: ## Check development tool installation
 # =============================================================================
 
 test: ## Run backend tests (SQLite)
-	cargo test
+	cargo test --workspace
 
 test-frontend: ## Run frontend tests
 	cd web && npm run test:run
@@ -111,7 +111,7 @@ test-postgres-run: ## Run PostgreSQL tests (assumes DB is running)
 	@until docker exec codex-postgres-test pg_isready -U codex_test > /dev/null 2>&1; do sleep 1; done
 	@echo "$(GREEN)PostgreSQL is ready!$(NC)"
 	POSTGRES_HOST=localhost POSTGRES_PORT=5433 POSTGRES_USER=codex_test POSTGRES_PASSWORD=codex_test POSTGRES_DB=codex_test \
-		cargo test --features rar -- --include-ignored
+		cargo test --workspace --features rar -- --include-ignored
 
 test-up: ## Start test database
 	docker compose --profile test up -d postgres-test
@@ -126,7 +126,7 @@ test-clean: ## Stop test database and remove volumes
 # Install: cargo install cargo-nextest --locked
 
 test-fast: ## Run backend tests with nextest (faster, parallel)
-	cargo nextest run
+	cargo nextest run --workspace
 
 test-fast-all: ## Run all tests with nextest (faster, parallel)
 	@echo "$(YELLOW)Running frontend tests...$(NC)"
@@ -144,7 +144,7 @@ test-fast-postgres-run: ## Run PostgreSQL tests with nextest (assumes DB running
 	@until docker exec codex-postgres-test pg_isready -U codex_test > /dev/null 2>&1; do sleep 1; done
 	@echo "$(GREEN)PostgreSQL is ready!$(NC)"
 	POSTGRES_HOST=localhost POSTGRES_PORT=5433 POSTGRES_USER=codex_test POSTGRES_PASSWORD=codex_test POSTGRES_DB=codex_test \
-		cargo nextest run --features rar --run-ignored all
+		cargo nextest run --workspace --features rar --run-ignored all
 
 # =============================================================================
 # Documentation (Docusaurus)

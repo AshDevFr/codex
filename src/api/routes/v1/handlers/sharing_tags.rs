@@ -17,13 +17,13 @@ use crate::api::{
     extractors::{AuthContext, AuthState},
     permissions::Permission,
 };
-use crate::db::repositories::SharingTagRepository;
 use axum::{
     Json,
     extract::{Path, Query, State},
     http::StatusCode,
     response::Response,
 };
+use codex_db::repositories::SharingTagRepository;
 use std::sync::Arc;
 use uuid::Uuid;
 

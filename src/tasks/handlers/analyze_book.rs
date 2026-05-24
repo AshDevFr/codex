@@ -4,11 +4,11 @@ use serde_json::json;
 use std::sync::Arc;
 use tracing::{error, info, warn};
 
-use crate::db::entities::tasks;
-use crate::db::repositories::BookRepository;
 use crate::scanner::analyze_book;
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::TaskResult;
+use codex_db::entities::tasks;
+use codex_db::repositories::BookRepository;
 use codex_events::{EventBroadcaster, TaskProgressEvent};
 
 pub struct AnalyzeBookHandler;

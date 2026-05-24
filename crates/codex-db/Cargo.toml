@@ -1,0 +1,61 @@
+[package]
+name = "codex-db"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[lib]
+name = "codex_db"
+path = "src/lib.rs"
+
+[features]
+# Exposes `codex_db::test_helpers` to downstream crates (root binary tests,
+# integration tests). Off by default so release builds don't pull in
+# tempfile / SQLite test plumbing.
+test-utils = ["dep:tempfile"]
+
+[dependencies]
+anyhow = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+utoipa = { workspace = true }
+uuid = { workspace = true }
+
+codex-config = { workspace = true }
+codex-events = { workspace = true }
+codex-models = { workspace = true }
+codex-utils = { workspace = true }
+
+# SeaORM + migrations. Feature set must match the root crate's historical
+# config so the dual SQLite/Postgres backends stay supported.
+sea-orm = { version = "1.1", features = [
+    "sqlx-postgres",
+    "sqlx-sqlite",
+    "runtime-tokio-rustls",
+    "macros",
+    "with-chrono",
+    "with-uuid",
+] }
+sea-orm-migration = { version = "1.1", features = [
+    "runtime-tokio-rustls",
+    "sqlx-postgres",
+    "sqlx-sqlite",
+] }
+migration = { path = "../../migration" }
+
+# Repository-level helpers.
+serde_json = "1.0"
+rand = "0.10"
+# Used by `connection::Database` to set sqlx logging level on connect.
+log = "0.4"
+# Pulled in optionally for `test-utils` so test_helpers can mint temp
+# SQLite files in downstream test runs.
+tempfile = { workspace = true, optional = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+serial_test = { workspace = true }
+# Capturing tracing layer for the trace.rs span-emission test.
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

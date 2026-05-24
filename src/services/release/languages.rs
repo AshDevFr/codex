@@ -13,7 +13,7 @@ use anyhow::Result;
 use sea_orm::DatabaseConnection;
 use serde_json::Value;
 
-use crate::db::repositories::SettingsRepository;
+use codex_db::repositories::SettingsRepository;
 
 /// Settings key for the server-wide default language list.
 pub const SERVER_DEFAULT_LANGUAGES_KEY: &str = "release_tracking.default_languages";

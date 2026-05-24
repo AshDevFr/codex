@@ -9,10 +9,10 @@ use std::sync::Arc;
 use tracing::warn;
 use uuid::Uuid;
 
-use crate::db::repositories::{
+use crate::services::ThumbnailService;
+use codex_db::repositories::{
     BookCoversRepository, SeriesCoversRepository, SeriesRepository, TaskRepository,
 };
-use crate::services::ThumbnailService;
 use codex_events::{EntityChangeEvent, EntityEvent, EntityType, EventBroadcaster};
 use codex_models::task::TaskType;
 

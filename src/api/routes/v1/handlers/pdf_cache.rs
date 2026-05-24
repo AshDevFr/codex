@@ -20,9 +20,9 @@ use crate::api::{
     extractors::{AppState, AuthContext},
     permissions::Permission,
 };
-use crate::db::repositories::TaskRepository;
 use crate::require_permission;
 use crate::tasks::types::TaskType;
+use codex_db::repositories::TaskRepository;
 
 /// Build the page-cache stats DTO from the current AppState.
 async fn page_cache_stats(state: &AppState) -> Result<PdfPageCacheStatsDto, ApiError> {

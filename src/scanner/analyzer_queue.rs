@@ -8,18 +8,18 @@ use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
-use crate::db::entities::book_error::{BookError, BookErrorType};
-use crate::db::entities::{book_metadata, books, pages};
-use crate::db::repositories::{
-    BookExternalLinkRepository, BookMetadataRepository, BookRepository, ExternalLinkRepository,
-    LibraryRepository, PageRepository, SeriesMetadataRepository, SeriesRepository, TaskRepository,
-};
 use crate::scanner::analyze_file;
 use crate::scanner::strategies::{
     BookMetadata, BookNamingContext, NumberContext, NumberMetadata, create_book_strategy,
     create_number_strategy,
 };
 use crate::tasks::types::TaskType;
+use codex_db::entities::book_error::{BookError, BookErrorType};
+use codex_db::entities::{book_metadata, books, pages};
+use codex_db::repositories::{
+    BookExternalLinkRepository, BookMetadataRepository, BookRepository, ExternalLinkRepository,
+    LibraryRepository, PageRepository, SeriesMetadataRepository, SeriesRepository, TaskRepository,
+};
 use codex_events::EventBroadcaster;
 use codex_models::{BookStrategy, CalibreStrategyConfig, NumberStrategy, SeriesStrategy};
 use codex_parsers::opf;
@@ -682,7 +682,7 @@ async fn analyze_single_book(
         if let Ok(Some(series_metadata_model)) =
             SeriesMetadataRepository::get_by_series_id(db, book.series_id).await
         {
-            use crate::db::entities::series_metadata;
+            use codex_db::entities::series_metadata;
             use sea_orm::{ActiveModelTrait, Set};
 
             let series_title = series_metadata_model.title.clone();
@@ -920,7 +920,7 @@ async fn analyze_single_book(
             && series_metadata_model.title_sort.is_none()
             && !series_metadata_model.title_sort_lock
         {
-            use crate::db::entities::series_metadata;
+            use codex_db::entities::series_metadata;
             use sea_orm::{ActiveModelTrait, Set};
 
             let series_title = series_metadata_model.title.clone();
@@ -951,7 +951,7 @@ async fn analyze_single_book(
                     if let Ok(Some(series_metadata_model)) =
                         SeriesMetadataRepository::get_by_series_id(db, book.series_id).await
                     {
-                        use crate::db::entities::series_metadata;
+                        use codex_db::entities::series_metadata;
                         use sea_orm::{ActiveModelTrait, Set};
 
                         let series_title = series_metadata_model.title.clone();
@@ -992,7 +992,7 @@ async fn analyze_single_book(
                             && let Some(ref status) = sj_meta.status
                         {
                             // Map Mylar status to Codex SeriesStatus
-                            use crate::db::entities::series_metadata::SeriesStatus;
+                            use codex_db::entities::series_metadata::SeriesStatus;
                             let codex_status = match status.to_lowercase().as_str() {
                                 "continuing" => "ongoing".to_string(),
                                 "ended" => "ended".to_string(),

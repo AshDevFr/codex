@@ -10,8 +10,6 @@ use crate::api::{
     extractors::{AuthContext, AuthState},
     permissions::{Permission, serialize_permissions},
 };
-use crate::db::entities::api_keys;
-use crate::db::repositories::ApiKeyRepository;
 use axum::{
     Json,
     extract::{Path, Query, State},
@@ -19,6 +17,8 @@ use axum::{
     response::Response,
 };
 use chrono::Utc;
+use codex_db::entities::api_keys;
+use codex_db::repositories::ApiKeyRepository;
 use codex_utils::password;
 use rand::RngExt;
 use sea_orm::ActiveModelTrait;

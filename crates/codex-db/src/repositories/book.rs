@@ -1,0 +1,4296 @@
+//! Repository for Book operations
+//!
+//! TODO: Remove allow(dead_code) when all book features are fully integrated
+
+#![allow(dead_code)]
+
+use anyhow::{Context, Result};
+use chrono::Utc;
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection, EntityTrait, JoinType, Order,
+    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, RelationTrait, Set,
+    sea_query::{Alias, Expr, ExprTrait, Func, IntoCondition},
+};
+use std::sync::Arc;
+use uuid::Uuid;
+
+use crate::entities::{books, prelude::*};
+use crate::repositories::SeriesRepository;
+use crate::trace::db_system_str;
+use codex_events::{EntityChangeEvent, EntityEvent, EventBroadcaster};
+use codex_utils::normalize_for_search;
+
+/// Options for querying books with filtering, sorting, and pagination
+#[derive(Debug, Clone, Default)]
+pub struct BookQueryOptions<'a> {
+    /// Filter by library ID
+    pub library_id: Option<Uuid>,
+    /// Filter by series ID
+    pub series_id: Option<Uuid>,
+    /// Filter by user's read status (requires user_id)
+    pub read_status: Option<ReadStatusFilter>,
+    /// User ID for user-specific filters and sorts (read_status, last_read sort)
+    pub user_id: Option<Uuid>,
+    /// Text search query (searches title, filename)
+    pub search: Option<&'a str>,
+    /// Filter by release date (after/before a given date)
+    pub release_date: Option<ReleaseDateFilter>,
+    /// Include soft-deleted books
+    pub include_deleted: bool,
+    /// Sort field and direction
+    pub sort: Option<BookQuerySort>,
+    /// Page offset (0-indexed)
+    pub page: u64,
+    /// Page size
+    pub page_size: u64,
+}
+
+/// Release date filter for querying books by their metadata release date
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReleaseDateFilter {
+    /// The comparison operator
+    pub operator: ReleaseDateOperator,
+    /// Year component
+    pub year: i32,
+    /// Month component (1-12)
+    pub month: i32,
+    /// Day component (1-31)
+    pub day: i32,
+}
+
+/// Operator for release date comparison
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReleaseDateOperator {
+    /// Books released after the given date
+    After,
+    /// Books released before the given date
+    Before,
+}
+
+/// Read status filter options
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReadStatusFilter {
+    /// Books with progress that are not completed
+    InProgress,
+    /// Books with progress that are completed
+    Read,
+    /// Books without any progress record for the user
+    Unread,
+}
+
+/// Sort configuration for book queries
+#[derive(Debug, Clone, Copy)]
+pub struct BookQuerySort {
+    pub field: BookSortField,
+    pub ascending: bool,
+}
+
+/// Sort field options for book queries (repository-level)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BookSortField {
+    /// Sort by series name, then book number within series
+    Series,
+    /// Sort by book title
+    Title,
+    /// Sort by date added (created_at)
+    DateAdded,
+    /// Sort by release date (year from metadata)
+    ReleaseDate,
+    /// Sort by chapter/book number
+    ChapterNumber,
+    /// Sort by file size
+    FileSize,
+    /// Sort by filename
+    Filename,
+    /// Sort by page count
+    PageCount,
+    /// Sort by last read date (requires user_id)
+    LastRead,
+}
+
+/// Repository for Book operations
+pub struct BookRepository;
+
+impl BookRepository {
+    /// Query books with flexible filtering, sorting, and pagination.
+    ///
+    /// This is the primary composable query method that supports all filtering
+    /// and sorting options. Use `BookQueryOptions` to configure the query.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// // Get all books in a library sorted by last read date
+    /// let options = BookQueryOptions {
+    ///     library_id: Some(library_id),
+    ///     user_id: Some(user_id),
+    ///     sort: Some(BookQuerySort {
+    ///         field: BookSortField::LastRead,
+    ///         ascending: false,
+    ///     }),
+    ///     page: 0,
+    ///     page_size: 20,
+    ///     ..Default::default()
+    /// };
+    /// let (books, total) = BookRepository::query(db, options).await?;
+    /// ```
+    #[tracing::instrument(
+        name = "db.book.query",
+        skip_all,
+        fields(
+            db.system = db_system_str(db),
+            db.operation = "select",
+            otel.kind = "client",
+            library_id = ?options.library_id,
+            series_id = ?options.series_id,
+            page = options.page,
+            page_size = options.page_size,
+        ),
+    )]
+    pub async fn query(
+        db: &DatabaseConnection,
+        options: BookQueryOptions<'_>,
+    ) -> Result<(Vec<books::Model>, u64)> {
+        use crate::entities::{book_metadata, read_progress, series, series_metadata};
+
+        let mut query = Books::find();
+        // Track whether book_metadata has been joined to avoid ambiguous column references
+        let mut metadata_joined = false;
+
+        // Apply filters
+        if let Some(library_id) = options.library_id {
+            query = query.filter(books::Column::LibraryId.eq(library_id));
+        }
+
+        if let Some(series_id) = options.series_id {
+            query = query.filter(books::Column::SeriesId.eq(series_id));
+        }
+
+        if !options.include_deleted {
+            query = query.filter(books::Column::Deleted.eq(false));
+        }
+
+        // Handle text search
+        if let Some(search) = options.search
+            && !search.is_empty()
+        {
+            let pattern = format!("%{}%", search.to_lowercase());
+            // Join with book_metadata for title search
+            query = query.join(JoinType::LeftJoin, books::Relation::BookMetadata.def());
+            metadata_joined = true;
+
+            // Search in title (case-insensitive)
+            let lower_title = Func::lower(Expr::col((
+                book_metadata::Entity,
+                book_metadata::Column::Title,
+            )));
+            query = query.filter(Expr::expr(lower_title).like(&pattern));
+        }
+
+        // Handle read status filter (requires user_id)
+        if let (Some(read_status), Some(user_id)) = (options.read_status, options.user_id) {
+            match read_status {
+                ReadStatusFilter::InProgress | ReadStatusFilter::Read => {
+                    // Join with read_progress and filter by status
+                    let completed = matches!(read_status, ReadStatusFilter::Read);
+                    query = query
+                        .join(JoinType::InnerJoin, books::Relation::ReadProgress.def())
+                        .filter(read_progress::Column::UserId.eq(user_id))
+                        .filter(read_progress::Column::Completed.eq(completed));
+                }
+                ReadStatusFilter::Unread => {
+                    // Subquery: books that DON'T have read_progress for this user
+                    // This requires a NOT EXISTS subquery, which is complex in SeaORM
+                    // For now, we'll use a left join and filter for NULL
+                    query = query
+                        .join(
+                            JoinType::LeftJoin,
+                            books::Relation::ReadProgress.def().on_condition(
+                                move |_left, right| {
+                                    Expr::col((right, read_progress::Column::UserId))
+                                        .eq(user_id)
+                                        .into_condition()
+                                },
+                            ),
+                        )
+                        .filter(read_progress::Column::Id.is_null());
+                }
+            }
+        }
+
+        // Handle release date filter
+        if let Some(ref release_date) = options.release_date {
+            // Join with book_metadata if not already joined
+            if !metadata_joined {
+                query = query.join(JoinType::LeftJoin, books::Relation::BookMetadata.def());
+                metadata_joined = true;
+            }
+
+            // Filter books that have release date metadata (year is required)
+            query = query.filter(book_metadata::Column::Year.is_not_null());
+
+            // Build date comparison using year * 10000 + month * 100 + day
+            // This creates a single comparable integer for before/after comparisons
+            let target_date_val =
+                release_date.year * 10000 + release_date.month * 100 + release_date.day;
+
+            // Construct: (year * 10000 + COALESCE(month, 1) * 100 + COALESCE(day, 1))
+            let year_expr =
+                Expr::col((book_metadata::Entity, book_metadata::Column::Year)).mul(10000);
+            let month_expr = Expr::expr(Func::coalesce([
+                Expr::col((book_metadata::Entity, book_metadata::Column::Month)).into(),
+                Expr::val(1).into(),
+            ]))
+            .mul(100);
+            let day_expr = Expr::expr(Func::coalesce([
+                Expr::col((book_metadata::Entity, book_metadata::Column::Day)).into(),
+                Expr::val(1).into(),
+            ]));
+
+            let date_expr = Expr::expr(year_expr).add(month_expr).add(day_expr);
+
+            match release_date.operator {
+                ReleaseDateOperator::After => {
+                    query = query.filter(date_expr.gt(target_date_val));
+                }
+                ReleaseDateOperator::Before => {
+                    query = query.filter(date_expr.lt(target_date_val));
+                }
+            }
+        }
+
+        // Get total count before sorting/pagination
+        let total = query
+            .clone()
+            .select_only()
+            .column(books::Column::Id)
+            .paginate(db, 1)
+            .num_items()
+            .await
+            .context("Failed to count books")?;
+
+        // Apply sorting
+        if let Some(sort) = options.sort {
+            let order = if sort.ascending {
+                Order::Asc
+            } else {
+                Order::Desc
+            };
+
+            // Join book_metadata if needed for sort and not already joined
+            let needs_metadata = matches!(
+                sort.field,
+                BookSortField::Series
+                    | BookSortField::Title
+                    | BookSortField::ReleaseDate
+                    | BookSortField::ChapterNumber
+            );
+            if needs_metadata && !metadata_joined {
+                query = query.join(JoinType::LeftJoin, books::Relation::BookMetadata.def());
+                #[allow(unused_assignments)]
+                {
+                    metadata_joined = true;
+                }
+            }
+
+            query = match sort.field {
+                BookSortField::Series => query
+                    .join(JoinType::LeftJoin, books::Relation::Series.def())
+                    .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def())
+                    .order_by(series_metadata::Column::TitleSort, order.clone())
+                    .order_by(series_metadata::Column::Title, order)
+                    .order_by(book_metadata::Column::Number, Order::Asc)
+                    .order_by(book_metadata::Column::Title, Order::Asc),
+
+                BookSortField::Title => query
+                    .order_by(book_metadata::Column::TitleSort, order.clone())
+                    .order_by(book_metadata::Column::Title, order)
+                    .order_by_asc(books::Column::FileName),
+
+                BookSortField::DateAdded => query.order_by(books::Column::CreatedAt, order),
+
+                BookSortField::ReleaseDate => query
+                    .order_by(book_metadata::Column::Year, order.clone())
+                    .order_by(book_metadata::Column::Month, order.clone())
+                    .order_by(book_metadata::Column::Day, order),
+
+                BookSortField::ChapterNumber => {
+                    query.order_by(book_metadata::Column::Number, order)
+                }
+
+                BookSortField::FileSize => query.order_by(books::Column::FileSize, order),
+
+                BookSortField::Filename => query.order_by(books::Column::FileName, order),
+
+                BookSortField::PageCount => query.order_by(books::Column::PageCount, order),
+
+                BookSortField::LastRead => {
+                    // LastRead sort requires user_id
+                    if let Some(user_id) = options.user_id {
+                        // Check if we already joined with read_progress (from read_status filter)
+                        // If not, we need to join
+                        let needs_join = options.read_status.is_none()
+                            || options.read_status == Some(ReadStatusFilter::Unread);
+
+                        let query = if needs_join {
+                            query.join(
+                                JoinType::LeftJoin,
+                                books::Relation::ReadProgress.def().on_condition(
+                                    move |_left, right| {
+                                        Expr::col((right, read_progress::Column::UserId))
+                                            .eq(user_id)
+                                            .into_condition()
+                                    },
+                                ),
+                            )
+                        } else {
+                            query
+                        };
+
+                        query
+                            .column_as(
+                                Expr::col((
+                                    Alias::new("read_progress"),
+                                    read_progress::Column::UpdatedAt,
+                                ))
+                                .max(),
+                                "last_read_at",
+                            )
+                            .group_by(books::Column::Id)
+                            .order_by(Expr::col(Alias::new("last_read_at")), order)
+                    } else {
+                        // No user_id, fall back to date added
+                        query.order_by(books::Column::CreatedAt, order)
+                    }
+                }
+            };
+        } else {
+            // Default sort by title
+            if !metadata_joined {
+                query = query.join(JoinType::LeftJoin, books::Relation::BookMetadata.def());
+            }
+            query = query
+                .order_by(book_metadata::Column::TitleSort, Order::Asc)
+                .order_by(book_metadata::Column::Title, Order::Asc)
+                .order_by_asc(books::Column::FileName);
+        }
+
+        // Apply pagination
+        let books = query
+            .offset(options.page * options.page_size)
+            .limit(options.page_size)
+            .all(db)
+            .await
+            .context("Failed to query books")?;
+
+        Ok((books, total))
+    }
+
+    /// Create a new book from entity model
+    #[tracing::instrument(
+        name = "db.book.insert",
+        skip_all,
+        fields(
+            db.system = db_system_str(db),
+            db.operation = "insert",
+            otel.kind = "client",
+            book.id = %book_model.id,
+        ),
+    )]
+    pub async fn create(
+        db: &DatabaseConnection,
+        book_model: &books::Model,
+        event_broadcaster: Option<&Arc<EventBroadcaster>>,
+    ) -> Result<books::Model> {
+        let book = books::ActiveModel {
+            id: Set(book_model.id),
+            series_id: Set(book_model.series_id),
+            library_id: Set(book_model.library_id),
+            path: Set(book_model.path.clone()),
+            file_name: Set(book_model.file_name.clone()),
+            file_size: Set(book_model.file_size),
+            file_hash: Set(book_model.file_hash.clone()),
+            partial_hash: Set(book_model.partial_hash.clone()),
+            format: Set(book_model.format.clone()),
+            page_count: Set(book_model.page_count),
+            deleted: Set(book_model.deleted),
+            analyzed: Set(book_model.analyzed),
+            analysis_error: Set(book_model.analysis_error.clone()),
+            analysis_errors: Set(book_model.analysis_errors.clone()),
+            modified_at: Set(book_model.modified_at),
+            created_at: Set(book_model.created_at),
+            updated_at: Set(book_model.updated_at),
+            thumbnail_path: Set(book_model.thumbnail_path.clone()),
+            thumbnail_generated_at: Set(book_model.thumbnail_generated_at),
+            koreader_hash: Set(book_model.koreader_hash.clone()),
+            epub_positions: Set(book_model.epub_positions.clone()),
+            epub_spine_items: Set(book_model.epub_spine_items.clone()),
+        };
+
+        let created_book = book.insert(db).await.context("Failed to create book")?;
+
+        // Emit BookCreated event if broadcaster is available
+        if let Some(broadcaster) = event_broadcaster {
+            // Get library_id by finding the series
+            if let Ok(Some(series)) =
+                crate::repositories::SeriesRepository::get_by_id(db, created_book.series_id).await
+            {
+                let event = EntityChangeEvent::new(
+                    EntityEvent::BookCreated {
+                        book_id: created_book.id,
+                        series_id: created_book.series_id,
+                        library_id: series.library_id,
+                    },
+                    None, // System-triggered, no user_id
+                );
+                let _ = broadcaster.emit(event);
+            }
+        }
+
+        Ok(created_book)
+    }
+
+    /// Get a book by ID
+    #[tracing::instrument(
+        name = "db.book.get_by_id",
+        skip_all,
+        fields(
+            db.system = db_system_str(db),
+            db.operation = "select",
+            otel.kind = "client",
+            book.id = %id,
+        ),
+    )]
+    pub async fn get_by_id(db: &DatabaseConnection, id: Uuid) -> Result<Option<books::Model>> {
+        Books::find_by_id(id)
+            .one(db)
+            .await
+            .context("Failed to get book by ID")
+    }
+
+    /// Check if a book exists by ID (more efficient than get_by_id for existence checks)
+    #[tracing::instrument(
+        name = "db.book.exists",
+        skip_all,
+        fields(
+            db.system = db_system_str(db),
+            db.operation = "select",
+            otel.kind = "client",
+            book.id = %id,
+        ),
+    )]
+    pub async fn exists(db: &DatabaseConnection, id: Uuid) -> Result<bool> {
+        let count = Books::find_by_id(id)
+            .count(db)
+            .await
+            .context("Failed to check book existence")?;
+        Ok(count > 0)
+    }
+
+    /// Get existing book IDs from a list of candidates (batch existence check)
+    ///
+    /// Returns only the IDs that exist in the database. This is much more efficient
+    /// than calling `exists()` for each ID individually.
+    pub async fn get_existing_ids(
+        db: &DatabaseConnection,
+        ids: &[Uuid],
+    ) -> Result<std::collections::HashSet<Uuid>> {
+        use std::collections::HashSet;
+
+        if ids.is_empty() {
+            return Ok(HashSet::new());
+        }
+
+        let existing: Vec<Uuid> = Books::find()
+            .filter(books::Column::Id.is_in(ids.to_vec()))
+            .select_only()
+            .column(books::Column::Id)
+            .into_tuple()
+            .all(db)
+            .await
+            .context("Failed to get existing book IDs")?;
+
+        Ok(existing.into_iter().collect())
+    }
+
+    /// Get books by their IDs (simple, no pagination)
+    ///
+    /// Returns all books matching the given IDs. This is useful for batch operations
+    /// where all matching books need to be processed.
+    #[tracing::instrument(
+        name = "db.book.get_by_ids",
+        skip_all,
+        fields(
+            db.system = db_system_str(db),
+            db.operation = "select",
+            otel.kind = "client",
+            id_count = ids.len(),
+        ),
+    )]
+    pub async fn get_by_ids(db: &DatabaseConnection, ids: &[Uuid]) -> Result<Vec<books::Model>> {
+        if ids.is_empty() {
+            return Ok(vec![]);
+        }
+
+        Books::find()
+            .filter(books::Column::Id.is_in(ids.to_vec()))
+            .filter(books::Column::Deleted.eq(false))
+            .all(db)
+            .await
+            .context("Failed to get books by IDs")
+    }
+
+    /// Get a book by file hash (for duplicate detection)
+    pub async fn get_by_hash(db: &DatabaseConnection, hash: &str) -> Result<Option<books::Model>> {
+        Books::find()
+            .filter(books::Column::FileHash.eq(hash))
+            .one(db)
+            .await
+            .context("Failed to get book by hash")
+    }
+
+    /// Find books by KOReader hash (for KOReader sync)
+    /// Returns all matching books (should normally be 0 or 1)
+    pub async fn find_by_koreader_hash(
+        db: &DatabaseConnection,
+        hash: &str,
+    ) -> Result<Vec<books::Model>> {
+        Books::find()
+            .filter(books::Column::KoreaderHash.eq(hash))
+            .filter(books::Column::Deleted.eq(false))
+            .all(db)
+            .await
+            .context("Failed to find books by KOReader hash")
+    }
+
+    /// Update KOReader hash for a book
+    pub async fn update_koreader_hash(
+        db: &DatabaseConnection,
+        book_id: Uuid,
+        koreader_hash: &str,
+    ) -> Result<()> {
+        Books::update_many()
+            .col_expr(
+                books::Column::KoreaderHash,
+                sea_orm::sea_query::Expr::value(koreader_hash.to_string()),
+            )
+            .filter(books::Column::Id.eq(book_id))
+            .exec(db)
+            .await
+            .context("Failed to update KOReader hash")?;
+        Ok(())
+    }
+
+    /// Get a book by file path and library ID
+    pub async fn get_by_path(
+        db: &DatabaseConnection,
+        library_id: Uuid,
+        path: &str,
+    ) -> Result<Option<books::Model>> {
+        Books::find()
+            .filter(books::Column::LibraryId.eq(library_id))
+            .filter(books::Column::Path.eq(path))
+            .one(db)
+            .await
+            .context("Failed to get book by path")
+    }
+
+    /// Get all books in a series
+    /// Orders by book_metadata.number, book_metadata.title_sort, then file_name
+    #[tracing::instrument(
+        name = "db.book.list_by_series",
+        skip_all,
+        fields(
+            db.system = db_system_str(db),
+            db.operation = "select",
+            otel.kind = "client",
+            series.id = %series_id,
+            include_deleted,
+        ),
+    )]
+    pub async fn list_by_series(
+        db: &DatabaseConnection,
+        series_id: Uuid,
+        include_deleted: bool,
+    ) -> Result<Vec<books::Model>> {
+        use crate::entities::book_metadata;
+        use sea_orm::JoinType;
+
+        let mut query = Books::find().filter(books::Column::SeriesId.eq(series_id));
+
+        if !include_deleted {
+            query = query.filter(books::Column::Deleted.eq(false));
+        }
+
+        query
+            .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
+            .order_by_asc(book_metadata::Column::Number)
+            .order_by_asc(book_metadata::Column::TitleSort)
+            .order_by_asc(book_metadata::Column::Title)
+            .order_by_asc(books::Column::FileName)
+            .all(db)
+            .await
+            .context("Failed to list books by series")
+    }
+
+    /// Get all books in multiple series
+    ///
+    /// Returns all non-deleted books that belong to any of the specified series.
+    pub async fn list_by_series_ids(
+        db: &DatabaseConnection,
+        series_ids: &[Uuid],
+    ) -> Result<Vec<books::Model>> {
+        if series_ids.is_empty() {
+            return Ok(vec![]);
+        }
+
+        Books::find()
+            .filter(books::Column::SeriesId.is_in(series_ids.to_vec()))
+            .filter(books::Column::Deleted.eq(false))
+            .all(db)
+            .await
+            .context("Failed to list books by series IDs")
+    }
+
+    /// Get all books in multiple series, grouped by series ID
+    ///
+    /// Returns a HashMap keyed by series_id for efficient lookups.
+    /// Each value is a Vec of non-deleted books belonging to that series.
+    pub async fn get_by_series_ids(
+        db: &DatabaseConnection,
+        series_ids: &[Uuid],
+    ) -> Result<std::collections::HashMap<Uuid, Vec<books::Model>>> {
+        if series_ids.is_empty() {
+            return Ok(std::collections::HashMap::new());
+        }
+
+        let results = Books::find()
+            .filter(books::Column::SeriesId.is_in(series_ids.to_vec()))
+            .filter(books::Column::Deleted.eq(false))
+            .all(db)
+            .await
+            .context("Failed to list books by series IDs")?;
+
+        let mut map: std::collections::HashMap<Uuid, Vec<books::Model>> =
+            std::collections::HashMap::new();
+        for book in results {
+            map.entry(book.series_id).or_default().push(book);
+        }
+
+        Ok(map)
+    }
+
+    /// Count books in a series (excluding deleted)
+    pub async fn count_by_series(db: &DatabaseConnection, series_id: Uuid) -> Result<u64> {
+        Books::find()
+            .filter(books::Column::SeriesId.eq(series_id))
+            .filter(books::Column::Deleted.eq(false))
+            .count(db)
+            .await
+            .context("Failed to count books in series")
+    }
+
+    /// Get the first book in a series (for thumbnail generation)
+    ///
+    /// Returns only the first book (ordered by number, title, filename).
+    /// More efficient than list_by_series when you only need the first book.
+    /// Excludes books with page_count == 0 (failed analysis) to ensure a valid
+    /// book is returned for thumbnail generation.
+    pub async fn get_first_in_series(
+        db: &DatabaseConnection,
+        series_id: Uuid,
+    ) -> Result<Option<books::Model>> {
+        use crate::entities::book_metadata;
+        use sea_orm::JoinType;
+
+        Books::find()
+            .filter(books::Column::SeriesId.eq(series_id))
+            .filter(books::Column::Deleted.eq(false))
+            .filter(books::Column::PageCount.gt(0))
+            .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
+            .order_by_asc(book_metadata::Column::Number)
+            .order_by_asc(book_metadata::Column::TitleSort)
+            .order_by_asc(book_metadata::Column::Title)
+            .order_by_asc(books::Column::FileName)
+            .one(db)
+            .await
+            .context("Failed to get first book in series")
+    }
+
+    /// Check if a book is the first (by sort order) in its series
+    ///
+    /// Used to determine if changing a book's thumbnail should invalidate
+    /// the cached series thumbnail.
+    pub async fn is_first_in_series(db: &DatabaseConnection, book_id: Uuid) -> Result<bool> {
+        // Get the book to find its series_id
+        let book = Self::get_by_id(db, book_id)
+            .await?
+            .context("Book not found")?;
+
+        // Get the first book in the series
+        let first_book = Self::get_first_in_series(db, book.series_id).await?;
+
+        Ok(first_book.map(|b| b.id == book_id).unwrap_or(false))
+    }
+
+    /// Get the adjacent (previous and next) books in the same series
+    ///
+    /// Returns books ordered by number, then title, then filename.
+    /// Previous is the book that comes before the given book, next is after.
+    pub async fn get_adjacent_in_series(
+        db: &DatabaseConnection,
+        book_id: Uuid,
+    ) -> Result<(Option<books::Model>, Option<books::Model>)> {
+        // First get the target book
+        let book = Self::get_by_id(db, book_id)
+            .await?
+            .context("Book not found")?;
+
+        // Get all non-deleted books in the series, ordered by metadata fields
+        use crate::entities::book_metadata;
+        use sea_orm::JoinType;
+
+        let all_books = Books::find()
+            .filter(books::Column::SeriesId.eq(book.series_id))
+            .filter(books::Column::Deleted.eq(false))
+            .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
+            .order_by_asc(book_metadata::Column::Number)
+            .order_by_asc(book_metadata::Column::TitleSort)
+            .order_by_asc(book_metadata::Column::Title)
+            .order_by_asc(books::Column::FileName)
+            .all(db)
+            .await
+            .context("Failed to list books in series")?;
+
+        // Find the position of the target book
+        let position = all_books.iter().position(|b| b.id == book_id);
+
+        match position {
+            Some(pos) => {
+                let prev = if pos > 0 {
+                    all_books.get(pos - 1).cloned()
+                } else {
+                    None
+                };
+                let next = all_books.get(pos + 1).cloned();
+                Ok((prev, next))
+            }
+            None => Ok((None, None)),
+        }
+    }
+
+    /// List all books with pagination
+    pub async fn list_all(
+        db: &DatabaseConnection,
+        include_deleted: bool,
+        offset: u64,
+        page_size: u64,
+    ) -> Result<(Vec<books::Model>, u64)> {
+        let mut query = Books::find();
+
+        if !include_deleted {
+            query = query.filter(books::Column::Deleted.eq(false));
+        }
+
+        // Get total count
+        let total = query
+            .clone()
+            .paginate(db, 1)
+            .num_items()
+            .await
+            .context("Failed to count books")?;
+
+        // Get paginated results - order by metadata fields
+        use crate::entities::book_metadata;
+        use sea_orm::JoinType;
+
+        let books = query
+            .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
+            .order_by_asc(book_metadata::Column::TitleSort)
+            .order_by_asc(book_metadata::Column::Title)
+            .order_by_asc(books::Column::FileName)
+            .offset(offset)
+            .limit(page_size)
+            .all(db)
+            .await
+            .context("Failed to list all books")?;
+
+        Ok((books, total))
+    }
+
+    /// Hydrate a pre-ranked list of book IDs into models, preserving the
+    /// caller's order.
+    ///
+    /// Built for the fuzzy-search path: the in-memory index ranks candidates,
+    /// the handler post-filters them, and then this method materializes the
+    /// survivors without re-sorting them.
+    pub async fn hydrate_by_ids(
+        db: &DatabaseConnection,
+        library_id: Option<Uuid>,
+        ids: &[Uuid],
+        include_deleted: bool,
+    ) -> Result<Vec<books::Model>> {
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let mut query = Books::find().filter(books::Column::Id.is_in(ids.to_vec()));
+        if let Some(lib_id) = library_id {
+            query = query.filter(books::Column::LibraryId.eq(lib_id));
+        }
+        if !include_deleted {
+            query = query.filter(books::Column::Deleted.eq(false));
+        }
+
+        let fetched = query
+            .all(db)
+            .await
+            .context("Failed to hydrate books by IDs")?;
+
+        let mut by_id: std::collections::HashMap<Uuid, books::Model> =
+            fetched.into_iter().map(|b| (b.id, b)).collect();
+        let mut ordered = Vec::with_capacity(by_id.len());
+        for id in ids {
+            if let Some(model) = by_id.remove(id) {
+                ordered.push(model);
+            }
+        }
+        Ok(ordered)
+    }
+
+    /// List books by their IDs with pagination
+    pub async fn list_by_ids(
+        db: &DatabaseConnection,
+        ids: &[Uuid],
+        include_deleted: bool,
+        offset: u64,
+        page_size: u64,
+    ) -> Result<(Vec<books::Model>, u64)> {
+        if ids.is_empty() {
+            return Ok((vec![], 0));
+        }
+
+        // Total count is the number of IDs
+        let total = ids.len() as u64;
+
+        // Get paginated results
+        let mut query = Books::find().filter(books::Column::Id.is_in(ids.to_vec()));
+
+        if !include_deleted {
+            query = query.filter(books::Column::Deleted.eq(false));
+        }
+
+        use crate::entities::book_metadata;
+        use sea_orm::JoinType;
+
+        let books = query
+            .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
+            .order_by_asc(book_metadata::Column::TitleSort)
+            .order_by_asc(book_metadata::Column::Title)
+            .order_by_asc(books::Column::FileName)
+            .offset(offset)
+            .limit(page_size)
+            .all(db)
+            .await
+            .context("Failed to list books by IDs")?;
+
+        Ok((books, total))
+    }
+
+    /// List books by their IDs with database-level sorting.
+    ///
+    /// Used when an upstream step (filter evaluator, fuzzy index, ContentFilter…)
+    /// has already narrowed the candidate set; this method materializes a
+    /// paginated slice with the requested sort applied at the SQL layer so
+    /// `(sort, offset, limit)` agree across pages.
+    ///
+    /// Pass `BookSortField::Relevance` to indicate "the caller will preserve
+    /// fuzzy rank order itself" — this method silently falls back to a stable
+    /// title sort so it remains safe to call with whatever sort param the
+    /// handler resolved.
+    pub async fn list_by_ids_sorted(
+        db: &DatabaseConnection,
+        ids: &[Uuid],
+        sort: &codex_models::sort::BookSortParam,
+        user_id: Option<Uuid>,
+        include_deleted: bool,
+        offset: u64,
+        limit: u64,
+    ) -> Result<(Vec<books::Model>, u64)> {
+        use crate::entities::{book_metadata, read_progress, series, series_metadata};
+        use codex_models::sort::{BookSortField, SortDirection};
+        use sea_orm::{Condition, JoinType};
+
+        if ids.is_empty() {
+            return Ok((vec![], 0));
+        }
+
+        let total = ids.len() as u64;
+
+        let mut base_query = Books::find().filter(books::Column::Id.is_in(ids.to_vec()));
+        if !include_deleted {
+            base_query = base_query.filter(books::Column::Deleted.eq(false));
+        }
+
+        let order = match sort.direction {
+            SortDirection::Asc => Order::Asc,
+            SortDirection::Desc => Order::Desc,
+        };
+
+        let books = match sort.field {
+            BookSortField::Series => base_query
+                .join(JoinType::LeftJoin, books::Relation::Series.def())
+                .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def())
+                .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
+                .order_by(series_metadata::Column::TitleSort, order.clone())
+                .order_by(series_metadata::Column::Title, order.clone())
+                .order_by(book_metadata::Column::Number, Order::Asc)
+                .order_by(book_metadata::Column::Title, Order::Asc)
+                .order_by_asc(books::Column::Id)
+                .offset(offset)
+                .limit(limit)
+                .all(db)
+                .await
+                .context("Failed to list books by IDs with series sort")?,
+
+            BookSortField::Title | BookSortField::Relevance => base_query
+                .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
+                .order_by(book_metadata::Column::TitleSort, order.clone())
+                .order_by(book_metadata::Column::Title, order)
+                .order_by_asc(books::Column::FileName)
+                .order_by_asc(books::Column::Id)
+                .offset(offset)
+                .limit(limit)
+                .all(db)
+                .await
+                .context("Failed to list books by IDs with title sort")?,
+
+            BookSortField::DateAdded => base_query
+                .order_by(books::Column::CreatedAt, order)
+                .order_by_asc(books::Column::Id)
+                .offset(offset)
+                .limit(limit)
+                .all(db)
+                .await
+                .context("Failed to list books by IDs with date added sort")?,
+
+            BookSortField::ReleaseDate => base_query
+                .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
+                .order_by(book_metadata::Column::Year, order.clone())
+                .order_by(book_metadata::Column::Month, order.clone())
+                .order_by(book_metadata::Column::Day, order)
+                .order_by_asc(books::Column::Id)
+                .offset(offset)
+                .limit(limit)
+                .all(db)
+                .await
+                .context("Failed to list books by IDs with release date sort")?,
+
+            BookSortField::ChapterNumber => base_query
+                .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
+                .order_by(book_metadata::Column::Number, order)
+                .order_by_asc(books::Column::Id)
+                .offset(offset)
+                .limit(limit)
+                .all(db)
+                .await
+                .context("Failed to list books by IDs with chapter number sort")?,
+
+            BookSortField::FileSize => base_query
+                .order_by(books::Column::FileSize, order)
+                .order_by_asc(books::Column::Id)
+                .offset(offset)
+                .limit(limit)
+                .all(db)
+                .await
+                .context("Failed to list books by IDs with file size sort")?,
+
+            BookSortField::Filename => base_query
+                .order_by(books::Column::FileName, order)
+                .order_by_asc(books::Column::Id)
+                .offset(offset)
+                .limit(limit)
+                .all(db)
+                .await
+                .context("Failed to list books by IDs with filename sort")?,
+
+            BookSortField::PageCount => base_query
+                .order_by(books::Column::PageCount, order)
+                .order_by_asc(books::Column::Id)
+                .offset(offset)
+                .limit(limit)
+                .all(db)
+                .await
+                .context("Failed to list books by IDs with page count sort")?,
+
+            BookSortField::LastRead => {
+                if let Some(uid) = user_id {
+                    base_query
+                        .join(
+                            JoinType::LeftJoin,
+                            books::Relation::ReadProgress.def().on_condition(
+                                move |_left, right| {
+                                    Condition::all().add(
+                                        Expr::col((right, read_progress::Column::UserId)).eq(uid),
+                                    )
+                                },
+                            ),
+                        )
+                        .column_as(
+                            Expr::col((
+                                Alias::new("read_progress"),
+                                read_progress::Column::UpdatedAt,
+                            ))
+                            .max(),
+                            "last_read_at",
+                        )
+                        .group_by(books::Column::Id)
+                        .order_by(Expr::col(Alias::new("last_read_at")), order)
+                        .order_by_asc(books::Column::Id)
+                        .offset(offset)
+                        .limit(limit)
+                        .all(db)
+                        .await
+                        .context("Failed to list books by IDs with last read sort")?
+                } else {
+                    base_query
+                        .order_by(books::Column::CreatedAt, order)
+                        .order_by_asc(books::Column::Id)
+                        .offset(offset)
+                        .limit(limit)
+                        .all(db)
+                        .await
+                        .context("Failed to list books by IDs (LastRead fallback to DateAdded)")?
+                }
+            }
+        };
+
+        Ok((books, total))
+    }
+
+    /// List books by library with pagination
+    #[tracing::instrument(
+        name = "db.book.list_by_library",
+        skip_all,
+        fields(
+            db.system = db_system_str(db),
+            db.operation = "select",
+            otel.kind = "client",
+            library.id = %library_id,
+            page,
+            page_size,
+        ),
+    )]
+    pub async fn list_by_library(
+        db: &DatabaseConnection,
+        library_id: Uuid,
+        include_deleted: bool,
+        page: u64,
+        page_size: u64,
+    ) -> Result<(Vec<books::Model>, u64)> {
+        // Build query filtering directly by library_id (now on books table)
+        let mut query = Books::find().filter(books::Column::LibraryId.eq(library_id));
+
+        if !include_deleted {
+            query = query.filter(books::Column::Deleted.eq(false));
+        }
+
+        // Get total count
+        let total = query
+            .clone()
+            .paginate(db, 1)
+            .num_items()
+            .await
+            .context("Failed to count books in library")?;
+
+        // Get paginated results - order by metadata fields
+        use crate::entities::book_metadata;
+        use sea_orm::JoinType;
+
+        let books = query
+            .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
+            .order_by_asc(book_metadata::Column::TitleSort)
+            .order_by_asc(book_metadata::Column::Title)
+            .order_by_asc(books::Column::FileName)
+            .offset(page * page_size)
+            .limit(page_size)
+            .all(db)
+            .await
+            .context("Failed to list books by library")?;
+
+        Ok((books, total))
+    }
+
+    /// List books by library with series compound sort (series name + book number)
+    ///
+    /// This sort groups books by their series name alphabetically, then sorts
+    /// books within each series by their book number. This is the "reading order" sort.
+    pub async fn list_by_library_series_sorted(
+        db: &DatabaseConnection,
+        library_id: Uuid,
+        include_deleted: bool,
+        ascending: bool,
+        page: u64,
+        page_size: u64,
+    ) -> Result<(Vec<books::Model>, u64)> {
+        use crate::entities::{series, series_metadata};
+        use sea_orm::{JoinType, Order};
+
+        // Build query filtering directly by library_id (now on books table)
+        let mut query = Books::find().filter(books::Column::LibraryId.eq(library_id));
+
+        if !include_deleted {
+            query = query.filter(books::Column::Deleted.eq(false));
+        }
+
+        // Get total count
+        let total = query
+            .clone()
+            .paginate(db, 1)
+            .num_items()
+            .await
+            .context("Failed to count books in library")?;
+
+        // Determine sort order
+        let order = if ascending { Order::Asc } else { Order::Desc };
+
+        // Get paginated results with series sorting
+        // JOIN with series, series_metadata and book_metadata for sorting
+        use crate::entities::book_metadata;
+
+        let books = query
+            .join(JoinType::LeftJoin, books::Relation::Series.def())
+            .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def())
+            .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
+            // Sort by series title_sort (if set) or series title from metadata
+            .order_by(series_metadata::Column::TitleSort, order.clone())
+            .order_by(series_metadata::Column::Title, order.clone())
+            // Then by book number within series (from book_metadata)
+            .order_by(book_metadata::Column::Number, Order::Asc)
+            // Then by book title as fallback (from book_metadata)
+            .order_by(book_metadata::Column::Title, Order::Asc)
+            .offset(page * page_size)
+            .limit(page_size)
+            .all(db)
+            .await
+            .context("Failed to list books by library with series sort")?;
+
+        Ok((books, total))
+    }
+
+    /// List books by library with sorting (database-level)
+    ///
+    /// This method handles all sort types at the database level with proper JOINs:
+    /// - Title: sorts by book_metadata.title_sort, then title, then file_name
+    /// - Series: compound sort by series name + book number
+    /// - DateAdded: sorts by books.created_at
+    /// - ReleaseDate: sorts by book_metadata.year
+    /// - ChapterNumber: sorts by book_metadata.number
+    /// - FileSize: sorts by books.file_size
+    /// - Filename: sorts by books.file_name
+    /// - PageCount: sorts by books.page_count
+    pub async fn list_by_library_sorted(
+        db: &DatabaseConnection,
+        library_id: Uuid,
+        sort: &codex_models::sort::BookSortParam,
+        include_deleted: bool,
+        page: u64,
+        page_size: u64,
+    ) -> Result<(Vec<books::Model>, u64)> {
+        use crate::entities::{book_metadata, series, series_metadata};
+        use codex_models::sort::{BookSortField, SortDirection};
+        use sea_orm::JoinType;
+
+        // Build base query
+        let mut base_query = Books::find().filter(books::Column::LibraryId.eq(library_id));
+
+        if !include_deleted {
+            base_query = base_query.filter(books::Column::Deleted.eq(false));
+        }
+
+        // Get total count (before sorting/pagination)
+        let total = base_query
+            .clone()
+            .paginate(db, 1)
+            .num_items()
+            .await
+            .context("Failed to count books in library")?;
+
+        let order = match sort.direction {
+            SortDirection::Asc => Order::Asc,
+            SortDirection::Desc => Order::Desc,
+        };
+
+        // Apply sort based on field
+        let books = match sort.field {
+            BookSortField::Series => {
+                // Compound sort: series title_sort/title, then book number, then book title
+                base_query
+                    .join(JoinType::LeftJoin, books::Relation::Series.def())
+                    .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def())
+                    .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
+                    .order_by(series_metadata::Column::TitleSort, order.clone())
+                    .order_by(series_metadata::Column::Title, order.clone())
+                    .order_by(book_metadata::Column::Number, Order::Asc)
+                    .order_by(book_metadata::Column::Title, Order::Asc)
+                    .offset(page * page_size)
+                    .limit(page_size)
+                    .all(db)
+                    .await
+                    .context("Failed to list books with series sort")?
+            }
+            BookSortField::Title | BookSortField::Relevance => {
+                // Relevance lives in the in-memory fuzzy index, not the database — callers
+                // wanting relevance order must hydrate from the ranked id list directly.
+                // We accept the variant here so the param round-trips through generic code
+                // paths and fall back to a stable title sort.
+                base_query
+                    .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
+                    .order_by(book_metadata::Column::TitleSort, order.clone())
+                    .order_by(book_metadata::Column::Title, order)
+                    .order_by_asc(books::Column::FileName)
+                    .offset(page * page_size)
+                    .limit(page_size)
+                    .all(db)
+                    .await
+                    .context("Failed to list books with title sort")?
+            }
+            BookSortField::DateAdded => base_query
+                .order_by(books::Column::CreatedAt, order)
+                .offset(page * page_size)
+                .limit(page_size)
+                .all(db)
+                .await
+                .context("Failed to list books with date added sort")?,
+            BookSortField::ReleaseDate => {
+                // Sort by year from book_metadata
+                base_query
+                    .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
+                    .order_by(book_metadata::Column::Year, order)
+                    .offset(page * page_size)
+                    .limit(page_size)
+                    .all(db)
+                    .await
+                    .context("Failed to list books with release date sort")?
+            }
+            BookSortField::ChapterNumber => {
+                // Sort by number from book_metadata
+                base_query
+                    .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
+                    .order_by(book_metadata::Column::Number, order)
+                    .offset(page * page_size)
+                    .limit(page_size)
+                    .all(db)
+                    .await
+                    .context("Failed to list books with chapter number sort")?
+            }
+            BookSortField::FileSize => base_query
+                .order_by(books::Column::FileSize, order)
+                .offset(page * page_size)
+                .limit(page_size)
+                .all(db)
+                .await
+                .context("Failed to list books with file size sort")?,
+            BookSortField::Filename => base_query
+                .order_by(books::Column::FileName, order)
+                .offset(page * page_size)
+                .limit(page_size)
+                .all(db)
+                .await
+                .context("Failed to list books with filename sort")?,
+            BookSortField::PageCount => base_query
+                .order_by(books::Column::PageCount, order)
+                .offset(page * page_size)
+                .limit(page_size)
+                .all(db)
+                .await
+                .context("Failed to list books with page count sort")?,
+            BookSortField::LastRead => {
+                // LastRead sort requires user_id which this method doesn't have
+                // Fall back to DateAdded sort; use BookRepository::query() for LastRead support
+                base_query
+                    .order_by(books::Column::CreatedAt, order)
+                    .offset(page * page_size)
+                    .limit(page_size)
+                    .all(db)
+                    .await
+                    .context("Failed to list books (LastRead fallback to DateAdded)")?
+            }
+        };
+
+        Ok((books, total))
+    }
+
+    /// List recently added books with pagination
+    pub async fn list_recently_added(
+        db: &DatabaseConnection,
+        library_id: Option<Uuid>,
+        include_deleted: bool,
+        page: u64,
+        page_size: u64,
+    ) -> Result<(Vec<books::Model>, u64)> {
+        use crate::entities::series;
+        use sea_orm::JoinType;
+
+        let mut query = Books::find();
+
+        // Join with series if filtering by library
+        if let Some(lib_id) = library_id {
+            query = query
+                .join(JoinType::InnerJoin, books::Relation::Series.def())
+                .filter(series::Column::LibraryId.eq(lib_id));
+        }
+
+        if !include_deleted {
+            query = query.filter(books::Column::Deleted.eq(false));
+        }
+
+        // Get total count
+        let total = query
+            .clone()
+            .paginate(db, 1)
+            .num_items()
+            .await
+            .context("Failed to count recently added books")?;
+
+        // Get paginated results, ordered by created_at descending (most recent first)
+        let books = query
+            .order_by_desc(books::Column::CreatedAt)
+            .offset(page * page_size)
+            .limit(page_size)
+            .all(db)
+            .await
+            .context("Failed to list recently added books")?;
+
+        Ok((books, total))
+    }
+
+    /// List recently read books (ordered by read_progress updated_at descending)
+    /// This returns books that have been read recently, regardless of completion status
+    pub async fn list_recently_read(
+        db: &DatabaseConnection,
+        user_id: Uuid,
+        library_id: Option<Uuid>,
+        limit: u64,
+    ) -> Result<Vec<books::Model>> {
+        use crate::entities::{read_progress, series};
+        use sea_orm::JoinType;
+
+        let mut query = Books::find()
+            .join(JoinType::InnerJoin, books::Relation::ReadProgress.def())
+            .filter(read_progress::Column::UserId.eq(user_id))
+            .filter(books::Column::Deleted.eq(false));
+
+        // Filter by library if specified
+        if let Some(lib_id) = library_id {
+            query = query
+                .join(JoinType::InnerJoin, books::Relation::Series.def())
+                .filter(series::Column::LibraryId.eq(lib_id));
+        }
+
+        query
+            .order_by_desc(read_progress::Column::UpdatedAt)
+            .limit(limit)
+            .all(db)
+            .await
+            .context("Failed to list recently read books")
+    }
+
+    /// Get books with reading progress for a user (in-progress books)
+    pub async fn list_with_progress(
+        db: &DatabaseConnection,
+        user_id: Uuid,
+        library_id: Option<Uuid>,
+        completed: Option<bool>,
+        page: u64,
+        page_size: u64,
+    ) -> Result<(Vec<books::Model>, u64)> {
+        use crate::entities::{read_progress, series};
+        use sea_orm::JoinType;
+
+        let mut query = Books::find()
+            .join(JoinType::InnerJoin, books::Relation::ReadProgress.def())
+            .filter(read_progress::Column::UserId.eq(user_id));
+
+        // Filter by library if specified
+        if let Some(lib_id) = library_id {
+            query = query
+                .join(JoinType::InnerJoin, books::Relation::Series.def())
+                .filter(series::Column::LibraryId.eq(lib_id));
+        }
+
+        // Filter by completion status if specified
+        if let Some(is_completed) = completed {
+            query = query.filter(read_progress::Column::Completed.eq(is_completed));
+        }
+
+        // Always exclude deleted books
+        query = query.filter(books::Column::Deleted.eq(false));
+
+        // Use GROUP BY to avoid duplicates from join and enable ordering by read_progress.updated_at
+        // PostgreSQL requires ORDER BY columns to be in SELECT list when using DISTINCT,
+        // so we use GROUP BY with MAX(updated_at) instead
+        let base_query = query
+            .column_as(
+                Expr::col((
+                    Alias::new("read_progress"),
+                    read_progress::Column::UpdatedAt,
+                ))
+                .max(),
+                "last_read_at",
+            )
+            .group_by(books::Column::Id);
+
+        // Get total count
+        let total = base_query
+            .clone()
+            .paginate(db, 1)
+            .num_items()
+            .await
+            .context("Failed to count books with progress")?;
+
+        // Get paginated results, ordered by most recently updated
+        let books = base_query
+            .order_by(Expr::col(Alias::new("last_read_at")), Order::Desc)
+            .offset(page * page_size)
+            .limit(page_size)
+            .all(db)
+            .await
+            .context("Failed to list books with progress")?;
+
+        Ok((books, total))
+    }
+
+    /// List unread books for a user (books without progress records)
+    ///
+    /// Returns books that the user has not started reading yet (no progress record exists).
+    pub async fn list_unread(
+        db: &DatabaseConnection,
+        user_id: Uuid,
+        library_id: Option<Uuid>,
+        page: u64,
+        page_size: u64,
+    ) -> Result<(Vec<books::Model>, u64)> {
+        use crate::entities::{read_progress, series};
+        use sea_orm::JoinType;
+
+        // Get all book IDs that have progress for this user
+        let books_with_progress: Vec<Uuid> = read_progress::Entity::find()
+            .select_only()
+            .column(read_progress::Column::BookId)
+            .filter(read_progress::Column::UserId.eq(user_id))
+            .into_tuple()
+            .all(db)
+            .await
+            .context("Failed to get books with progress")?;
+
+        // Query books that are NOT in the progress list
+        let mut query = Books::find()
+            .filter(books::Column::Deleted.eq(false))
+            .filter(books::Column::Id.is_not_in(books_with_progress));
+
+        // Filter by library if specified
+        if let Some(lib_id) = library_id {
+            query = query
+                .join(JoinType::InnerJoin, books::Relation::Series.def())
+                .filter(series::Column::LibraryId.eq(lib_id));
+        }
+
+        // Get total count
+        let total = query
+            .clone()
+            .count(db)
+            .await
+            .context("Failed to count unread books")?;
+
+        // Get paginated results, ordered by created_at descending (newest first)
+        let books = query
+            .order_by_desc(books::Column::CreatedAt)
+            .offset(page * page_size)
+            .limit(page_size)
+            .all(db)
+            .await
+            .context("Failed to list unread books")?;
+
+        Ok((books, total))
+    }
+
+    /// Get "on deck" books - next unread book in series where user has completed at least one book
+    /// and has no books currently in-progress in that series.
+    ///
+    /// Logic:
+    /// 1. Find series where user has completed at least one book
+    /// 2. Exclude series that have any book with in-progress reading (completed=false)
+    /// 3. For each qualifying series, find the first unread book (by sort order)
+    pub async fn list_on_deck(
+        db: &DatabaseConnection,
+        user_id: Uuid,
+        library_id: Option<Uuid>,
+        page: u64,
+        page_size: u64,
+    ) -> Result<(Vec<books::Model>, u64)> {
+        use crate::entities::{read_progress, series};
+        use sea_orm::JoinType;
+
+        // Step 1: Get series where user has completed at least one book,
+        // along with the most recent read-progress timestamp (for sorting by recency).
+        let series_with_last_read: Vec<(Uuid, Option<chrono::DateTime<chrono::Utc>>)> =
+            Books::find()
+                .select_only()
+                .column(books::Column::SeriesId)
+                .column_as(read_progress::Column::UpdatedAt.max(), "last_read")
+                .join(JoinType::InnerJoin, books::Relation::ReadProgress.def())
+                .filter(read_progress::Column::UserId.eq(user_id))
+                .filter(read_progress::Column::Completed.eq(true))
+                .group_by(books::Column::SeriesId)
+                .into_tuple()
+                .all(db)
+                .await
+                .context("Failed to get completed series")?;
+
+        let completed_series: Vec<Uuid> = series_with_last_read.iter().map(|(id, _)| *id).collect();
+
+        let series_last_read: std::collections::HashMap<Uuid, chrono::DateTime<chrono::Utc>> =
+            series_with_last_read
+                .into_iter()
+                .filter_map(|(id, ts)| ts.map(|t| (id, t)))
+                .collect();
+
+        if completed_series.is_empty() {
+            return Ok((vec![], 0));
+        }
+
+        // Step 2: Get series IDs where user has in-progress books (to exclude)
+        let in_progress_series_query = Books::find()
+            .select_only()
+            .column(books::Column::SeriesId)
+            .join(JoinType::InnerJoin, books::Relation::ReadProgress.def())
+            .filter(read_progress::Column::UserId.eq(user_id))
+            .filter(read_progress::Column::Completed.eq(false))
+            .group_by(books::Column::SeriesId);
+
+        let in_progress_series: Vec<Uuid> = in_progress_series_query
+            .into_tuple::<Uuid>()
+            .all(db)
+            .await
+            .context("Failed to get in-progress series")?;
+
+        // Step 3: Calculate eligible series (completed - in_progress)
+        let eligible_series: Vec<Uuid> = completed_series
+            .into_iter()
+            .filter(|s| !in_progress_series.contains(s))
+            .collect();
+
+        if eligible_series.is_empty() {
+            return Ok((vec![], 0));
+        }
+
+        // Step 4: Get all book IDs that have progress for this user (to exclude from unread)
+        let books_with_progress: Vec<Uuid> = read_progress::Entity::find()
+            .select_only()
+            .column(read_progress::Column::BookId)
+            .filter(read_progress::Column::UserId.eq(user_id))
+            .into_tuple::<Uuid>()
+            .all(db)
+            .await
+            .context("Failed to get books with progress")?;
+
+        // Step 5: Get all books in eligible series that are unread
+        let mut unread_query = Books::find()
+            .filter(books::Column::SeriesId.is_in(eligible_series.clone()))
+            .filter(books::Column::Deleted.eq(false));
+
+        // Exclude books that have progress
+        if !books_with_progress.is_empty() {
+            unread_query = unread_query.filter(books::Column::Id.is_not_in(books_with_progress));
+        }
+
+        // Filter by library if specified
+        if let Some(lib_id) = library_id {
+            unread_query = unread_query
+                .join(JoinType::InnerJoin, books::Relation::Series.def())
+                .filter(series::Column::LibraryId.eq(lib_id));
+        }
+
+        // Order by series, then by book number/title/filename (from metadata)
+        use crate::entities::book_metadata;
+
+        let all_unread_books = unread_query
+            .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
+            .order_by_asc(books::Column::SeriesId)
+            .order_by_asc(book_metadata::Column::Number)
+            .order_by_asc(book_metadata::Column::TitleSort)
+            .order_by_asc(book_metadata::Column::Title)
+            .order_by_asc(books::Column::FileName)
+            .all(db)
+            .await
+            .context("Failed to get unread books")?;
+
+        // Step 6: Pick the first book from each series
+        let mut seen_series: std::collections::HashSet<Uuid> = std::collections::HashSet::new();
+        let mut on_deck_books: Vec<books::Model> = Vec::new();
+
+        for book in all_unread_books {
+            if !seen_series.contains(&book.series_id) {
+                seen_series.insert(book.series_id);
+                on_deck_books.push(book);
+            }
+        }
+
+        // Sort by most recently read series first (descending activity timestamp)
+        on_deck_books.sort_by(|a, b| {
+            let a_activity = series_last_read.get(&a.series_id);
+            let b_activity = series_last_read.get(&b.series_id);
+            b_activity.cmp(&a_activity)
+        });
+
+        let total = on_deck_books.len() as u64;
+
+        // Apply pagination
+        let start = (page * page_size) as usize;
+        if start >= on_deck_books.len() {
+            return Ok((vec![], total));
+        }
+        let end = (start + page_size as usize).min(on_deck_books.len());
+        let paginated_books = on_deck_books[start..end].to_vec();
+
+        Ok((paginated_books, total))
+    }
+
+    /// Search books by name/title (case-insensitive via book_metadata)
+    /// Convenience wrapper for OPDS - returns first 50 results
+    pub async fn search_by_name(db: &DatabaseConnection, query: &str) -> Result<Vec<books::Model>> {
+        let (books, _) = Self::search_by_title(db, query, None, None, false, Some((0, 50))).await?;
+        Ok(books)
+    }
+
+    /// Search books by metadata title with optional pagination (case-insensitive)
+    ///
+    /// Unified search method with optional filters:
+    /// - `library_id`: Filter to a specific library (None = all libraries)
+    /// - `candidate_ids`: Filter to specific book IDs (None = no ID filter)
+    /// - `include_deleted`: Include soft-deleted books
+    /// - `pagination`: Optional (page, page_size) tuple. If None, returns all results.
+    ///
+    /// Returns (results, total_count). If pagination is None, total_count equals results.len().
+    /// Returns empty vec if candidate_ids is Some but empty.
+    pub async fn search_by_title(
+        db: &DatabaseConnection,
+        query: &str,
+        library_id: Option<Uuid>,
+        candidate_ids: Option<&[Uuid]>,
+        include_deleted: bool,
+        pagination: Option<(u64, u64)>,
+    ) -> Result<(Vec<books::Model>, u64)> {
+        use crate::entities::book_metadata;
+        use sea_orm::JoinType;
+
+        // Short-circuit if candidate_ids is explicitly empty
+        if let Some(ids) = candidate_ids
+            && ids.is_empty()
+        {
+            return Ok((vec![], 0));
+        }
+
+        let pattern = format!("%{}%", normalize_for_search(query));
+
+        // Use search_title LIKE pattern for accent-insensitive, case-insensitive search
+        let mut search_condition = Condition::all().add(
+            Expr::col((book_metadata::Entity, book_metadata::Column::SearchTitle)).like(&pattern),
+        );
+
+        // Add library filter if specified
+        if let Some(lib_id) = library_id {
+            search_condition = search_condition.add(books::Column::LibraryId.eq(lib_id));
+        }
+
+        // Add candidate IDs filter if specified
+        if let Some(ids) = candidate_ids {
+            search_condition = search_condition.add(books::Column::Id.is_in(ids.to_vec()));
+        }
+
+        if !include_deleted {
+            search_condition = search_condition.add(books::Column::Deleted.eq(false));
+        }
+
+        let base_query = Books::find()
+            .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
+            .filter(search_condition.clone());
+
+        if let Some((page, page_size)) = pagination {
+            // With pagination: count total and fetch page
+            let total = Books::find()
+                .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
+                .filter(search_condition)
+                .count(db)
+                .await
+                .context("Failed to count search results")?;
+
+            let books_list = base_query
+                .order_by_asc(book_metadata::Column::Title)
+                .offset(page * page_size)
+                .limit(page_size)
+                .all(db)
+                .await
+                .context("Failed to search books by title")?;
+
+            Ok((books_list, total))
+        } else {
+            // Without pagination: return all results
+            let books_list = base_query
+                .order_by_asc(book_metadata::Column::Title)
+                .all(db)
+                .await
+                .context("Failed to search books by title")?;
+
+            let total = books_list.len() as u64;
+            Ok((books_list, total))
+        }
+    }
+
+    /// Update book
+    #[tracing::instrument(
+        name = "db.book.update",
+        skip_all,
+        fields(
+            db.system = db_system_str(db),
+            db.operation = "update",
+            otel.kind = "client",
+            book.id = %book_model.id,
+        ),
+    )]
+    pub async fn update(
+        db: &DatabaseConnection,
+        book_model: &books::Model,
+        event_broadcaster: Option<&Arc<EventBroadcaster>>,
+    ) -> Result<()> {
+        let active = books::ActiveModel {
+            id: Set(book_model.id),
+            series_id: Set(book_model.series_id),
+            library_id: Set(book_model.library_id),
+            path: Set(book_model.path.clone()),
+            file_name: Set(book_model.file_name.clone()),
+            file_size: Set(book_model.file_size),
+            file_hash: Set(book_model.file_hash.clone()),
+            partial_hash: Set(book_model.partial_hash.clone()),
+            format: Set(book_model.format.clone()),
+            page_count: Set(book_model.page_count),
+            deleted: Set(book_model.deleted),
+            analyzed: Set(book_model.analyzed),
+            analysis_error: Set(book_model.analysis_error.clone()),
+            analysis_errors: Set(book_model.analysis_errors.clone()),
+            modified_at: Set(book_model.modified_at),
+            created_at: Set(book_model.created_at),
+            updated_at: Set(Utc::now()),
+            thumbnail_path: Set(book_model.thumbnail_path.clone()),
+            thumbnail_generated_at: Set(book_model.thumbnail_generated_at),
+            koreader_hash: Set(book_model.koreader_hash.clone()),
+            epub_positions: Set(book_model.epub_positions.clone()),
+            epub_spine_items: Set(book_model.epub_spine_items.clone()),
+        };
+
+        active.update(db).await.context("Failed to update book")?;
+
+        // Emit BookUpdated event if broadcaster is available
+        if let Some(broadcaster) = event_broadcaster {
+            // Get library_id by finding the series
+            if let Ok(Some(series)) = SeriesRepository::get_by_id(db, book_model.series_id).await {
+                let event = EntityChangeEvent::new(
+                    EntityEvent::BookUpdated {
+                        book_id: book_model.id,
+                        series_id: book_model.series_id,
+                        library_id: series.library_id,
+                        fields: None, // Could track specific fields that changed if needed
+                    },
+                    None, // System-triggered, no user_id
+                );
+                let _ = broadcaster.emit(event);
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Mark a book as deleted or restore it
+    #[tracing::instrument(
+        name = "db.book.mark_deleted",
+        skip_all,
+        fields(
+            db.system = db_system_str(db),
+            db.operation = "update",
+            otel.kind = "client",
+            book.id = %book_id,
+            deleted,
+        ),
+    )]
+    pub async fn mark_deleted(
+        db: &DatabaseConnection,
+        book_id: Uuid,
+        deleted: bool,
+        event_broadcaster: Option<&Arc<EventBroadcaster>>,
+    ) -> Result<()> {
+        let book = Books::find_by_id(book_id)
+            .one(db)
+            .await
+            .context("Failed to find book")?
+            .ok_or_else(|| anyhow::anyhow!("Book not found"))?;
+
+        let series_id = book.series_id;
+        let mut active: books::ActiveModel = book.into();
+        active.deleted = Set(deleted);
+        active.updated_at = Set(Utc::now());
+
+        active
+            .update(db)
+            .await
+            .context("Failed to mark book as deleted")?;
+
+        // Clean up duplicates when soft-deleting (removed books shouldn't appear in duplicates)
+        if deleted {
+            use crate::repositories::BookDuplicatesRepository;
+            BookDuplicatesRepository::cleanup_for_book(db, book_id).await?;
+        }
+
+        // Emit BookUpdated event if broadcaster is available
+        if let Some(broadcaster) = event_broadcaster {
+            // Get library_id by finding the series
+            if let Ok(Some(series)) = SeriesRepository::get_by_id(db, series_id).await {
+                let event = EntityChangeEvent::new(
+                    EntityEvent::BookUpdated {
+                        book_id,
+                        series_id,
+                        library_id: series.library_id,
+                        fields: Some(vec!["deleted".to_string()]),
+                    },
+                    None, // System-triggered, no user_id
+                );
+                let _ = broadcaster.emit(event);
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Delete a book
+    #[tracing::instrument(
+        name = "db.book.delete",
+        skip_all,
+        fields(
+            db.system = db_system_str(db),
+            db.operation = "delete",
+            otel.kind = "client",
+            book.id = %id,
+        ),
+    )]
+    pub async fn delete(db: &DatabaseConnection, id: Uuid) -> Result<()> {
+        Books::delete_by_id(id)
+            .exec(db)
+            .await
+            .context("Failed to delete book")?;
+
+        // Clean up duplicates after deleting a book
+        use crate::repositories::BookDuplicatesRepository;
+        BookDuplicatesRepository::cleanup_for_book(db, id).await?;
+
+        Ok(())
+    }
+
+    /// Count books in a library (excluding deleted books)
+    pub async fn count_by_library(db: &DatabaseConnection, library_id: Uuid) -> Result<i64> {
+        // Get all series in the library
+        let series_list =
+            crate::repositories::SeriesRepository::list_by_library(db, library_id).await?;
+        let series_ids: Vec<Uuid> = series_list.iter().map(|s| s.id).collect();
+
+        if series_ids.is_empty() {
+            return Ok(0);
+        }
+
+        use sea_orm::PaginatorTrait;
+
+        let count = Books::find()
+            .filter(books::Column::SeriesId.is_in(series_ids))
+            .filter(books::Column::Deleted.eq(false))
+            .paginate(db, 1)
+            .num_items()
+            .await
+            .context("Failed to count books")?;
+
+        Ok(count as i64)
+    }
+
+    /// Purge all deleted books in a library (permanently delete from database)
+    pub async fn purge_deleted_in_library(
+        db: &DatabaseConnection,
+        library_id: Uuid,
+        event_broadcaster: Option<&Arc<codex_events::EventBroadcaster>>,
+    ) -> Result<u64> {
+        // Get all series in the library
+        let series_list =
+            crate::repositories::SeriesRepository::list_by_library(db, library_id).await?;
+        let series_ids: Vec<Uuid> = series_list.iter().map(|s| s.id).collect();
+
+        if series_ids.is_empty() {
+            return Ok(0);
+        }
+
+        // First, fetch all books that will be deleted so we can emit events
+        let books_to_delete = Books::find()
+            .filter(books::Column::SeriesId.is_in(series_ids.clone()))
+            .filter(books::Column::Deleted.eq(true))
+            .all(db)
+            .await
+            .context("Failed to fetch books to purge")?;
+
+        // Delete all books that are marked as deleted in this library
+        let result = Books::delete_many()
+            .filter(books::Column::SeriesId.is_in(series_ids))
+            .filter(books::Column::Deleted.eq(true))
+            .exec(db)
+            .await
+            .context("Failed to purge deleted books")?;
+
+        let deleted_count = result.rows_affected;
+
+        // Emit BookDeleted events for each purged book
+        if let Some(broadcaster) = event_broadcaster {
+            use codex_events::{EntityChangeEvent, EntityEvent};
+            use tracing::warn;
+
+            for book in books_to_delete {
+                let event = EntityChangeEvent {
+                    event: EntityEvent::BookDeleted {
+                        library_id,
+                        series_id: book.series_id,
+                        book_id: book.id,
+                    },
+                    user_id: None,
+                    timestamp: chrono::Utc::now(),
+                };
+
+                if let Err(e) = broadcaster.emit(event) {
+                    warn!(
+                        "Failed to emit BookDeleted event for book {}: {:?}",
+                        book.id, e
+                    );
+                }
+            }
+        }
+
+        // Check if we should purge empty series
+        let purge_empty_series = crate::repositories::SettingsRepository::get_value::<bool>(
+            db,
+            "purge.purge_empty_series",
+        )
+        .await
+        .unwrap_or(Some(true))
+        .unwrap_or(true);
+
+        if purge_empty_series {
+            // Purge empty series after deleting books
+            let _series_deleted =
+                crate::repositories::SeriesRepository::purge_empty_series_in_library(
+                    db,
+                    library_id,
+                    event_broadcaster,
+                )
+                .await
+                .context("Failed to purge empty series")?;
+        }
+
+        Ok(deleted_count)
+    }
+
+    /// Purge all deleted books in a series (permanently delete from database)
+    pub async fn purge_deleted_in_series(
+        db: &DatabaseConnection,
+        series_id: Uuid,
+        event_broadcaster: Option<&Arc<codex_events::EventBroadcaster>>,
+    ) -> Result<u64> {
+        // First, fetch the series to get library_id and all books that will be deleted
+        let series = crate::repositories::SeriesRepository::get_by_id(db, series_id)
+            .await?
+            .context("Series not found")?;
+
+        let books_to_delete = Books::find()
+            .filter(books::Column::SeriesId.eq(series_id))
+            .filter(books::Column::Deleted.eq(true))
+            .all(db)
+            .await
+            .context("Failed to fetch books to purge")?;
+
+        let result = Books::delete_many()
+            .filter(books::Column::SeriesId.eq(series_id))
+            .filter(books::Column::Deleted.eq(true))
+            .exec(db)
+            .await
+            .context("Failed to purge deleted books in series")?;
+
+        let deleted_count = result.rows_affected;
+
+        // Emit BookDeleted events for each purged book
+        if let Some(broadcaster) = event_broadcaster {
+            use codex_events::{EntityChangeEvent, EntityEvent};
+            use tracing::warn;
+
+            for book in books_to_delete {
+                let event = EntityChangeEvent {
+                    event: EntityEvent::BookDeleted {
+                        library_id: series.library_id,
+                        series_id,
+                        book_id: book.id,
+                    },
+                    user_id: None,
+                    timestamp: chrono::Utc::now(),
+                };
+
+                if let Err(e) = broadcaster.emit(event) {
+                    warn!(
+                        "Failed to emit BookDeleted event for book {}: {:?}",
+                        book.id, e
+                    );
+                }
+            }
+        }
+
+        // Check if we should purge empty series
+        let purge_empty_series = crate::repositories::SettingsRepository::get_value::<bool>(
+            db,
+            "purge.purge_empty_series",
+        )
+        .await
+        .unwrap_or(Some(true))
+        .unwrap_or(true);
+
+        if purge_empty_series {
+            // Check if series is now empty and delete it if so
+            let _series_deleted = crate::repositories::SeriesRepository::purge_if_empty(
+                db,
+                series_id,
+                event_broadcaster,
+            )
+            .await
+            .context("Failed to check/purge empty series")?;
+        }
+
+        Ok(deleted_count)
+    }
+
+    /// Get all unanalyzed books in a library
+    pub async fn get_unanalyzed_in_library(
+        db: &DatabaseConnection,
+        library_id: Uuid,
+    ) -> Result<Vec<books::Model>> {
+        // Get all series in the library
+        let series_list =
+            crate::repositories::SeriesRepository::list_by_library(db, library_id).await?;
+        let series_ids: Vec<Uuid> = series_list.iter().map(|s| s.id).collect();
+
+        if series_ids.is_empty() {
+            return Ok(vec![]);
+        }
+
+        Books::find()
+            .filter(books::Column::SeriesId.is_in(series_ids))
+            .filter(books::Column::Analyzed.eq(false))
+            .filter(books::Column::Deleted.eq(false))
+            .all(db)
+            .await
+            .context("Failed to get unanalyzed books")
+    }
+
+    /// Get all unanalyzed books in a series
+    pub async fn get_unanalyzed_in_series(
+        db: &DatabaseConnection,
+        series_id: Uuid,
+    ) -> Result<Vec<books::Model>> {
+        Books::find()
+            .filter(books::Column::SeriesId.eq(series_id))
+            .filter(books::Column::Analyzed.eq(false))
+            .filter(books::Column::Deleted.eq(false))
+            .all(db)
+            .await
+            .context("Failed to get unanalyzed books in series")
+    }
+
+    /// Count unread books in a series for a specific user
+    /// A book is considered unread if it has no read progress or the progress is not completed
+    pub async fn count_unread_in_series(
+        db: &DatabaseConnection,
+        series_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<i64> {
+        use crate::entities::read_progress;
+        use sea_orm::JoinType;
+
+        // Count all non-deleted books in the series
+        let total_books = Books::find()
+            .filter(books::Column::SeriesId.eq(series_id))
+            .filter(books::Column::Deleted.eq(false))
+            .count(db)
+            .await
+            .context("Failed to count books in series")?;
+
+        // Count books with completed read progress
+        let completed_count = Books::find()
+            .filter(books::Column::SeriesId.eq(series_id))
+            .filter(books::Column::Deleted.eq(false))
+            .join(JoinType::InnerJoin, books::Relation::ReadProgress.def())
+            .filter(read_progress::Column::UserId.eq(user_id))
+            .filter(read_progress::Column::Completed.eq(true))
+            .count(db)
+            .await
+            .context("Failed to count completed books in series")?;
+
+        // Unread = total - completed
+        Ok((total_books - completed_count) as i64)
+    }
+
+    /// Count unread books in multiple series for a specific user
+    ///
+    /// Returns a HashMap keyed by series_id with unread counts
+    pub async fn count_unread_in_series_ids(
+        db: &DatabaseConnection,
+        series_ids: &[Uuid],
+        user_id: Uuid,
+    ) -> Result<std::collections::HashMap<Uuid, i64>> {
+        use crate::entities::read_progress;
+        use sea_orm::{FromQueryResult, JoinType, QuerySelect, sea_query::Expr};
+
+        if series_ids.is_empty() {
+            return Ok(std::collections::HashMap::new());
+        }
+
+        #[derive(Debug, FromQueryResult)]
+        struct CountResult {
+            series_id: Uuid,
+            count: i64,
+        }
+
+        // Count all non-deleted books per series
+        let total_counts: Vec<CountResult> = Books::find()
+            .select_only()
+            .column(books::Column::SeriesId)
+            .column_as(Expr::col(books::Column::Id).count(), "count")
+            .filter(books::Column::SeriesId.is_in(series_ids.to_vec()))
+            .filter(books::Column::Deleted.eq(false))
+            .group_by(books::Column::SeriesId)
+            .into_model::<CountResult>()
+            .all(db)
+            .await
+            .context("Failed to count books in series")?;
+
+        let total_map: std::collections::HashMap<Uuid, i64> = total_counts
+            .into_iter()
+            .map(|r| (r.series_id, r.count))
+            .collect();
+
+        // Count completed books per series for this user
+        // Use qualified column name to avoid ambiguity when joining with read_progress
+        let completed_counts: Vec<CountResult> = Books::find()
+            .select_only()
+            .column(books::Column::SeriesId)
+            .column_as(
+                Expr::col((books::Entity, books::Column::Id)).count(),
+                "count",
+            )
+            .filter(books::Column::SeriesId.is_in(series_ids.to_vec()))
+            .filter(books::Column::Deleted.eq(false))
+            .join(JoinType::InnerJoin, books::Relation::ReadProgress.def())
+            .filter(read_progress::Column::UserId.eq(user_id))
+            .filter(read_progress::Column::Completed.eq(true))
+            .group_by(books::Column::SeriesId)
+            .into_model::<CountResult>()
+            .all(db)
+            .await
+            .context("Failed to count completed books in series")?;
+
+        let completed_map: std::collections::HashMap<Uuid, i64> = completed_counts
+            .into_iter()
+            .map(|r| (r.series_id, r.count))
+            .collect();
+
+        // Compute unread = total - completed
+        let mut result: std::collections::HashMap<Uuid, i64> = std::collections::HashMap::new();
+        for id in series_ids {
+            let total = total_map.get(id).copied().unwrap_or(0);
+            let completed = completed_map.get(id).copied().unwrap_or(0);
+            result.insert(*id, total - completed);
+        }
+
+        Ok(result)
+    }
+
+    /// Check if a book is analyzed
+    pub async fn is_analyzed(db: &DatabaseConnection, book_id: Uuid) -> Result<bool> {
+        let book = Books::find_by_id(book_id)
+            .one(db)
+            .await
+            .context("Failed to find book")?
+            .ok_or_else(|| anyhow::anyhow!("Book not found"))?;
+
+        Ok(book.analyzed)
+    }
+
+    /// Mark a book as analyzed
+    pub async fn mark_analyzed(
+        db: &DatabaseConnection,
+        book_id: Uuid,
+        analyzed: bool,
+    ) -> Result<()> {
+        let book = Books::find_by_id(book_id)
+            .one(db)
+            .await
+            .context("Failed to find book")?
+            .ok_or_else(|| anyhow::anyhow!("Book not found"))?;
+
+        let mut active: books::ActiveModel = book.into();
+        active.analyzed = Set(analyzed);
+        active.updated_at = Set(Utc::now());
+
+        active
+            .update(db)
+            .await
+            .context("Failed to mark book as analyzed")?;
+
+        Ok(())
+    }
+
+    /// Set or clear analysis error for a book
+    pub async fn set_analysis_error(
+        db: &DatabaseConnection,
+        book_id: Uuid,
+        error: Option<String>,
+    ) -> Result<()> {
+        let book = Books::find_by_id(book_id)
+            .one(db)
+            .await
+            .context("Failed to find book")?
+            .ok_or_else(|| anyhow::anyhow!("Book not found"))?;
+
+        let mut active: books::ActiveModel = book.into();
+        active.analysis_error = Set(error);
+        active.updated_at = Set(Utc::now());
+
+        active
+            .update(db)
+            .await
+            .context("Failed to set analysis error")?;
+
+        Ok(())
+    }
+
+    /// Set a specific error type for a book
+    ///
+    /// This adds or updates a specific error type in the analysis_errors JSON map.
+    /// If the book already has other error types, they are preserved.
+    pub async fn set_error(
+        db: &DatabaseConnection,
+        book_id: Uuid,
+        error_type: BookErrorType,
+        error: BookError,
+    ) -> Result<()> {
+        use crate::entities::book_error::{parse_analysis_errors, serialize_analysis_errors};
+
+        let book = Books::find_by_id(book_id)
+            .one(db)
+            .await
+            .context("Failed to find book")?
+            .ok_or_else(|| anyhow::anyhow!("Book not found"))?;
+
+        // Parse existing errors
+        let mut errors = parse_analysis_errors(book.analysis_errors.as_deref());
+
+        // Add/update the specific error type
+        errors.insert(error_type, error);
+
+        // Update the book
+        let mut active: books::ActiveModel = book.into();
+        active.analysis_errors = Set(serialize_analysis_errors(&errors));
+        active.updated_at = Set(Utc::now());
+
+        active
+            .update(db)
+            .await
+            .context("Failed to set book error")?;
+
+        Ok(())
+    }
+
+    /// Clear a specific error type from a book
+    ///
+    /// Removes the specified error type from the analysis_errors JSON map.
+    /// Other error types are preserved.
+    pub async fn clear_error(
+        db: &DatabaseConnection,
+        book_id: Uuid,
+        error_type: BookErrorType,
+    ) -> Result<()> {
+        use crate::entities::book_error::{parse_analysis_errors, serialize_analysis_errors};
+
+        let book = Books::find_by_id(book_id)
+            .one(db)
+            .await
+            .context("Failed to find book")?
+            .ok_or_else(|| anyhow::anyhow!("Book not found"))?;
+
+        // Parse existing errors
+        let mut errors = parse_analysis_errors(book.analysis_errors.as_deref());
+
+        // Remove the specific error type
+        errors.remove(&error_type);
+
+        // Update the book
+        let mut active: books::ActiveModel = book.into();
+        active.analysis_errors = Set(serialize_analysis_errors(&errors));
+        active.updated_at = Set(Utc::now());
+
+        active
+            .update(db)
+            .await
+            .context("Failed to clear book error")?;
+
+        Ok(())
+    }
+
+    /// Clear all errors from a book
+    pub async fn clear_all_errors(db: &DatabaseConnection, book_id: Uuid) -> Result<()> {
+        let book = Books::find_by_id(book_id)
+            .one(db)
+            .await
+            .context("Failed to find book")?
+            .ok_or_else(|| anyhow::anyhow!("Book not found"))?;
+
+        let mut active: books::ActiveModel = book.into();
+        active.analysis_errors = Set(None);
+        active.updated_at = Set(Utc::now());
+
+        active
+            .update(db)
+            .await
+            .context("Failed to clear all book errors")?;
+
+        Ok(())
+    }
+
+    /// Get all errors for a book
+    pub async fn get_errors(db: &DatabaseConnection, book_id: Uuid) -> Result<BookErrors> {
+        use crate::entities::book_error::parse_analysis_errors;
+
+        let book = Books::find_by_id(book_id)
+            .one(db)
+            .await
+            .context("Failed to find book")?
+            .ok_or_else(|| anyhow::anyhow!("Book not found"))?;
+
+        Ok(parse_analysis_errors(book.analysis_errors.as_deref()))
+    }
+
+    /// List books with errors (using analysis_errors JSON field)
+    /// Returns books with their parsed errors, filtered optionally by library, series, or error type
+    pub async fn list_with_errors(
+        db: &DatabaseConnection,
+        library_id: Option<Uuid>,
+        series_id: Option<Uuid>,
+        error_type: Option<BookErrorType>,
+        page: u64,
+        page_size: u64,
+    ) -> Result<(Vec<(books::Model, BookErrors)>, u64)> {
+        use crate::entities::book_error::parse_analysis_errors;
+
+        let mut query = Books::find()
+            .filter(books::Column::AnalysisErrors.is_not_null())
+            .filter(books::Column::Deleted.eq(false));
+
+        if let Some(lib_id) = library_id {
+            query = query.filter(books::Column::LibraryId.eq(lib_id));
+        }
+
+        if let Some(ser_id) = series_id {
+            query = query.filter(books::Column::SeriesId.eq(ser_id));
+        }
+
+        // First, get all matching books
+        let all_books: Vec<books::Model> = query
+            .clone()
+            .order_by_desc(books::Column::UpdatedAt)
+            .all(db)
+            .await
+            .context("Failed to list books with errors")?;
+
+        // Parse and filter by error type if specified
+        let filtered_books: Vec<(books::Model, BookErrors)> = all_books
+            .into_iter()
+            .filter_map(|book| {
+                let errors = parse_analysis_errors(book.analysis_errors.as_deref());
+                if errors.is_empty() {
+                    return None;
+                }
+                if let Some(et) = &error_type
+                    && !errors.contains_key(et)
+                {
+                    return None;
+                }
+                Some((book, errors))
+            })
+            .collect();
+
+        let total = filtered_books.len() as u64;
+
+        // Apply pagination
+        let paginated: Vec<(books::Model, BookErrors)> = filtered_books
+            .into_iter()
+            .skip((page * page_size) as usize)
+            .take(page_size as usize)
+            .collect();
+
+        Ok((paginated, total))
+    }
+
+    /// Count errors grouped by error type
+    /// Returns a map of error type to count of books with that error
+    pub async fn count_errors_by_type(
+        db: &DatabaseConnection,
+        library_id: Option<Uuid>,
+    ) -> Result<std::collections::HashMap<BookErrorType, u64>> {
+        use crate::entities::book_error::parse_analysis_errors;
+
+        let mut query = Books::find()
+            .filter(books::Column::AnalysisErrors.is_not_null())
+            .filter(books::Column::Deleted.eq(false));
+
+        if let Some(lib_id) = library_id {
+            query = query.filter(books::Column::LibraryId.eq(lib_id));
+        }
+
+        let books = query
+            .all(db)
+            .await
+            .context("Failed to count errors by type")?;
+
+        let mut counts: std::collections::HashMap<BookErrorType, u64> =
+            std::collections::HashMap::new();
+
+        for book in books {
+            let errors = parse_analysis_errors(book.analysis_errors.as_deref());
+            for error_type in errors.keys() {
+                *counts.entry(*error_type).or_insert(0) += 1;
+            }
+        }
+
+        Ok(counts)
+    }
+
+    /// Create multiple books in a single batch insert operation
+    ///
+    /// This is significantly more efficient than calling `create()` for each book
+    /// individually. Note: This does NOT emit events for performance reasons.
+    /// If you need events, use `create()` in a loop or emit them separately.
+    ///
+    /// # Arguments
+    /// * `db` - Database connection
+    /// * `books_models` - Slice of book models to create
+    ///
+    /// # Returns
+    /// Number of books created
+    pub async fn create_batch(
+        db: &DatabaseConnection,
+        books_models: &[books::Model],
+    ) -> Result<u64> {
+        if books_models.is_empty() {
+            return Ok(0);
+        }
+
+        // Convert models to active models for batch insert
+        let active_models: Vec<books::ActiveModel> = books_models
+            .iter()
+            .map(|book_model| books::ActiveModel {
+                id: Set(book_model.id),
+                series_id: Set(book_model.series_id),
+                library_id: Set(book_model.library_id),
+                path: Set(book_model.path.clone()),
+                file_name: Set(book_model.file_name.clone()),
+                file_size: Set(book_model.file_size),
+                file_hash: Set(book_model.file_hash.clone()),
+                partial_hash: Set(book_model.partial_hash.clone()),
+                format: Set(book_model.format.clone()),
+                page_count: Set(book_model.page_count),
+                deleted: Set(book_model.deleted),
+                analyzed: Set(book_model.analyzed),
+                analysis_error: Set(book_model.analysis_error.clone()),
+                analysis_errors: Set(book_model.analysis_errors.clone()),
+                modified_at: Set(book_model.modified_at),
+                created_at: Set(book_model.created_at),
+                updated_at: Set(book_model.updated_at),
+                thumbnail_path: Set(book_model.thumbnail_path.clone()),
+                thumbnail_generated_at: Set(book_model.thumbnail_generated_at),
+                koreader_hash: Set(book_model.koreader_hash.clone()),
+                epub_positions: Set(book_model.epub_positions.clone()),
+                epub_spine_items: Set(book_model.epub_spine_items.clone()),
+            })
+            .collect();
+
+        let count = active_models.len() as u64;
+
+        // Bulk insert all books in a single query
+        Books::insert_many(active_models)
+            .exec(db)
+            .await
+            .context("Failed to batch create books")?;
+
+        Ok(count)
+    }
+
+    /// Update multiple books in a batch operation
+    ///
+    /// This performs individual updates but groups them efficiently. For very large
+    /// batches, consider chunking the input.
+    ///
+    /// Note: This does NOT emit events for performance reasons.
+    ///
+    /// # Arguments
+    /// * `db` - Database connection
+    /// * `books_models` - Slice of book models to update (must have valid IDs)
+    ///
+    /// # Returns
+    /// Number of books updated
+    pub async fn update_batch(
+        db: &DatabaseConnection,
+        books_models: &[books::Model],
+    ) -> Result<u64> {
+        use sea_orm::TransactionTrait;
+
+        if books_models.is_empty() {
+            return Ok(0);
+        }
+
+        let txn = db.begin().await.context("Failed to begin transaction")?;
+        let mut updated = 0u64;
+
+        for book_model in books_models {
+            let active = books::ActiveModel {
+                id: Set(book_model.id),
+                series_id: Set(book_model.series_id),
+                library_id: Set(book_model.library_id),
+                path: Set(book_model.path.clone()),
+                file_name: Set(book_model.file_name.clone()),
+                file_size: Set(book_model.file_size),
+                file_hash: Set(book_model.file_hash.clone()),
+                partial_hash: Set(book_model.partial_hash.clone()),
+                format: Set(book_model.format.clone()),
+                page_count: Set(book_model.page_count),
+                deleted: Set(book_model.deleted),
+                analyzed: Set(book_model.analyzed),
+                analysis_error: Set(book_model.analysis_error.clone()),
+                analysis_errors: Set(book_model.analysis_errors.clone()),
+                modified_at: Set(book_model.modified_at),
+                created_at: Set(book_model.created_at),
+                updated_at: Set(book_model.updated_at),
+                thumbnail_path: Set(book_model.thumbnail_path.clone()),
+                thumbnail_generated_at: Set(book_model.thumbnail_generated_at),
+                koreader_hash: Set(book_model.koreader_hash.clone()),
+                epub_positions: Set(book_model.epub_positions.clone()),
+                epub_spine_items: Set(book_model.epub_spine_items.clone()),
+            };
+
+            active
+                .update(&txn)
+                .await
+                .context("Failed to update book in batch")?;
+            updated += 1;
+        }
+
+        txn.commit()
+            .await
+            .context("Failed to commit batch update")?;
+
+        Ok(updated)
+    }
+
+    /// Get multiple books by their file paths in a single query
+    ///
+    /// This is more efficient than calling `get_by_path()` for each path individually.
+    ///
+    /// # Arguments
+    /// * `db` - Database connection
+    /// * `library_id` - Library ID to filter by
+    /// * `paths` - List of file paths to look up
+    ///
+    /// # Returns
+    /// HashMap of path -> book model for existing books
+    pub async fn get_by_paths(
+        db: &DatabaseConnection,
+        library_id: Uuid,
+        paths: &[String],
+    ) -> Result<std::collections::HashMap<String, books::Model>> {
+        use std::collections::HashMap;
+
+        if paths.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let books_list = Books::find()
+            .filter(books::Column::LibraryId.eq(library_id))
+            .filter(books::Column::Path.is_in(paths.to_vec()))
+            .all(db)
+            .await
+            .context("Failed to get books by paths")?;
+
+        let mut map = HashMap::with_capacity(books_list.len());
+        for book in books_list {
+            map.insert(book.path.clone(), book);
+        }
+
+        Ok(map)
+    }
+
+    // =========================================================================
+    // Cursor-Based Pagination Methods
+    // =========================================================================
+
+    /// List books by library using cursor-based pagination
+    ///
+    /// This method is more efficient than offset-based pagination for large datasets.
+    /// It uses the `(title_sort, id)` tuple as the cursor position.
+    ///
+    /// # Arguments
+    /// * `db` - Database connection
+    /// * `library_id` - Library ID to filter by
+    /// * `cursor` - Optional cursor from a previous page (title_sort, book_id)
+    /// * `page_size` - Number of items to return
+    ///
+    /// # Returns
+    /// * `Vec<books::Model>` - Books for this page (may have page_size + 1 to detect has_more)
+    pub async fn list_by_library_cursor(
+        db: &DatabaseConnection,
+        library_id: Uuid,
+        cursor: Option<(&str, Uuid)>,
+        page_size: u64,
+    ) -> Result<Vec<books::Model>> {
+        use crate::entities::book_metadata;
+        use sea_orm::JoinType;
+
+        let mut query = Books::find()
+            .filter(books::Column::LibraryId.eq(library_id))
+            .filter(books::Column::Deleted.eq(false))
+            .join(JoinType::LeftJoin, books::Relation::BookMetadata.def());
+
+        // Apply cursor condition if provided
+        // We use (title_sort, id) as the cursor tuple
+        // Rows after cursor: (title_sort > cursor_title) OR (title_sort = cursor_title AND id > cursor_id)
+        if let Some((cursor_title, cursor_id)) = cursor {
+            query = query.filter(
+                Condition::any()
+                    .add(
+                        book_metadata::Column::TitleSort.gt(cursor_title).or(
+                            book_metadata::Column::TitleSort
+                                .is_null()
+                                .and(Expr::val(cursor_title).ne("")),
+                        ),
+                    )
+                    .add(
+                        Condition::all()
+                            .add(
+                                book_metadata::Column::TitleSort.eq(cursor_title).or(
+                                    book_metadata::Column::TitleSort
+                                        .is_null()
+                                        .and(Expr::val(cursor_title).eq("")),
+                                ),
+                            )
+                            .add(books::Column::Id.gt(cursor_id)),
+                    ),
+            );
+        }
+
+        // Order by title_sort ASC, then id ASC for stability
+        query
+            .order_by_asc(book_metadata::Column::TitleSort)
+            .order_by_asc(books::Column::Id)
+            // Fetch one extra to determine if there are more pages
+            .limit(page_size + 1)
+            .all(db)
+            .await
+            .context("Failed to list books by library with cursor")
+    }
+
+    /// List recently added books using cursor-based pagination
+    ///
+    /// Uses `(created_at, id)` as the cursor for descending date order.
+    ///
+    /// # Arguments
+    /// * `db` - Database connection
+    /// * `library_id` - Optional library ID to filter by
+    /// * `cursor` - Optional cursor from a previous page (created_at timestamp, book_id)
+    /// * `page_size` - Number of items to return
+    ///
+    /// # Returns
+    /// * `Vec<books::Model>` - Books for this page (may have page_size + 1 to detect has_more)
+    pub async fn list_recently_added_cursor(
+        db: &DatabaseConnection,
+        library_id: Option<Uuid>,
+        cursor: Option<(i64, Uuid)>,
+        page_size: u64,
+    ) -> Result<Vec<books::Model>> {
+        let mut query = Books::find().filter(books::Column::Deleted.eq(false));
+
+        // Filter by library if specified
+        if let Some(lib_id) = library_id {
+            query = query.filter(books::Column::LibraryId.eq(lib_id));
+        }
+
+        // Apply cursor condition if provided
+        // For descending order: (created_at < cursor_timestamp) OR (created_at = cursor_timestamp AND id < cursor_id)
+        if let Some((cursor_timestamp, cursor_id)) = cursor {
+            use chrono::TimeZone;
+            let cursor_datetime = Utc.timestamp_millis_opt(cursor_timestamp).single();
+            if let Some(dt) = cursor_datetime {
+                query = query.filter(
+                    Condition::any().add(books::Column::CreatedAt.lt(dt)).add(
+                        Condition::all()
+                            .add(books::Column::CreatedAt.eq(dt))
+                            .add(books::Column::Id.lt(cursor_id)),
+                    ),
+                );
+            }
+        }
+
+        // Order by created_at DESC (most recent first), then id DESC for stability
+        query
+            .order_by_desc(books::Column::CreatedAt)
+            .order_by_desc(books::Column::Id)
+            // Fetch one extra to determine if there are more pages
+            .limit(page_size + 1)
+            .all(db)
+            .await
+            .context("Failed to list recently added books with cursor")
+    }
+
+    /// Get title_sort for a book (used for cursor construction)
+    pub async fn get_title_sort(db: &DatabaseConnection, book_id: Uuid) -> Result<Option<String>> {
+        use crate::entities::book_metadata;
+
+        let result: Option<String> = book_metadata::Entity::find()
+            .filter(book_metadata::Column::BookId.eq(book_id))
+            .select_only()
+            .column(book_metadata::Column::TitleSort)
+            .into_tuple()
+            .one(db)
+            .await
+            .context("Failed to get title_sort for book")?;
+
+        Ok(result)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ScanningStrategy;
+    use crate::repositories::{LibraryRepository, SeriesRepository};
+    use crate::test_helpers::create_test_db;
+
+    /// Helper to create a test book model
+    fn create_book_model(
+        series_id: Uuid,
+        library_id: Uuid,
+        path: &str,
+        name: &str,
+    ) -> books::Model {
+        let now = Utc::now();
+        // Note: title and number are now in book_metadata table
+        books::Model {
+            id: Uuid::new_v4(),
+            series_id,
+            library_id,
+            path: path.to_string(),
+            file_name: name.to_string(),
+            file_size: 1024,
+            file_hash: format!("hash_{}", Uuid::new_v4()),
+            partial_hash: String::new(),
+            format: "cbz".to_string(),
+            page_count: 10,
+            deleted: false,
+            analyzed: false,
+            analysis_error: None,
+            analysis_errors: None,
+            modified_at: now,
+            created_at: now,
+            updated_at: now,
+            thumbnail_path: None,
+            thumbnail_generated_at: None,
+            koreader_hash: None,
+            epub_positions: None,
+            epub_spine_items: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_create_book() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
+
+        let book = create_book_model(series.id, library.id, "/test/book.cbz", "book.cbz");
+        let created = BookRepository::create(db.sea_orm_connection(), &book, None)
+            .await
+            .unwrap();
+
+        assert_eq!(created.id, book.id);
+        assert_eq!(created.path, "/test/book.cbz");
+        assert_eq!(created.format, "cbz");
+    }
+
+    #[tokio::test]
+    async fn test_get_book_by_id() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
+
+        let book = create_book_model(series.id, library.id, "/test/book.cbz", "book.cbz");
+        BookRepository::create(db.sea_orm_connection(), &book, None)
+            .await
+            .unwrap();
+
+        let retrieved = BookRepository::get_by_id(db.sea_orm_connection(), book.id)
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(retrieved.id, book.id);
+        assert_eq!(retrieved.path, "/test/book.cbz");
+    }
+
+    #[tokio::test]
+    async fn test_get_book_by_hash() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
+
+        let mut book = create_book_model(series.id, library.id, "/test/book.cbz", "book.cbz");
+        book.file_hash = "unique_hash_123".to_string();
+
+        BookRepository::create(db.sea_orm_connection(), &book, None)
+            .await
+            .unwrap();
+
+        let retrieved = BookRepository::get_by_hash(db.sea_orm_connection(), "unique_hash_123")
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(retrieved.id, book.id);
+        assert_eq!(retrieved.file_hash, "unique_hash_123");
+    }
+
+    #[tokio::test]
+    async fn test_get_book_by_path() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
+
+        let book = create_book_model(series.id, library.id, "/test/book.cbz", "book.cbz");
+        BookRepository::create(db.sea_orm_connection(), &book, None)
+            .await
+            .unwrap();
+
+        let retrieved =
+            BookRepository::get_by_path(db.sea_orm_connection(), library.id, "/test/book.cbz")
+                .await
+                .unwrap()
+                .unwrap();
+
+        assert_eq!(retrieved.id, book.id);
+        assert_eq!(retrieved.path, "/test/book.cbz");
+    }
+
+    #[tokio::test]
+    async fn test_list_books_by_series() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
+
+        // Note: number is now in book_metadata table, not needed for this test
+        let book1 = create_book_model(series.id, library.id, "/test/book1.cbz", "book1.cbz");
+        let book2 = create_book_model(series.id, library.id, "/test/book2.cbz", "book2.cbz");
+
+        BookRepository::create(db.sea_orm_connection(), &book1, None)
+            .await
+            .unwrap();
+        BookRepository::create(db.sea_orm_connection(), &book2, None)
+            .await
+            .unwrap();
+
+        let books = BookRepository::list_by_series(db.sea_orm_connection(), series.id, false)
+            .await
+            .unwrap();
+
+        assert_eq!(books.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_update_book() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
+
+        let mut book = create_book_model(series.id, library.id, "/test/book.cbz", "book.cbz");
+        BookRepository::create(db.sea_orm_connection(), &book, None)
+            .await
+            .unwrap();
+
+        // Update fields that are still in books table (title/number moved to book_metadata)
+        book.page_count = 50;
+        book.analyzed = true;
+
+        BookRepository::update(db.sea_orm_connection(), &book, None)
+            .await
+            .unwrap();
+
+        let retrieved = BookRepository::get_by_id(db.sea_orm_connection(), book.id)
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(retrieved.page_count, 50);
+        assert!(retrieved.analyzed);
+    }
+
+    #[tokio::test]
+    async fn test_delete_book() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
+
+        let book = create_book_model(series.id, library.id, "/test/book.cbz", "book.cbz");
+        BookRepository::create(db.sea_orm_connection(), &book, None)
+            .await
+            .unwrap();
+
+        BookRepository::delete(db.sea_orm_connection(), book.id)
+            .await
+            .unwrap();
+
+        let result = BookRepository::get_by_id(db.sea_orm_connection(), book.id)
+            .await
+            .unwrap();
+
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_list_all_books() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
+
+        // Create test books
+        for i in 1..=5 {
+            let book = create_book_model(
+                series.id,
+                library.id,
+                &format!("/test/book{}.cbz", i),
+                &format!("book{}.cbz", i),
+            );
+            BookRepository::create(db.sea_orm_connection(), &book, None)
+                .await
+                .unwrap();
+        }
+
+        let (books, total) = BookRepository::list_all(db.sea_orm_connection(), false, 0, 10)
+            .await
+            .unwrap();
+
+        assert_eq!(books.len(), 5);
+        assert_eq!(total, 5);
+    }
+
+    #[tokio::test]
+    async fn test_list_all_books_with_pagination() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
+
+        // Create 10 test books
+        for i in 1..=10 {
+            let book = create_book_model(
+                series.id,
+                library.id,
+                &format!("/test/book{:02}.cbz", i),
+                &format!("book{:02}.cbz", i),
+            );
+            BookRepository::create(db.sea_orm_connection(), &book, None)
+                .await
+                .unwrap();
+        }
+
+        // Get first page (5 items)
+        let (books_page1, total) = BookRepository::list_all(db.sea_orm_connection(), false, 0, 5)
+            .await
+            .unwrap();
+
+        assert_eq!(books_page1.len(), 5);
+        assert_eq!(total, 10);
+
+        // Get second page (5 items)
+        let (books_page2, total) = BookRepository::list_all(db.sea_orm_connection(), false, 1, 5)
+            .await
+            .unwrap();
+
+        assert_eq!(books_page2.len(), 5);
+        assert_eq!(total, 10);
+
+        // Verify different books on each page
+        assert_ne!(books_page1[0].id, books_page2[0].id);
+    }
+
+    #[tokio::test]
+    async fn test_list_all_books_excludes_deleted() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
+
+        // Create 3 books
+        let mut book_ids = vec![];
+        for i in 1..=3 {
+            let book = create_book_model(
+                series.id,
+                library.id,
+                &format!("/test/book{}.cbz", i),
+                &format!("book{}.cbz", i),
+            );
+            let created = BookRepository::create(db.sea_orm_connection(), &book, None)
+                .await
+                .unwrap();
+            book_ids.push(created.id);
+        }
+
+        // Mark one book as deleted
+        BookRepository::mark_deleted(db.sea_orm_connection(), book_ids[1], true, None)
+            .await
+            .unwrap();
+
+        // List without deleted
+        let (books, total) = BookRepository::list_all(db.sea_orm_connection(), false, 0, 10)
+            .await
+            .unwrap();
+
+        assert_eq!(books.len(), 2);
+        assert_eq!(total, 2);
+
+        // List with deleted
+        let (books_with_deleted, total_with_deleted) =
+            BookRepository::list_all(db.sea_orm_connection(), true, 0, 10)
+                .await
+                .unwrap();
+
+        assert_eq!(books_with_deleted.len(), 3);
+        assert_eq!(total_with_deleted, 3);
+    }
+
+    #[tokio::test]
+    async fn test_list_all_books_empty() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let (books, total) = BookRepository::list_all(db.sea_orm_connection(), false, 0, 10)
+            .await
+            .unwrap();
+
+        assert_eq!(books.len(), 0);
+        assert_eq!(total, 0);
+    }
+
+    #[tokio::test]
+    async fn test_list_all_books_orders_by_file_name() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
+
+        // Create books with different file names (title is now in book_metadata)
+        let names = vec!["Zebra", "Apple", "Monkey", "Banana"];
+        for name in names {
+            let book = create_book_model(
+                series.id,
+                library.id,
+                &format!("/test/{}.cbz", name),
+                &format!("{}.cbz", name),
+            );
+            BookRepository::create(db.sea_orm_connection(), &book, None)
+                .await
+                .unwrap();
+        }
+
+        let (books, _) = BookRepository::list_all(db.sea_orm_connection(), false, 0, 10)
+            .await
+            .unwrap();
+
+        // Default sort order is by file_name
+        assert_eq!(books[0].file_name, "Apple.cbz");
+        assert_eq!(books[1].file_name, "Banana.cbz");
+        assert_eq!(books[2].file_name, "Monkey.cbz");
+        assert_eq!(books[3].file_name, "Zebra.cbz");
+    }
+
+    #[tokio::test]
+    async fn test_list_by_library() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        // Create two libraries
+        let library1 = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Library 1",
+            "/lib1",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let library2 = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Library 2",
+            "/lib2",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        // Create series in each library
+        let series1 =
+            SeriesRepository::create(db.sea_orm_connection(), library1.id, "Series 1", None)
+                .await
+                .unwrap();
+        let series2 =
+            SeriesRepository::create(db.sea_orm_connection(), library2.id, "Series 2", None)
+                .await
+                .unwrap();
+
+        // Create books in library 1
+        for i in 1..=3 {
+            let book = create_book_model(
+                series1.id,
+                library1.id,
+                &format!("/lib1/book{}.cbz", i),
+                "book.cbz",
+            );
+            BookRepository::create(db.sea_orm_connection(), &book, None)
+                .await
+                .unwrap();
+        }
+
+        // Create books in library 2
+        for i in 1..=2 {
+            let book = create_book_model(
+                series2.id,
+                library2.id,
+                &format!("/lib2/book{}.cbz", i),
+                "book.cbz",
+            );
+            BookRepository::create(db.sea_orm_connection(), &book, None)
+                .await
+                .unwrap();
+        }
+
+        // Test library 1 books
+        let (books, total) =
+            BookRepository::list_by_library(db.sea_orm_connection(), library1.id, false, 0, 10)
+                .await
+                .unwrap();
+
+        assert_eq!(books.len(), 3);
+        assert_eq!(total, 3);
+
+        // Test library 2 books
+        let (books, total) =
+            BookRepository::list_by_library(db.sea_orm_connection(), library2.id, false, 0, 10)
+                .await
+                .unwrap();
+
+        assert_eq!(books.len(), 2);
+        assert_eq!(total, 2);
+    }
+
+    #[tokio::test]
+    async fn test_list_with_progress() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        // Create library and series
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
+
+        // Create books
+        let mut book_ids = Vec::new();
+        for i in 1..=5 {
+            let book = create_book_model(
+                series.id,
+                library.id,
+                &format!("/test/book{}.cbz", i),
+                "book.cbz",
+            );
+            let created = BookRepository::create(db.sea_orm_connection(), &book, None)
+                .await
+                .unwrap();
+            book_ids.push(created.id);
+        }
+
+        // Create user
+
+        use crate::entities::users;
+        use crate::repositories::{ReadProgressRepository, UserRepository};
+        use codex_utils::password;
+
+        let password_hash = password::hash_password("test123").unwrap();
+        let user = users::Model {
+            id: Uuid::new_v4(),
+            username: "testuser".to_string(),
+            email: "test@example.com".to_string(),
+            password_hash,
+            role: "reader".to_string(),
+            is_active: true,
+            email_verified: true,
+            permissions: serde_json::json!([]),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            last_login_at: None,
+        };
+        let created_user = UserRepository::create(db.sea_orm_connection(), &user)
+            .await
+            .unwrap();
+
+        // Add reading progress for some books
+        for book_id in book_ids.iter().take(3) {
+            ReadProgressRepository::upsert(
+                db.sea_orm_connection(),
+                created_user.id,
+                *book_id,
+                5,
+                false,
+            )
+            .await
+            .unwrap();
+        }
+
+        // Mark one as completed
+        ReadProgressRepository::upsert(
+            db.sea_orm_connection(),
+            created_user.id,
+            book_ids[3],
+            10,
+            true,
+        )
+        .await
+        .unwrap();
+
+        // Test getting in-progress books (not completed)
+        let (books, total) = BookRepository::list_with_progress(
+            db.sea_orm_connection(),
+            created_user.id,
+            None,
+            Some(false), // only in-progress
+            0,
+            10,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(books.len(), 3);
+        assert_eq!(total, 3);
+
+        // Test getting all books with progress
+        let (books, total) = BookRepository::list_with_progress(
+            db.sea_orm_connection(),
+            created_user.id,
+            None,
+            None, // all with progress
+            0,
+            10,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(books.len(), 4); // 3 in-progress + 1 completed
+        assert_eq!(total, 4);
+    }
+
+    #[tokio::test]
+    async fn test_list_recently_added() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        // Create library and series
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
+
+        // Create books with delays to ensure different timestamps
+        for i in 1..=5 {
+            let book = create_book_model(
+                series.id,
+                library.id,
+                &format!("/test/book{}.cbz", i),
+                "book.cbz",
+            );
+            BookRepository::create(db.sea_orm_connection(), &book, None)
+                .await
+                .unwrap();
+            tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+        }
+
+        // Test getting recently added books
+        let (books, total) =
+            BookRepository::list_recently_added(db.sea_orm_connection(), None, false, 0, 10)
+                .await
+                .unwrap();
+
+        assert_eq!(books.len(), 5);
+        assert_eq!(total, 5);
+
+        // Verify books are ordered by created_at descending (most recent first)
+        for i in 0..books.len() - 1 {
+            assert!(
+                books[i].created_at >= books[i + 1].created_at,
+                "Books should be ordered by created_at descending"
+            );
+        }
+
+        // Test filtering by library
+        let (books, total) = BookRepository::list_recently_added(
+            db.sea_orm_connection(),
+            Some(library.id),
+            false,
+            0,
+            10,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(books.len(), 5);
+        assert_eq!(total, 5);
+    }
+
+    #[tokio::test]
+    async fn test_set_analysis_error() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
+
+        let book = create_book_model(series.id, library.id, "/test/book.cbz", "book.cbz");
+        BookRepository::create(db.sea_orm_connection(), &book, None)
+            .await
+            .unwrap();
+
+        // Verify initial state has no error
+        let retrieved = BookRepository::get_by_id(db.sea_orm_connection(), book.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(retrieved.analysis_error, None);
+
+        // Set an analysis error
+        BookRepository::set_analysis_error(
+            db.sea_orm_connection(),
+            book.id,
+            Some("Test error: invalid archive".to_string()),
+        )
+        .await
+        .unwrap();
+
+        let retrieved = BookRepository::get_by_id(db.sea_orm_connection(), book.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            retrieved.analysis_error,
+            Some("Test error: invalid archive".to_string())
+        );
+
+        // Clear the analysis error
+        BookRepository::set_analysis_error(db.sea_orm_connection(), book.id, None)
+            .await
+            .unwrap();
+
+        let retrieved = BookRepository::get_by_id(db.sea_orm_connection(), book.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(retrieved.analysis_error, None);
+    }
+
+    #[tokio::test]
+    async fn test_get_existing_ids() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
+
+        // Create two books
+        let book1 = create_book_model(series.id, library.id, "/test/book1.cbz", "book1.cbz");
+        let book2 = create_book_model(series.id, library.id, "/test/book2.cbz", "book2.cbz");
+
+        BookRepository::create(db.sea_orm_connection(), &book1, None)
+            .await
+            .unwrap();
+        BookRepository::create(db.sea_orm_connection(), &book2, None)
+            .await
+            .unwrap();
+
+        // Create a non-existent ID
+        let non_existent_id = Uuid::new_v4();
+
+        // Test batch lookup
+        let ids_to_check = vec![book1.id, book2.id, non_existent_id];
+        let existing = BookRepository::get_existing_ids(db.sea_orm_connection(), &ids_to_check)
+            .await
+            .unwrap();
+
+        // Should contain the two existing books but not the non-existent one
+        assert_eq!(existing.len(), 2);
+        assert!(existing.contains(&book1.id));
+        assert!(existing.contains(&book2.id));
+        assert!(!existing.contains(&non_existent_id));
+
+        // Test with empty input
+        let existing = BookRepository::get_existing_ids(db.sea_orm_connection(), &[])
+            .await
+            .unwrap();
+        assert!(existing.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_create_batch() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
+
+        // Create multiple books
+        let books_to_create: Vec<books::Model> = (0..5)
+            .map(|i| {
+                create_book_model(
+                    series.id,
+                    library.id,
+                    &format!("/test/book{}.cbz", i),
+                    &format!("book{}.cbz", i),
+                )
+            })
+            .collect();
+
+        // Batch create
+        let count = BookRepository::create_batch(db.sea_orm_connection(), &books_to_create)
+            .await
+            .unwrap();
+        assert_eq!(count, 5);
+
+        // Verify all books were created
+        for book in &books_to_create {
+            let retrieved = BookRepository::get_by_id(db.sea_orm_connection(), book.id)
+                .await
+                .unwrap();
+            assert!(retrieved.is_some());
+            assert_eq!(retrieved.unwrap().path, book.path);
+        }
+
+        // Test with empty input
+        let count = BookRepository::create_batch(db.sea_orm_connection(), &[])
+            .await
+            .unwrap();
+        assert_eq!(count, 0);
+    }
+
+    #[tokio::test]
+    async fn test_update_batch() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
+
+        // Create books first
+        let mut books_to_update: Vec<books::Model> = (0..3)
+            .map(|i| {
+                create_book_model(
+                    series.id,
+                    library.id,
+                    &format!("/test/book{}.cbz", i),
+                    &format!("book{}.cbz", i),
+                )
+            })
+            .collect();
+
+        BookRepository::create_batch(db.sea_orm_connection(), &books_to_update)
+            .await
+            .unwrap();
+
+        // Modify the books
+        for book in &mut books_to_update {
+            book.page_count = 99;
+            book.analyzed = true;
+        }
+
+        // Batch update
+        let count = BookRepository::update_batch(db.sea_orm_connection(), &books_to_update)
+            .await
+            .unwrap();
+        assert_eq!(count, 3);
+
+        // Verify updates
+        for book in &books_to_update {
+            let retrieved = BookRepository::get_by_id(db.sea_orm_connection(), book.id)
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(retrieved.page_count, 99);
+            assert!(retrieved.analyzed);
+        }
+
+        // Test with empty input
+        let count = BookRepository::update_batch(db.sea_orm_connection(), &[])
+            .await
+            .unwrap();
+        assert_eq!(count, 0);
+    }
+
+    #[tokio::test]
+    async fn test_get_by_paths() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
+
+        // Create books
+        let book1 = create_book_model(series.id, library.id, "/test/book1.cbz", "book1.cbz");
+        let book2 = create_book_model(series.id, library.id, "/test/book2.cbz", "book2.cbz");
+        let book3 = create_book_model(series.id, library.id, "/test/book3.cbz", "book3.cbz");
+
+        BookRepository::create_batch(
+            db.sea_orm_connection(),
+            &[book1.clone(), book2.clone(), book3.clone()],
+        )
+        .await
+        .unwrap();
+
+        // Test batch lookup
+        let paths = vec![
+            "/test/book1.cbz".to_string(),
+            "/test/book2.cbz".to_string(),
+            "/test/nonexistent.cbz".to_string(),
+        ];
+
+        let result = BookRepository::get_by_paths(db.sea_orm_connection(), library.id, &paths)
+            .await
+            .unwrap();
+
+        // Should contain book1 and book2, but not nonexistent
+        assert_eq!(result.len(), 2);
+        assert!(result.contains_key("/test/book1.cbz"));
+        assert!(result.contains_key("/test/book2.cbz"));
+        assert!(!result.contains_key("/test/nonexistent.cbz"));
+
+        // Verify the IDs
+        assert_eq!(result.get("/test/book1.cbz").unwrap().id, book1.id);
+        assert_eq!(result.get("/test/book2.cbz").unwrap().id, book2.id);
+
+        // Test with empty paths
+        let result = BookRepository::get_by_paths(db.sea_orm_connection(), library.id, &[])
+            .await
+            .unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_set_error() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
+
+        let book = create_book_model(series.id, library.id, "/test/book.cbz", "book.cbz");
+        BookRepository::create(db.sea_orm_connection(), &book, None)
+            .await
+            .unwrap();
+
+        // Set a parser error
+        BookRepository::set_error(
+            db.sea_orm_connection(),
+            book.id,
+            BookErrorType::Parser,
+            BookError::new("Failed to parse archive"),
+        )
+        .await
+        .unwrap();
+
+        // Verify the error was set
+        let errors = BookRepository::get_errors(db.sea_orm_connection(), book.id)
+            .await
+            .unwrap();
+        assert_eq!(errors.len(), 1);
+        assert!(errors.contains_key(&BookErrorType::Parser));
+        assert_eq!(
+            errors.get(&BookErrorType::Parser).unwrap().message,
+            "Failed to parse archive"
+        );
+
+        // Set another error type (thumbnail)
+        BookRepository::set_error(
+            db.sea_orm_connection(),
+            book.id,
+            BookErrorType::Thumbnail,
+            BookError::new("Thumbnail generation failed"),
+        )
+        .await
+        .unwrap();
+
+        // Verify both errors exist
+        let errors = BookRepository::get_errors(db.sea_orm_connection(), book.id)
+            .await
+            .unwrap();
+        assert_eq!(errors.len(), 2);
+        assert!(errors.contains_key(&BookErrorType::Parser));
+        assert!(errors.contains_key(&BookErrorType::Thumbnail));
+
+        // Update an existing error
+        BookRepository::set_error(
+            db.sea_orm_connection(),
+            book.id,
+            BookErrorType::Parser,
+            BookError::new("Updated parser error"),
+        )
+        .await
+        .unwrap();
+
+        let errors = BookRepository::get_errors(db.sea_orm_connection(), book.id)
+            .await
+            .unwrap();
+        assert_eq!(errors.len(), 2);
+        assert_eq!(
+            errors.get(&BookErrorType::Parser).unwrap().message,
+            "Updated parser error"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_clear_error() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
+
+        let book = create_book_model(series.id, library.id, "/test/book.cbz", "book.cbz");
+        BookRepository::create(db.sea_orm_connection(), &book, None)
+            .await
+            .unwrap();
+
+        // Set multiple errors
+        BookRepository::set_error(
+            db.sea_orm_connection(),
+            book.id,
+            BookErrorType::Parser,
+            BookError::new("Parser error"),
+        )
+        .await
+        .unwrap();
+
+        BookRepository::set_error(
+            db.sea_orm_connection(),
+            book.id,
+            BookErrorType::Thumbnail,
+            BookError::new("Thumbnail error"),
+        )
+        .await
+        .unwrap();
+
+        // Clear one error
+        BookRepository::clear_error(db.sea_orm_connection(), book.id, BookErrorType::Parser)
+            .await
+            .unwrap();
+
+        // Verify only thumbnail error remains
+        let errors = BookRepository::get_errors(db.sea_orm_connection(), book.id)
+            .await
+            .unwrap();
+        assert_eq!(errors.len(), 1);
+        assert!(!errors.contains_key(&BookErrorType::Parser));
+        assert!(errors.contains_key(&BookErrorType::Thumbnail));
+    }
+
+    #[tokio::test]
+    async fn test_clear_all_errors() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
+
+        let book = create_book_model(series.id, library.id, "/test/book.cbz", "book.cbz");
+        BookRepository::create(db.sea_orm_connection(), &book, None)
+            .await
+            .unwrap();
+
+        // Set multiple errors
+        BookRepository::set_error(
+            db.sea_orm_connection(),
+            book.id,
+            BookErrorType::Parser,
+            BookError::new("Parser error"),
+        )
+        .await
+        .unwrap();
+
+        BookRepository::set_error(
+            db.sea_orm_connection(),
+            book.id,
+            BookErrorType::Thumbnail,
+            BookError::new("Thumbnail error"),
+        )
+        .await
+        .unwrap();
+
+        // Clear all errors
+        BookRepository::clear_all_errors(db.sea_orm_connection(), book.id)
+            .await
+            .unwrap();
+
+        // Verify no errors remain
+        let errors = BookRepository::get_errors(db.sea_orm_connection(), book.id)
+            .await
+            .unwrap();
+        assert!(errors.is_empty());
+
+        // Verify the book's analysis_errors is None
+        let retrieved = BookRepository::get_by_id(db.sea_orm_connection(), book.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(retrieved.analysis_errors.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_list_with_errors() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
+
+        // Create books
+        let book1 = create_book_model(series.id, library.id, "/test/book1.cbz", "book1.cbz");
+        let book2 = create_book_model(series.id, library.id, "/test/book2.cbz", "book2.cbz");
+        let book3 = create_book_model(series.id, library.id, "/test/book3.cbz", "book3.cbz");
+
+        BookRepository::create(db.sea_orm_connection(), &book1, None)
+            .await
+            .unwrap();
+        BookRepository::create(db.sea_orm_connection(), &book2, None)
+            .await
+            .unwrap();
+        BookRepository::create(db.sea_orm_connection(), &book3, None)
+            .await
+            .unwrap();
+
+        // Set errors on book1 and book2
+        BookRepository::set_error(
+            db.sea_orm_connection(),
+            book1.id,
+            BookErrorType::Parser,
+            BookError::new("Parser error"),
+        )
+        .await
+        .unwrap();
+
+        BookRepository::set_error(
+            db.sea_orm_connection(),
+            book2.id,
+            BookErrorType::Parser,
+            BookError::new("Another parser error"),
+        )
+        .await
+        .unwrap();
+
+        BookRepository::set_error(
+            db.sea_orm_connection(),
+            book2.id,
+            BookErrorType::Thumbnail,
+            BookError::new("Thumbnail error"),
+        )
+        .await
+        .unwrap();
+
+        // List all books with errors
+        let (books, total) =
+            BookRepository::list_with_errors(db.sea_orm_connection(), None, None, None, 0, 10)
+                .await
+                .unwrap();
+
+        assert_eq!(total, 2);
+        assert_eq!(books.len(), 2);
+
+        // Filter by error type - Parser
+        let (books, total) = BookRepository::list_with_errors(
+            db.sea_orm_connection(),
+            None,
+            None,
+            Some(BookErrorType::Parser),
+            0,
+            10,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(total, 2);
+        assert_eq!(books.len(), 2);
+
+        // Filter by error type - Thumbnail
+        let (books, total) = BookRepository::list_with_errors(
+            db.sea_orm_connection(),
+            None,
+            None,
+            Some(BookErrorType::Thumbnail),
+            0,
+            10,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(total, 1);
+        assert_eq!(books.len(), 1);
+        assert_eq!(books[0].0.id, book2.id);
+
+        // Test pagination
+        let (books, total) =
+            BookRepository::list_with_errors(db.sea_orm_connection(), None, None, None, 0, 1)
+                .await
+                .unwrap();
+
+        assert_eq!(total, 2);
+        assert_eq!(books.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_count_errors_by_type() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
+
+        // Create books and set errors
+        let book1 = create_book_model(series.id, library.id, "/test/book1.cbz", "book1.cbz");
+        let book2 = create_book_model(series.id, library.id, "/test/book2.cbz", "book2.cbz");
+        let book3 = create_book_model(series.id, library.id, "/test/book3.cbz", "book3.cbz");
+
+        BookRepository::create(db.sea_orm_connection(), &book1, None)
+            .await
+            .unwrap();
+        BookRepository::create(db.sea_orm_connection(), &book2, None)
+            .await
+            .unwrap();
+        BookRepository::create(db.sea_orm_connection(), &book3, None)
+            .await
+            .unwrap();
+
+        // Set errors:
+        // book1: Parser
+        // book2: Parser, Thumbnail
+        // book3: Thumbnail
+        BookRepository::set_error(
+            db.sea_orm_connection(),
+            book1.id,
+            BookErrorType::Parser,
+            BookError::new("Parser error"),
+        )
+        .await
+        .unwrap();
+
+        BookRepository::set_error(
+            db.sea_orm_connection(),
+            book2.id,
+            BookErrorType::Parser,
+            BookError::new("Parser error"),
+        )
+        .await
+        .unwrap();
+
+        BookRepository::set_error(
+            db.sea_orm_connection(),
+            book2.id,
+            BookErrorType::Thumbnail,
+            BookError::new("Thumbnail error"),
+        )
+        .await
+        .unwrap();
+
+        BookRepository::set_error(
+            db.sea_orm_connection(),
+            book3.id,
+            BookErrorType::Thumbnail,
+            BookError::new("Thumbnail error"),
+        )
+        .await
+        .unwrap();
+
+        // Count errors by type
+        let counts = BookRepository::count_errors_by_type(db.sea_orm_connection(), None)
+            .await
+            .unwrap();
+
+        assert_eq!(counts.get(&BookErrorType::Parser), Some(&2));
+        assert_eq!(counts.get(&BookErrorType::Thumbnail), Some(&2));
+        assert_eq!(counts.get(&BookErrorType::Metadata), None);
+    }
+
+    #[tokio::test]
+    async fn test_get_by_series_ids_empty_input() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let result = BookRepository::get_by_series_ids(db.sea_orm_connection(), &[])
+            .await
+            .unwrap();
+
+        assert!(result.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_get_by_series_ids_multiple_series() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series1 =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Series 1", None)
+                .await
+                .unwrap();
+        let series2 =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Series 2", None)
+                .await
+                .unwrap();
+
+        let book1 = create_book_model(series1.id, library.id, "/test/book1.cbz", "book1.cbz");
+        let book2 = create_book_model(series1.id, library.id, "/test/book2.cbz", "book2.cbz");
+        let book3 = create_book_model(series2.id, library.id, "/test/book3.cbz", "book3.cbz");
+        let book4 = create_book_model(series2.id, library.id, "/test/book4.cbz", "book4.cbz");
+
+        BookRepository::create(db.sea_orm_connection(), &book1, None)
+            .await
+            .unwrap();
+        BookRepository::create(db.sea_orm_connection(), &book2, None)
+            .await
+            .unwrap();
+        BookRepository::create(db.sea_orm_connection(), &book3, None)
+            .await
+            .unwrap();
+        BookRepository::create(db.sea_orm_connection(), &book4, None)
+            .await
+            .unwrap();
+
+        let result =
+            BookRepository::get_by_series_ids(db.sea_orm_connection(), &[series1.id, series2.id])
+                .await
+                .unwrap();
+
+        assert_eq!(result.len(), 2);
+        assert_eq!(result.get(&series1.id).unwrap().len(), 2);
+        assert_eq!(result.get(&series2.id).unwrap().len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_get_by_series_ids_excludes_deleted_books() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
+
+        let book1 = create_book_model(series.id, library.id, "/test/book1.cbz", "book1.cbz");
+        let mut book2 = create_book_model(series.id, library.id, "/test/book2.cbz", "book2.cbz");
+        book2.deleted = true;
+
+        BookRepository::create(db.sea_orm_connection(), &book1, None)
+            .await
+            .unwrap();
+        BookRepository::create(db.sea_orm_connection(), &book2, None)
+            .await
+            .unwrap();
+
+        let result = BookRepository::get_by_series_ids(db.sea_orm_connection(), &[series.id])
+            .await
+            .unwrap();
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result.get(&series.id).unwrap().len(), 1);
+        assert_eq!(result.get(&series.id).unwrap()[0].id, book1.id);
+    }
+}

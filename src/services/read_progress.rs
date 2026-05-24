@@ -13,7 +13,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, warn};
 use uuid::Uuid;
 
-use crate::db::repositories::ReadProgressRepository;
+use codex_db::repositories::ReadProgressRepository;
 
 /// Maximum number of entries before forcing a flush
 const MAX_BUFFER_SIZE: usize = 100;
@@ -212,12 +212,12 @@ impl ReadProgressService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::entities::{books, users};
-    use crate::db::repositories::{
+    use chrono::Utc;
+    use codex_db::entities::{books, users};
+    use codex_db::repositories::{
         BookRepository, LibraryRepository, ReadProgressRepository, SeriesRepository, UserRepository,
     };
-    use crate::db::test_helpers::setup_test_db;
-    use chrono::Utc;
+    use codex_db::test_helpers::setup_test_db;
     use codex_models::ScanningStrategy;
     use codex_utils::password;
     use std::time::Duration;

@@ -2,10 +2,10 @@ use tracing::debug;
 
 use crate::api::error::ApiError;
 use crate::api::permissions::{Permission, UserRole};
-use crate::db::repositories::{ApiKeyRepository, UserRepository};
 use axum::http::header::COOKIE;
 use axum::{extract::FromRequestParts, http::request::Parts};
 use chrono::{DateTime, Utc};
+use codex_db::repositories::{ApiKeyRepository, UserRepository};
 use codex_utils::{jwt::JwtService, password};
 use dashmap::DashMap;
 use sea_orm::DatabaseConnection;

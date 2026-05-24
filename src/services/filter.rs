@@ -4,8 +4,8 @@
 
 #![allow(dead_code)]
 
-use crate::db::repositories::{GenreRepository, TagRepository};
 use anyhow::Result;
+use codex_db::repositories::{GenreRepository, TagRepository};
 use codex_models::filter::{
     BookCondition, BoolOperator, DateOperator, FieldOperator, NumberOperator, SeriesCondition,
     UuidOperator,
@@ -216,7 +216,7 @@ impl FilterService {
         operator: &UuidOperator,
         candidate_ids: Option<&HashSet<Uuid>>,
     ) -> Result<HashSet<Uuid>> {
-        use crate::db::entities::series;
+        use codex_db::entities::series;
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 
         match operator {
@@ -304,7 +304,7 @@ impl FilterService {
                         .collect())
                 } else {
                     // Without candidates, we need all series
-                    use crate::db::entities::series;
+                    use codex_db::entities::series;
                     use sea_orm::EntityTrait;
 
                     let all_series: HashSet<Uuid> = series::Entity::find()
@@ -346,7 +346,7 @@ impl FilterService {
                         .cloned()
                         .collect())
                 } else {
-                    use crate::db::entities::series;
+                    use codex_db::entities::series;
                     use sea_orm::EntityTrait;
 
                     let all_series: HashSet<Uuid> = series::Entity::find()
@@ -396,7 +396,7 @@ impl FilterService {
                         .cloned()
                         .collect())
                 } else {
-                    use crate::db::entities::series;
+                    use codex_db::entities::series;
                     use sea_orm::EntityTrait;
 
                     let all_series: HashSet<Uuid> = series::Entity::find()
@@ -455,7 +455,7 @@ impl FilterService {
                         .cloned()
                         .collect())
                 } else {
-                    use crate::db::entities::series;
+                    use codex_db::entities::series;
                     use sea_orm::EntityTrait;
 
                     let all_series: HashSet<Uuid> = series::Entity::find()
@@ -495,7 +495,7 @@ impl FilterService {
                         .cloned()
                         .collect())
                 } else {
-                    use crate::db::entities::series;
+                    use codex_db::entities::series;
                     use sea_orm::EntityTrait;
 
                     let all_series: HashSet<Uuid> = series::Entity::find()
@@ -543,7 +543,7 @@ impl FilterService {
                         .cloned()
                         .collect())
                 } else {
-                    use crate::db::entities::series;
+                    use codex_db::entities::series;
                     use sea_orm::EntityTrait;
 
                     let all_series: HashSet<Uuid> = series::Entity::find()
@@ -577,7 +577,7 @@ impl FilterService {
         operator: &FieldOperator,
         candidate_ids: Option<&HashSet<Uuid>>,
     ) -> Result<HashSet<Uuid>> {
-        use crate::db::repositories::SharingTagRepository;
+        use codex_db::repositories::SharingTagRepository;
 
         match operator {
             FieldOperator::Is { value } => {
@@ -605,7 +605,7 @@ impl FilterService {
                         .cloned()
                         .collect())
                 } else {
-                    use crate::db::entities::series;
+                    use codex_db::entities::series;
                     use sea_orm::EntityTrait;
 
                     let all_series: HashSet<Uuid> = series::Entity::find()
@@ -646,7 +646,7 @@ impl FilterService {
                         .cloned()
                         .collect())
                 } else {
-                    use crate::db::entities::series;
+                    use codex_db::entities::series;
                     use sea_orm::EntityTrait;
 
                     let all_series: HashSet<Uuid> = series::Entity::find()
@@ -697,7 +697,7 @@ impl FilterService {
                         .cloned()
                         .collect())
                 } else {
-                    use crate::db::entities::series;
+                    use codex_db::entities::series;
                     use sea_orm::EntityTrait;
 
                     let all_series: HashSet<Uuid> = series::Entity::find()
@@ -746,7 +746,7 @@ impl FilterService {
         operator: &BoolOperator,
         candidate_ids: Option<&HashSet<Uuid>>,
     ) -> Result<HashSet<Uuid>> {
-        use crate::db::entities::{books, series_metadata};
+        use codex_db::entities::{books, series_metadata};
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
 
         // Get all series with total_volume_count set
@@ -827,7 +827,7 @@ impl FilterService {
         operator: &BoolOperator,
         candidate_ids: Option<&HashSet<Uuid>>,
     ) -> Result<HashSet<Uuid>> {
-        use crate::db::entities::{series, series_external_ids};
+        use codex_db::entities::{series, series_external_ids};
         use sea_orm::{EntityTrait, QuerySelect};
 
         // Get all series IDs that have at least one external ID
@@ -893,7 +893,7 @@ impl FilterService {
         candidate_ids: Option<&HashSet<Uuid>>,
         user_id: Option<Uuid>,
     ) -> Result<HashSet<Uuid>> {
-        use crate::db::entities::{series, user_series_ratings};
+        use codex_db::entities::{series, user_series_ratings};
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
 
         let Some(uid) = user_id else {
@@ -977,7 +977,7 @@ impl FilterService {
         operator: &BoolOperator,
         candidate_ids: Option<&HashSet<Uuid>>,
     ) -> Result<HashSet<Uuid>> {
-        use crate::db::entities::{series, series_tracking};
+        use codex_db::entities::{series, series_tracking};
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
 
         // Series with tracking explicitly enabled.
@@ -1030,7 +1030,7 @@ impl FilterService {
         operator: &FieldOperator,
         candidate_ids: Option<&HashSet<Uuid>>,
     ) -> Result<HashSet<Uuid>> {
-        use crate::db::entities::series_metadata;
+        use codex_db::entities::series_metadata;
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
 
         let query = series_metadata::Entity::find();
@@ -1082,7 +1082,7 @@ impl FilterService {
         operator: &FieldOperator,
         candidate_ids: Option<&HashSet<Uuid>>,
     ) -> Result<HashSet<Uuid>> {
-        use crate::db::entities::series_metadata;
+        use codex_db::entities::series_metadata;
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
 
         let query = series_metadata::Entity::find();
@@ -1113,7 +1113,7 @@ impl FilterService {
         operator: &FieldOperator,
         candidate_ids: Option<&HashSet<Uuid>>,
     ) -> Result<HashSet<Uuid>> {
-        use crate::db::entities::series_metadata;
+        use codex_db::entities::series_metadata;
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
 
         let query = series_metadata::Entity::find();
@@ -1144,7 +1144,7 @@ impl FilterService {
         operator: &FieldOperator,
         candidate_ids: Option<&HashSet<Uuid>>,
     ) -> Result<HashSet<Uuid>> {
-        use crate::db::entities::series_metadata;
+        use codex_db::entities::series_metadata;
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
 
         // title is NOT NULL; IsNull always returns empty.
@@ -1184,7 +1184,7 @@ impl FilterService {
         operator: &FieldOperator,
         candidate_ids: Option<&HashSet<Uuid>>,
     ) -> Result<HashSet<Uuid>> {
-        use crate::db::entities::series_metadata;
+        use codex_db::entities::series_metadata;
         use sea_orm::{ColumnTrait, Condition, EntityTrait, QueryFilter, QuerySelect};
 
         let query = series_metadata::Entity::find();
@@ -1378,7 +1378,7 @@ impl FilterService {
         candidate_ids: Option<&HashSet<Uuid>>,
         user_id: Option<Uuid>,
     ) -> Result<HashSet<Uuid>> {
-        use crate::db::entities::{books, read_progress, series};
+        use codex_db::entities::{books, read_progress, series};
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
 
         // If no user_id provided, we can't filter by read status
@@ -1483,7 +1483,7 @@ impl FilterService {
         operator: &NumberOperator,
         candidate_ids: Option<&HashSet<Uuid>>,
     ) -> Result<HashSet<Uuid>> {
-        use crate::db::entities::{series, series_metadata};
+        use codex_db::entities::{series, series_metadata};
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
 
         // IsNull is special: also include series with no metadata row at all.
@@ -1587,7 +1587,7 @@ impl FilterService {
         operator: &FieldOperator,
         candidate_ids: Option<&HashSet<Uuid>>,
     ) -> Result<HashSet<Uuid>> {
-        use crate::db::entities::series_metadata;
+        use codex_db::entities::series_metadata;
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
 
         let query = series_metadata::Entity::find();
@@ -1621,7 +1621,7 @@ impl FilterService {
         operator: &FieldOperator,
         candidate_ids: Option<&HashSet<Uuid>>,
     ) -> Result<HashSet<Uuid>> {
-        use crate::db::entities::series;
+        use codex_db::entities::series;
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
 
         // series.path is NOT NULL; IsNull always returns empty.
@@ -1656,7 +1656,7 @@ impl FilterService {
         operator: &DateOperator,
         candidate_ids: Option<&HashSet<Uuid>>,
     ) -> Result<HashSet<Uuid>> {
-        use crate::db::entities::series;
+        use codex_db::entities::series;
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
 
         let query = series::Entity::find();
@@ -1832,7 +1832,7 @@ impl FilterService {
         operator: &UuidOperator,
         candidate_ids: Option<&HashSet<Uuid>>,
     ) -> Result<HashSet<Uuid>> {
-        use crate::db::entities::{books, series};
+        use codex_db::entities::{books, series};
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
 
         match operator {
@@ -1914,7 +1914,7 @@ impl FilterService {
         operator: &UuidOperator,
         candidate_ids: Option<&HashSet<Uuid>>,
     ) -> Result<HashSet<Uuid>> {
-        use crate::db::entities::books;
+        use codex_db::entities::books;
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
 
         match operator {
@@ -1979,7 +1979,7 @@ impl FilterService {
         operator: &FieldOperator,
         candidate_ids: Option<&HashSet<Uuid>>,
     ) -> Result<HashSet<Uuid>> {
-        use crate::db::entities::books;
+        use codex_db::entities::books;
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
 
         // First get series matching the genre condition
@@ -2018,7 +2018,7 @@ impl FilterService {
         operator: &FieldOperator,
         candidate_ids: Option<&HashSet<Uuid>>,
     ) -> Result<HashSet<Uuid>> {
-        use crate::db::entities::books;
+        use codex_db::entities::books;
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
 
         // First get series matching the tag condition
@@ -2056,7 +2056,7 @@ impl FilterService {
         operator: &FieldOperator,
         candidate_ids: Option<&HashSet<Uuid>>,
     ) -> Result<HashSet<Uuid>> {
-        use crate::db::entities::book_metadata;
+        use codex_db::entities::book_metadata;
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
 
         let query = book_metadata::Entity::find();
@@ -2090,7 +2090,7 @@ impl FilterService {
         operator: &FieldOperator,
         candidate_ids: Option<&HashSet<Uuid>>,
     ) -> Result<HashSet<Uuid>> {
-        use crate::db::entities::book_metadata;
+        use codex_db::entities::book_metadata;
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
 
         let query = book_metadata::Entity::find();
@@ -2128,7 +2128,7 @@ impl FilterService {
         candidate_ids: Option<&HashSet<Uuid>>,
         user_id: Option<Uuid>,
     ) -> Result<HashSet<Uuid>> {
-        use crate::db::entities::{books, read_progress};
+        use codex_db::entities::{books, read_progress};
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
 
         // If no user_id provided, we can't filter by read status
@@ -2204,7 +2204,7 @@ impl FilterService {
         operator: &BoolOperator,
         candidate_ids: Option<&HashSet<Uuid>>,
     ) -> Result<HashSet<Uuid>> {
-        use crate::db::entities::books;
+        use codex_db::entities::books;
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
 
         let query = books::Entity::find();
@@ -2238,7 +2238,7 @@ impl FilterService {
         operator: &FieldOperator,
         candidate_ids: Option<&HashSet<Uuid>>,
     ) -> Result<HashSet<Uuid>> {
-        use crate::db::entities::book_metadata;
+        use codex_db::entities::book_metadata;
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
 
         let query = book_metadata::Entity::find();
@@ -2295,7 +2295,7 @@ impl FilterService {
         operator: &FieldOperator,
         candidate_ids: Option<&HashSet<Uuid>>,
     ) -> Result<HashSet<Uuid>> {
-        use crate::db::entities::books;
+        use codex_db::entities::books;
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
 
         // books.path is NOT NULL; IsNull always returns empty.
@@ -2354,7 +2354,7 @@ impl FilterService {
         operator: &FieldOperator,
         candidate_ids: Option<&HashSet<Uuid>>,
     ) -> Result<HashSet<Uuid>> {
-        use crate::db::entities::books;
+        use codex_db::entities::books;
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
 
         let query = books::Entity::find().filter(books::Column::Deleted.eq(false));
@@ -2405,7 +2405,7 @@ impl FilterService {
         operator: &NumberOperator,
         candidate_ids: Option<&HashSet<Uuid>>,
     ) -> Result<HashSet<Uuid>> {
-        use crate::db::entities::books;
+        use codex_db::entities::books;
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
 
         let query = books::Entity::find().filter(books::Column::Deleted.eq(false));
@@ -2467,7 +2467,7 @@ impl FilterService {
         operator: &DateOperator,
         candidate_ids: Option<&HashSet<Uuid>>,
     ) -> Result<HashSet<Uuid>> {
-        use crate::db::entities::books;
+        use codex_db::entities::books;
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
 
         let query = books::Entity::find().filter(books::Column::Deleted.eq(false));

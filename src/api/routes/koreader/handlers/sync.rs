@@ -8,10 +8,10 @@ use crate::api::error::ApiError;
 use crate::api::extractors::{AuthContext, AuthState};
 use crate::api::permissions::Permission;
 use crate::api::routes::koreader::dto::progress::DocumentProgressDto;
-use crate::db::entities::books;
-use crate::db::repositories::{BookRepository, ReadProgressRepository};
 use axum::Json;
 use axum::extract::{Path, State};
+use codex_db::entities::books;
+use codex_db::repositories::{BookRepository, ReadProgressRepository};
 use codex_parsers::EpubPosition;
 use std::sync::Arc;
 

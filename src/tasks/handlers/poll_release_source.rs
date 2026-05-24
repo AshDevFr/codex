@@ -33,13 +33,6 @@ use std::time::Duration;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
-use crate::db::entities::release_ledger::state as ledger_state;
-use crate::db::entities::release_sources::plugin_id as source_plugin_id;
-use crate::db::entities::tasks;
-use crate::db::repositories::{
-    NewReleaseEntry, PluginsRepository, ReleaseLedgerRepository, ReleaseSourceRepository,
-    SeriesRepository, SeriesTrackingRepository,
-};
 use crate::services::SettingsService;
 use crate::services::plugin::PluginManager;
 use crate::services::plugin::handle::PluginError;
@@ -49,6 +42,13 @@ use crate::services::release::backoff::{HostBackoff, is_backoff_status};
 use crate::services::release::matcher::{evaluate, resolve_threshold};
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::TaskResult;
+use codex_db::entities::release_ledger::state as ledger_state;
+use codex_db::entities::release_sources::plugin_id as source_plugin_id;
+use codex_db::entities::tasks;
+use codex_db::repositories::{
+    NewReleaseEntry, PluginsRepository, ReleaseLedgerRepository, ReleaseSourceRepository,
+    SeriesRepository, SeriesTrackingRepository,
+};
 use codex_events::{EntityChangeEvent, EventBroadcaster};
 
 /// Default plugin task timeout in seconds (5 minutes — same as user_plugin_sync).
@@ -633,7 +633,7 @@ pub(crate) fn build_poll_summary(
 /// the ledger row is the source of truth, the SSE event is a UX nicety.
 pub(crate) fn emit_release_announced(
     broadcaster: &EventBroadcaster,
-    row: &crate::db::entities::release_ledger::Model,
+    row: &codex_db::entities::release_ledger::Model,
     plugin_id: &str,
     series_title: String,
 ) {
@@ -703,7 +703,7 @@ async fn resolve_initial_state(
 /// Looks in `config.url`, `config.feed_url`, and `config.base_url` in that
 /// order; falls back to the plugin name (so all sources on the same plugin
 /// share a backoff key).
-fn derive_url_hint(source: &crate::db::entities::release_sources::Model) -> String {
+fn derive_url_hint(source: &codex_db::entities::release_sources::Model) -> String {
     if let Some(cfg) = source.config.as_ref() {
         for key in ["url", "feedUrl", "feed_url", "baseUrl", "base_url"] {
             if let Some(v) = cfg.get(key).and_then(|v| v.as_str())
@@ -718,7 +718,7 @@ fn derive_url_hint(source: &crate::db::entities::release_sources::Model) -> Stri
 
 async fn record_error(
     db: &DatabaseConnection,
-    source: &crate::db::entities::release_sources::Model,
+    source: &codex_db::entities::release_sources::Model,
     event_broadcaster: Option<&Arc<EventBroadcaster>>,
     message: &str,
 ) {
@@ -745,13 +745,13 @@ async fn record_error(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::ScanningStrategy;
-    use crate::db::entities::release_sources::kind;
-    use crate::db::repositories::{
+    use codex_db::ScanningStrategy;
+    use codex_db::entities::release_sources::kind;
+    use codex_db::repositories::{
         LibraryRepository, NewReleaseSource, ReleaseSourceRepository, SeriesRepository,
         SeriesTrackingRepository, TrackingUpdate,
     };
-    use crate::db::test_helpers::create_test_db;
+    use codex_db::test_helpers::create_test_db;
 
     use codex_events::EntityEvent;
 
@@ -762,7 +762,7 @@ mod tests {
         let broadcaster = EventBroadcaster::new(8);
         let mut rx = broadcaster.subscribe();
 
-        let row = crate::db::entities::release_ledger::Model {
+        let row = codex_db::entities::release_ledger::Model {
             id: Uuid::new_v4(),
             series_id: Uuid::new_v4(),
             source_id: Uuid::new_v4(),
@@ -822,7 +822,7 @@ mod tests {
     #[test]
     fn emit_release_announced_tolerates_no_subscribers() {
         let broadcaster = EventBroadcaster::new(8);
-        let row = crate::db::entities::release_ledger::Model {
+        let row = codex_db::entities::release_ledger::Model {
             id: Uuid::new_v4(),
             series_id: Uuid::new_v4(),
             source_id: Uuid::new_v4(),
@@ -867,8 +867,8 @@ mod tests {
         assert_eq!(derive_url_hint(&model), "https://example.com/x");
     }
 
-    fn make_model() -> crate::db::entities::release_sources::Model {
-        crate::db::entities::release_sources::Model {
+    fn make_model() -> codex_db::entities::release_sources::Model {
+        codex_db::entities::release_sources::Model {
             id: Uuid::new_v4(),
             plugin_id: "release-nyaa".to_string(),
             plugin_uuid: None,

@@ -11,8 +11,8 @@
 //! language publication facts are not the same category as
 //! translation/scanlation releases (which the MangaUpdates plugin handles).
 
-use crate::db::entities::series_external_ids::Model as SeriesExternalId;
-use crate::db::entities::series_tracking::Model as SeriesTrackingRow;
+use codex_db::entities::series_external_ids::Model as SeriesExternalId;
+use codex_db::entities::series_tracking::Model as SeriesTrackingRow;
 
 /// Computed gap between upstream publication and local content for a series.
 ///

@@ -19,7 +19,7 @@ use super::storage::{
     StorageGetResponse, StorageKeyEntry, StorageListResponse, StorageSetRequest,
     StorageSetResponse,
 };
-use crate::db::repositories::UserPluginDataRepository;
+use codex_db::repositories::UserPluginDataRepository;
 
 /// Maximum number of storage keys allowed per plugin instance
 const MAX_KEYS_PER_PLUGIN: usize = 100;
@@ -336,11 +336,11 @@ impl WithId for JsonRpcResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::entities::plugins;
-    use crate::db::entities::users;
-    use crate::db::repositories::{PluginsRepository, UserPluginsRepository, UserRepository};
-    use crate::db::test_helpers::setup_test_db;
     use crate::services::plugin::protocol::RequestId;
+    use codex_db::entities::plugins;
+    use codex_db::entities::users;
+    use codex_db::repositories::{PluginsRepository, UserPluginsRepository, UserRepository};
+    use codex_db::test_helpers::setup_test_db;
     use serde_json::json;
 
     async fn create_test_user(db: &DatabaseConnection) -> users::Model {

@@ -9,10 +9,6 @@ use super::super::dto::{
 };
 use super::auth::build_auth_cookie;
 use crate::api::{error::ApiError, extractors::AppState, permissions::UserRole};
-use crate::db::{
-    entities::users,
-    repositories::{OidcConnectionRepository, UserRepository},
-};
 use axum::{
     Json,
     extract::{Path, Query, State},
@@ -21,6 +17,10 @@ use axum::{
 };
 use base64::{Engine as _, engine::general_purpose};
 use chrono::Utc;
+use codex_db::{
+    entities::users,
+    repositories::{OidcConnectionRepository, UserRepository},
+};
 use std::sync::Arc;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
@@ -322,7 +322,7 @@ pub async fn callback(
         };
 
         // Create OIDC connection
-        let connection = crate::db::entities::oidc_connections::Model {
+        let connection = codex_db::entities::oidc_connections::Model {
             id: Uuid::new_v4(),
             user_id: user.id,
             provider_name: provider.clone(),
@@ -589,7 +589,7 @@ mod tests {
     // Integration tests for async functions that need a database
     mod db_tests {
         use super::*;
-        use crate::db::repositories::UserRepository;
+        use codex_db::repositories::UserRepository;
         use sea_orm::Database;
 
         async fn setup_test_db() -> sea_orm::DatabaseConnection {

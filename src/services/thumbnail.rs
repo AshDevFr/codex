@@ -19,9 +19,9 @@ use tokio_util::io::ReaderStream;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
-use crate::db::entities::books;
-use crate::db::repositories::{BookRepository, SeriesRepository, SettingsRepository};
 use codex_config::FilesConfig;
+use codex_db::entities::books;
+use codex_db::repositories::{BookRepository, SeriesRepository, SettingsRepository};
 use codex_events::{EntityChangeEvent, EntityEvent, EntityType, EventBroadcaster};
 
 // ============================================================================

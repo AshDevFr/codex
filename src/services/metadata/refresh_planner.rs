@@ -15,9 +15,9 @@ use sea_orm::DatabaseConnection;
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
-use crate::db::entities::plugins::Model as Plugin;
-use crate::db::entities::series_external_ids::{self, Model as SeriesExternalId};
-use crate::db::repositories::{PluginsRepository, SeriesExternalIdRepository, SeriesRepository};
+use codex_db::entities::plugins::Model as Plugin;
+use codex_db::entities::series_external_ids::{self, Model as SeriesExternalId};
+use codex_db::repositories::{PluginsRepository, SeriesExternalIdRepository, SeriesRepository};
 
 use crate::services::library_jobs::MetadataRefreshJobConfig;
 
@@ -240,12 +240,12 @@ pub fn fields_filter_from_job_config(config: &MetadataRefreshJobConfig) -> Optio
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::ScanningStrategy;
-    use crate::db::entities::plugins::PluginPermission;
-    use crate::db::repositories::{LibraryRepository, PluginsRepository, SeriesRepository};
-    use crate::db::test_helpers::setup_test_db;
     use crate::services::library_jobs::{MetadataRefreshJobConfig, RefreshScope};
     use crate::services::plugin::protocol::PluginScope;
+    use codex_db::ScanningStrategy;
+    use codex_db::entities::plugins::PluginPermission;
+    use codex_db::repositories::{LibraryRepository, PluginsRepository, SeriesRepository};
+    use codex_db::test_helpers::setup_test_db;
     use std::env;
     use std::sync::Once;
 

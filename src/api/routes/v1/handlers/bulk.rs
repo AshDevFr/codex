@@ -10,16 +10,16 @@ use super::super::dto::{
     BulkReprocessSeriesTitlesRequest, BulkSeriesRequest, BulkTaskResponse, MarkReadResponse,
 };
 use crate::api::{AppState, error::ApiError, extractors::AuthContext, permissions::Permission};
-use crate::db::repositories::{
+use crate::require_permission;
+use crate::tasks::types::TaskType;
+use axum::{Json, extract::State};
+use chrono::Utc;
+use codex_db::repositories::{
     AlternateTitleRepository, BookRepository, ExternalLinkRepository, ExternalRatingRepository,
     GenreRepository, ReadProgressRepository, SeriesCoversRepository, SeriesExternalIdRepository,
     SeriesMetadataRepository, SeriesRepository, SharingTagRepository, TagRepository,
     TaskRepository,
 };
-use crate::require_permission;
-use crate::tasks::types::TaskType;
-use axum::{Json, extract::State};
-use chrono::Utc;
 use codex_events::{EntityChangeEvent, EntityEvent};
 use std::sync::Arc;
 use uuid::Uuid;
@@ -895,7 +895,7 @@ pub async fn bulk_reset_series_metadata(
         }
 
         // Delete metadata sources
-        use crate::db::entities::metadata_sources;
+        use codex_db::entities::metadata_sources;
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
         if let Err(e) = metadata_sources::Entity::delete_many()
             .filter(metadata_sources::Column::SeriesId.eq(*series_id))

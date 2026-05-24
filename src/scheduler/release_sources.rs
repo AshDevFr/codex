@@ -23,10 +23,10 @@ use tokio_cron_scheduler::{Job, JobScheduler};
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
-use crate::db::repositories::{ReleaseSourceRepository, TaskRepository};
 use crate::services::release::schedule::{read_default_cron_schedule, resolve_cron_schedule};
 use crate::services::settings::SettingsService;
 use crate::tasks::types::TaskType;
+use codex_db::repositories::{ReleaseSourceRepository, TaskRepository};
 use codex_utils::cron::normalize_cron_expression;
 
 /// Tracks scheduler-registered jobs per source row so we can reconcile.
@@ -134,7 +134,7 @@ async fn register_one(
     scheduler: &mut JobScheduler,
     state: &mut ReleaseSourceSchedule,
     db: &DatabaseConnection,
-    source: &crate::db::entities::release_sources::Model,
+    source: &codex_db::entities::release_sources::Model,
     effective_cron: &str,
 ) -> Result<()> {
     // Normalize 5-field POSIX cron to the 6-field form tokio-cron-scheduler

@@ -4,9 +4,9 @@
 
 #![allow(dead_code)]
 
-use crate::db::repositories::SettingsRepository;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
+use codex_db::repositories::SettingsRepository;
 use sea_orm::DatabaseConnection;
 use serde::de::DeserializeOwned;
 use std::collections::HashMap;
@@ -194,7 +194,7 @@ impl SettingsService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::test_helpers::setup_test_db;
+    use codex_db::test_helpers::setup_test_db;
 
     #[tokio::test]
     async fn test_settings_service_get() {
