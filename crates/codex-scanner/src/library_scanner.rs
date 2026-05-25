@@ -1459,7 +1459,7 @@ async fn load_existing_books(
     library_id: Uuid,
 ) -> Result<HashMap<String, (String, books::Model)>> {
     let series_load_start = Instant::now();
-    let series_list = SeriesRepository::list_by_library(db, library_id).await?;
+    let series_list = SeriesRepository::list_by_library(db, library_id, None).await?;
     info!(
         "Loaded {} series from database in {:?}",
         series_list.len(),

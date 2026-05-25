@@ -97,7 +97,7 @@ async fn test_renumber_series_success() {
     // Scan and process to create series and books with numbers
     scan_and_process(&db, library.id).await;
 
-    let series_list = SeriesRepository::list_by_library(&db, library.id)
+    let series_list = SeriesRepository::list_by_library(&db, library.id, None)
         .await
         .unwrap();
 
@@ -204,7 +204,7 @@ async fn test_bulk_renumber_series_success() {
 
     scan_and_process(&db, library.id).await;
 
-    let series_list = SeriesRepository::list_by_library(&db, library.id)
+    let series_list = SeriesRepository::list_by_library(&db, library.id, None)
         .await
         .unwrap();
 

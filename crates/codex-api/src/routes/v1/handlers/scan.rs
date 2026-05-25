@@ -530,7 +530,7 @@ pub async fn trigger_library_analysis(
 
     // Get all books in the library (including already analyzed)
     use codex_db::repositories::SeriesRepository;
-    let series_list = SeriesRepository::list_by_library(&state.db, library_id)
+    let series_list = SeriesRepository::list_by_library(&state.db, library_id, None)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to get series: {}", e)))?;
 

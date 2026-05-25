@@ -5,7 +5,7 @@
 use crate::require_permission;
 use crate::{
     error::ApiError,
-    extractors::{AuthContext, AuthState},
+    extractors::{AuthContext, AuthState, ContentFilter},
     permissions::Permission,
     routes::opds::handlers::OpdsPaginationParams,
 };
@@ -175,8 +175,13 @@ pub async fn library_series(
         .map_err(|e| ApiError::Internal(format!("Failed to fetch library: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Library not found".to_string()))?;
 
+    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+    let visibility = content_filter.to_visibility();
+
     // Fetch all series in library
-    let all_series = SeriesRepository::list_by_library(&state.db, library_id)
+    let all_series = SeriesRepository::list_by_library(&state.db, library_id, visibility.as_ref())
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?;
 
@@ -405,6 +410,11 @@ pub async fn recent(
     let pagination = pagination.validate(50);
     let base_url = "/opds/v2";
 
+    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+    let visibility = content_filter.to_visibility();
+
     // Fetch recent books with their series
     // page is 0-indexed
     let (books, _total) = BookRepository::list_recently_added(
@@ -413,6 +423,7 @@ pub async fn recent(
         false,
         0,
         pagination.page_size as u64,
+        visibility.as_ref(),
     )
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to fetch books: {}", e)))?;

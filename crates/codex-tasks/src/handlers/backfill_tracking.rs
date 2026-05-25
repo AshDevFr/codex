@@ -140,10 +140,10 @@ async fn resolve_series_scope(
         return Ok(ids);
     }
     if let Some(lib_id) = library_id {
-        let series_list = SeriesRepository::list_by_library(db, lib_id).await?;
+        let series_list = SeriesRepository::list_by_library(db, lib_id, None).await?;
         return Ok(series_list.into_iter().map(|s| s.id).collect());
     }
-    let all = SeriesRepository::list_all(db).await?;
+    let all = SeriesRepository::list_all(db, None).await?;
     Ok(all.into_iter().map(|s| s.id).collect())
 }
 

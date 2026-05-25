@@ -10,7 +10,7 @@
 //! 2. **Whitelist mode** (user has any `allow` grants): User only sees series with allowed tags
 //! 3. **No grants**: User sees everything (default-open behavior)
 
-use codex_db::repositories::SharingTagRepository;
+use codex_db::repositories::{SeriesVisibility, SharingTagRepository};
 use sea_orm::DatabaseConnection;
 use std::collections::HashSet;
 use uuid::Uuid;
@@ -131,6 +131,23 @@ impl ContentFilter {
     #[allow(dead_code)]
     pub fn excluded_ids(&self) -> Vec<Uuid> {
         self.excluded_series_ids.iter().cloned().collect()
+    }
+
+    /// Convert to a SQL-level visibility filter for use with repository methods.
+    ///
+    /// Returns `None` when the user has no restrictions, so callers can skip
+    /// adding any visibility clause and let SeaORM emit the natural query.
+    pub fn to_visibility(&self) -> Option<SeriesVisibility> {
+        if !self.has_restrictions {
+            return None;
+        }
+        Some(SeriesVisibility {
+            excluded_series_ids: self.excluded_series_ids.iter().copied().collect(),
+            allowed_series_ids: self
+                .allowed_series_ids
+                .as_ref()
+                .map(|s| s.iter().copied().collect()),
+        })
     }
 }
 

@@ -16,6 +16,7 @@ use uuid::Uuid;
 
 use crate::entities::{books, prelude::*};
 use crate::repositories::SeriesRepository;
+use crate::repositories::visibility::{SeriesVisibility, apply_book_visibility};
 use crate::trace::db_system_str;
 use codex_events::{EntityChangeEvent, EntityEvent, EventBroadcaster};
 use codex_utils::normalize_for_search;
@@ -740,11 +741,27 @@ impl BookRepository {
     pub async fn get_adjacent_in_series(
         db: &DatabaseConnection,
         book_id: Uuid,
+        visibility: Option<&SeriesVisibility>,
     ) -> Result<(Option<books::Model>, Option<books::Model>)> {
         // First get the target book
         let book = Self::get_by_id(db, book_id)
             .await?
             .context("Book not found")?;
+
+        // If the caller cannot see this series, hide the neighbors too.
+        if let Some(v) = visibility {
+            if v.is_empty_whitelist() {
+                return Ok((None, None));
+            }
+            if v.excluded_series_ids.contains(&book.series_id) {
+                return Ok((None, None));
+            }
+            if let Some(allowed) = &v.allowed_series_ids
+                && !allowed.contains(&book.series_id)
+            {
+                return Ok((None, None));
+            }
+        }
 
         // Get all non-deleted books in the series, ordered by metadata fields
         use crate::entities::book_metadata;
@@ -785,12 +802,21 @@ impl BookRepository {
         include_deleted: bool,
         offset: u64,
         page_size: u64,
+        visibility: Option<&SeriesVisibility>,
     ) -> Result<(Vec<books::Model>, u64)> {
+        if let Some(v) = visibility
+            && v.is_empty_whitelist()
+        {
+            return Ok((vec![], 0));
+        }
+
         let mut query = Books::find();
 
         if !include_deleted {
             query = query.filter(books::Column::Deleted.eq(false));
         }
+
+        query = apply_book_visibility(query, visibility);
 
         // Get total count
         let total = query
@@ -829,8 +855,14 @@ impl BookRepository {
         library_id: Option<Uuid>,
         ids: &[Uuid],
         include_deleted: bool,
+        visibility: Option<&SeriesVisibility>,
     ) -> Result<Vec<books::Model>> {
         if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        if let Some(v) = visibility
+            && v.is_empty_whitelist()
+        {
             return Ok(Vec::new());
         }
 
@@ -841,6 +873,7 @@ impl BookRepository {
         if !include_deleted {
             query = query.filter(books::Column::Deleted.eq(false));
         }
+        query = apply_book_visibility(query, visibility);
 
         let fetched = query
             .all(db)
@@ -865,13 +898,16 @@ impl BookRepository {
         include_deleted: bool,
         offset: u64,
         page_size: u64,
+        visibility: Option<&SeriesVisibility>,
     ) -> Result<(Vec<books::Model>, u64)> {
         if ids.is_empty() {
             return Ok((vec![], 0));
         }
-
-        // Total count is the number of IDs
-        let total = ids.len() as u64;
+        if let Some(v) = visibility
+            && v.is_empty_whitelist()
+        {
+            return Ok((vec![], 0));
+        }
 
         // Get paginated results
         let mut query = Books::find().filter(books::Column::Id.is_in(ids.to_vec()));
@@ -879,6 +915,14 @@ impl BookRepository {
         if !include_deleted {
             query = query.filter(books::Column::Deleted.eq(false));
         }
+        query = apply_book_visibility(query, visibility);
+
+        // Count after applying visibility so totals reflect what the caller sees.
+        let total = query
+            .clone()
+            .count(db)
+            .await
+            .context("Failed to count books by IDs")?;
 
         use crate::entities::book_metadata;
         use sea_orm::JoinType;
@@ -908,6 +952,7 @@ impl BookRepository {
     /// fuzzy rank order itself" — this method silently falls back to a stable
     /// title sort so it remains safe to call with whatever sort param the
     /// handler resolved.
+    #[allow(clippy::too_many_arguments)]
     pub async fn list_by_ids_sorted(
         db: &DatabaseConnection,
         ids: &[Uuid],
@@ -916,6 +961,7 @@ impl BookRepository {
         include_deleted: bool,
         offset: u64,
         limit: u64,
+        visibility: Option<&SeriesVisibility>,
     ) -> Result<(Vec<books::Model>, u64)> {
         use crate::entities::{book_metadata, read_progress, series, series_metadata};
         use codex_models::sort::{BookSortField, SortDirection};
@@ -924,13 +970,24 @@ impl BookRepository {
         if ids.is_empty() {
             return Ok((vec![], 0));
         }
-
-        let total = ids.len() as u64;
+        if let Some(v) = visibility
+            && v.is_empty_whitelist()
+        {
+            return Ok((vec![], 0));
+        }
 
         let mut base_query = Books::find().filter(books::Column::Id.is_in(ids.to_vec()));
         if !include_deleted {
             base_query = base_query.filter(books::Column::Deleted.eq(false));
         }
+        base_query = apply_book_visibility(base_query, visibility);
+
+        // Count visible matches after filter so totals stay accurate.
+        let total = base_query
+            .clone()
+            .count(db)
+            .await
+            .context("Failed to count books by IDs sorted")?;
 
         let order = match sort.direction {
             SortDirection::Asc => Order::Asc,
@@ -1196,10 +1253,17 @@ impl BookRepository {
         include_deleted: bool,
         page: u64,
         page_size: u64,
+        visibility: Option<&SeriesVisibility>,
     ) -> Result<(Vec<books::Model>, u64)> {
         use crate::entities::{book_metadata, series, series_metadata};
         use codex_models::sort::{BookSortField, SortDirection};
         use sea_orm::JoinType;
+
+        if let Some(v) = visibility
+            && v.is_empty_whitelist()
+        {
+            return Ok((vec![], 0));
+        }
 
         // Build base query
         let mut base_query = Books::find().filter(books::Column::LibraryId.eq(library_id));
@@ -1207,6 +1271,7 @@ impl BookRepository {
         if !include_deleted {
             base_query = base_query.filter(books::Column::Deleted.eq(false));
         }
+        base_query = apply_book_visibility(base_query, visibility);
 
         // Get total count (before sorting/pagination)
         let total = base_query
@@ -1328,9 +1393,18 @@ impl BookRepository {
         include_deleted: bool,
         page: u64,
         page_size: u64,
+        visibility: Option<&SeriesVisibility>,
     ) -> Result<(Vec<books::Model>, u64)> {
         use crate::entities::series;
         use sea_orm::JoinType;
+
+        // Whitelist with zero allowed series produces an empty result without
+        // touching the DB.
+        if let Some(v) = visibility
+            && v.is_empty_whitelist()
+        {
+            return Ok((vec![], 0));
+        }
 
         let mut query = Books::find();
 
@@ -1344,6 +1418,8 @@ impl BookRepository {
         if !include_deleted {
             query = query.filter(books::Column::Deleted.eq(false));
         }
+
+        query = apply_book_visibility(query, visibility);
 
         // Get total count
         let total = query
@@ -1372,9 +1448,16 @@ impl BookRepository {
         user_id: Uuid,
         library_id: Option<Uuid>,
         limit: u64,
+        visibility: Option<&SeriesVisibility>,
     ) -> Result<Vec<books::Model>> {
         use crate::entities::{read_progress, series};
         use sea_orm::JoinType;
+
+        if let Some(v) = visibility
+            && v.is_empty_whitelist()
+        {
+            return Ok(vec![]);
+        }
 
         let mut query = Books::find()
             .join(JoinType::InnerJoin, books::Relation::ReadProgress.def())
@@ -1387,6 +1470,7 @@ impl BookRepository {
                 .join(JoinType::InnerJoin, books::Relation::Series.def())
                 .filter(series::Column::LibraryId.eq(lib_id));
         }
+        query = apply_book_visibility(query, visibility);
 
         query
             .order_by_desc(read_progress::Column::UpdatedAt)
@@ -1404,9 +1488,16 @@ impl BookRepository {
         completed: Option<bool>,
         page: u64,
         page_size: u64,
+        visibility: Option<&SeriesVisibility>,
     ) -> Result<(Vec<books::Model>, u64)> {
         use crate::entities::{read_progress, series};
         use sea_orm::JoinType;
+
+        if let Some(v) = visibility
+            && v.is_empty_whitelist()
+        {
+            return Ok((vec![], 0));
+        }
 
         let mut query = Books::find()
             .join(JoinType::InnerJoin, books::Relation::ReadProgress.def())
@@ -1426,6 +1517,7 @@ impl BookRepository {
 
         // Always exclude deleted books
         query = query.filter(books::Column::Deleted.eq(false));
+        query = apply_book_visibility(query, visibility);
 
         // Use GROUP BY to avoid duplicates from join and enable ordering by read_progress.updated_at
         // PostgreSQL requires ORDER BY columns to be in SELECT list when using DISTINCT,
@@ -1528,9 +1620,16 @@ impl BookRepository {
         library_id: Option<Uuid>,
         page: u64,
         page_size: u64,
+        visibility: Option<&SeriesVisibility>,
     ) -> Result<(Vec<books::Model>, u64)> {
         use crate::entities::{read_progress, series};
         use sea_orm::JoinType;
+
+        if let Some(v) = visibility
+            && v.is_empty_whitelist()
+        {
+            return Ok((vec![], 0));
+        }
 
         // Step 1: Get series where user has completed at least one book,
         // along with the most recent read-progress timestamp (for sorting by recency).
@@ -1612,6 +1711,9 @@ impl BookRepository {
                 .filter(series::Column::LibraryId.eq(lib_id));
         }
 
+        // Hide books in series the caller cannot see.
+        unread_query = apply_book_visibility(unread_query, visibility);
+
         // Order by series, then by book number/title/filename (from metadata)
         use crate::entities::book_metadata;
 
@@ -1659,8 +1761,13 @@ impl BookRepository {
 
     /// Search books by name/title (case-insensitive via book_metadata)
     /// Convenience wrapper for OPDS - returns first 50 results
-    pub async fn search_by_name(db: &DatabaseConnection, query: &str) -> Result<Vec<books::Model>> {
-        let (books, _) = Self::search_by_title(db, query, None, None, false, Some((0, 50))).await?;
+    pub async fn search_by_name(
+        db: &DatabaseConnection,
+        query: &str,
+        visibility: Option<&SeriesVisibility>,
+    ) -> Result<Vec<books::Model>> {
+        let (books, _) =
+            Self::search_by_title(db, query, None, None, false, Some((0, 50)), visibility).await?;
         Ok(books)
     }
 
@@ -1681,6 +1788,7 @@ impl BookRepository {
         candidate_ids: Option<&[Uuid]>,
         include_deleted: bool,
         pagination: Option<(u64, u64)>,
+        visibility: Option<&SeriesVisibility>,
     ) -> Result<(Vec<books::Model>, u64)> {
         use crate::entities::book_metadata;
         use sea_orm::JoinType;
@@ -1688,6 +1796,11 @@ impl BookRepository {
         // Short-circuit if candidate_ids is explicitly empty
         if let Some(ids) = candidate_ids
             && ids.is_empty()
+        {
+            return Ok((vec![], 0));
+        }
+        if let Some(v) = visibility
+            && v.is_empty_whitelist()
         {
             return Ok((vec![], 0));
         }
@@ -1711,6 +1824,14 @@ impl BookRepository {
 
         if !include_deleted {
             search_condition = search_condition.add(books::Column::Deleted.eq(false));
+        }
+
+        // Visibility constraints folded into the same Condition so all branches honor it.
+        if let Some(v) = visibility
+            && let Some(expr) =
+                crate::repositories::visibility::visibility_predicate(books::Column::SeriesId, v)
+        {
+            search_condition = search_condition.add(expr);
         }
 
         let base_query = Books::find()
@@ -1899,7 +2020,7 @@ impl BookRepository {
     pub async fn count_by_library(db: &DatabaseConnection, library_id: Uuid) -> Result<i64> {
         // Get all series in the library
         let series_list =
-            crate::repositories::SeriesRepository::list_by_library(db, library_id).await?;
+            crate::repositories::SeriesRepository::list_by_library(db, library_id, None).await?;
         let series_ids: Vec<Uuid> = series_list.iter().map(|s| s.id).collect();
 
         if series_ids.is_empty() {
@@ -1927,7 +2048,7 @@ impl BookRepository {
     ) -> Result<u64> {
         // Get all series in the library
         let series_list =
-            crate::repositories::SeriesRepository::list_by_library(db, library_id).await?;
+            crate::repositories::SeriesRepository::list_by_library(db, library_id, None).await?;
         let series_ids: Vec<Uuid> = series_list.iter().map(|s| s.id).collect();
 
         if series_ids.is_empty() {
@@ -2083,7 +2204,7 @@ impl BookRepository {
     ) -> Result<Vec<books::Model>> {
         // Get all series in the library
         let series_list =
-            crate::repositories::SeriesRepository::list_by_library(db, library_id).await?;
+            crate::repositories::SeriesRepository::list_by_library(db, library_id, None).await?;
         let series_ids: Vec<Uuid> = series_list.iter().map(|s| s.id).collect();
 
         if series_ids.is_empty() {
@@ -3092,7 +3213,7 @@ mod tests {
                 .unwrap();
         }
 
-        let (books, total) = BookRepository::list_all(db.sea_orm_connection(), false, 0, 10)
+        let (books, total) = BookRepository::list_all(db.sea_orm_connection(), false, 0, 10, None)
             .await
             .unwrap();
 
@@ -3132,17 +3253,19 @@ mod tests {
         }
 
         // Get first page (5 items)
-        let (books_page1, total) = BookRepository::list_all(db.sea_orm_connection(), false, 0, 5)
-            .await
-            .unwrap();
+        let (books_page1, total) =
+            BookRepository::list_all(db.sea_orm_connection(), false, 0, 5, None)
+                .await
+                .unwrap();
 
         assert_eq!(books_page1.len(), 5);
         assert_eq!(total, 10);
 
         // Get second page (5 items)
-        let (books_page2, total) = BookRepository::list_all(db.sea_orm_connection(), false, 1, 5)
-            .await
-            .unwrap();
+        let (books_page2, total) =
+            BookRepository::list_all(db.sea_orm_connection(), false, 1, 5, None)
+                .await
+                .unwrap();
 
         assert_eq!(books_page2.len(), 5);
         assert_eq!(total, 10);
@@ -3190,7 +3313,7 @@ mod tests {
             .unwrap();
 
         // List without deleted
-        let (books, total) = BookRepository::list_all(db.sea_orm_connection(), false, 0, 10)
+        let (books, total) = BookRepository::list_all(db.sea_orm_connection(), false, 0, 10, None)
             .await
             .unwrap();
 
@@ -3199,7 +3322,7 @@ mod tests {
 
         // List with deleted
         let (books_with_deleted, total_with_deleted) =
-            BookRepository::list_all(db.sea_orm_connection(), true, 0, 10)
+            BookRepository::list_all(db.sea_orm_connection(), true, 0, 10, None)
                 .await
                 .unwrap();
 
@@ -3211,7 +3334,7 @@ mod tests {
     async fn test_list_all_books_empty() {
         let (db, _temp_dir) = create_test_db().await;
 
-        let (books, total) = BookRepository::list_all(db.sea_orm_connection(), false, 0, 10)
+        let (books, total) = BookRepository::list_all(db.sea_orm_connection(), false, 0, 10, None)
             .await
             .unwrap();
 
@@ -3251,7 +3374,7 @@ mod tests {
                 .unwrap();
         }
 
-        let (books, _) = BookRepository::list_all(db.sea_orm_connection(), false, 0, 10)
+        let (books, _) = BookRepository::list_all(db.sea_orm_connection(), false, 0, 10, None)
             .await
             .unwrap();
 
@@ -3430,6 +3553,7 @@ mod tests {
             Some(false), // only in-progress
             0,
             10,
+            None,
         )
         .await
         .unwrap();
@@ -3445,6 +3569,7 @@ mod tests {
             None, // all with progress
             0,
             10,
+            None,
         )
         .await
         .unwrap();
@@ -3488,7 +3613,7 @@ mod tests {
 
         // Test getting recently added books
         let (books, total) =
-            BookRepository::list_recently_added(db.sea_orm_connection(), None, false, 0, 10)
+            BookRepository::list_recently_added(db.sea_orm_connection(), None, false, 0, 10, None)
                 .await
                 .unwrap();
 
@@ -3510,6 +3635,7 @@ mod tests {
             false,
             0,
             10,
+            None,
         )
         .await
         .unwrap();

@@ -482,7 +482,7 @@ async fn test_purge_deleted_on_scan_enabled() {
     tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
 
     // Get books and mark one as deleted
-    let series_list = SeriesRepository::list_by_library(&db, library.id)
+    let series_list = SeriesRepository::list_by_library(&db, library.id, None)
         .await
         .unwrap();
     assert!(!series_list.is_empty(), "Should have at least one series");
@@ -614,7 +614,7 @@ async fn test_purge_deleted_on_scan_disabled() {
     tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
 
     // Get books and mark one as deleted
-    let series_list = SeriesRepository::list_by_library(&db, library.id)
+    let series_list = SeriesRepository::list_by_library(&db, library.id, None)
         .await
         .unwrap();
     assert!(!series_list.is_empty(), "Should have at least one series");
@@ -746,7 +746,7 @@ async fn test_purge_deleted_on_scan_with_deep_scan() {
     tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
 
     // Get books and mark one as deleted
-    let series_list = SeriesRepository::list_by_library(&db, library.id)
+    let series_list = SeriesRepository::list_by_library(&db, library.id, None)
         .await
         .unwrap();
     assert!(!series_list.is_empty(), "Should have at least one series");

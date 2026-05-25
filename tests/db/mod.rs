@@ -9,3 +9,4 @@ mod postgres;
 mod refresh_token_repository;
 mod repositories;
 mod series_duplicates;
+mod visibility;

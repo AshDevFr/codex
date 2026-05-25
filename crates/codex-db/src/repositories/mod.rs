@@ -40,6 +40,9 @@ pub mod user_series_rating;
 // Sharing tags for content access control
 pub mod sharing_tag;
 
+// Series-level visibility filter (driven by sharing tags / access groups)
+pub mod visibility;
+
 // Access groups: reusable bundles of sharing-tag grants assignable to users
 pub mod access_group;
 
@@ -102,6 +105,11 @@ pub use user_series_rating::UserSeriesRatingRepository;
 
 // Sharing tags
 pub use sharing_tag::SharingTagRepository;
+
+// Visibility filter helpers
+pub use visibility::{
+    SeriesVisibility, apply_book_visibility, apply_series_visibility, visibility_predicate,
+};
 
 // Access groups
 pub use access_group::AccessGroupRepository;

@@ -311,12 +311,12 @@ impl Database {
         &self,
         library_id: Uuid,
     ) -> Result<Vec<entities::series::Model>> {
-        SeriesRepository::list_by_library(&self.conn, library_id).await
+        SeriesRepository::list_by_library(&self.conn, library_id, None).await
     }
 
     /// Search series by name
     pub async fn search_series(&self, query: &str) -> Result<Vec<entities::series::Model>> {
-        SeriesRepository::search_by_name(&self.conn, query).await
+        SeriesRepository::search_by_name(&self.conn, query, None).await
     }
 
     /// Update series

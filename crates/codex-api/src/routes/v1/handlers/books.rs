@@ -764,37 +764,18 @@ pub async fn list_books(
 
         (paginated, total)
     } else {
-        // List all books with pagination, then filter by sharing tags
-        // Use i64::MAX as page_size to avoid SQLite integer overflow (u64::MAX > i64::MAX)
-        let (books, _) = BookRepository::list_all(
+        // Apply visibility at the SQL layer so pagination and totals stay correct.
+        let visibility = content_filter.to_visibility();
+        let offset = (page - 1) * page_size;
+        BookRepository::list_all(
             &state.db,
             false, // exclude deleted
-            0,
-            i64::MAX as u64,
+            offset,
+            page_size,
+            visibility.as_ref(),
         )
         .await
-        .map_err(|e| ApiError::Internal(format!("Failed to fetch books: {}", e)))?;
-
-        // Filter books by sharing tags
-        let filtered: Vec<_> = books
-            .into_iter()
-            .filter(|b| content_filter.is_book_visible(b.series_id))
-            .collect();
-
-        let total = filtered.len() as u64;
-
-        // Apply pagination (1-indexed: page 1 = offset 0)
-        let offset = (page - 1) * page_size;
-        let start = offset as usize;
-
-        let paginated = if start >= filtered.len() {
-            vec![]
-        } else {
-            let end = (start + page_size as usize).min(filtered.len());
-            filtered[start..end].to_vec()
-        };
-
-        (paginated, total)
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch books: {}", e)))?
     };
 
     // Build pagination links
@@ -916,18 +897,11 @@ pub async fn list_books_filtered(
     };
     let use_relevance_order = sort.field == BookSortField::Relevance && has_fuzzy_search_query;
 
-    // Sharing-tag visibility is applied to fuzzy matches before hydration;
-    // the legacy LIKE path relies on downstream callers to filter, so we only
-    // need to load the filter when fuzzy is taking the wheel.
-    let fuzzy_content_filter = if has_fuzzy_search_query {
-        Some(
-            ContentFilter::for_user(&state.db, auth.user_id)
-                .await
-                .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?,
-        )
-    } else {
-        None
-    };
+    // Every branch needs to honor sharing-tag visibility, so load it up front.
+    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+    let visibility = content_filter.to_visibility();
 
     // Fetch books based on filter results and full-text search
     let (books_list, total) = match (&filtered_ids, &request.full_text_search) {
@@ -945,8 +919,6 @@ pub async fn list_books_filtered(
                     state
                         .fuzzy_index
                         .search_books(search_query, candidate_limit, None);
-
-                let content_filter = fuzzy_content_filter.as_ref().expect("set above");
 
                 let visible: Vec<Uuid> = candidates
                     .into_iter()
@@ -978,6 +950,7 @@ pub async fn list_books_filtered(
                         None,
                         &page_ids,
                         request.include_deleted,
+                        visibility.as_ref(),
                     )
                     .await
                     .map_err(|e| ApiError::Internal(format!("Failed to hydrate books: {}", e)))?;
@@ -994,6 +967,7 @@ pub async fn list_books_filtered(
                         request.include_deleted,
                         offset,
                         page_size,
+                        visibility.as_ref(),
                     )
                     .await
                     .map_err(|e| {
@@ -1016,6 +990,7 @@ pub async fn list_books_filtered(
                     Some(&id_vec),
                     request.include_deleted,
                     Some((offset, page_size)),
+                    visibility.as_ref(),
                 )
                 .await
                 .map_err(|e| ApiError::Internal(format!("Failed to search books: {}", e)))?
@@ -1030,6 +1005,7 @@ pub async fn list_books_filtered(
                 None,
                 request.include_deleted,
                 Some((offset, page_size)),
+                visibility.as_ref(),
             )
             .await
             .map_err(|e| ApiError::Internal(format!("Failed to search books: {}", e)))?
@@ -1046,17 +1022,22 @@ pub async fn list_books_filtered(
                     request.include_deleted,
                     offset,
                     page_size,
+                    visibility.as_ref(),
                 )
                 .await
                 .map_err(|e| ApiError::Internal(format!("Failed to fetch books: {}", e)))?
             }
         }
         // No filter and no full-text search
-        (None, _) => {
-            BookRepository::list_all(&state.db, request.include_deleted, offset, page_size)
-                .await
-                .map_err(|e| ApiError::Internal(format!("Failed to fetch books: {}", e)))?
-        }
+        (None, _) => BookRepository::list_all(
+            &state.db,
+            request.include_deleted,
+            offset,
+            page_size,
+            visibility.as_ref(),
+        )
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch books: {}", e)))?,
     };
 
     // Build pagination links with query params
@@ -1447,15 +1428,21 @@ pub async fn get_adjacent_books(
 ) -> Result<Json<AdjacentBooksResponse>, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
 
-    let (prev, next) = BookRepository::get_adjacent_in_series(&state.db, book_id)
+    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
         .await
-        .map_err(|e| {
-            if e.to_string().contains("not found") {
-                ApiError::NotFound("Book not found".to_string())
-            } else {
-                ApiError::Internal(format!("Failed to get adjacent books: {}", e))
-            }
-        })?;
+        .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+    let visibility = content_filter.to_visibility();
+
+    let (prev, next) =
+        BookRepository::get_adjacent_in_series(&state.db, book_id, visibility.as_ref())
+            .await
+            .map_err(|e| {
+                if e.to_string().contains("not found") {
+                    ApiError::NotFound("Book not found".to_string())
+                } else {
+                    ApiError::Internal(format!("Failed to get adjacent books: {}", e))
+                }
+            })?;
 
     // Convert to DTOs
     let prev_dto = if let Some(book) = prev {
@@ -1520,10 +1507,20 @@ pub async fn list_library_books(
         .map(|s| BookSortParam::parse(s))
         .unwrap_or_default();
 
+    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+    let visibility = content_filter.to_visibility();
+
     // Use database-level sorting for all sort types
     let (books_list, total) = BookRepository::list_by_library_sorted(
-        &state.db, library_id, &sort, false, // exclude deleted
-        offset, page_size,
+        &state.db,
+        library_id,
+        &sort,
+        false, // exclude deleted
+        offset,
+        page_size,
+        visibility.as_ref(),
     )
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to fetch library books: {}", e)))?;
@@ -1588,6 +1585,11 @@ pub async fn list_in_progress_books(
     };
     let offset = (page - 1) * page_size;
 
+    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+    let visibility = content_filter.to_visibility();
+
     // Fetch books with reading progress (not completed)
     let (books_list, total) = BookRepository::list_with_progress(
         &state.db,
@@ -1596,6 +1598,7 @@ pub async fn list_in_progress_books(
         Some(false), // only in-progress (not completed)
         offset,
         page_size,
+        visibility.as_ref(),
     )
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to fetch in-progress books: {}", e)))?;
@@ -1663,6 +1666,11 @@ pub async fn list_library_in_progress_books(
     };
     let offset = (page - 1) * page_size;
 
+    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+    let visibility = content_filter.to_visibility();
+
     // Fetch books with reading progress (not completed) in this library
     let (books_list, total) = BookRepository::list_with_progress(
         &state.db,
@@ -1671,6 +1679,7 @@ pub async fn list_library_in_progress_books(
         Some(false), // only in-progress (not completed)
         offset,
         page_size,
+        visibility.as_ref(),
     )
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to fetch in-progress books: {}", e)))?;
@@ -1726,11 +1735,22 @@ pub async fn list_on_deck_books(
     };
     let offset = (page - 1) * page_size;
 
+    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+    let visibility = content_filter.to_visibility();
+
     // Fetch on-deck books
-    let (books_list, total) =
-        BookRepository::list_on_deck(&state.db, auth.user_id, query.library_id, offset, page_size)
-            .await
-            .map_err(|e| ApiError::Internal(format!("Failed to fetch on-deck books: {}", e)))?;
+    let (books_list, total) = BookRepository::list_on_deck(
+        &state.db,
+        auth.user_id,
+        query.library_id,
+        offset,
+        page_size,
+        visibility.as_ref(),
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to fetch on-deck books: {}", e)))?;
 
     let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;
 
@@ -1786,11 +1806,22 @@ pub async fn list_library_on_deck_books(
     };
     let offset = (page - 1) * page_size;
 
+    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+    let visibility = content_filter.to_visibility();
+
     // Fetch on-deck books in this library
-    let (books_list, total) =
-        BookRepository::list_on_deck(&state.db, auth.user_id, Some(library_id), offset, page_size)
-            .await
-            .map_err(|e| ApiError::Internal(format!("Failed to fetch on-deck books: {}", e)))?;
+    let (books_list, total) = BookRepository::list_on_deck(
+        &state.db,
+        auth.user_id,
+        Some(library_id),
+        offset,
+        page_size,
+        visibility.as_ref(),
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to fetch on-deck books: {}", e)))?;
 
     let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;
 
@@ -1843,6 +1874,11 @@ pub async fn list_recently_added_books(
     };
     let offset = (page - 1) * page_size;
 
+    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+    let visibility = content_filter.to_visibility();
+
     // Fetch recently added books
     let (books_list, total) = BookRepository::list_recently_added(
         &state.db,
@@ -1850,6 +1886,7 @@ pub async fn list_recently_added_books(
         false, // exclude deleted
         offset,
         page_size,
+        visibility.as_ref(),
     )
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to fetch recently added books: {}", e)))?;
@@ -1917,6 +1954,11 @@ pub async fn list_library_recently_added_books(
     };
     let offset = (page - 1) * page_size;
 
+    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+    let visibility = content_filter.to_visibility();
+
     // Fetch recently added books in this library
     let (books_list, total) = BookRepository::list_recently_added(
         &state.db,
@@ -1924,6 +1966,7 @@ pub async fn list_library_recently_added_books(
         false, // exclude deleted
         offset,
         page_size,
+        visibility.as_ref(),
     )
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to fetch recently added books: {}", e)))?;
@@ -1988,12 +2031,20 @@ pub async fn list_recently_read_books(
 ) -> Result<Json<Vec<BookDto>>, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
 
-    let books_list =
-        BookRepository::list_recently_read(&state.db, auth.user_id, query.library_id, query.limit)
-            .await
-            .map_err(|e| {
-                ApiError::Internal(format!("Failed to fetch recently read books: {}", e))
-            })?;
+    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+    let visibility = content_filter.to_visibility();
+
+    let books_list = BookRepository::list_recently_read(
+        &state.db,
+        auth.user_id,
+        query.library_id,
+        query.limit,
+        visibility.as_ref(),
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to fetch recently read books: {}", e)))?;
 
     let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;
 
@@ -2026,12 +2077,20 @@ pub async fn list_library_recently_read_books(
 ) -> Result<Json<Vec<BookDto>>, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
 
-    let books_list =
-        BookRepository::list_recently_read(&state.db, auth.user_id, Some(library_id), query.limit)
-            .await
-            .map_err(|e| {
-                ApiError::Internal(format!("Failed to fetch recently read books: {}", e))
-            })?;
+    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+    let visibility = content_filter.to_visibility();
+
+    let books_list = BookRepository::list_recently_read(
+        &state.db,
+        auth.user_id,
+        Some(library_id),
+        query.limit,
+        visibility.as_ref(),
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to fetch recently read books: {}", e)))?;
 
     let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;
 

@@ -65,13 +65,13 @@ impl TaskHandler for GenerateSeriesThumbnailsHandler {
                     "Generating series thumbnails for library {} (force={})",
                     lib_id, force
                 );
-                SeriesRepository::list_by_library(db, lib_id).await?
+                SeriesRepository::list_by_library(db, lib_id, None).await?
             } else {
                 info!(
                     "Generating series thumbnails for all series (force={})",
                     force
                 );
-                SeriesRepository::list_all(db).await?
+                SeriesRepository::list_all(db, None).await?
             };
 
             let total = series_list.len();

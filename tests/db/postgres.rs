@@ -410,7 +410,7 @@ async fn test_postgres_rating_sort() {
     let sort = SeriesSortParam::new(SeriesSortField::Rating, SortDirection::Desc);
 
     let (sorted_series, total) =
-        SeriesRepository::list_by_ids_sorted(conn, &all_ids, &sort, Some(user.id), 0, 50)
+        SeriesRepository::list_by_ids_sorted(conn, &all_ids, &sort, Some(user.id), 0, 50, None)
             .await
             .expect("Rating sort should work on PostgreSQL");
 

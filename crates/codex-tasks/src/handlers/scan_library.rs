@@ -126,7 +126,7 @@ impl ScanLibraryHandler {
         );
 
         // Get all series in the library
-        let series_list = match SeriesRepository::list_by_library(db, library_id).await {
+        let series_list = match SeriesRepository::list_by_library(db, library_id, None).await {
             Ok(series) => series,
             Err(e) => {
                 warn!(

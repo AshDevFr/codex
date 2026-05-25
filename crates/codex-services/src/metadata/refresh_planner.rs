@@ -147,7 +147,7 @@ impl RefreshPlanner {
         };
 
         // 2. List series.
-        let series_list = SeriesRepository::list_by_library(db, library_id)
+        let series_list = SeriesRepository::list_by_library(db, library_id, None)
             .await
             .context("Failed to list series for refresh planning")?;
         if series_list.is_empty() {

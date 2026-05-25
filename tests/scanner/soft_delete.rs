@@ -61,7 +61,7 @@ async fn test_scan_marks_missing_books_deleted() {
     assert_eq!(result.books_deleted, 0);
 
     // Get the created books
-    let series_list = SeriesRepository::list_by_library(db, library.id)
+    let series_list = SeriesRepository::list_by_library(db, library.id, None)
         .await
         .unwrap();
     assert_eq!(series_list.len(), 1);
@@ -118,7 +118,7 @@ async fn test_scan_restores_reappeared_books() {
         .unwrap();
     assert_eq!(result.books_created, 2);
 
-    let series_list = SeriesRepository::list_by_library(db, library.id)
+    let series_list = SeriesRepository::list_by_library(db, library.id, None)
         .await
         .unwrap();
     let series_path = temp_dir.path().join("test_library/Test Series");
@@ -178,7 +178,7 @@ async fn test_scan_leaves_deleted_books_unchanged() {
         .await
         .unwrap();
 
-    let series_list = SeriesRepository::list_by_library(db, library.id)
+    let series_list = SeriesRepository::list_by_library(db, library.id, None)
         .await
         .unwrap();
     let series_path = temp_dir.path().join("test_library/Test Series");
@@ -221,7 +221,7 @@ async fn test_scan_multiple_files_deleted_and_restored() {
         .await
         .unwrap();
 
-    let series_list = SeriesRepository::list_by_library(db, library.id)
+    let series_list = SeriesRepository::list_by_library(db, library.id, None)
         .await
         .unwrap();
     let series_path = temp_dir.path().join("test_library/Test Series");
@@ -284,7 +284,7 @@ async fn test_deep_scan_reprocesses_all_files() {
         .await
         .unwrap();
 
-    let series_list = SeriesRepository::list_by_library(db, library.id)
+    let series_list = SeriesRepository::list_by_library(db, library.id, None)
         .await
         .unwrap();
 
@@ -332,7 +332,7 @@ async fn test_purge_deleted_on_scan_config() {
     assert_eq!(result.books_created, 3);
 
     // Get the created books
-    let series_list = SeriesRepository::list_by_library(db, library.id)
+    let series_list = SeriesRepository::list_by_library(db, library.id, None)
         .await
         .unwrap();
     assert_eq!(series_list.len(), 1);
@@ -446,7 +446,7 @@ async fn test_deleted_books_have_number_cleared() {
         .unwrap();
     assert_eq!(result.books_created, 3);
 
-    let series_list = SeriesRepository::list_by_library(db, library.id)
+    let series_list = SeriesRepository::list_by_library(db, library.id, None)
         .await
         .unwrap();
     let series_id = series_list[0].id;
@@ -530,7 +530,7 @@ async fn test_restored_books_get_renumbered() {
         .await
         .unwrap();
 
-    let series_list = SeriesRepository::list_by_library(db, library.id)
+    let series_list = SeriesRepository::list_by_library(db, library.id, None)
         .await
         .unwrap();
     let series_id = series_list[0].id;
@@ -602,7 +602,7 @@ async fn test_remaining_books_renumbered_contiguously_after_deletion() {
         .await
         .unwrap();
 
-    let series_list = SeriesRepository::list_by_library(db, library.id)
+    let series_list = SeriesRepository::list_by_library(db, library.id, None)
         .await
         .unwrap();
     let series_id = series_list[0].id;

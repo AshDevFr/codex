@@ -151,7 +151,7 @@ impl TaskHandler for ReprocessSeriesTitlesHandler {
             } else if let Some(lib_id) = library_id {
                 // Library scope - get all series in library
                 info!("Processing all series in library {}", lib_id);
-                let series_list = SeriesRepository::list_by_library(db, lib_id).await?;
+                let series_list = SeriesRepository::list_by_library(db, lib_id, None).await?;
                 series_list.into_iter().map(|s| s.id).collect()
             } else {
                 return Err(anyhow!(

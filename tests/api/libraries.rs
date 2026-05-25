@@ -764,7 +764,7 @@ async fn test_book_count_excludes_deleted_books() {
 
     if initial_book_count > 0 {
         // Soft delete one book
-        let series_list = SeriesRepository::list_by_library(&db, library.id)
+        let series_list = SeriesRepository::list_by_library(&db, library.id, None)
             .await
             .unwrap();
         if !series_list.is_empty() {

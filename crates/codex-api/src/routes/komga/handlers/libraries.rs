@@ -174,7 +174,7 @@ pub async fn get_library_thumbnail(
         .ok_or_else(|| ApiError::NotFound("Library not found".to_string()))?;
 
     // Get the first series in this library to use as the thumbnail
-    let series_list = SeriesRepository::list_by_library(&state.db, library_id)
+    let series_list = SeriesRepository::list_by_library(&state.db, library_id, None)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?;
 

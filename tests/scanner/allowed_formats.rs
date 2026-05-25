@@ -79,7 +79,7 @@ async fn test_scan_respects_allowed_formats_cbr_only() {
     assert_eq!(result.files_processed, 0);
 
     // Verify no books were created
-    let series_list = SeriesRepository::list_by_library(db, library.id)
+    let series_list = SeriesRepository::list_by_library(db, library.id, None)
         .await
         .unwrap();
     assert_eq!(series_list.len(), 0);
@@ -110,7 +110,7 @@ async fn test_scan_respects_allowed_formats_cbz_only() {
     assert_eq!(result.files_processed, 2);
 
     // Verify only CBZ books were created
-    let series_list = SeriesRepository::list_by_library(db, library.id)
+    let series_list = SeriesRepository::list_by_library(db, library.id, None)
         .await
         .unwrap();
     assert_eq!(series_list.len(), 1);
@@ -147,7 +147,7 @@ async fn test_scan_respects_allowed_formats_multiple_formats() {
     assert_eq!(result.files_processed, 4);
 
     // Verify only CBZ and EPUB books were created
-    let series_list = SeriesRepository::list_by_library(db, library.id)
+    let series_list = SeriesRepository::list_by_library(db, library.id, None)
         .await
         .unwrap();
     assert_eq!(series_list.len(), 1);
@@ -182,7 +182,7 @@ async fn test_scan_respects_allowed_formats_none_restriction() {
     assert_eq!(result.files_processed, 6);
 
     // Verify all books were created
-    let series_list = SeriesRepository::list_by_library(db, library.id)
+    let series_list = SeriesRepository::list_by_library(db, library.id, None)
         .await
         .unwrap();
     assert_eq!(series_list.len(), 1);
@@ -221,7 +221,7 @@ async fn test_scan_respects_allowed_formats_deep_scan() {
     assert_eq!(result.files_processed, 2);
 
     // Verify only EPUB books were created
-    let series_list = SeriesRepository::list_by_library(db, library.id)
+    let series_list = SeriesRepository::list_by_library(db, library.id, None)
         .await
         .unwrap();
     assert_eq!(series_list.len(), 1);

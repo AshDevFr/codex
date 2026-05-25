@@ -12,7 +12,7 @@ use super::libraries::{extract_page_image, generate_thumbnail};
 use crate::require_permission;
 use crate::{
     error::ApiError,
-    extractors::{AuthState, FlexibleAuthContext},
+    extractors::{AuthState, ContentFilter, FlexibleAuthContext},
     permissions::Permission,
 };
 use axum::{
@@ -279,12 +279,23 @@ pub async fn get_books_ondeck(
     let page = query.page.max(0) as u64;
     let size = query.size.clamp(1, 500) as u64;
 
+    let content_filter = ContentFilter::for_user(&state.db, user_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+    let visibility = content_filter.to_visibility();
+
     // On Deck = first unread book in series where user completed at least one book
     // and no books are currently in-progress. Uses the same logic as the v1 API.
-    let (books, total) =
-        BookRepository::list_on_deck(&state.db, user_id, query.library_id, page, size)
-            .await
-            .map_err(|e| ApiError::Internal(format!("Failed to fetch on-deck books: {}", e)))?;
+    let (books, total) = BookRepository::list_on_deck(
+        &state.db,
+        user_id,
+        query.library_id,
+        page,
+        size,
+        visibility.as_ref(),
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to fetch on-deck books: {}", e)))?;
 
     // Batch-fetch book metadata for all books
     let book_ids: Vec<Uuid> = books.iter().map(|b| b.id).collect();
@@ -536,16 +547,22 @@ pub async fn get_next_book(
 
     let user_id = Some(auth.user_id);
 
-    // Get adjacent books
-    let (_prev, next) = BookRepository::get_adjacent_in_series(&state.db, book_id)
+    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
         .await
-        .map_err(|e| {
-            if e.to_string().contains("not found") {
-                ApiError::NotFound("Book not found".to_string())
-            } else {
-                ApiError::Internal(format!("Failed to get next book: {}", e))
-            }
-        })?;
+        .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+    let visibility = content_filter.to_visibility();
+
+    // Get adjacent books
+    let (_prev, next) =
+        BookRepository::get_adjacent_in_series(&state.db, book_id, visibility.as_ref())
+            .await
+            .map_err(|e| {
+                if e.to_string().contains("not found") {
+                    ApiError::NotFound("Book not found".to_string())
+                } else {
+                    ApiError::Internal(format!("Failed to get next book: {}", e))
+                }
+            })?;
 
     let next_book = next.ok_or_else(|| ApiError::NotFound("No next book".to_string()))?;
 
@@ -622,16 +639,22 @@ pub async fn get_previous_book(
 
     let user_id = Some(auth.user_id);
 
-    // Get adjacent books
-    let (prev, _next) = BookRepository::get_adjacent_in_series(&state.db, book_id)
+    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
         .await
-        .map_err(|e| {
-            if e.to_string().contains("not found") {
-                ApiError::NotFound("Book not found".to_string())
-            } else {
-                ApiError::Internal(format!("Failed to get previous book: {}", e))
-            }
-        })?;
+        .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+    let visibility = content_filter.to_visibility();
+
+    // Get adjacent books
+    let (prev, _next) =
+        BookRepository::get_adjacent_in_series(&state.db, book_id, visibility.as_ref())
+            .await
+            .map_err(|e| {
+                if e.to_string().contains("not found") {
+                    ApiError::NotFound("Book not found".to_string())
+                } else {
+                    ApiError::Internal(format!("Failed to get previous book: {}", e))
+                }
+            })?;
 
     let prev_book = prev.ok_or_else(|| ApiError::NotFound("No previous book".to_string()))?;
 
