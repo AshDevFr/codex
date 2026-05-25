@@ -390,6 +390,7 @@ export function SeriesFilterPanel({ libraryId }: SeriesFilterPanelProps = {}) {
               onValueChange={draftState.setGenreState}
               onModeChange={draftState.setGenreMode}
               onClear={() => draftState.clearGroupDraft("genres")}
+              searchable
             />
           )}
 
@@ -401,6 +402,7 @@ export function SeriesFilterPanel({ libraryId }: SeriesFilterPanelProps = {}) {
               onValueChange={draftState.setTagState}
               onModeChange={draftState.setTagMode}
               onClear={() => draftState.clearGroupDraft("tags")}
+              searchable
             />
           )}
         </>
@@ -427,6 +429,7 @@ export function SeriesFilterPanel({ libraryId }: SeriesFilterPanelProps = {}) {
             onValueChange={draftState.setSharingTagState}
             onModeChange={draftState.setSharingTagMode}
             onClear={() => draftState.clearGroupDraft("sharingTags")}
+            searchable
           />
         </>
       )}

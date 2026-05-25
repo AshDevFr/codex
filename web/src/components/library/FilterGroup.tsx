@@ -1,13 +1,16 @@
 import {
   ActionIcon,
   Box,
+  CloseButton,
   Group,
   SegmentedControl,
   Stack,
   Text,
+  TextInput,
   Tooltip,
 } from "@mantine/core";
-import { IconX } from "@tabler/icons-react";
+import { IconSearch, IconX } from "@tabler/icons-react";
+import { useMemo, useState } from "react";
 import type { FilterGroupState, FilterMode, TriState } from "@/types";
 import classes from "./FilterGroup.module.css";
 import { TriStateChip, type TriStateChipVariant } from "./TriStateChip";
@@ -42,6 +45,13 @@ interface FilterGroupProps {
    * shape language.
    */
   variant?: TriStateChipVariant;
+  /**
+   * When true, renders a search input above the chip list that filters
+   * options by case-insensitive substring match against the label.
+   * Useful for long lists (genres, tags) where scrolling becomes painful,
+   * especially on mobile.
+   */
+  searchable?: boolean;
 }
 
 /**
@@ -63,7 +73,10 @@ export function FilterGroup({
   showModeToggle = true,
   disabled = false,
   variant = "metadata",
+  searchable = false,
 }: FilterGroupProps) {
+  const [query, setQuery] = useState("");
+
   // Get the current state for a value
   const getValueState = (value: string): TriState => {
     return state.values.get(value) || "neutral";
@@ -71,6 +84,14 @@ export function FilterGroup({
 
   // Check if this group has any active filters
   const hasActiveFilters = state.values.size > 0;
+
+  const trimmedQuery = query.trim().toLowerCase();
+  const visibleOptions = useMemo(() => {
+    if (!searchable || trimmedQuery === "") return options;
+    return options.filter((option) =>
+      option.label.toLowerCase().includes(trimmedQuery),
+    );
+  }, [options, searchable, trimmedQuery]);
 
   return (
     <Stack gap={6} className={classes.container}>
@@ -111,9 +132,30 @@ export function FilterGroup({
         )}
       </Group>
 
+      {searchable && options.length > 0 && (
+        <TextInput
+          size="xs"
+          placeholder={`Search ${title.toLowerCase()}...`}
+          value={query}
+          onChange={(event) => setQuery(event.currentTarget.value)}
+          leftSection={<IconSearch size={12} />}
+          rightSection={
+            query ? (
+              <CloseButton
+                size="xs"
+                onClick={() => setQuery("")}
+                aria-label={`Clear ${title.toLowerCase()} search`}
+              />
+            ) : null
+          }
+          disabled={disabled}
+          aria-label={`Search ${title.toLowerCase()}`}
+        />
+      )}
+
       <Box className={classes.chipsContainer}>
         <Group gap={6} wrap="wrap">
-          {options.map((option) => (
+          {visibleOptions.map((option) => (
             <TriStateChip
               key={option.value}
               label={option.label}
@@ -131,6 +173,12 @@ export function FilterGroup({
       {options.length === 0 && (
         <Text size="sm" c="dimmed" fs="italic">
           No options available
+        </Text>
+      )}
+
+      {options.length > 0 && visibleOptions.length === 0 && (
+        <Text size="sm" c="dimmed" fs="italic">
+          No matches for "{query.trim()}"
         </Text>
       )}
     </Stack>

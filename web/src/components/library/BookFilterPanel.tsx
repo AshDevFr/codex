@@ -335,6 +335,7 @@ export function BookFilterPanel({ libraryId }: BookFilterPanelProps = {}) {
               onValueChange={draftState.setGenreState}
               onModeChange={draftState.setGenreMode}
               onClear={() => draftState.clearGroupDraft("genres")}
+              searchable
             />
           )}
 
@@ -346,6 +347,7 @@ export function BookFilterPanel({ libraryId }: BookFilterPanelProps = {}) {
               onValueChange={draftState.setTagState}
               onModeChange={draftState.setTagMode}
               onClear={() => draftState.clearGroupDraft("tags")}
+              searchable
             />
           )}
         </>

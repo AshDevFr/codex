@@ -220,6 +220,134 @@ describe("FilterGroup", () => {
     });
   });
 
+  describe("searchable", () => {
+    const longOptions = [
+      { value: "action", label: "Action" },
+      { value: "adventure", label: "Adventure" },
+      { value: "comedy", label: "Comedy" },
+      { value: "drama", label: "Drama" },
+      { value: "fantasy", label: "Fantasy" },
+    ];
+
+    it("does not render search input by default", () => {
+      renderWithProviders(
+        <FilterGroup
+          title="Genres"
+          options={longOptions}
+          state={createState()}
+          onValueChange={vi.fn()}
+          onModeChange={vi.fn()}
+        />,
+      );
+
+      expect(
+        screen.queryByRole("textbox", { name: /search genres/i }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("renders search input when searchable is true", () => {
+      renderWithProviders(
+        <FilterGroup
+          title="Genres"
+          options={longOptions}
+          state={createState()}
+          onValueChange={vi.fn()}
+          onModeChange={vi.fn()}
+          searchable
+        />,
+      );
+
+      expect(
+        screen.getByRole("textbox", { name: /search genres/i }),
+      ).toBeInTheDocument();
+    });
+
+    it("does not render search input when options is empty", () => {
+      renderWithProviders(
+        <FilterGroup
+          title="Genres"
+          options={[]}
+          state={createState()}
+          onValueChange={vi.fn()}
+          onModeChange={vi.fn()}
+          searchable
+        />,
+      );
+
+      expect(
+        screen.queryByRole("textbox", { name: /search genres/i }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("filters options by case-insensitive substring match", async () => {
+      const user = userEvent.setup();
+
+      renderWithProviders(
+        <FilterGroup
+          title="Genres"
+          options={longOptions}
+          state={createState()}
+          onValueChange={vi.fn()}
+          onModeChange={vi.fn()}
+          searchable
+        />,
+      );
+
+      const input = screen.getByRole("textbox", { name: /search genres/i });
+      await user.type(input, "AD");
+
+      expect(screen.getByText("Adventure")).toBeInTheDocument();
+      expect(screen.queryByText("Action")).not.toBeInTheDocument();
+      expect(screen.queryByText("Comedy")).not.toBeInTheDocument();
+    });
+
+    it("shows a no-matches message when the query yields nothing", async () => {
+      const user = userEvent.setup();
+
+      renderWithProviders(
+        <FilterGroup
+          title="Genres"
+          options={longOptions}
+          state={createState()}
+          onValueChange={vi.fn()}
+          onModeChange={vi.fn()}
+          searchable
+        />,
+      );
+
+      const input = screen.getByRole("textbox", { name: /search genres/i });
+      await user.type(input, "zzz");
+
+      expect(screen.getByText(/no matches for "zzz"/i)).toBeInTheDocument();
+    });
+
+    it("clears the search query via the close button", async () => {
+      const user = userEvent.setup();
+
+      renderWithProviders(
+        <FilterGroup
+          title="Genres"
+          options={longOptions}
+          state={createState()}
+          onValueChange={vi.fn()}
+          onModeChange={vi.fn()}
+          searchable
+        />,
+      );
+
+      const input = screen.getByRole("textbox", { name: /search genres/i });
+      await user.type(input, "comedy");
+      expect(screen.queryByText("Action")).not.toBeInTheDocument();
+
+      await user.click(
+        screen.getByRole("button", { name: /clear genres search/i }),
+      );
+
+      expect(screen.getByText("Action")).toBeInTheDocument();
+      expect(screen.getByText("Adventure")).toBeInTheDocument();
+    });
+  });
+
   describe("clear button", () => {
     it("should not show clear button when no active filters", () => {
       const onClear = vi.fn();
