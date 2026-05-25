@@ -27,6 +27,8 @@ import { SearchPage } from "@/pages/SearchPage";
 import { SeriesDetail } from "@/pages/SeriesDetail";
 import { Setup } from "@/pages/Setup";
 import {
+  AccessGroupDetail,
+  AccessGroupsSettings,
   BooksInErrorSettings,
   CleanupSettings,
   DownloadsSettings,
@@ -330,6 +332,28 @@ function App() {
             <ProtectedRoute>
               <AppLayout>
                 <SharingTagsSettings />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/settings/access-groups"
+          element={
+            <ProtectedRoute>
+              <AppLayout>
+                <AccessGroupsSettings />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/settings/access-groups/:groupId"
+          element={
+            <ProtectedRoute>
+              <AppLayout>
+                <AccessGroupDetail />
               </AppLayout>
             </ProtectedRoute>
           }

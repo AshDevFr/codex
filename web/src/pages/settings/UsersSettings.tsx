@@ -41,7 +41,7 @@ import { type UserDto, type UserListParams, usersApi } from "@/api/users";
 import { PermissionPicker } from "@/components/common";
 import { TableSkeleton } from "@/components/skeletons";
 import { ResponsiveTable, type ResponsiveTableColumn } from "@/components/ui";
-import { UserSharingTagGrants } from "@/components/users";
+import { UserEffectiveGrants, UserSharingTagGrants } from "@/components/users";
 import { useShowSkeleton } from "@/lib/motion/useShowSkeleton";
 import { useAuthStore } from "@/store/authStore";
 import { type Permission, ROLE_PERMISSIONS } from "@/types/permissions";
@@ -686,6 +686,9 @@ export function UsersSettings() {
 
             {/* Sharing Tag Grants */}
             {selectedUser && <UserSharingTagGrants userId={selectedUser.id} />}
+
+            {/* Effective Grants (combined user + group view) */}
+            {selectedUser && <UserEffectiveGrants userId={selectedUser.id} />}
 
             {/* Custom Permissions */}
             {selectedUser && selectedUser.role !== "admin" && (
