@@ -2,6 +2,25 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.31.0] - 2026-05-25
+
+### 🚀 Features
+
+- *(access-groups)* Add schema, entities, and repository for sharing-tag access groups
+- *(access-groups)* Merge group grants into ContentFilter
+- *(access-groups)* Add admin API for access group management
+- *(access-groups)* Reconcile OIDC group memberships on login
+- *(access-groups)* Add frontend admin UI for access group management
+
+### 🐛 Bug Fixes
+
+- *(tests)* Adjust migration 089 rollback test for new migration 090
+- *(access-groups)* Enforce sharing-tag visibility on book and series list endpoints
+
+### 📚 Documentation
+
+- *(access-groups)* Add user-facing documentation for access groups
+
 ## [1.30.1] - 2026-05-24
 
 ### 🐛 Bug Fixes
