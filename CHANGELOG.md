@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.31.1] - 2026-05-25
+
+### 🚀 Features
+
+- *(filters)* Add per-group search input for long chip lists
+
 ## [1.31.0] - 2026-05-25
 
 ### 🚀 Features
