@@ -5,7 +5,7 @@
 use crate::require_permission;
 use crate::{
     error::ApiError,
-    extractors::{AuthContext, AuthState},
+    extractors::{AuthContext, AuthState, ContentFilter},
     permissions::Permission,
 };
 use axum::extract::{Query, State};
@@ -67,7 +67,7 @@ pub async fn search(
     let mut publications: Vec<Publication> = Vec::new();
 
     // Search series by name and add as navigation-like entries with links to books
-    let series_list = SeriesRepository::search_by_name(&state.db, query)
+    let series_list = SeriesRepository::search_by_name(&state.db, query, None)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to search series: {}", e)))?;
 
@@ -102,12 +102,16 @@ pub async fn search(
         publications.push(pub_entry);
     }
 
+    let user_id = auth.user_id;
+    let content_filter = ContentFilter::for_user(&state.db, user_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+    let visibility = content_filter.to_visibility();
+
     // Search books by name/title
-    let books = BookRepository::search_by_name(&state.db, query)
+    let books = BookRepository::search_by_name(&state.db, query, visibility.as_ref())
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to search books: {}", e)))?;
-
-    let user_id = auth.user_id;
 
     // Add book entries
     for book in books.iter().take(20) {

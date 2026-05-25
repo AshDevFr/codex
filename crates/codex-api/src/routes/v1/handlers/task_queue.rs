@@ -1173,7 +1173,7 @@ pub async fn reprocess_library_series_titles(
         let rules = LibraryRepository::get_preprocessing_rules(&library);
 
         // Fetch all series in library
-        let series_list = SeriesRepository::list_by_library(&state.db, library_id)
+        let series_list = SeriesRepository::list_by_library(&state.db, library_id, None)
             .await
             .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 

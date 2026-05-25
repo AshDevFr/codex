@@ -471,17 +471,17 @@ pub async fn resolve_series_ids(
     library_ids: &[Uuid],
 ) -> Result<Vec<Uuid>> {
     let content_filter = ContentFilter::for_user(db, user_id).await?;
+    let visibility = content_filter.to_visibility();
 
     let mut all_ids = Vec::new();
     for &lib_id in library_ids {
-        let series_list = SeriesRepository::list_by_library(db, lib_id).await?;
+        let series_list =
+            SeriesRepository::list_by_library(db, lib_id, visibility.as_ref()).await?;
         let ids: Vec<Uuid> = series_list.iter().map(|s| s.id).collect();
         all_ids.extend(ids);
     }
 
-    // Apply content filter (sharing-tag based access control)
-    let visible_ids = content_filter.filter_series_ids(all_ids);
-    Ok(visible_ids)
+    Ok(all_ids)
 }
 
 /// Collect series data in batches and call `on_row` for each row.

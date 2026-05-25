@@ -78,7 +78,7 @@ async fn test_analyze_series_success() {
     tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
 
     // Get a series
-    let series_list = SeriesRepository::list_by_library(&db, library.id)
+    let series_list = SeriesRepository::list_by_library(&db, library.id, None)
         .await
         .unwrap();
 
@@ -129,7 +129,7 @@ async fn test_analyze_series_with_concurrency() {
 
     tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
 
-    let series_list = SeriesRepository::list_by_library(&db, library.id)
+    let series_list = SeriesRepository::list_by_library(&db, library.id, None)
         .await
         .unwrap();
 
@@ -215,7 +215,7 @@ async fn test_analyze_book_success() {
     tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
 
     // Get a book
-    let series_list = SeriesRepository::list_by_library(&db, library.id)
+    let series_list = SeriesRepository::list_by_library(&db, library.id, None)
         .await
         .unwrap();
 
@@ -272,7 +272,7 @@ async fn test_analyze_book_force_reanalysis() {
 
     tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
 
-    let series_list = SeriesRepository::list_by_library(&db, library.id)
+    let series_list = SeriesRepository::list_by_library(&db, library.id, None)
         .await
         .unwrap();
 
@@ -667,7 +667,7 @@ async fn test_trigger_series_unanalyzed_analysis() {
     tokio::time::sleep(Duration::from_millis(100)).await;
 
     // Get series
-    let series_list = SeriesRepository::list_by_library(&db, library.id)
+    let series_list = SeriesRepository::list_by_library(&db, library.id, None)
         .await
         .unwrap();
     assert!(!series_list.is_empty(), "Should have series");
@@ -743,7 +743,7 @@ async fn test_trigger_book_unanalyzed_analysis() {
     tokio::time::sleep(Duration::from_millis(100)).await;
 
     // Get first book
-    let series_list = SeriesRepository::list_by_library(&db, library.id)
+    let series_list = SeriesRepository::list_by_library(&db, library.id, None)
         .await
         .unwrap();
     assert!(!series_list.is_empty());
@@ -947,7 +947,7 @@ async fn test_analyze_endpoints_require_permissions() {
     worker.process_once().await.ok();
     tokio::time::sleep(Duration::from_millis(100)).await;
 
-    let series_list = SeriesRepository::list_by_library(&db, library.id)
+    let series_list = SeriesRepository::list_by_library(&db, library.id, None)
         .await
         .unwrap();
     let series = &series_list[0];

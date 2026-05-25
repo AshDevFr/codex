@@ -723,28 +723,24 @@ pub async fn list_series(
         query.page_size.min(MAX_PAGE_SIZE)
     };
 
-    // Fetch all series IDs first (for filtering)
+    // Sharing-tag visibility goes into the repository queries below.
+    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+    let visibility = content_filter.to_visibility();
+
+    // Fetch series IDs with visibility applied at the SQL layer.
     let all_series = if let Some(library_id) = query.library_id {
-        SeriesRepository::list_by_library(&state.db, library_id)
+        SeriesRepository::list_by_library(&state.db, library_id, visibility.as_ref())
             .await
             .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
     } else {
-        SeriesRepository::list_all(&state.db)
+        SeriesRepository::list_all(&state.db, visibility.as_ref())
             .await
             .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
     };
 
-    // Collect IDs after applying filters
     let mut filtered_ids: Vec<Uuid> = all_series.iter().map(|s| s.id).collect();
-
-    // Apply sharing tag content filter (exclude series the user doesn't have access to)
-    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
-
-    if content_filter.has_restrictions {
-        filtered_ids.retain(|id| content_filter.is_series_visible(*id));
-    }
 
     // Apply genre filter if specified
     if let Some(genres_param) = &query.genres {
@@ -800,6 +796,7 @@ pub async fn list_series(
         Some(auth.user_id),
         offset,
         page_size,
+        visibility.as_ref(),
     )
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to fetch sorted series: {}", e)))?;
@@ -1088,6 +1085,7 @@ pub async fn search_series(
     let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+    let visibility = content_filter.to_visibility();
 
     let fuzzy_enabled = codex_db::repositories::SettingsRepository::get_value::<bool>(
         &state.db,
@@ -1123,22 +1121,18 @@ pub async fn search_series(
                 .map_err(|e| ApiError::Internal(format!("Failed to hydrate series: {}", e)))?
         }
     } else {
-        let series_list = SeriesRepository::search_by_name(&state.db, &request.query)
-            .await
-            .map_err(|e| ApiError::Internal(format!("Failed to search series: {}", e)))?;
+        let series_list =
+            SeriesRepository::search_by_name(&state.db, &request.query, visibility.as_ref())
+                .await
+                .map_err(|e| ApiError::Internal(format!("Failed to search series: {}", e)))?;
 
-        // Filter by library and sharing tags
+        // Library-scoping is the only remaining in-memory filter (visibility
+        // already handled by the repo).
         series_list
             .into_iter()
-            .filter(|s| {
-                // Apply library filter if specified
-                if let Some(lib_id) = request.library_id
-                    && s.library_id != lib_id
-                {
-                    return false;
-                }
-                // Apply sharing tag filter
-                content_filter.is_series_visible(s.id)
+            .filter(|s| match request.library_id {
+                Some(lib_id) => s.library_id == lib_id,
+                None => true,
             })
             .collect()
     };
@@ -1231,6 +1225,7 @@ pub async fn list_series_filtered(
     let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+    let visibility = content_filter.to_visibility();
 
     // Evaluate filter condition once up-front; both branches reuse this set.
     let condition_matches: Option<HashSet<Uuid>> = if let Some(ref condition) = request.condition {
@@ -1297,6 +1292,7 @@ pub async fn list_series_filtered(
                 Some(auth.user_id),
                 offset,
                 page_size,
+                visibility.as_ref(),
             )
             .await
             .map_err(|e| ApiError::Internal(format!("Failed to fetch sorted series: {}", e)))?;
@@ -1307,13 +1303,13 @@ pub async fn list_series_filtered(
     } else {
         // LEGACY (LIKE / no-search) PATH: unchanged behavior when fuzzy is off
         // or no text query is present.
-        let all_series_ids: HashSet<Uuid> = SeriesRepository::list_all(&state.db)
-            .await
-            .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
-            .into_iter()
-            .filter(|s| content_filter.is_series_visible(s.id))
-            .map(|s| s.id)
-            .collect();
+        let all_series_ids: HashSet<Uuid> =
+            SeriesRepository::list_all(&state.db, visibility.as_ref())
+                .await
+                .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
+                .into_iter()
+                .map(|s| s.id)
+                .collect();
 
         let matching_ids: HashSet<Uuid> = match condition_matches {
             Some(ids) => ids.intersection(&all_series_ids).copied().collect(),
@@ -1331,6 +1327,7 @@ pub async fn list_series_filtered(
                 None,
                 Some(&candidate_ids),
                 None,
+                visibility.as_ref(),
             )
             .await
             .map_err(|e| ApiError::Internal(format!("Failed to search series: {}", e)))?;
@@ -1346,6 +1343,7 @@ pub async fn list_series_filtered(
             Some(auth.user_id),
             offset,
             page_size,
+            visibility.as_ref(),
         )
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch sorted series: {}", e)))?
@@ -1420,20 +1418,15 @@ pub async fn list_series_alphabetical_groups(
 
     require_permission!(auth, Permission::SeriesRead)?;
 
-    // Get all series IDs first (we'll filter from this)
-    let all_series = SeriesRepository::list_all(&state.db)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?;
-
-    // Apply sharing tag content filter
+    // Apply sharing tag content filter at the SQL layer.
     let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+    let visibility = content_filter.to_visibility();
 
-    let all_series: Vec<_> = all_series
-        .into_iter()
-        .filter(|s| content_filter.is_series_visible(s.id))
-        .collect();
+    let all_series = SeriesRepository::list_all(&state.db, visibility.as_ref())
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?;
 
     let all_series_ids: std::collections::HashSet<Uuid> = all_series.iter().map(|s| s.id).collect();
 
@@ -2048,20 +2041,20 @@ pub async fn list_in_progress_series(
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
 
-    // Fetch in-progress series for the current user
-    let series_list = SeriesRepository::list_in_progress(&state.db, auth.user_id, query.library_id)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to fetch in-progress series: {}", e)))?;
-
-    // Apply sharing tag content filter
     let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+    let visibility = content_filter.to_visibility();
 
-    let series_list: Vec<_> = series_list
-        .into_iter()
-        .filter(|s| content_filter.is_series_visible(s.id))
-        .collect();
+    // Fetch in-progress series for the current user
+    let series_list = SeriesRepository::list_in_progress(
+        &state.db,
+        auth.user_id,
+        query.library_id,
+        visibility.as_ref(),
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to fetch in-progress series: {}", e)))?;
 
     // Build response based on full parameter
     if query.full {
@@ -2128,22 +2121,19 @@ pub async fn list_recently_added_series(
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
 
-    let series_list =
-        SeriesRepository::list_recently_added(&state.db, query.library_id, query.limit)
-            .await
-            .map_err(|e| {
-                ApiError::Internal(format!("Failed to fetch recently added series: {}", e))
-            })?;
-
-    // Apply sharing tag content filter
     let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+    let visibility = content_filter.to_visibility();
 
-    let series_list: Vec<_> = series_list
-        .into_iter()
-        .filter(|s| content_filter.is_series_visible(s.id))
-        .collect();
+    let series_list = SeriesRepository::list_recently_added(
+        &state.db,
+        query.library_id,
+        query.limit,
+        visibility.as_ref(),
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to fetch recently added series: {}", e)))?;
 
     // Build response based on full parameter
     if query.full {
@@ -2192,22 +2182,19 @@ pub async fn list_library_recently_added_series(
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
 
-    let series_list =
-        SeriesRepository::list_recently_added(&state.db, Some(library_id), query.limit)
-            .await
-            .map_err(|e| {
-                ApiError::Internal(format!("Failed to fetch recently added series: {}", e))
-            })?;
-
-    // Apply sharing tag content filter
     let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+    let visibility = content_filter.to_visibility();
 
-    let series_list: Vec<_> = series_list
-        .into_iter()
-        .filter(|s| content_filter.is_series_visible(s.id))
-        .collect();
+    let series_list = SeriesRepository::list_recently_added(
+        &state.db,
+        Some(library_id),
+        query.limit,
+        visibility.as_ref(),
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to fetch recently added series: {}", e)))?;
 
     // Build response based on full parameter
     if query.full {
@@ -2252,22 +2239,19 @@ pub async fn list_recently_updated_series(
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
 
-    let series_list =
-        SeriesRepository::list_recently_updated(&state.db, query.library_id, query.limit)
-            .await
-            .map_err(|e| {
-                ApiError::Internal(format!("Failed to fetch recently updated series: {}", e))
-            })?;
-
-    // Apply sharing tag content filter
     let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+    let visibility = content_filter.to_visibility();
 
-    let series_list: Vec<_> = series_list
-        .into_iter()
-        .filter(|s| content_filter.is_series_visible(s.id))
-        .collect();
+    let series_list = SeriesRepository::list_recently_updated(
+        &state.db,
+        query.library_id,
+        query.limit,
+        visibility.as_ref(),
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to fetch recently updated series: {}", e)))?;
 
     if query.full {
         let full_dtos =
@@ -2315,22 +2299,19 @@ pub async fn list_library_recently_updated_series(
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
 
-    let series_list =
-        SeriesRepository::list_recently_updated(&state.db, Some(library_id), query.limit)
-            .await
-            .map_err(|e| {
-                ApiError::Internal(format!("Failed to fetch recently updated series: {}", e))
-            })?;
-
-    // Apply sharing tag content filter
     let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+    let visibility = content_filter.to_visibility();
 
-    let series_list: Vec<_> = series_list
-        .into_iter()
-        .filter(|s| content_filter.is_series_visible(s.id))
-        .collect();
+    let series_list = SeriesRepository::list_recently_updated(
+        &state.db,
+        Some(library_id),
+        query.limit,
+        visibility.as_ref(),
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to fetch recently updated series: {}", e)))?;
 
     if query.full {
         let full_dtos =
@@ -2397,22 +2378,14 @@ pub async fn list_library_series(
     let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+    let visibility = content_filter.to_visibility();
 
-    // Fetch all series IDs from library for filtering
-    let all_series = SeriesRepository::list_by_library(&state.db, library_id)
+    // Fetch series IDs in the library, with visibility applied at the SQL layer.
+    let all_series = SeriesRepository::list_by_library(&state.db, library_id, visibility.as_ref())
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?;
 
-    // Collect IDs after applying sharing tag filter
-    let filtered_ids: Vec<Uuid> = if content_filter.has_restrictions {
-        all_series
-            .iter()
-            .filter(|s| content_filter.is_series_visible(s.id))
-            .map(|s| s.id)
-            .collect()
-    } else {
-        all_series.iter().map(|s| s.id).collect()
-    };
+    let filtered_ids: Vec<Uuid> = all_series.iter().map(|s| s.id).collect();
 
     // Use database-level sorting with the filtered IDs (convert to 0-indexed offset)
     let offset = (page - 1) * page_size;
@@ -2423,6 +2396,7 @@ pub async fn list_library_series(
         Some(auth.user_id),
         offset,
         page_size,
+        visibility.as_ref(),
     )
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to fetch sorted series: {}", e)))?;
@@ -2500,20 +2474,20 @@ pub async fn list_library_in_progress_series(
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
 
-    // Fetch in-progress series for the current user in this library
-    let series_list = SeriesRepository::list_in_progress(&state.db, auth.user_id, Some(library_id))
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to fetch in-progress series: {}", e)))?;
-
-    // Apply sharing tag content filter
     let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+    let visibility = content_filter.to_visibility();
 
-    let series_list: Vec<_> = series_list
-        .into_iter()
-        .filter(|s| content_filter.is_series_visible(s.id))
-        .collect();
+    // Fetch in-progress series for the current user in this library
+    let series_list = SeriesRepository::list_in_progress(
+        &state.db,
+        auth.user_id,
+        Some(library_id),
+        visibility.as_ref(),
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to fetch in-progress series: {}", e)))?;
 
     if query.full {
         let full_dtos =

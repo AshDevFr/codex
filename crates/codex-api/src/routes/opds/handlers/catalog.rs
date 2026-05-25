@@ -2,7 +2,7 @@ use super::super::dto::{OpdsEntry, OpdsFeed, OpdsLink};
 use crate::require_permission;
 use crate::{
     error::ApiError,
-    extractors::{AuthContext, AuthState},
+    extractors::{AuthContext, AuthState, ContentFilter},
     permissions::Permission,
 };
 use axum::{
@@ -245,8 +245,13 @@ pub async fn library_series(
         .map_err(|e| ApiError::Internal(format!("Failed to fetch library: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Library not found".to_string()))?;
 
+    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+    let visibility = content_filter.to_visibility();
+
     // Fetch all series in library (no built-in pagination)
-    let all_series = SeriesRepository::list_by_library(&state.db, library_id)
+    let all_series = SeriesRepository::list_by_library(&state.db, library_id, visibility.as_ref())
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?;
 

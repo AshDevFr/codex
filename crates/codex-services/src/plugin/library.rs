@@ -26,7 +26,7 @@ pub async fn build_user_library(
     user_id: Uuid,
 ) -> Result<Vec<UserLibraryEntry>> {
     // 1. Get all series
-    let all_series = SeriesRepository::list_all(db).await?;
+    let all_series = SeriesRepository::list_all(db, None).await?;
     if all_series.is_empty() {
         return Ok(vec![]);
     }

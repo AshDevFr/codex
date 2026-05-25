@@ -85,7 +85,7 @@ impl TaskHandler for GenerateThumbnailsHandler {
             } else {
                 // All libraries
                 info!("Generating thumbnails for all books (force={})", force);
-                let (books, _total) = BookRepository::list_all(db, false, 0, 1000000).await?;
+                let (books, _total) = BookRepository::list_all(db, false, 0, 1000000, None).await?;
                 books
             };
 

@@ -96,7 +96,9 @@ async fn test_generate_book_thumbnails_all_success() {
     tokio::time::sleep(Duration::from_millis(100)).await;
 
     // Verify books were created
-    let (books, _) = BookRepository::list_all(&db, false, 0, 100).await.unwrap();
+    let (books, _) = BookRepository::list_all(&db, false, 0, 100, None)
+        .await
+        .unwrap();
     assert!(!books.is_empty(), "Should have books after scan");
 
     let app = create_test_router_with_app_state(state);
@@ -435,7 +437,7 @@ async fn test_generate_series_thumbnail_single_success() {
     tokio::time::sleep(Duration::from_millis(100)).await;
 
     // Get a series
-    let series_list = SeriesRepository::list_by_library(&db, library.id)
+    let series_list = SeriesRepository::list_by_library(&db, library.id, None)
         .await
         .unwrap();
 
@@ -486,7 +488,7 @@ async fn test_generate_series_thumbnail_single_with_force() {
     worker.process_once().await.ok();
     tokio::time::sleep(Duration::from_millis(100)).await;
 
-    let series_list = SeriesRepository::list_by_library(&db, library.id)
+    let series_list = SeriesRepository::list_by_library(&db, library.id, None)
         .await
         .unwrap();
 
@@ -728,7 +730,7 @@ async fn test_generate_book_thumbnail_success() {
     tokio::time::sleep(Duration::from_millis(100)).await;
 
     // Get a book
-    let series_list = SeriesRepository::list_by_library(&db, library.id)
+    let series_list = SeriesRepository::list_by_library(&db, library.id, None)
         .await
         .unwrap();
 
@@ -787,7 +789,7 @@ async fn test_generate_book_thumbnail_with_force() {
     worker.process_once().await.ok();
     tokio::time::sleep(Duration::from_millis(100)).await;
 
-    let series_list = SeriesRepository::list_by_library(&db, library.id)
+    let series_list = SeriesRepository::list_by_library(&db, library.id, None)
         .await
         .unwrap();
 
@@ -864,7 +866,7 @@ async fn test_generate_book_thumbnail_requires_write_permission() {
     worker.process_once().await.ok();
     tokio::time::sleep(Duration::from_millis(100)).await;
 
-    let series_list = SeriesRepository::list_by_library(&db, library.id)
+    let series_list = SeriesRepository::list_by_library(&db, library.id, None)
         .await
         .unwrap();
 
@@ -990,7 +992,7 @@ async fn test_generate_thumbnail_single_task() {
     // Process all analysis tasks
     process_all_pending_tasks(&db).await;
 
-    let series_list = SeriesRepository::list_by_library(&db, library.id)
+    let series_list = SeriesRepository::list_by_library(&db, library.id, None)
         .await
         .unwrap();
 
@@ -1071,7 +1073,7 @@ async fn test_generate_book_thumbnails_with_book_ids() {
     tokio::time::sleep(Duration::from_millis(100)).await;
 
     // Get books
-    let series_list = SeriesRepository::list_by_library(&db, library.id)
+    let series_list = SeriesRepository::list_by_library(&db, library.id, None)
         .await
         .unwrap();
 
@@ -1138,7 +1140,7 @@ async fn test_generate_series_thumbnails_with_series_ids() {
     tokio::time::sleep(Duration::from_millis(100)).await;
 
     // Get series
-    let series_list = SeriesRepository::list_by_library(&db, library.id)
+    let series_list = SeriesRepository::list_by_library(&db, library.id, None)
         .await
         .unwrap();
 

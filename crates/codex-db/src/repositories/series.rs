@@ -17,6 +17,7 @@ use crate::entities::{
     book_metadata, books, prelude::*, read_progress, series, series_external_ratings,
     series_metadata, user_series_ratings,
 };
+use crate::repositories::visibility::{SeriesVisibility, apply_series_visibility};
 use crate::trace::db_system_str;
 use codex_events::{EntityChangeEvent, EntityEvent, EventBroadcaster};
 use codex_models::sort::{SeriesSortField, SeriesSortParam, SortDirection};
@@ -989,10 +990,19 @@ impl SeriesRepository {
     pub async fn list_by_library(
         db: &DatabaseConnection,
         library_id: Uuid,
+        visibility: Option<&SeriesVisibility>,
     ) -> Result<Vec<series::Model>> {
+        if let Some(v) = visibility
+            && v.is_empty_whitelist()
+        {
+            return Ok(vec![]);
+        }
+
         // Join with series_metadata to sort by title_sort/title
-        Series::find()
-            .filter(series::Column::LibraryId.eq(library_id))
+        let mut query = Series::find().filter(series::Column::LibraryId.eq(library_id));
+        query = apply_series_visibility(query, visibility);
+
+        query
             .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def())
             .order_by_asc(series_metadata::Column::TitleSort)
             .order_by_asc(series_metadata::Column::Title)
@@ -1016,8 +1026,20 @@ impl SeriesRepository {
     }
 
     /// Get all series across all libraries
-    pub async fn list_all(db: &DatabaseConnection) -> Result<Vec<series::Model>> {
-        Series::find()
+    pub async fn list_all(
+        db: &DatabaseConnection,
+        visibility: Option<&SeriesVisibility>,
+    ) -> Result<Vec<series::Model>> {
+        if let Some(v) = visibility
+            && v.is_empty_whitelist()
+        {
+            return Ok(vec![]);
+        }
+
+        let mut query = Series::find();
+        query = apply_series_visibility(query, visibility);
+
+        query
             .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def())
             .order_by_asc(series_metadata::Column::TitleSort)
             .order_by_asc(series_metadata::Column::Title)
@@ -1031,12 +1053,20 @@ impl SeriesRepository {
         db: &DatabaseConnection,
         library_id: Option<Uuid>,
         limit: u64,
+        visibility: Option<&SeriesVisibility>,
     ) -> Result<Vec<series::Model>> {
+        if let Some(v) = visibility
+            && v.is_empty_whitelist()
+        {
+            return Ok(vec![]);
+        }
+
         let mut query = Series::find();
 
         if let Some(lib_id) = library_id {
             query = query.filter(series::Column::LibraryId.eq(lib_id));
         }
+        query = apply_series_visibility(query, visibility);
 
         query
             .order_by_desc(series::Column::CreatedAt)
@@ -1051,12 +1081,20 @@ impl SeriesRepository {
         db: &DatabaseConnection,
         library_id: Option<Uuid>,
         limit: u64,
+        visibility: Option<&SeriesVisibility>,
     ) -> Result<Vec<series::Model>> {
+        if let Some(v) = visibility
+            && v.is_empty_whitelist()
+        {
+            return Ok(vec![]);
+        }
+
         let mut query = Series::find();
 
         if let Some(lib_id) = library_id {
             query = query.filter(series::Column::LibraryId.eq(lib_id));
         }
+        query = apply_series_visibility(query, visibility);
 
         query
             .order_by_desc(series::Column::UpdatedAt)
@@ -1072,6 +1110,7 @@ impl SeriesRepository {
     /// - Simple sorts: name, date_added, date_updated, book_count
     /// - User-specific sorts: date_read (requires user_id and JOIN with read_progress)
     /// - release_date queries series_metadata.year
+    #[allow(clippy::too_many_arguments)]
     pub async fn list_by_library_sorted(
         db: &DatabaseConnection,
         library_id: Uuid,
@@ -1079,20 +1118,36 @@ impl SeriesRepository {
         user_id: Option<Uuid>,
         offset: u64,
         limit: u64,
+        visibility: Option<&SeriesVisibility>,
     ) -> Result<Vec<series::Model>> {
+        if let Some(v) = visibility
+            && v.is_empty_whitelist()
+        {
+            return Ok(vec![]);
+        }
+
         let order = match sort.direction {
             SortDirection::Asc => Order::Asc,
             SortDirection::Desc => Order::Desc,
         };
 
+        let base = || {
+            apply_series_visibility(
+                Series::find().filter(series::Column::LibraryId.eq(library_id)),
+                visibility,
+            )
+        };
+
         match sort.field {
             SeriesSortField::DateRead => {
-                Self::list_with_date_read_sort(db, library_id, sort, user_id, offset, limit).await
+                Self::list_with_date_read_sort(
+                    db, library_id, sort, user_id, offset, limit, visibility,
+                )
+                .await
             }
             SeriesSortField::ReleaseDate => {
                 // Sort by year from series_metadata
-                Series::find()
-                    .filter(series::Column::LibraryId.eq(library_id))
+                base()
                     .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def())
                     .order_by(series_metadata::Column::Year, order)
                     .offset(offset)
@@ -1102,8 +1157,7 @@ impl SeriesRepository {
                     .context("Failed to list series with release date sort")
             }
             SeriesSortField::BookCount => {
-                let results = Series::find()
-                    .filter(series::Column::LibraryId.eq(library_id))
+                let results = base()
                     .join(JoinType::LeftJoin, series::Relation::Books.def())
                     .column_as(
                         Expr::col((books::Entity, books::Column::Id)).count(),
@@ -1123,8 +1177,7 @@ impl SeriesRepository {
             SeriesSortField::Rating
             | SeriesSortField::CommunityRating
             | SeriesSortField::ExternalRating => {
-                let lib_filter = series::Column::LibraryId.eq(library_id);
-                let mut query = Series::find().filter(lib_filter);
+                let mut query = base();
 
                 // Apply the appropriate rating JOIN
                 let rating_expr: SimpleExpr = match sort.field {
@@ -1210,7 +1263,7 @@ impl SeriesRepository {
             }
             _ => {
                 // Simple sorts that may use metadata for name sort
-                let query = Series::find().filter(series::Column::LibraryId.eq(library_id));
+                let query = base();
 
                 // Apply sort
                 let query = match sort.field {
@@ -1252,6 +1305,7 @@ impl SeriesRepository {
     /// This method is used when filtering has already been done (e.g., by content filter,
     /// genre filter, tag filter) and we have a set of IDs to fetch with proper sorting.
     /// This avoids the broken in-memory sorting pattern.
+    #[allow(clippy::too_many_arguments)]
     pub async fn list_by_ids_sorted(
         db: &DatabaseConnection,
         ids: &[Uuid],
@@ -1259,19 +1313,48 @@ impl SeriesRepository {
         user_id: Option<Uuid>,
         offset: u64,
         limit: u64,
+        visibility: Option<&SeriesVisibility>,
     ) -> Result<(Vec<series::Model>, u64)> {
         if ids.is_empty() {
             return Ok((vec![], 0));
         }
+        if let Some(v) = visibility
+            && v.is_empty_whitelist()
+        {
+            return Ok((vec![], 0));
+        }
 
-        let total = ids.len() as u64;
+        // Narrow the caller's id list by the visibility filter up-front so the
+        // SQL only sees visible ids and the total reflects what the user can see.
+        let filtered_ids: Vec<Uuid> = match visibility {
+            None => ids.to_vec(),
+            Some(v) => ids
+                .iter()
+                .copied()
+                .filter(|id| {
+                    if v.excluded_series_ids.contains(id) {
+                        return false;
+                    }
+                    if let Some(allowed) = &v.allowed_series_ids {
+                        return allowed.contains(id);
+                    }
+                    true
+                })
+                .collect(),
+        };
+
+        if filtered_ids.is_empty() {
+            return Ok((vec![], 0));
+        }
+
+        let total = filtered_ids.len() as u64;
 
         let order = match sort.direction {
             SortDirection::Asc => Order::Asc,
             SortDirection::Desc => Order::Desc,
         };
 
-        let base_condition = series::Column::Id.is_in(ids.to_vec());
+        let base_condition = series::Column::Id.is_in(filtered_ids);
 
         let series = match sort.field {
             SeriesSortField::Name | SeriesSortField::Relevance => {
@@ -1585,6 +1668,7 @@ impl SeriesRepository {
     }
 
     /// List series sorted by last read date (user-specific)
+    #[allow(clippy::too_many_arguments)]
     async fn list_with_date_read_sort(
         db: &DatabaseConnection,
         library_id: Uuid,
@@ -1592,6 +1676,7 @@ impl SeriesRepository {
         user_id: Option<Uuid>,
         offset: u64,
         limit: u64,
+        visibility: Option<&SeriesVisibility>,
     ) -> Result<Vec<series::Model>> {
         use sea_orm::sea_query::Expr;
 
@@ -1600,10 +1685,12 @@ impl SeriesRepository {
             SortDirection::Desc => Order::Desc,
         };
 
-        let mut query = Series::find()
-            .filter(series::Column::LibraryId.eq(library_id))
-            .join(JoinType::LeftJoin, series::Relation::Books.def())
-            .join(JoinType::LeftJoin, books::Relation::ReadProgress.def());
+        let mut query = apply_series_visibility(
+            Series::find().filter(series::Column::LibraryId.eq(library_id)),
+            visibility,
+        )
+        .join(JoinType::LeftJoin, series::Relation::Books.def())
+        .join(JoinType::LeftJoin, books::Relation::ReadProgress.def());
 
         // Filter by user if provided
         if let Some(uid) = user_id {
@@ -1640,11 +1727,18 @@ impl SeriesRepository {
         db: &DatabaseConnection,
         user_id: Uuid,
         library_id: Option<Uuid>,
+        visibility: Option<&SeriesVisibility>,
     ) -> Result<Vec<series::Model>> {
         use crate::entities::{books, read_progress};
         use sea_orm::JoinType;
 
-        let mut query = Series::find()
+        if let Some(v) = visibility
+            && v.is_empty_whitelist()
+        {
+            return Ok(vec![]);
+        }
+
+        let mut query = apply_series_visibility(Series::find(), visibility)
             .join(JoinType::InnerJoin, series::Relation::Books.def())
             .join(JoinType::InnerJoin, books::Relation::ReadProgress.def())
             .filter(read_progress::Column::UserId.eq(user_id))
@@ -1681,10 +1775,16 @@ impl SeriesRepository {
         library_id: Option<Uuid>,
         candidate_ids: Option<&[Uuid]>,
         pagination: Option<(u64, u64)>,
+        visibility: Option<&SeriesVisibility>,
     ) -> Result<(Vec<series::Model>, u64)> {
         // Short-circuit if candidate_ids is explicitly empty
         if let Some(ids) = candidate_ids
             && ids.is_empty()
+        {
+            return Ok((vec![], 0));
+        }
+        if let Some(v) = visibility
+            && v.is_empty_whitelist()
         {
             return Ok((vec![], 0));
         }
@@ -1708,6 +1808,15 @@ impl SeriesRepository {
         // Add candidate IDs filter if specified
         if let Some(ids) = candidate_ids {
             search_condition = search_condition.add(series::Column::Id.is_in(ids.to_vec()));
+        }
+
+        // Apply visibility constraints to the same Condition so both count and
+        // paged fetch see them.
+        if let Some(v) = visibility
+            && let Some(expr) =
+                crate::repositories::visibility::visibility_predicate(series::Column::Id, v)
+        {
+            search_condition = search_condition.add(expr);
         }
 
         let base_query = Series::find()
@@ -1750,8 +1859,9 @@ impl SeriesRepository {
     pub async fn search_by_name(
         db: &DatabaseConnection,
         query: &str,
+        visibility: Option<&SeriesVisibility>,
     ) -> Result<Vec<series::Model>> {
-        let (results, _) = Self::search_by_title(db, query, None, None, None).await?;
+        let (results, _) = Self::search_by_title(db, query, None, None, None, visibility).await?;
         Ok(results)
     }
 
@@ -2577,7 +2687,7 @@ mod tests {
             .await
             .unwrap();
 
-        let series = SeriesRepository::list_by_library(db.sea_orm_connection(), library.id)
+        let series = SeriesRepository::list_by_library(db.sea_orm_connection(), library.id, None)
             .await
             .unwrap();
 
@@ -2604,7 +2714,7 @@ mod tests {
             .await
             .unwrap();
 
-        let results = SeriesRepository::search_by_name(db.sea_orm_connection(), "piece")
+        let results = SeriesRepository::search_by_name(db.sea_orm_connection(), "piece", None)
             .await
             .unwrap();
 
@@ -2645,7 +2755,7 @@ mod tests {
             .unwrap();
 
         // Searching "mar" should find "MÄR" (accent-insensitive + case-insensitive)
-        let results = SeriesRepository::search_by_name(db.sea_orm_connection(), "mar")
+        let results = SeriesRepository::search_by_name(db.sea_orm_connection(), "mar", None)
             .await
             .unwrap();
         assert_eq!(results.len(), 1);
@@ -2657,13 +2767,13 @@ mod tests {
         assert_eq!(metadata.title, "MÄR");
 
         // Searching "MÄR" should also find "MÄR" (exact match still works)
-        let results = SeriesRepository::search_by_name(db.sea_orm_connection(), "MÄR")
+        let results = SeriesRepository::search_by_name(db.sea_orm_connection(), "MÄR", None)
             .await
             .unwrap();
         assert_eq!(results.len(), 1);
 
         // Searching "cafe" should find "Café Stories"
-        let results = SeriesRepository::search_by_name(db.sea_orm_connection(), "cafe")
+        let results = SeriesRepository::search_by_name(db.sea_orm_connection(), "cafe", None)
             .await
             .unwrap();
         assert_eq!(results.len(), 1);
@@ -2675,13 +2785,13 @@ mod tests {
         assert_eq!(metadata.title, "Café Stories");
 
         // Searching "café" should also find "Café Stories"
-        let results = SeriesRepository::search_by_name(db.sea_orm_connection(), "café")
+        let results = SeriesRepository::search_by_name(db.sea_orm_connection(), "café", None)
             .await
             .unwrap();
         assert_eq!(results.len(), 1);
 
         // Searching "naruto" should still find "Naruto" (basic ASCII case-insensitive)
-        let results = SeriesRepository::search_by_name(db.sea_orm_connection(), "naruto")
+        let results = SeriesRepository::search_by_name(db.sea_orm_connection(), "naruto", None)
             .await
             .unwrap();
         assert_eq!(results.len(), 1);
@@ -2750,9 +2860,10 @@ mod tests {
         assert_eq!(metadata.search_title, "creme brulee");
 
         // Search should find it by accent-stripped query
-        let results = SeriesRepository::search_by_name(db.sea_orm_connection(), "creme brulee")
-            .await
-            .unwrap();
+        let results =
+            SeriesRepository::search_by_name(db.sea_orm_connection(), "creme brulee", None)
+                .await
+                .unwrap();
         assert_eq!(results.len(), 1);
     }
 
@@ -3053,10 +3164,14 @@ mod tests {
         .unwrap();
 
         // Test getting started series (only in-progress, not completed)
-        let started =
-            SeriesRepository::list_in_progress(db.sea_orm_connection(), created_user.id, None)
-                .await
-                .unwrap();
+        let started = SeriesRepository::list_in_progress(
+            db.sea_orm_connection(),
+            created_user.id,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
 
         assert_eq!(started.len(), 2); // Only series1 and series2 with in-progress books
         let series_ids: Vec<_> = started.iter().map(|s| s.id).collect();
@@ -3069,6 +3184,7 @@ mod tests {
             db.sea_orm_connection(),
             created_user.id,
             Some(library.id),
+            None,
         )
         .await
         .unwrap();

@@ -2861,7 +2861,7 @@ pub async fn enqueue_library_auto_match_tasks(
     }
 
     // Get all series in the library
-    let series_list = SeriesRepository::list_by_library(&state.db, library_id)
+    let series_list = SeriesRepository::list_by_library(&state.db, library_id, None)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to get series: {}", e)))?;
 

@@ -72,7 +72,7 @@ async fn test_series_rename_preserves_identity() {
     assert_eq!(result.series_created, 1);
 
     // Get the original series ID
-    let series_list = SeriesRepository::list_by_library(db, library.id)
+    let series_list = SeriesRepository::list_by_library(db, library.id, None)
         .await
         .unwrap();
     assert_eq!(series_list.len(), 1);
@@ -96,7 +96,7 @@ async fn test_series_rename_preserves_identity() {
     assert_eq!(result.series_created, 0);
 
     // Verify same series ID is used, but name and path are updated
-    let series_list = SeriesRepository::list_by_library(db, library.id)
+    let series_list = SeriesRepository::list_by_library(db, library.id, None)
         .await
         .unwrap();
     assert_eq!(series_list.len(), 1);
@@ -134,7 +134,7 @@ async fn test_series_copy_creates_new_series() {
     assert_eq!(result.series_created, 1);
 
     // Get the original series ID
-    let series_list = SeriesRepository::list_by_library(db, library.id)
+    let series_list = SeriesRepository::list_by_library(db, library.id, None)
         .await
         .unwrap();
     assert_eq!(series_list.len(), 1);
@@ -159,7 +159,7 @@ async fn test_series_copy_creates_new_series() {
     assert_eq!(result.books_created, 2);
 
     // Verify we now have 2 series
-    let series_list = SeriesRepository::list_by_library(db, library.id)
+    let series_list = SeriesRepository::list_by_library(db, library.id, None)
         .await
         .unwrap();
     assert_eq!(series_list.len(), 2);
@@ -209,7 +209,7 @@ async fn test_nested_folder_copy_creates_new_series() {
     assert_eq!(result.series_created, 1);
 
     // Get the original series ID
-    let series_list = SeriesRepository::list_by_library(db, library.id)
+    let series_list = SeriesRepository::list_by_library(db, library.id, None)
         .await
         .unwrap();
     let original_series_id = series_list[0].id;
@@ -241,7 +241,7 @@ async fn test_nested_folder_copy_creates_new_series() {
     assert_eq!(result.books_created, 1);
 
     // Verify we now have 2 series
-    let series_list = SeriesRepository::list_by_library(db, library.id)
+    let series_list = SeriesRepository::list_by_library(db, library.id, None)
         .await
         .unwrap();
     assert_eq!(series_list.len(), 2);
@@ -282,7 +282,7 @@ async fn test_deep_scan_respects_rename_vs_copy() {
         .await
         .unwrap();
 
-    let series_list = SeriesRepository::list_by_library(db, library.id)
+    let series_list = SeriesRepository::list_by_library(db, library.id, None)
         .await
         .unwrap();
     let original_series_id = series_list[0].id;
@@ -300,7 +300,7 @@ async fn test_deep_scan_respects_rename_vs_copy() {
     assert_eq!(result.series_created, 1);
 
     // Verify we have 2 series
-    let series_list = SeriesRepository::list_by_library(db, library.id)
+    let series_list = SeriesRepository::list_by_library(db, library.id, None)
         .await
         .unwrap();
     assert_eq!(series_list.len(), 2);

@@ -2,7 +2,7 @@ use super::super::dto::{OpdsEntry, OpdsFeed, OpdsLink};
 use crate::require_permission;
 use crate::{
     error::ApiError,
-    extractors::{AuthContext, AuthState},
+    extractors::{AuthContext, AuthState, ContentFilter},
     permissions::Permission,
 };
 use axum::{
@@ -127,6 +127,11 @@ pub async fn search(
 
     let now = Utc::now();
     let base_url = "/opds";
+
+    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+    let visibility = content_filter.to_visibility();
     let query = params.q.trim();
     let app_name = SettingsRepository::get_app_name(&state.db).await;
 
@@ -150,7 +155,7 @@ pub async fn search(
     .add_link(OpdsLink::start_link(base_url.to_string()));
 
     // Search series by name
-    let series_list = SeriesRepository::search_by_name(&state.db, query)
+    let series_list = SeriesRepository::search_by_name(&state.db, query, None)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to search series: {}", e)))?;
 
@@ -179,7 +184,7 @@ pub async fn search(
     }
 
     // Search books by name/title
-    let books = BookRepository::search_by_name(&state.db, query)
+    let books = BookRepository::search_by_name(&state.db, query, visibility.as_ref())
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to search books: {}", e)))?;
 
