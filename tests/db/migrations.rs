@@ -862,7 +862,8 @@ async fn test_migration_089_down_restores_file_path_sqlite() {
     let (db, _temp_dir) = setup_test_db_wrapper().await;
     let conn = db.sea_orm_connection();
 
-    Migrator::down(conn, Some(1)).await.unwrap();
+    // Roll back migration 090 (access_groups) + 089 (file_path rename)
+    Migrator::down(conn, Some(2)).await.unwrap();
 
     assert!(sqlite_has_column(conn, "books", "file_path").await);
     assert!(!sqlite_has_column(conn, "books", "path").await);
