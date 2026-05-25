@@ -37,6 +37,7 @@ import {
   IconServer,
   IconSettings,
   IconShare,
+  IconShieldCheck,
   IconSparkles,
   IconTrashX,
   IconUser,
@@ -685,6 +686,14 @@ export function Sidebar({ onNavigate }: SidebarProps = {}) {
                     label="Sharing Tags"
                     leftSection={<IconShare size={16} stroke={1.5} />}
                     active={currentPath.startsWith("/settings/sharing-tags")}
+                    onClick={onNavigate}
+                  />
+                  <NavLink
+                    component={Link}
+                    to="/settings/access-groups"
+                    label="Access Groups"
+                    leftSection={<IconShieldCheck size={16} stroke={1.5} />}
+                    active={currentPath.startsWith("/settings/access-groups")}
                     onClick={onNavigate}
                   />
 

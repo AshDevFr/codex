@@ -1,3 +1,5 @@
+export { AccessGroupDetail } from "./AccessGroupDetail";
+export { AccessGroupsSettings } from "./AccessGroupsSettings";
 export { BooksInErrorSettings } from "./BooksInErrorSettings";
 export { CleanupSettings } from "./CleanupSettings";
 export { DownloadsSettings } from "./DownloadsSettings";
