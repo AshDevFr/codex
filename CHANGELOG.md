@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.31.2] - 2026-05-27
+
+### 🐛 Bug Fixes
+
+- *(search)* Repair advanced search and filters on mobile
+
 ## [1.31.1] - 2026-05-25
 
 ### 🚀 Features
