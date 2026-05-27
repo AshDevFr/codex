@@ -301,8 +301,8 @@ export function SearchPage() {
           >
             {builderOpened ? "Hide filters" : "Show filters"}
           </Button>
-          <Group gap="md" wrap="nowrap">
-            <Group gap="xs" wrap="nowrap">
+          <Group gap="md" wrap="wrap">
+            <Group gap="xs" wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
               <Text size="sm" c="dimmed">
                 Sort:
               </Text>
@@ -315,7 +315,7 @@ export function SearchPage() {
                 }
                 placeholder={state.query.trim() ? "Relevance" : "Default"}
                 clearable
-                w={240}
+                style={{ flex: 1, minWidth: 0, maxWidth: 240 }}
               />
             </Group>
             <PresetsMenu

@@ -1,7 +1,22 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderWithProviders, screen, userEvent } from "@/test/utils";
 import type { SeriesCondition } from "@/types/filters";
 import { FilterBuilder } from "./FilterBuilder";
+
+// Helper to drive `useMediaQuery` (which reads `window.matchMedia`) toward the
+// mobile breakpoint used by the leaf editor's stacked layout.
+function setViewportMatchesMobile(isMobile: boolean) {
+  window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+    matches: isMobile && query.includes("768px"),
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
+}
 
 describe("FilterBuilder", () => {
   it("renders an empty state for a fresh builder", () => {
@@ -93,5 +108,53 @@ describe("FilterBuilder", () => {
       />,
     );
     expect(screen.getByText(/match any/i)).toBeInTheDocument();
+  });
+
+  describe("responsive leaf layout", () => {
+    afterEach(() => {
+      // Reset to the desktop default so the override doesn't leak between tests.
+      setViewportMatchesMobile(false);
+    });
+
+    it("stretches the value input to full width on mobile", () => {
+      setViewportMatchesMobile(true);
+      renderWithProviders(
+        <FilterBuilder
+          condition={{
+            allOf: [{ title: { operator: "contains", value: "" } }],
+          }}
+          target="series"
+          onChange={vi.fn()}
+        />,
+      );
+
+      const root = screen
+        .getByPlaceholderText("value")
+        .closest(".mantine-TextInput-root") as HTMLElement;
+      expect(root).not.toBeNull();
+      // Mobile stacks the controls, so the value input owns the whole row
+      // instead of being crushed to a few pixels beside the fixed-width selects.
+      expect(root.style.width).toBe("100%");
+    });
+
+    it("keeps the value input inline (flex) on desktop", () => {
+      setViewportMatchesMobile(false);
+      renderWithProviders(
+        <FilterBuilder
+          condition={{
+            allOf: [{ title: { operator: "contains", value: "" } }],
+          }}
+          target="series"
+          onChange={vi.fn()}
+        />,
+      );
+
+      const root = screen
+        .getByPlaceholderText("value")
+        .closest(".mantine-TextInput-root") as HTMLElement;
+      expect(root).not.toBeNull();
+      expect(root.style.width).toBe("");
+      expect(root.style.flex).not.toBe("");
+    });
   });
 });

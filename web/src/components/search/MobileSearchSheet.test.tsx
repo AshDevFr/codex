@@ -222,4 +222,28 @@ describe("MobileSearchSheet", () => {
       expect(screen.getByText("No results found")).toBeInTheDocument();
     });
   });
+
+  it("opens advanced search from the sheet (the header icon is hidden on mobile)", async () => {
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    renderWithProviders(<MobileSearchSheet opened={true} onClose={onClose} />);
+
+    await user.click(screen.getByRole("button", { name: "Advanced search" }));
+
+    expect(mockNavigate).toHaveBeenCalledWith("/search");
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it("carries the typed query into advanced search", async () => {
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    renderWithProviders(<MobileSearchSheet opened={true} onClose={onClose} />);
+
+    const input = screen.getByPlaceholderText("Search series and books...");
+    await user.type(input, "isekai");
+    await user.click(screen.getByRole("button", { name: "Advanced search" }));
+
+    expect(mockNavigate).toHaveBeenCalledWith("/search?q=isekai");
+    expect(onClose).toHaveBeenCalled();
+  });
 });

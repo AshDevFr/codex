@@ -1,4 +1,5 @@
 import {
+  Button,
   Drawer,
   Group,
   Loader,
@@ -8,7 +9,7 @@ import {
   TextInput,
   UnstyledButton,
 } from "@mantine/core";
-import { IconSearch } from "@tabler/icons-react";
+import { IconAdjustmentsHorizontal, IconSearch } from "@tabler/icons-react";
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSearch } from "@/hooks/useSearch";
@@ -78,6 +79,24 @@ export function MobileSearchSheet({ opened, onClose }: MobileSearchSheetProps) {
           size="md"
           aria-label="Search query"
         />
+
+        {/* The header's advanced-search icon is hidden on mobile, so this is
+            the only way to reach the filter builder from a phone. Carry the
+            typed query across so it isn't lost when switching modes. */}
+        <Button
+          variant="light"
+          leftSection={<IconAdjustmentsHorizontal size={16} />}
+          onClick={() =>
+            handleNavigate(
+              query.trim()
+                ? `/search?q=${encodeURIComponent(query.trim())}`
+                : "/search",
+            )
+          }
+          fullWidth
+        >
+          Advanced search
+        </Button>
 
         {showResults && (
           <ScrollArea style={{ flex: 1 }} type="scroll">

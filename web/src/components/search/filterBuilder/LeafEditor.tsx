@@ -8,6 +8,7 @@ import {
   TextInput,
   Tooltip,
 } from "@mantine/core";
+import { useMediaQuery } from "@mantine/hooks";
 import { IconTrash } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
@@ -59,12 +60,29 @@ export function LeafEditor({
 }: LeafEditorProps) {
   const pickerGroups = useMemo(() => fieldPickerGroups(target), [target]);
   const field = findFieldAnyTarget(fieldKey);
+  // Below the drawer/sheet breakpoint the three controls + delete button can't
+  // share one row without crushing the value input to an unusable width, so we
+  // stack them vertically and let each control fill the row instead.
+  const isMobile = useMediaQuery("(max-width: 768px)");
+
+  const removeButton = (
+    <Tooltip label="Remove">
+      <ActionIcon
+        variant="subtle"
+        color="red"
+        onClick={onRemove}
+        aria-label="Remove filter"
+      >
+        <IconTrash size={14} />
+      </ActionIcon>
+    </Tooltip>
+  );
 
   // Field truly missing (malformed condition): fall back to a bare picker so
   // the user can either pick something or remove the row.
   if (!field) {
     return (
-      <Group gap="xs">
+      <Group gap="xs" wrap="nowrap">
         <Select
           value={null}
           placeholder={`Unknown field: ${fieldKey}`}
@@ -75,18 +93,10 @@ export function LeafEditor({
               if (nextField) onChange(newLeaf(nextField));
             }
           }}
-          w={220}
+          w={isMobile ? undefined : 220}
+          flex={isMobile ? 1 : undefined}
         />
-        <Tooltip label="Remove">
-          <ActionIcon
-            variant="subtle"
-            color="red"
-            onClick={onRemove}
-            aria-label="Remove filter"
-          >
-            <IconTrash size={14} />
-          </ActionIcon>
-        </Tooltip>
+        {removeButton}
       </Group>
     );
   }
@@ -106,51 +116,68 @@ export function LeafEditor({
       ? "Series"
       : "Books";
 
-  const row = (
+  const fieldSelect = (
+    <Select
+      value={field.key}
+      data={pickerGroups}
+      onChange={(nextKey) => {
+        if (nextKey && nextKey !== field.key) {
+          const nextField = findFieldAnyTarget(nextKey);
+          if (nextField) {
+            // Caller (parent) replaces the entire leaf; we do that here
+            // by emitting a fresh leaf shape.
+            const fresh = makeFreshLeaf(nextField);
+            onChange(fresh);
+          }
+        }
+      }}
+      searchable
+      w={isMobile ? undefined : 180}
+      flex={isMobile ? 1 : undefined}
+    />
+  );
+
+  const operatorSelect = (
+    <Select
+      value={op}
+      data={ops.map((value) => ({ value, label: opLabels[value] ?? value }))}
+      onChange={(nextOp) => {
+        if (nextOp && nextOp !== op) {
+          onChange(updateLeafOperator(condition, field, nextOp));
+        }
+      }}
+      w={isMobile ? "100%" : 150}
+    />
+  );
+
+  const valueInput = (
+    <ValueInput
+      condition={condition}
+      field={field}
+      operator={op}
+      onChange={onChange}
+      fullWidth={isMobile}
+    />
+  );
+
+  // Mobile: stack the controls so the value input gets the full row width.
+  // The field picker shares its row with the delete button to keep the
+  // remove affordance visible without a third column squeezing everything.
+  const row = isMobile ? (
+    <Stack gap="xs">
+      <Group gap="xs" wrap="nowrap" align="center">
+        {fieldSelect}
+        {removeButton}
+      </Group>
+      {operatorSelect}
+      {valueInput}
+    </Stack>
+  ) : (
     <Group gap="xs" wrap="nowrap" align="flex-start">
-      <Select
-        value={field.key}
-        data={pickerGroups}
-        onChange={(nextKey) => {
-          if (nextKey && nextKey !== field.key) {
-            const nextField = findFieldAnyTarget(nextKey);
-            if (nextField) {
-              // Caller (parent) replaces the entire leaf; we do that here
-              // by emitting a fresh leaf shape.
-              const fresh = makeFreshLeaf(nextField);
-              onChange(fresh);
-            }
-          }
-        }}
-        searchable
-        w={180}
-      />
-      <Select
-        value={op}
-        data={ops.map((value) => ({ value, label: opLabels[value] ?? value }))}
-        onChange={(nextOp) => {
-          if (nextOp && nextOp !== op) {
-            onChange(updateLeafOperator(condition, field, nextOp));
-          }
-        }}
-        w={150}
-      />
-      <ValueInput
-        condition={condition}
-        field={field}
-        operator={op}
-        onChange={onChange}
-      />
-      <Tooltip label="Remove">
-        <ActionIcon
-          variant="subtle"
-          color="red"
-          onClick={onRemove}
-          aria-label="Remove filter"
-        >
-          <IconTrash size={14} />
-        </ActionIcon>
-      </Tooltip>
+      {fieldSelect}
+      {operatorSelect}
+      {valueInput}
+      {removeButton}
     </Group>
   );
 
@@ -171,9 +198,17 @@ interface ValueInputProps {
   field: FieldDef;
   operator: string;
   onChange: (next: Condition) => void;
+  /** Stretch the input(s) to fill the row (mobile stacked layout). */
+  fullWidth?: boolean;
 }
 
-function ValueInput({ condition, field, operator, onChange }: ValueInputProps) {
+function ValueInput({
+  condition,
+  field,
+  operator,
+  onChange,
+  fullWidth,
+}: ValueInputProps) {
   // Operators without a value: render nothing (the operator label itself
   // carries the meaning).
   if (
@@ -196,6 +231,7 @@ function ValueInput({ condition, field, operator, onChange }: ValueInputProps) {
           onChange={(next) =>
             onChange(updateLeafValue(condition, field, { value: next }))
           }
+          fullWidth={fullWidth}
         />
       );
     }
@@ -208,14 +244,20 @@ function ValueInput({ condition, field, operator, onChange }: ValueInputProps) {
           )
         }
         placeholder={field.hint === "path" ? "/path/fragment" : "value"}
-        flex={1}
+        w={fullWidth ? "100%" : undefined}
+        flex={fullWidth ? undefined : 1}
       />
     );
   }
 
   if (field.operatorType === "uuid") {
     return (
-      <UuidValueInput condition={condition} field={field} onChange={onChange} />
+      <UuidValueInput
+        condition={condition}
+        field={field}
+        onChange={onChange}
+        fullWidth={fullWidth}
+      />
     );
   }
 
@@ -225,7 +267,12 @@ function ValueInput({ condition, field, operator, onChange }: ValueInputProps) {
         field.key
       ] as Extract<NumberOperator, { operator: "between" }>;
       return (
-        <Group gap="xs" wrap="nowrap">
+        <Group
+          gap="xs"
+          wrap="nowrap"
+          grow={fullWidth}
+          w={fullWidth ? "100%" : undefined}
+        >
           <NumberInput
             value={node.min ?? ""}
             onChange={(v) =>
@@ -236,7 +283,7 @@ function ValueInput({ condition, field, operator, onChange }: ValueInputProps) {
               )
             }
             placeholder="min"
-            w={100}
+            w={fullWidth ? undefined : 100}
           />
           <NumberInput
             value={node.max ?? ""}
@@ -248,7 +295,7 @@ function ValueInput({ condition, field, operator, onChange }: ValueInputProps) {
               )
             }
             placeholder="max"
-            w={100}
+            w={fullWidth ? undefined : 100}
           />
         </Group>
       );
@@ -267,7 +314,7 @@ function ValueInput({ condition, field, operator, onChange }: ValueInputProps) {
           )
         }
         placeholder={field.hint === "year" ? "YYYY" : "value"}
-        w={120}
+        w={fullWidth ? "100%" : 120}
       />
     );
   }
@@ -278,13 +325,19 @@ function ValueInput({ condition, field, operator, onChange }: ValueInputProps) {
         field.key
       ] as Extract<DateOperator, { operator: "between" }>;
       return (
-        <Group gap="xs" wrap="nowrap">
+        <Group
+          gap="xs"
+          wrap="nowrap"
+          grow={fullWidth}
+          w={fullWidth ? "100%" : undefined}
+        >
           <DateLocalInput
             value={node.start ?? null}
             onChange={(next) =>
               onChange(updateLeafValue(condition, field, { start: next }))
             }
             placeholder="from"
+            fullWidth={fullWidth}
           />
           <DateLocalInput
             value={node.end ?? null}
@@ -292,6 +345,7 @@ function ValueInput({ condition, field, operator, onChange }: ValueInputProps) {
               onChange(updateLeafValue(condition, field, { end: next }))
             }
             placeholder="to"
+            fullWidth={fullWidth}
           />
         </Group>
       );
@@ -305,6 +359,7 @@ function ValueInput({ condition, field, operator, onChange }: ValueInputProps) {
         onChange={(next) =>
           onChange(updateLeafValue(condition, field, { value: next ?? "" }))
         }
+        fullWidth={fullWidth}
       />
     );
   }
@@ -316,10 +371,12 @@ function EnumSelect({
   options,
   value,
   onChange,
+  fullWidth,
 }: {
   options: EnumOption[];
   value: string;
   onChange: (next: string) => void;
+  fullWidth?: boolean;
 }) {
   return (
     <Select
@@ -328,7 +385,7 @@ function EnumSelect({
       onChange={(next) => {
         if (next) onChange(next);
       }}
-      w={180}
+      w={fullWidth ? "100%" : 180}
     />
   );
 }
@@ -337,10 +394,12 @@ function UuidValueInput({
   condition,
   field,
   onChange,
+  fullWidth,
 }: {
   condition: Condition;
   field: FieldDef;
   onChange: (next: Condition) => void;
+  fullWidth?: boolean;
 }) {
   // Only `libraryId` currently has a curated picker; `seriesId` falls back
   // to a free-text input until we wire a series autocomplete.
@@ -366,7 +425,7 @@ function UuidValueInput({
         }}
         placeholder="Pick a library"
         searchable
-        w={220}
+        w={fullWidth ? "100%" : 220}
       />
     );
   }
@@ -380,7 +439,8 @@ function UuidValueInput({
         )
       }
       placeholder="uuid"
-      flex={1}
+      w={fullWidth ? "100%" : undefined}
+      flex={fullWidth ? undefined : 1}
     />
   );
 }
@@ -394,10 +454,12 @@ function DateLocalInput({
   value,
   onChange,
   placeholder,
+  fullWidth,
 }: {
   value: string | null;
   onChange: (next: string | null) => void;
   placeholder?: string;
+  fullWidth?: boolean;
 }) {
   const localValue = value ? isoToLocalInput(value) : "";
   return (
@@ -409,7 +471,7 @@ function DateLocalInput({
         onChange(raw ? localInputToIso(raw) : null);
       }}
       placeholder={placeholder}
-      w={200}
+      w={fullWidth ? "100%" : 200}
     />
   );
 }
