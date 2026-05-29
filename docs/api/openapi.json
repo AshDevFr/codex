@@ -9837,6 +9837,87 @@
         ]
       }
     },
+    "/api/v1/series/external-index": {
+      "get": {
+        "tags": [
+          "Series"
+        ],
+        "summary": "Slim external-index projection of every visible series",
+        "description": "Returns one entry per series the caller can access, carrying only the\nseries UUID, its linked external IDs, and the locally-owned\nvolume/chapter signals. A deliberately lightweight alternative to\n`GET /api/v1/series?full=true` for external discovery tools that key on\nexternal IDs and would otherwise over-fetch and discard the full DTO.\n\nOrdering is fixed (`name asc, id asc`) so a consumer can paginate the\nlist to completion in one deterministic sweep.",
+        "operationId": "list_series_external_index",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number (1-indexed, minimum 1)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "default": 1,
+              "minimum": 1
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "Number of items per page (max 500, default 50)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "default": 50,
+              "maximum": 500,
+              "minimum": 1
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "Sort field and direction (e.g., \"name,asc\" or \"createdAt,desc\")",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "full",
+            "in": "query",
+            "description": "Return full data including metadata, locks, and related entities.\nDefault is false for backward compatibility.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated slim per-series external-index entries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/series/in-progress": {
       "get": {
         "tags": [
@@ -37988,6 +38069,84 @@
               "$ref": "#/components/schemas/SeriesExternalIdDto"
             },
             "description": "List of external IDs"
+          }
+        }
+      },
+      "SeriesExternalIdRefDto": {
+        "type": "object",
+        "description": "Slim external-ID reference used by the external-index endpoint.\n\nCarries only the fields a discovery consumer needs to match a Codex\nseries against an upstream provider: the source, the provider's ID, and\nan optional deep link. Deliberately omits the record `id`, sync hashes,\nand timestamps that [`SeriesExternalIdDto`] exposes.",
+        "required": [
+          "source",
+          "externalId"
+        ],
+        "properties": {
+          "externalId": {
+            "type": "string",
+            "description": "External ID value from the source",
+            "example": "12345"
+          },
+          "externalUrl": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "URL to the external source page (if available)",
+            "example": "https://mangabaka.dev/manga/12345"
+          },
+          "source": {
+            "type": "string",
+            "description": "Source identifier (e.g., \"plugin:mangabaka\", \"comicinfo\", \"epub\")",
+            "example": "plugin:mangabaka"
+          }
+        }
+      },
+      "SeriesExternalIndexDto": {
+        "type": "object",
+        "description": "Slim per-series projection for external discovery tools.\n\nReturned by `GET /api/v1/series/external-index`. It carries just the\nseries UUID, its linked external IDs, and the locally-owned\nvolume/chapter signals, deliberately omitting the heavy metadata,\ngenres, tags, covers, ratings, and links of [`FullSeriesResponse`].",
+        "required": [
+          "id",
+          "externalIds"
+        ],
+        "properties": {
+          "externalIds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SeriesExternalIdRefDto"
+            },
+            "description": "External IDs linked to this series (empty if none have been linked yet)"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Series ID (build the Codex web deep link `/series/{id}` consumer-side)",
+            "example": "550e8400-e29b-41d4-a716-446655440002"
+          },
+          "localMaxChapter": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float",
+            "description": "Highest `book_metadata.chapter` across non-deleted books, or null if\nno book in the series has a parsed chapter.",
+            "example": 130.5
+          },
+          "localMaxVolume": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Highest `book_metadata.volume` across non-deleted books, or null if\nno book in the series has a parsed volume.",
+            "example": 12
+          },
+          "volumesOwned": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Count of complete-volume files (volume set, chapter null). A soft,\ndisplay-only signal; not authoritative for \"how far along\".",
+            "example": 12
           }
         }
       },
