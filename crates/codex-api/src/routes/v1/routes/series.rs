@@ -33,6 +33,10 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/series/list/alphabetical-groups",
             post(handlers::list_series_alphabetical_groups),
         )
+        .route(
+            "/series/external-index",
+            get(handlers::list_series_external_index),
+        )
         .route("/series/{series_id}", get(handlers::get_series))
         .route("/series/{series_id}", patch(handlers::patch_series))
         .route("/series/{series_id}/books", get(handlers::get_series_books))

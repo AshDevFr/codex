@@ -812,6 +812,74 @@ impl From<codex_db::entities::series_external_ids::Model> for SeriesExternalIdDt
     }
 }
 
+/// Slim external-ID reference used by the external-index endpoint.
+///
+/// Carries only the fields a discovery consumer needs to match a Codex
+/// series against an upstream provider: the source, the provider's ID, and
+/// an optional deep link. Deliberately omits the record `id`, sync hashes,
+/// and timestamps that [`SeriesExternalIdDto`] exposes.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SeriesExternalIdRefDto {
+    /// Source identifier (e.g., "plugin:mangabaka", "comicinfo", "epub")
+    #[schema(example = "plugin:mangabaka")]
+    pub source: String,
+
+    /// External ID value from the source
+    #[schema(example = "12345")]
+    pub external_id: String,
+
+    /// URL to the external source page (if available)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "https://mangabaka.dev/manga/12345")]
+    pub external_url: Option<String>,
+}
+
+impl From<codex_db::entities::series_external_ids::Model> for SeriesExternalIdRefDto {
+    fn from(model: codex_db::entities::series_external_ids::Model) -> Self {
+        Self {
+            source: model.source,
+            external_id: model.external_id,
+            external_url: model.external_url,
+        }
+    }
+}
+
+/// Slim per-series projection for external discovery tools.
+///
+/// Returned by `GET /api/v1/series/external-index`. It carries just the
+/// series UUID, its linked external IDs, and the locally-owned
+/// volume/chapter signals, deliberately omitting the heavy metadata,
+/// genres, tags, covers, ratings, and links of [`FullSeriesResponse`].
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SeriesExternalIndexDto {
+    /// Series ID (build the Codex web deep link `/series/{id}` consumer-side)
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440002")]
+    pub id: uuid::Uuid,
+
+    /// External IDs linked to this series (empty if none have been linked yet)
+    pub external_ids: Vec<SeriesExternalIdRefDto>,
+
+    /// Highest `book_metadata.volume` across non-deleted books, or null if
+    /// no book in the series has a parsed volume.
+    #[schema(example = 12)]
+    pub local_max_volume: Option<i32>,
+
+    /// Highest `book_metadata.chapter` across non-deleted books, or null if
+    /// no book in the series has a parsed chapter.
+    #[schema(example = 130.5)]
+    pub local_max_chapter: Option<f32>,
+
+    /// Count of complete-volume files (volume set, chapter null). A soft,
+    /// display-only signal; not authoritative for "how far along".
+    #[schema(example = 12)]
+    pub volumes_owned: Option<i64>,
+}
+
+/// Paginated list of slim per-series external-index entries.
+pub type SeriesExternalIndexListResponse = PaginatedResponse<SeriesExternalIndexDto>;
+
 /// Response containing a list of external IDs
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]

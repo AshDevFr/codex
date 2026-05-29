@@ -14,6 +14,7 @@ use super::super::dto::{
         GenreListResponse, MetadataLocks, PatchSeriesMetadataRequest, PatchSeriesRequest,
         ReplaceSeriesMetadataRequest, SeriesAverageRatingResponse, SeriesCoverDto,
         SeriesCoverListResponse, SeriesExternalIdDto, SeriesExternalIdListResponse,
+        SeriesExternalIdRefDto, SeriesExternalIndexDto, SeriesExternalIndexListResponse,
         SeriesFullMetadata, SeriesMetadataResponse, SeriesSortParam, SeriesUpdateResponse,
         SetSeriesGenresRequest, SetSeriesTagsRequest, SetUserRatingRequest, TagDto,
         TagListResponse, TaxonomyCleanupResponse, UpdateAlternateTitleRequest,
@@ -848,6 +849,117 @@ pub async fn list_series(
             SeriesListResponse::with_builder(dtos, page, page_size, total, &link_builder);
         Ok(paginated_response(response, &link_builder))
     }
+}
+
+/// Slim external-index projection of every visible series
+///
+/// Returns one entry per series the caller can access, carrying only the
+/// series UUID, its linked external IDs, and the locally-owned
+/// volume/chapter signals. A deliberately lightweight alternative to
+/// `GET /api/v1/series?full=true` for external discovery tools that key on
+/// external IDs and would otherwise over-fetch and discard the full DTO.
+///
+/// Ordering is fixed (`name asc, id asc`) so a consumer can paginate the
+/// list to completion in one deterministic sweep.
+#[utoipa::path(
+    get,
+    path = "/api/v1/series/external-index",
+    params(ListPaginationParams),
+    responses(
+        (status = 200, description = "Paginated slim per-series external-index entries", body = SeriesExternalIndexListResponse),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Series"
+)]
+pub async fn list_series_external_index(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Query(pagination): Query<ListPaginationParams>,
+) -> Result<Response, ApiError> {
+    require_permission!(auth, Permission::SeriesRead)?;
+
+    let (page, page_size) = pagination.validated();
+    let offset = (page - 1) * page_size;
+
+    // Honor sharing-tag visibility: only export series this user can access.
+    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+    let visibility = content_filter.to_visibility();
+
+    // Collect every visible series ID, then defer the deterministic name-asc
+    // page (and total) to the repo's SQL-level sort + pagination.
+    let visible_ids: Vec<Uuid> = SeriesRepository::list_all(&state.db, visibility.as_ref())
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
+        .into_iter()
+        .map(|s| s.id)
+        .collect();
+
+    let (series_list, total) = SeriesRepository::list_by_ids_sorted(
+        &state.db,
+        &visible_ids,
+        &SeriesSortParam::default(),
+        Some(auth.user_id),
+        offset,
+        page_size,
+        visibility.as_ref(),
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to fetch sorted series: {}", e)))?;
+
+    let page_ids: Vec<Uuid> = series_list.iter().map(|s| s.id).collect();
+
+    // Batch-load external IDs + classification aggregates for just this page.
+    let mut external_ids_by_series =
+        SeriesExternalIdRepository::get_for_series_ids(&state.db, &page_ids)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to load external IDs: {}", e)))?;
+    let aggregates =
+        SeriesRepository::get_book_classification_aggregates_for_series_ids(&state.db, &page_ids)
+            .await
+            .map_err(|e| {
+                ApiError::Internal(format!("Failed to load classification aggregates: {}", e))
+            })?;
+
+    let items: Vec<SeriesExternalIndexDto> = page_ids
+        .iter()
+        .map(|id| {
+            let agg = aggregates.get(id).copied().unwrap_or_default();
+            let external_ids = external_ids_by_series
+                .remove(id)
+                .unwrap_or_default()
+                .into_iter()
+                .map(SeriesExternalIdRefDto::from)
+                .collect();
+            SeriesExternalIndexDto {
+                id: *id,
+                external_ids,
+                local_max_volume: agg.local_max_volume,
+                local_max_chapter: agg.local_max_chapter,
+                volumes_owned: agg.volumes_owned,
+            }
+        })
+        .collect();
+
+    let total_pages = if page_size == 0 {
+        0
+    } else {
+        total.div_ceil(page_size)
+    };
+    let link_builder = PaginationLinkBuilder::new(
+        "/api/v1/series/external-index",
+        page,
+        page_size,
+        total_pages,
+    );
+    let response =
+        SeriesExternalIndexListResponse::with_builder(items, page, page_size, total, &link_builder);
+    Ok(paginated_response(response, &link_builder))
 }
 
 /// Query parameters for getting a single series
