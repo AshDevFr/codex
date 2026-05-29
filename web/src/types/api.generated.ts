@@ -3445,6 +3445,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/series/external-index": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Slim external-index projection of every visible series
+         * @description Returns one entry per series the caller can access, carrying only the
+         *     series UUID, its linked external IDs, and the locally-owned
+         *     volume/chapter signals. A deliberately lightweight alternative to
+         *     `GET /api/v1/series?full=true` for external discovery tools that key on
+         *     external IDs and would otherwise over-fetch and discard the full DTO.
+         *
+         *     Ordering is fixed (`name asc, id asc`) so a consumer can paginate the
+         *     list to completion in one deterministic sweep.
+         */
+        get: operations["list_series_external_index"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/series/in-progress": {
         parameters: {
             query?: never;
@@ -17313,6 +17340,70 @@ export interface components {
             /** @description List of external IDs */
             externalIds: components["schemas"]["SeriesExternalIdDto"][];
         };
+        /**
+         * @description Slim external-ID reference used by the external-index endpoint.
+         *
+         *     Carries only the fields a discovery consumer needs to match a Codex
+         *     series against an upstream provider: the source, the provider's ID, and
+         *     an optional deep link. Deliberately omits the record `id`, sync hashes,
+         *     and timestamps that [`SeriesExternalIdDto`] exposes.
+         */
+        SeriesExternalIdRefDto: {
+            /**
+             * @description External ID value from the source
+             * @example 12345
+             */
+            externalId: string;
+            /**
+             * @description URL to the external source page (if available)
+             * @example https://mangabaka.dev/manga/12345
+             */
+            externalUrl?: string | null;
+            /**
+             * @description Source identifier (e.g., "plugin:mangabaka", "comicinfo", "epub")
+             * @example plugin:mangabaka
+             */
+            source: string;
+        };
+        /**
+         * @description Slim per-series projection for external discovery tools.
+         *
+         *     Returned by `GET /api/v1/series/external-index`. It carries just the
+         *     series UUID, its linked external IDs, and the locally-owned
+         *     volume/chapter signals, deliberately omitting the heavy metadata,
+         *     genres, tags, covers, ratings, and links of [`FullSeriesResponse`].
+         */
+        SeriesExternalIndexDto: {
+            /** @description External IDs linked to this series (empty if none have been linked yet) */
+            externalIds: components["schemas"]["SeriesExternalIdRefDto"][];
+            /**
+             * Format: uuid
+             * @description Series ID (build the Codex web deep link `/series/{id}` consumer-side)
+             * @example 550e8400-e29b-41d4-a716-446655440002
+             */
+            id: string;
+            /**
+             * Format: float
+             * @description Highest `book_metadata.chapter` across non-deleted books, or null if
+             *     no book in the series has a parsed chapter.
+             * @example 130.5
+             */
+            localMaxChapter?: number | null;
+            /**
+             * Format: int32
+             * @description Highest `book_metadata.volume` across non-deleted books, or null if
+             *     no book in the series has a parsed volume.
+             * @example 12
+             */
+            localMaxVolume?: number | null;
+            /**
+             * Format: int64
+             * @description Count of complete-volume files (volume set, chapter null). A soft,
+             *     display-only signal; not authoritative for "how far along".
+             * @example 12
+             */
+            volumesOwned?: number | null;
+        };
         /** @description Nested metadata object for FullSeriesResponse */
         SeriesFullMetadata: {
             /**
@@ -27040,6 +27131,45 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_series_external_index: {
+        parameters: {
+            query?: {
+                /** @description Page number (1-indexed, minimum 1) */
+                page?: number;
+                /** @description Number of items per page (max 500, default 50) */
+                pageSize?: number;
+                /** @description Sort field and direction (e.g., "name,asc" or "createdAt,desc") */
+                sort?: string | null;
+                /**
+                 * @description Return full data including metadata, locks, and related entities.
+                 *     Default is false for backward compatibility.
+                 */
+                full?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated slim per-series external-index entries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedResponse"];
+                };
             };
             /** @description Forbidden */
             403: {
