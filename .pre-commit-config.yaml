@@ -24,7 +24,7 @@ repos:
         name: Check OpenAPI files are in sync
         entry: ./scripts/check-openapi-sync.sh
         language: script
-        files: ^(src/api/.*\.rs|src/db/entities/.*\.rs|web/openapi\.json|web/src/types/api\.generated\.ts)$
+        files: ^(crates/codex-(api|models|services|tasks|events|db)/.*\.rs|web/openapi\.json|web/src/types/api\.generated\.ts)$
         pass_filenames: false
 
       - id: plugin-lint-fix
