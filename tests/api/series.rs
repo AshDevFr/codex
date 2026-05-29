@@ -3,7 +3,9 @@ mod common;
 
 use codex::api::error::ErrorResponse;
 use codex::api::routes::v1::dto::book::BookDto;
-use codex::api::routes::v1::dto::series::{SearchSeriesRequest, SeriesDto, SeriesListResponse};
+use codex::api::routes::v1::dto::series::{
+    SearchSeriesRequest, SeriesDto, SeriesExternalIndexListResponse, SeriesListResponse,
+};
 use codex::db::ScanningStrategy;
 use codex::db::repositories::{
     BookMetadataRepository, BookRepository, LibraryRepository, SeriesExternalIdRepository,
@@ -7227,4 +7229,128 @@ async fn test_metadata_locks_authors_json_lock() {
     assert_eq!(status, StatusCode::OK);
     let locks = response.unwrap();
     assert!(locks.authors_json_lock, "authors_json_lock should persist");
+}
+
+// ============================================================================
+// External-Index Endpoint Tests
+// ============================================================================
+
+/// Create a book with a classified metadata row (volume/chapter) for a series.
+async fn add_classified_book_for_index(
+    db: &sea_orm::DatabaseConnection,
+    series_id: uuid::Uuid,
+    library_id: uuid::Uuid,
+    path: &str,
+    volume: Option<i32>,
+    chapter: Option<f32>,
+) {
+    use sea_orm::{ActiveModelTrait, Set};
+
+    let mut book = create_test_book(
+        series_id,
+        library_id,
+        path,
+        path.rsplit('/').next().unwrap_or(path),
+        None,
+    );
+    book.file_hash = format!("hash_{}", uuid::Uuid::new_v4());
+    let created = BookRepository::create(db, &book, None).await.unwrap();
+    let meta = BookMetadataRepository::create_with_title_and_number(db, created.id, None, None)
+        .await
+        .unwrap();
+    let mut active: codex::db::entities::book_metadata::ActiveModel = meta.into();
+    active.volume = Set(volume);
+    active.chapter = Set(chapter);
+    active.update(db).await.unwrap();
+}
+
+#[tokio::test]
+async fn test_list_series_external_index_shape() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Name-ascending order is fixed, so "AAA" sorts before "ZZZ".
+    let linked = SeriesRepository::create(&db, library.id, "AAA Linked Series", None)
+        .await
+        .unwrap();
+    let bare = SeriesRepository::create(&db, library.id, "ZZZ Bare Series", None)
+        .await
+        .unwrap();
+
+    // Linked series: one external ID + two complete-volume files.
+    SeriesExternalIdRepository::create(
+        &db,
+        linked.id,
+        "plugin:mangabaka",
+        "12345",
+        Some("https://mangabaka.dev/manga/12345"),
+        None,
+    )
+    .await
+    .unwrap();
+    add_classified_book_for_index(&db, linked.id, library.id, "/v1.cbz", Some(1), None).await;
+    add_classified_book_for_index(&db, linked.id, library.id, "/v12.cbz", Some(12), None).await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request = get_request_with_auth("/api/v1/series/external-index", &token);
+    let (status, response): (StatusCode, Option<SeriesExternalIndexListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body = response.unwrap();
+
+    // Both series returned (including the one with no external IDs), correct total.
+    assert_eq!(body.total, 2);
+    assert_eq!(body.page, 1);
+    assert_eq!(body.data.len(), 2);
+
+    // data[0] is the name-first "AAA Linked Series".
+    let first = &body.data[0];
+    assert_eq!(first.id, linked.id);
+    assert_eq!(first.external_ids.len(), 1);
+    let ext = &first.external_ids[0];
+    assert_eq!(ext.source, "plugin:mangabaka");
+    assert_eq!(ext.external_id, "12345");
+    assert_eq!(
+        ext.external_url.as_deref(),
+        Some("https://mangabaka.dev/manga/12345")
+    );
+    assert_eq!(first.local_max_volume, Some(12));
+    // Two complete-volume files (volume set, chapter null).
+    assert_eq!(first.volumes_owned, Some(2));
+
+    // data[1] is the bare series: present, with an empty external-id list.
+    let second = &body.data[1];
+    assert_eq!(second.id, bare.id);
+    assert!(second.external_ids.is_empty());
+    // No books at all -> no aggregate row -> all signals null.
+    assert_eq!(second.local_max_volume, None);
+    assert_eq!(second.local_max_chapter, None);
+    assert_eq!(second.volumes_owned, None);
+}
+
+#[tokio::test]
+async fn test_list_series_external_index_requires_auth() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library.id, "Series", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let app = create_test_router(state).await;
+
+    let request = get_request("/api/v1/series/external-index");
+    let (status, _response): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
 }
