@@ -2,6 +2,20 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.32.0] - 2026-05-30
+
+### 🚀 Features
+
+- *(api)* Add slim series external-index endpoint for discovery tools
+
+### 🐛 Bug Fixes
+
+- *(hooks)* Update openapi-sync paths for crate-split layout
+
+### ⚙️ Miscellaneous Tasks
+
+- *(api)* Sync OpenAPI spec and TS types for series external-index endpoint
+
 ## [1.31.2] - 2026-05-27
 
 ### 🐛 Bug Fixes
