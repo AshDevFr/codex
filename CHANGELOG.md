@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.32.1] - 2026-05-30
+
+### 🐛 Bug Fixes
+
+- *(web)* Make sidebar scroll when libraries overflow the navbar
+
 ## [1.32.0] - 2026-05-30
 
 ### 🚀 Features
