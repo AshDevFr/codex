@@ -41,6 +41,7 @@ const sidebars: SidebarsConfig = {
         "series-management",
         "custom-metadata",
         "release-tracking",
+        "tsundoku",
         "exports",
         {
           type: "category",

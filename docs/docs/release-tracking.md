@@ -117,6 +117,10 @@ The sidebar's **Releases** entry shows a count badge for the number of `New` rel
 
 There's no email/push-notification integration in Codex itself; the inbox + badge are the source of truth. Wire your own notifier on top of the API if you need one (`/api/v1/releases?state=new` returns the same list).
 
+## Discovering series you don't own yet
+
+Release tracking only watches series that are **already in your library**. To find new series you haven't started collecting, see [Tsundoku](./tsundoku.md), a standalone companion service that polls discovery sources and keeps a browsable catalog of titles not yet in Codex. It reads your library over Codex's API to skip the ones you already have.
+
 ## Disabling a source
 
 Three levels of off-switch, from softest to hardest:

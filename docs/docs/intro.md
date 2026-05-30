@@ -156,3 +156,4 @@ For more details, see:
 - [Configuration](./configuration) - All configuration options
 - [Deployment](./deployment) - Docker Compose, systemd, Kubernetes
 - [API Reference](/docs/api/codex-api) - REST API documentation
+- [Tsundoku](./tsundoku) - Companion service for discovering manga series you don't own yet

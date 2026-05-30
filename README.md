@@ -83,6 +83,10 @@ For more details, see the [UnRAR license](https://www.rarlab.com/license.htm).
 - [Troubleshooting](https://codex.4sh.dev/docs/troubleshooting)
 - [Changelog](CHANGELOG.md)
 
+## Companion Projects
+
+- **[Tsundoku](https://github.com/AshDevFr/tsundoku)** ([docs](https://tsundoku.4sh.dev)) — a standalone manga discovery service that finds series you *don't* own yet. Where Codex's release tracking watches series already in your library, Tsundoku polls discovery sources and keeps a browsable catalog of titles not yet in Codex, reading your library over the Codex API to skip the ones you already have. See the [Codex docs](https://codex.4sh.dev/docs/tsundoku) for how the two fit together.
+
 ## Project Status & Support
 
 Codex is a solo side project. I built it for my own use and continue to develop it because I enjoy it. A few things that follow from that:
