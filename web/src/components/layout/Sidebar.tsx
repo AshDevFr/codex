@@ -115,30 +115,27 @@ export function Sidebar({ onNavigate }: SidebarProps = {}) {
       setShowScrollCue(false);
       return;
     }
-    // The scrollable element is the parent `.mantine-AppShell-navbar` (not
-    // our grow section). Look it up from the section ref so we don't depend
-    // on a global selector.
+    // The scrollable element is the grow section itself (`.navSection`),
+    // which scrolls internally so the footer below it stays pinned.
     const section = navSectionRef.current;
-    const navbar = section?.closest<HTMLElement>(".mantine-AppShell-navbar");
-    if (!navbar) return;
+    if (!section) return;
 
     const update = () => {
-      const overflowing = navbar.scrollHeight - navbar.clientHeight > 4;
+      const overflowing = section.scrollHeight - section.clientHeight > 4;
       const atBottom =
-        navbar.scrollTop + navbar.clientHeight >= navbar.scrollHeight - 4;
+        section.scrollTop + section.clientHeight >= section.scrollHeight - 4;
       setShowScrollCue(overflowing && !atBottom);
     };
 
     update();
-    navbar.addEventListener("scroll", update, { passive: true });
+    section.addEventListener("scroll", update, { passive: true });
+    // The ResizeObserver catches content height changes (e.g. Settings
+    // expand/collapse) that grow the section without a scroll event.
     const ro = new ResizeObserver(update);
-    ro.observe(navbar);
-    // Observing the section catches Settings expand/collapse, which changes
-    // section height without changing the navbar's clientHeight.
-    if (section) ro.observe(section);
+    ro.observe(section);
 
     return () => {
-      navbar.removeEventListener("scroll", update);
+      section.removeEventListener("scroll", update);
       ro.disconnect();
     };
   }, [isMobile]);
@@ -385,7 +382,11 @@ export function Sidebar({ onNavigate }: SidebarProps = {}) {
   return (
     <>
       <AppShell.Navbar p="md">
-        <AppShell.Section grow ref={navSectionRef}>
+        <AppShell.Section
+          grow
+          ref={navSectionRef}
+          className={classes.navSection}
+        >
           <Stack gap="xs" className={classes.navStack}>
             <NavLink
               component={Link}

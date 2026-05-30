@@ -759,8 +759,8 @@ describe("Sidebar Component (via AppLayout)", () => {
       // @ts-expect-error - test stub
       window.ResizeObserver = StubResizeObserver;
 
-      // Stub scrollHeight/clientHeight on the navbar element so update()
-      // detects overflow on mount.
+      // Stub scrollHeight/clientHeight on the growing nav section (the
+      // scroll container) so update() detects overflow on mount.
       const originalScrollHeight = Object.getOwnPropertyDescriptor(
         Element.prototype,
         "scrollHeight",
@@ -772,13 +772,13 @@ describe("Sidebar Component (via AppLayout)", () => {
       Object.defineProperty(Element.prototype, "scrollHeight", {
         configurable: true,
         get() {
-          return this.classList?.contains("mantine-AppShell-navbar") ? 2000 : 0;
+          return this.getAttribute?.("data-grow") === "true" ? 2000 : 0;
         },
       });
       Object.defineProperty(Element.prototype, "clientHeight", {
         configurable: true,
         get() {
-          return this.classList?.contains("mantine-AppShell-navbar") ? 600 : 0;
+          return this.getAttribute?.("data-grow") === "true" ? 600 : 0;
         },
       });
 

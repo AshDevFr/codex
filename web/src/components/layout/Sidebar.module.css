@@ -18,6 +18,18 @@
      every row clears a 48px touch target and section breaks grow to 24px
      so the groups read clearly on a phone. */
 
+/* The growing nav section scrolls internally when its content (a long
+   library list, an expanded Settings group, …) exceeds the available
+   height, so the page body underneath never catches the wheel event.
+   `min-height: 0` is required so this flex child can shrink below its
+   content size inside the flex-column navbar; without it the section
+   refuses to shrink, the overflow never triggers, and the rows below the
+   fold (Settings, the footer) stay unreachable. */
+.navSection {
+  overflow-y: auto;
+  min-height: 0;
+}
+
 /* Section grouping via top-margin. Marker is placed on the first NavLink
    of each group (Libraries, Settings). All other rows sit at the Stack's
    default gap. */

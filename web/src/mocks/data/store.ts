@@ -75,10 +75,24 @@ const seriesNamesByLibrary: Record<string, string[]> = {
   ],
 };
 
+// Extra libraries with no series, used to make the sidebar list long enough
+// to exercise the navbar's internal scroll (regression aid for the
+// "sidebar doesn't scroll" bug).
+const extraLibraryNames = [
+  "Webtoons",
+  "Light Novels",
+  "Magazines",
+  "Newspapers",
+  "Art Books",
+  "Cookbooks",
+  "Textbooks",
+];
+
 // Create libraries
-export let mockLibraries: LibraryDto[] = libraryNames.map((name) =>
-  createLibrary({ name }),
-);
+export let mockLibraries: LibraryDto[] = [
+  ...libraryNames.map((name) => createLibrary({ name })),
+  ...extraLibraryNames.map((name) => createLibrary({ name })),
+];
 
 // Create series with proper library relationships
 export let mockSeries: SeriesDto[] = [];
@@ -185,7 +199,10 @@ export const getBooksBySeries = (seriesId: string): BookDto[] =>
 export const resetMockData = () => {
   faker.seed(12345);
 
-  mockLibraries = libraryNames.map((name) => createLibrary({ name }));
+  mockLibraries = [
+    ...libraryNames.map((name) => createLibrary({ name })),
+    ...extraLibraryNames.map((name) => createLibrary({ name })),
+  ];
 
   mockSeries = [];
   for (const library of mockLibraries) {
