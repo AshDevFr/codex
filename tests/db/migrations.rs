@@ -862,8 +862,15 @@ async fn test_migration_089_down_restores_file_path_sqlite() {
     let (db, _temp_dir) = setup_test_db_wrapper().await;
     let conn = db.sea_orm_connection();
 
-    // Roll back migration 090 (access_groups) + 089 (file_path rename)
-    Migrator::down(conn, Some(2)).await.unwrap();
+    // Roll back every migration applied after (and including) 089 so its `down`
+    // runs. Computed dynamically so adding later migrations doesn't break this.
+    let migrations = Migrator::migrations();
+    let idx_089 = migrations
+        .iter()
+        .position(|m| m.name().contains("rename_books_file_path_to_path"))
+        .expect("migration 089 should exist");
+    let steps = migrations.len() - idx_089;
+    Migrator::down(conn, Some(steps as u32)).await.unwrap();
 
     assert!(sqlite_has_column(conn, "books", "file_path").await);
     assert!(!sqlite_has_column(conn, "books", "path").await);

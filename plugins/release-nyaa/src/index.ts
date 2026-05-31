@@ -237,7 +237,10 @@ function toCandidate(
     ...(hasDistinctMedia ? { mediaUrl: torrentLink, mediaUrlKind: "torrent" as const } : {}),
     infoHash: item.infoHash,
     formatHints,
-    observedAt: item.observedAt,
+    // Detection time is now; the upstream publish date (if any) rides along
+    // separately as releasedAt.
+    observedAt: new Date().toISOString(),
+    releasedAt: item.releasedAt,
   };
 }
 

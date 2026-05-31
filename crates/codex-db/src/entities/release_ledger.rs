@@ -53,7 +53,11 @@ pub struct Model {
     /// `announced` | `dismissed` | `marked_acquired` | `ignored` | `hidden`.
     pub state: String,
     pub metadata: Option<serde_json::Value>,
+    /// When Codex detected this release (plugin-set, defaults to record time).
     pub observed_at: DateTime<Utc>,
+    /// Upstream publish date (from the source feed). `None` when the feed
+    /// carried no usable date or the emitting plugin predates this field.
+    pub released_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
 }
 

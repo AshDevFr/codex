@@ -37,9 +37,20 @@ export interface ReleaseInboxParams {
   sourceId?: string;
   language?: string;
   libraryId?: string;
+  /**
+   * Sort order as `"field,direction"`. Supported fields: `series` (default),
+   * `observed`, `released`. Directions: `asc` (default), `desc`. Sorting is
+   * applied server-side (before pagination) so it orders the whole result
+   * set, not just the current page.
+   */
+  sort?: string;
   page?: number;
   pageSize?: number;
 }
+
+/** Sortable columns exposed by the releases inbox. */
+export type ReleaseSortField = "series" | "observed" | "released";
+export type ReleaseSortDirection = "asc" | "desc";
 
 export interface ReleaseFacetsParams {
   state?: string;

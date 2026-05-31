@@ -91,7 +91,11 @@ pub struct ReleaseLedgerEntryDto {
     /// Source-specific extras (free-form).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<serde_json::Value>,
+    /// When Codex detected this release.
     pub observed_at: DateTime<Utc>,
+    /// Upstream publish date from the source feed. `null` when unavailable.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub released_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
 }
 
@@ -119,6 +123,7 @@ impl ReleaseLedgerEntryDto {
             state: m.state,
             metadata: m.metadata,
             observed_at: m.observed_at,
+            released_at: m.released_at,
             created_at: m.created_at,
         }
     }

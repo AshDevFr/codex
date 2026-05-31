@@ -9,9 +9,12 @@ import {
   Table,
   Text,
   Tooltip,
+  UnstyledButton,
 } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
 import {
+  IconArrowDown,
+  IconArrowUp,
   IconCheck,
   IconExternalLink,
   IconEyeOff,
@@ -21,7 +24,12 @@ import {
 } from "@tabler/icons-react";
 import { format } from "date-fns";
 import { Link } from "react-router-dom";
-import type { ReleaseLedgerEntry, ReleaseSource } from "@/api/releases";
+import type {
+  ReleaseLedgerEntry,
+  ReleaseSortDirection,
+  ReleaseSortField,
+  ReleaseSource,
+} from "@/api/releases";
 import { MOBILE_MEDIA_QUERY } from "@/components/ui";
 import { MediaUrlIcon } from "./MediaUrlIcon";
 
@@ -57,6 +65,55 @@ interface ReleasesTableProps {
   /** Visual density. The page-level inbox uses "sm"; the embedded panel
    *  uses "xs" so it doesn't dominate the surrounding card. */
   verticalSpacing?: "xs" | "sm";
+  /** Active sort column. Headers show a direction arrow on the active one. */
+  sortField?: ReleaseSortField;
+  /** Active sort direction for {@link sortField}. */
+  sortDirection?: ReleaseSortDirection;
+  /** When provided, the Series and Observed headers become clickable to sort.
+   *  Omit (the per-series panel) to render plain, non-interactive headers. */
+  onSort?: (field: ReleaseSortField) => void;
+}
+
+/** A clickable column header that drives server-side sorting. */
+function SortableHeader({
+  label,
+  field,
+  sortField,
+  sortDirection,
+  onSort,
+}: {
+  label: string;
+  field: ReleaseSortField;
+  sortField?: ReleaseSortField;
+  sortDirection?: ReleaseSortDirection;
+  onSort: (field: ReleaseSortField) => void;
+}) {
+  const active = sortField === field;
+  return (
+    <UnstyledButton
+      onClick={() => onSort(field)}
+      aria-label={`Sort by ${label}`}
+      aria-sort={
+        active ? (sortDirection === "asc" ? "ascending" : "descending") : "none"
+      }
+    >
+      {/* Inactive sortable headers read as plain text (with a pointer cursor);
+          only the active column shows a single direction arrow. This keeps the
+          header row calm rather than peppering every sortable column with a
+          persistent dimmed icon. */}
+      <Group gap={4} wrap="nowrap" style={{ cursor: "pointer" }}>
+        <Text size="sm" fw={500}>
+          {label}
+        </Text>
+        {active &&
+          (sortDirection === "asc" ? (
+            <IconArrowUp size={14} />
+          ) : (
+            <IconArrowDown size={14} />
+          ))}
+      </Group>
+    </UnstyledButton>
+  );
 }
 
 interface NumericSpan {
@@ -105,6 +162,9 @@ export function ReleasesTable({
   isResetPending = false,
   isDeletePending = false,
   verticalSpacing = "sm",
+  sortField,
+  sortDirection,
+  onSort,
 }: ReleasesTableProps) {
   const allSelected =
     entries.length > 0 && entries.every((e) => selected.has(e.id));
@@ -201,6 +261,9 @@ export function ReleasesTable({
                 </Text>
                 <Text size="xs" c="dimmed">
                   Observed {format(new Date(entry.observedAt), "yyyy-MM-dd")}
+                  {entry.releasedAt
+                    ? ` · Released ${format(new Date(entry.releasedAt), "yyyy-MM-dd")}`
+                    : ""}
                 </Text>
               </Stack>
               <Group gap={4} justify="flex-end" wrap="nowrap" mt="sm">
@@ -302,12 +365,51 @@ export function ReleasesTable({
               onChange={onToggleAll}
             />
           </Table.Th>
-          {showSeriesColumn && <Table.Th>Series</Table.Th>}
+          {showSeriesColumn && (
+            <Table.Th>
+              {onSort ? (
+                <SortableHeader
+                  label="Series"
+                  field="series"
+                  sortField={sortField}
+                  sortDirection={sortDirection}
+                  onSort={onSort}
+                />
+              ) : (
+                "Series"
+              )}
+            </Table.Th>
+          )}
           <Table.Th>Ch / Vol</Table.Th>
           <Table.Th>Source / Group</Table.Th>
           <Table.Th>Lang</Table.Th>
           <Table.Th>State</Table.Th>
-          <Table.Th>Observed</Table.Th>
+          <Table.Th>
+            {onSort ? (
+              <SortableHeader
+                label="Observed"
+                field="observed"
+                sortField={sortField}
+                sortDirection={sortDirection}
+                onSort={onSort}
+              />
+            ) : (
+              "Observed"
+            )}
+          </Table.Th>
+          <Table.Th>
+            {onSort ? (
+              <SortableHeader
+                label="Released"
+                field="released"
+                sortField={sortField}
+                sortDirection={sortDirection}
+                onSort={onSort}
+              />
+            ) : (
+              "Released"
+            )}
+          </Table.Th>
           <Table.Th aria-label="Actions" />
         </Table.Tr>
       </Table.Thead>
@@ -349,12 +451,15 @@ export function ReleasesTable({
                 />
               </Table.Td>
               {showSeriesColumn && (
-                <Table.Td>
+                <Table.Td style={{ maxWidth: 280 }}>
                   <Anchor
                     component={Link}
                     to={`/series/${entry.seriesId}#releases`}
                     size="sm"
-                    lineClamp={1}
+                    // Allow long titles to wrap to two lines (kept narrow via
+                    // the cell maxWidth) so the date columns don't get squeezed
+                    // into wrapping their own values.
+                    lineClamp={2}
                   >
                     {entry.seriesTitle.length > 0
                       ? entry.seriesTitle
@@ -387,8 +492,15 @@ export function ReleasesTable({
                 </Badge>
               </Table.Td>
               <Table.Td>
-                <Text size="xs" c="dimmed">
+                <Text size="xs" c="dimmed" style={{ whiteSpace: "nowrap" }}>
                   {format(new Date(entry.observedAt), "yyyy-MM-dd")}
+                </Text>
+              </Table.Td>
+              <Table.Td>
+                <Text size="xs" c="dimmed" style={{ whiteSpace: "nowrap" }}>
+                  {entry.releasedAt
+                    ? format(new Date(entry.releasedAt), "yyyy-MM-dd")
+                    : "—"}
                 </Text>
               </Table.Td>
               <Table.Td>

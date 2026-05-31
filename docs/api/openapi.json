@@ -8615,6 +8615,18 @@
             }
           },
           {
+            "name": "sort",
+            "in": "query",
+            "description": "Sort order as `\"field,direction\"`. Supported fields: `series`\n(default), `observed`, `released`. Directions: `asc` (default),\n`desc`. Unknown values fall back to `series,asc`.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
             "name": "page",
             "in": "query",
             "required": false,
@@ -32246,11 +32258,20 @@
                 },
                 "observedAt": {
                   "type": "string",
-                  "format": "date-time"
+                  "format": "date-time",
+                  "description": "When Codex detected this release."
                 },
                 "payloadUrl": {
                   "type": "string",
                   "description": "Where to acquire the release. Conventionally a human-readable\nlanding page (Nyaa view page, MangaUpdates release page)."
+                },
+                "releasedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time",
+                  "description": "Upstream publish date from the source feed. `null` when unavailable."
                 },
                 "seriesId": {
                   "type": "string",
@@ -35895,11 +35916,20 @@
           },
           "observedAt": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "description": "When Codex detected this release."
           },
           "payloadUrl": {
             "type": "string",
             "description": "Where to acquire the release. Conventionally a human-readable\nlanding page (Nyaa view page, MangaUpdates release page)."
+          },
+          "releasedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Upstream publish date from the source feed. `null` when unavailable."
           },
           "seriesId": {
             "type": "string",

@@ -1294,6 +1294,7 @@ mod tests {
             info_hash: None,
             metadata: None,
             observed_at: Utc::now(),
+            released_at: None,
         }
     }
 
@@ -2069,6 +2070,7 @@ mod tests {
             info_hash: None,
             metadata: None,
             observed_at: Utc::now(),
+            released_at: None,
         }
     }
 

@@ -106,6 +106,7 @@ async fn record_announced(
             confidence: 0.95,
             metadata: None,
             observed_at: chrono::Utc::now(),
+            released_at: None,
             initial_state: None,
         },
     )

@@ -62,8 +62,15 @@ pub struct ReleaseCandidate {
     /// Free-form metadata bag (preserved on the ledger row).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metadata: Option<serde_json::Value>,
-    /// When the upstream source observed this release.
+    /// When the plugin detected this release. Conventionally "now" at poll
+    /// time. Subject to the [`MAX_FUTURE_SKEW_S`] future-skew guard.
     pub observed_at: DateTime<Utc>,
+    /// Upstream publish date for the release (e.g. the RSS `<pubDate>`).
+    /// Optional: omitted by sources/plugins that can't supply it, in which
+    /// case the ledger row stores `NULL` and the UI shows a dash. Not
+    /// skew-checked — a publish date can legitimately predate everything.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub released_at: Option<DateTime<Utc>>,
 }
 
 /// Classifies what [`ReleaseCandidate::media_url`] points at so the UI can
@@ -195,6 +202,7 @@ mod tests {
             info_hash: Some("deadbeef".to_string()),
             metadata: None,
             observed_at: Utc::now(),
+            released_at: None,
         }
     }
 

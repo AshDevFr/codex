@@ -36,6 +36,10 @@ import {
 import { useTableShiftSelection } from "@/hooks/useTableShiftSelection";
 import { useShowSkeleton } from "@/lib/motion/useShowSkeleton";
 import { useReleaseAnnouncementsStore } from "@/store/releaseAnnouncementsStore";
+import {
+  buildReleaseSortParam,
+  useReleasesPreferencesStore,
+} from "@/store/releasesPreferencesStore";
 
 const STATE_OPTIONS = [
   { value: "all", label: "All" },
@@ -121,6 +125,11 @@ export function ReleasesInbox() {
   const [seriesId, setSeriesId] = useState<string>(ALL_VALUE);
   const [libraryId, setLibraryId] = useState<string>(ALL_VALUE);
   const [page, setPage] = useState<number>(1);
+  // Sort is persisted across visits (zustand + localStorage) and applied
+  // server-side, so it orders the whole result set rather than one page.
+  const sortField = useReleasesPreferencesStore((s) => s.sortField);
+  const sortDirection = useReleasesPreferencesStore((s) => s.sortDirection);
+  const toggleSort = useReleasesPreferencesStore((s) => s.toggleSort);
   const [confirmBulkDelete, { open: openBulkDelete, close: closeBulkDelete }] =
     useDisclosure(false);
 
@@ -129,6 +138,7 @@ export function ReleasesInbox() {
     language: language === ALL_VALUE ? undefined : language,
     seriesId: seriesId === ALL_VALUE ? undefined : seriesId,
     libraryId: libraryId === ALL_VALUE ? undefined : libraryId,
+    sort: buildReleaseSortParam(sortField, sortDirection),
     page,
     pageSize: PAGE_SIZE,
   };
@@ -166,7 +176,7 @@ export function ReleasesInbox() {
   // biome-ignore lint/correctness/useExhaustiveDependencies: deps are change-triggers, not consumed values
   useEffect(() => {
     clear();
-  }, [page, state, language, seriesId, libraryId]);
+  }, [page, state, language, seriesId, libraryId, sortField, sortDirection]);
 
   const seriesOptions = useMemo(() => buildSeriesOptions(facets), [facets]);
   const libraryOptions = useMemo(() => buildLibraryOptions(facets), [facets]);
@@ -324,6 +334,13 @@ export function ReleasesInbox() {
             isResetPending={resetRelease.isPending}
             isDeletePending={deleteRelease.isPending}
             verticalSpacing="sm"
+            sortField={sortField}
+            sortDirection={sortDirection}
+            onSort={(field) => {
+              toggleSort(field);
+              // A new sort reorders the whole set, so jump back to page 1.
+              setPage(1);
+            }}
           />
         </Card>
       )}

@@ -454,7 +454,7 @@ describe("parseItem", () => {
     expect(item.infoHash).toBe("abc123def456"); // lowercased
     expect(item.chapters).toEqual([{ start: 142, end: 142 }]);
     expect(item.seriesGuess).toBe("Chainsaw Man");
-    expect(new Date(item.observedAt).toISOString()).toBe("2026-05-04T02:31:00.000Z");
+    expect(item.releasedAt).toBe("2026-05-04T02:31:00.000Z");
   });
 
   it("returns null when title is missing", () => {
