@@ -2,6 +2,16 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.33.0] - 2026-05-31
+
+### 🚀 Features
+
+- *(releases)* Sortable inbox columns and split observed/released dates
+
+### 📚 Documentation
+
+- Document Tsundoku companion discovery service
+
 ## [1.32.1] - 2026-05-30
 
 ### 🐛 Bug Fixes
