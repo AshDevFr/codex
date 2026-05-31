@@ -260,7 +260,10 @@ function toCandidate(
     language: item.language,
     groupOrUploader: item.group,
     payloadUrl,
-    observedAt: item.observedAt,
+    // Detection time is now; the upstream publish date (if any) rides along
+    // separately as releasedAt.
+    observedAt: new Date().toISOString(),
+    releasedAt: item.releasedAt,
   };
   return candidate;
 }

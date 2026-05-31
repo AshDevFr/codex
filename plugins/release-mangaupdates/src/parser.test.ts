@@ -142,7 +142,7 @@ describe("parseItem", () => {
     expect(item.group).toBe("Best Group");
     expect(item.language).toBe("en");
     expect(item.link).toBe("https://www.mangaupdates.com/release.html?id=12345");
-    expect(item.observedAt).toBe("2026-05-04T02:31:00.000Z");
+    expect(item.releasedAt).toBe("2026-05-04T02:31:00.000Z");
   });
 
   it("falls back to link as externalReleaseId when guid is missing", () => {
@@ -218,7 +218,7 @@ describe("parseItem", () => {
     expect(parseItem(xml)).toBeNull();
   });
 
-  it("falls back to current time when pubDate is invalid", () => {
+  it("returns null releasedAt when pubDate is invalid", () => {
     const xml = `
       <title>c.1 by G (en)</title>
       <pubDate>not a real date</pubDate>
@@ -226,7 +226,7 @@ describe("parseItem", () => {
     const item = parseItem(xml);
     expect(item).not.toBeNull();
     if (!item) return;
-    expect(Number.isNaN(new Date(item.observedAt).getTime())).toBe(false);
+    expect(item.releasedAt).toBeNull();
   });
 
   it("decodes XML entities in title", () => {

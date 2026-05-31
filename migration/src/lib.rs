@@ -184,6 +184,8 @@ mod m20260520_000088_add_filter_indexes;
 mod m20260521_000089_rename_books_file_path_to_path;
 // Access groups for sharing tag management
 pub mod m20260524_000090_create_access_groups;
+// Release tracking: split observed_at (detected) from released_at (publish date)
+mod m20260530_000091_add_release_ledger_released_at;
 
 pub struct Migrator;
 
@@ -338,6 +340,9 @@ impl MigratorTrait for Migrator {
             Box::new(m20260521_000089_rename_books_file_path_to_path::Migration),
             // Access groups for sharing tag management
             Box::new(m20260524_000090_create_access_groups::Migration),
+            // Release ledger: add released_at (upstream publish date); observed_at
+            // now means detection time.
+            Box::new(m20260530_000091_add_release_ledger_released_at::Migration),
         ]
     }
 }

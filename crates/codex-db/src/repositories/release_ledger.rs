@@ -19,6 +19,7 @@ use crate::entities::release_ledger::{
     self, Entity as ReleaseLedger, Model as ReleaseLedgerRow, state,
 };
 use codex_models::release::{NumericSpan, normalize_spans, primary_value};
+use codex_models::sort::SortDirection;
 
 /// New-row payload. Keys plus payload fields.
 ///
@@ -44,7 +45,11 @@ pub struct NewReleaseEntry {
     pub media_url_kind: Option<String>,
     pub confidence: f64,
     pub metadata: Option<serde_json::Value>,
+    /// When Codex detected this release (plugin-set; defaults to now).
     pub observed_at: chrono::DateTime<Utc>,
+    /// Upstream publish date from the source feed. `None` when the feed
+    /// carried no usable date.
+    pub released_at: Option<chrono::DateTime<Utc>>,
     /// State to insert with. `None` defaults to `announced`. Used by the
     /// poll/reverse-RPC path to insert directly as `ignored` when the
     /// release matches a book the user already owns.
@@ -75,6 +80,58 @@ pub struct LedgerInboxFilter {
     pub language: Option<String>,
     /// Restrict to series belonging to this library.
     pub library_id: Option<Uuid>,
+}
+
+/// Sortable column for the cross-series inbox view.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InboxSortField {
+    /// Group rows by series name, then by highest volume/chapter and newest
+    /// observation within each series. This is the inbox's natural default.
+    Series,
+    /// Flat chronological list ordered by the detection timestamp
+    /// (`observed_at`).
+    Observed,
+    /// Flat chronological list ordered by the upstream publish date
+    /// (`released_at`). Rows with no release date sort last.
+    Released,
+}
+
+/// Sort selection for [`ReleaseLedgerRepository::list_inbox_sorted`].
+#[derive(Debug, Clone, Copy)]
+pub struct InboxSort {
+    pub field: InboxSortField,
+    pub direction: SortDirection,
+}
+
+impl Default for InboxSort {
+    fn default() -> Self {
+        // Matches the historical inbox order: series name ascending.
+        Self {
+            field: InboxSortField::Series,
+            direction: SortDirection::Asc,
+        }
+    }
+}
+
+impl InboxSort {
+    /// Parse a `"field,direction"` string (e.g. `"observed,desc"`). Unknown
+    /// fields/directions fall back to the default so a stale or malformed
+    /// client value never errors the request.
+    pub fn parse(s: &str) -> Self {
+        let mut parts = s.split(',');
+        let field = match parts.next().map(str::trim) {
+            Some("observed") => InboxSortField::Observed,
+            Some("released") => InboxSortField::Released,
+            Some("series") => InboxSortField::Series,
+            _ => return Self::default(),
+        };
+        let direction = parts
+            .next()
+            .map(str::trim)
+            .and_then(|d| d.parse::<SortDirection>().ok())
+            .unwrap_or_default();
+        Self { field, direction }
+    }
 }
 
 /// Per-series facet entry.
@@ -190,6 +247,7 @@ impl ReleaseLedgerRepository {
             state: Set(initial_state),
             metadata: Set(entry.metadata),
             observed_at: Set(entry.observed_at),
+            released_at: Set(entry.released_at),
             created_at: Set(Utc::now()),
         };
         let inserted = active.insert(db).await?;
@@ -235,39 +293,79 @@ impl ReleaseLedgerRepository {
         Ok(query.all(db).await?)
     }
 
-    /// Inbox view across all series, with filters.
-    ///
-    /// Sort order: group all rows of a series together (highest volume/chapter
-    /// on top), then break ties between series by the most recent observation.
-    /// Grouping by series first matches how users read the inbox: they want
-    /// every chapter of a series listed contiguously and descending, even when
-    /// rows come from multiple poll batches with different `observed_at`s.
-    ///
-    /// Inner-joins `series` so the cross-series order is by `series.name`
-    /// (alphabetical) rather than by `series_id` (a meaningless UUID order).
+    /// Inbox view across all series, with filters, using the default sort
+    /// (group by series name ascending). Thin wrapper over
+    /// [`Self::list_inbox_sorted`] for callers that don't expose sorting.
     pub async fn list_inbox(
         db: &DatabaseConnection,
         filter: LedgerInboxFilter,
         limit: u64,
         offset: u64,
     ) -> Result<Vec<ReleaseLedgerRow>> {
+        Self::list_inbox_sorted(db, filter, InboxSort::default(), limit, offset).await
+    }
+
+    /// Inbox view across all series, with filters and an explicit sort.
+    ///
+    /// `Series` sort groups all rows of a series together (highest
+    /// volume/chapter on top), then breaks ties between series by the most
+    /// recent observation. Grouping by series first matches how users read the
+    /// inbox: they want every chapter of a series listed contiguously and
+    /// descending, even when rows come from multiple poll batches with
+    /// different `observed_at`s. The direction flips only the cross-series
+    /// `series.name` ordering; the within-series chapter ordering stays
+    /// newest/highest-first so a single series never reads backwards.
+    ///
+    /// `Observed` sort is a flat chronological list keyed on `observed_at`,
+    /// honouring the requested direction directly.
+    ///
+    /// Always inner-joins `series` so the cross-series order can use
+    /// `series.name` (alphabetical) rather than `series_id` (a meaningless
+    /// UUID order), and so the optional `library_id` filter has its join.
+    pub async fn list_inbox_sorted(
+        db: &DatabaseConnection,
+        filter: LedgerInboxFilter,
+        sort: InboxSort,
+        limit: u64,
+        offset: u64,
+    ) -> Result<Vec<ReleaseLedgerRow>> {
         use sea_orm::{JoinType, RelationTrait};
-        let mut query = ReleaseLedger::find()
-            .join(JoinType::InnerJoin, release_ledger::Relation::Series.def())
-            .order_by_asc(crate::entities::series::Column::Name)
-            .order_by_asc(release_ledger::Column::SeriesId)
-            .order_by_with_nulls(
-                release_ledger::Column::Volume,
-                Order::Desc,
-                NullOrdering::Last,
-            )
-            .order_by_with_nulls(
-                release_ledger::Column::Chapter,
-                Order::Desc,
-                NullOrdering::Last,
-            )
-            .order_by_desc(release_ledger::Column::ObservedAt)
-            .order_by_asc(release_ledger::Column::Id);
+        let query =
+            ReleaseLedger::find().join(JoinType::InnerJoin, release_ledger::Relation::Series.def());
+        let order = match sort.direction {
+            SortDirection::Asc => Order::Asc,
+            SortDirection::Desc => Order::Desc,
+        };
+        let mut query = match sort.field {
+            InboxSortField::Series => query
+                .order_by(crate::entities::series::Column::Name, order)
+                .order_by_asc(release_ledger::Column::SeriesId)
+                .order_by_with_nulls(
+                    release_ledger::Column::Volume,
+                    Order::Desc,
+                    NullOrdering::Last,
+                )
+                .order_by_with_nulls(
+                    release_ledger::Column::Chapter,
+                    Order::Desc,
+                    NullOrdering::Last,
+                )
+                .order_by_desc(release_ledger::Column::ObservedAt)
+                .order_by_asc(release_ledger::Column::Id),
+            InboxSortField::Observed => query
+                .order_by(release_ledger::Column::ObservedAt, order)
+                // Stable tie-breaker so equal timestamps paginate deterministically.
+                .order_by_asc(release_ledger::Column::Id),
+            InboxSortField::Released => query
+                // Rows with no upstream release date always sort last, in both
+                // directions — a missing date isn't "oldest" or "newest".
+                .order_by_with_nulls(
+                    release_ledger::Column::ReleasedAt,
+                    order,
+                    NullOrdering::Last,
+                )
+                .order_by_asc(release_ledger::Column::Id),
+        };
         // `series_already_joined: true` so apply_inbox_filter doesn't add
         // a duplicate join when `library_id` is present in the filter.
         query = apply_inbox_filter(query, &filter, true);
@@ -593,6 +691,7 @@ mod tests {
             confidence: 0.95,
             metadata: None,
             observed_at: Utc::now(),
+            released_at: None,
             initial_state: None,
         }
     }
@@ -786,6 +885,154 @@ mod tests {
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0].external_release_id, "rel-new");
         assert_eq!(rows[1].external_release_id, "rel-old");
+    }
+
+    #[tokio::test]
+    async fn list_inbox_sorted_by_observed_at_flattens_across_series() {
+        // The inbox's "Observed" sort is a flat chronological list: rows order
+        // purely by observed_at regardless of which series they belong to,
+        // unlike the default Series sort which groups by series first.
+        let (db, _temp) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let (series_a, src) = setup_world(conn).await;
+        let library = LibraryRepository::create(conn, "Lib2", "/lib2", ScanningStrategy::Default)
+            .await
+            .unwrap();
+        // "Alpha" sorts before series_a's "Series" alphabetically, so a
+        // series-grouped order would put Alpha first. Observed order must not.
+        let series_b = SeriesRepository::create(conn, library.id, "Alpha", None)
+            .await
+            .unwrap();
+
+        let now = Utc::now();
+        let mut newest = entry(series_a, src, "rel-newest");
+        newest.observed_at = now;
+        let mut middle = entry(series_b.id, src, "rel-middle");
+        middle.observed_at = now - chrono::Duration::hours(1);
+        let mut oldest = entry(series_a, src, "rel-oldest");
+        oldest.observed_at = now - chrono::Duration::hours(2);
+        ReleaseLedgerRepository::record(conn, oldest).await.unwrap();
+        ReleaseLedgerRepository::record(conn, newest).await.unwrap();
+        ReleaseLedgerRepository::record(conn, middle).await.unwrap();
+
+        let desc = ReleaseLedgerRepository::list_inbox_sorted(
+            conn,
+            LedgerInboxFilter::default(),
+            InboxSort {
+                field: InboxSortField::Observed,
+                direction: SortDirection::Desc,
+            },
+            100,
+            0,
+        )
+        .await
+        .unwrap();
+        let ids: Vec<&str> = desc
+            .iter()
+            .map(|r| r.external_release_id.as_str())
+            .collect();
+        assert_eq!(ids, vec!["rel-newest", "rel-middle", "rel-oldest"]);
+
+        let asc = ReleaseLedgerRepository::list_inbox_sorted(
+            conn,
+            LedgerInboxFilter::default(),
+            InboxSort {
+                field: InboxSortField::Observed,
+                direction: SortDirection::Asc,
+            },
+            100,
+            0,
+        )
+        .await
+        .unwrap();
+        let ids: Vec<&str> = asc.iter().map(|r| r.external_release_id.as_str()).collect();
+        assert_eq!(ids, vec!["rel-oldest", "rel-middle", "rel-newest"]);
+    }
+
+    #[test]
+    fn inbox_sort_parse_handles_known_and_unknown_values() {
+        assert_eq!(
+            InboxSort::parse("observed,desc").field,
+            InboxSortField::Observed
+        );
+        assert_eq!(
+            InboxSort::parse("observed,desc").direction,
+            SortDirection::Desc
+        );
+        assert_eq!(InboxSort::parse("series,asc").field, InboxSortField::Series);
+        // Unknown field falls back to the default (series, asc).
+        assert_eq!(
+            InboxSort::parse("garbage,desc").field,
+            InboxSortField::Series
+        );
+        assert_eq!(
+            InboxSort::parse("garbage,desc").direction,
+            SortDirection::Asc
+        );
+        // Missing/invalid direction defaults to asc.
+        assert_eq!(InboxSort::parse("observed").direction, SortDirection::Asc);
+        // Released is a recognised field.
+        assert_eq!(
+            InboxSort::parse("released,desc").field,
+            InboxSortField::Released
+        );
+    }
+
+    #[tokio::test]
+    async fn list_inbox_sorted_by_released_at_orders_with_nulls_last() {
+        // The "Released" sort orders by the upstream publish date. Rows with
+        // no release date sort last regardless of direction.
+        let (db, _temp) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let (series_id, source_id) = setup_world(conn).await;
+
+        let now = Utc::now();
+        let mut newer = entry(series_id, source_id, "rel-newer");
+        newer.released_at = Some(now);
+        let mut older = entry(series_id, source_id, "rel-older");
+        older.released_at = Some(now - chrono::Duration::days(30));
+        let mut undated = entry(series_id, source_id, "rel-undated");
+        undated.released_at = None;
+        ReleaseLedgerRepository::record(conn, undated)
+            .await
+            .unwrap();
+        ReleaseLedgerRepository::record(conn, newer).await.unwrap();
+        ReleaseLedgerRepository::record(conn, older).await.unwrap();
+
+        let desc = ReleaseLedgerRepository::list_inbox_sorted(
+            conn,
+            LedgerInboxFilter::default(),
+            InboxSort {
+                field: InboxSortField::Released,
+                direction: SortDirection::Desc,
+            },
+            100,
+            0,
+        )
+        .await
+        .unwrap();
+        let ids: Vec<&str> = desc
+            .iter()
+            .map(|r| r.external_release_id.as_str())
+            .collect();
+        // Newest release first, undated last.
+        assert_eq!(ids, vec!["rel-newer", "rel-older", "rel-undated"]);
+
+        let asc = ReleaseLedgerRepository::list_inbox_sorted(
+            conn,
+            LedgerInboxFilter::default(),
+            InboxSort {
+                field: InboxSortField::Released,
+                direction: SortDirection::Asc,
+            },
+            100,
+            0,
+        )
+        .await
+        .unwrap();
+        let ids: Vec<&str> = asc.iter().map(|r| r.external_release_id.as_str()).collect();
+        // Oldest release first, undated STILL last (nulls last in both dirs).
+        assert_eq!(ids, vec!["rel-older", "rel-newer", "rel-undated"]);
     }
 
     #[tokio::test]

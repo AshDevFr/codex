@@ -81,7 +81,7 @@ pub use read_progress::ReadProgressRepository;
 pub use refresh_token::{NewRefreshToken, RefreshTokenRepository};
 #[allow(unused_imports)]
 pub use release_ledger::{
-    LedgerInboxFilter, NewReleaseEntry, RecordOutcome, ReleaseLedgerRepository,
+    InboxSort, LedgerInboxFilter, NewReleaseEntry, RecordOutcome, ReleaseLedgerRepository,
 };
 #[allow(unused_imports)]
 pub use release_sources::{NewReleaseSource, ReleaseSourceRepository, ReleaseSourceUpdate};

@@ -119,8 +119,12 @@ export interface NumericSpan {
  * - `infoHash`: Torrent info_hash if applicable. Cross-source dedup key.
  * - `metadata` / `formatHints`: Free-form JSON for plugin-specific data
  *   (Nyaa size in bytes, MangaUpdates "is volume bundle" flag, etc.).
- * - `observedAt`: When the plugin saw this entry. Used for ordering;
- *   bounded by `MAX_FUTURE_SKEW_S` (1h) on the host side.
+ * - `observedAt`: When the plugin detected this entry (conventionally "now"
+ *   at poll time). Used for ordering; bounded by `MAX_FUTURE_SKEW_S` (1h) on
+ *   the host side.
+ * - `releasedAt`: The upstream publish date for the release (e.g. the RSS
+ *   `<pubDate>`). Optional — set to `null` when the source carried no usable
+ *   date. NOT skew-checked, since a publish date can legitimately be old.
  */
 export interface ReleaseCandidate {
   seriesMatch: SeriesMatch;
@@ -137,8 +141,10 @@ export interface ReleaseCandidate {
   mediaUrlKind?: MediaUrlKind | null;
   infoHash?: string | null;
   metadata?: Record<string, unknown> | null;
-  /** ISO-8601 timestamp. */
+  /** ISO-8601 timestamp. When the plugin detected the release ("now"). */
   observedAt: string;
+  /** ISO-8601 upstream publish date, or `null`/omitted when unavailable. */
+  releasedAt?: string | null;
 }
 
 /**

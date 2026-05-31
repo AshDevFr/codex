@@ -78,8 +78,9 @@ export interface ParsedRssItem {
   pageUrl: string | null;
   /** `nyaa:infoHash` value, lowercased; null if missing. */
   infoHash: string | null;
-  /** ISO-8601 timestamp. Falls back to "now" if pubDate is missing/invalid. */
-  observedAt: string;
+  /** ISO-8601 upstream publish date (from `<pubDate>`), or null when the
+   *  feed carried no usable date. This is the release date, not detection. */
+  releasedAt: string | null;
 }
 
 // -----------------------------------------------------------------------------
@@ -473,12 +474,15 @@ export function parseTitle(title: string): {
 // Item parsing
 // -----------------------------------------------------------------------------
 
-function pubDateToIso(raw: string | null): string {
+// Best-effort `pubDate` -> ISO-8601 conversion. Returns null on missing or
+// invalid input — the release date is genuinely unknown then, and the host
+// stores NULL rather than a misleading fallback timestamp.
+function pubDateToIso(raw: string | null): string | null {
   if (raw) {
     const d = new Date(raw);
     if (!Number.isNaN(d.getTime())) return d.toISOString();
   }
-  return new Date().toISOString();
+  return null;
 }
 
 /**
@@ -543,7 +547,7 @@ export function parseItem(itemXml: string): ParsedRssItem | null {
     link: link ?? "",
     pageUrl: derivePageUrl(guid),
     infoHash,
-    observedAt: pubDateToIso(pubDate),
+    releasedAt: pubDateToIso(pubDate),
   };
 }
 

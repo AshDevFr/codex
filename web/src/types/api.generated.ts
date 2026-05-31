@@ -13921,13 +13921,21 @@ export interface components {
                 mediaUrlKind?: string | null;
                 /** @description Source-specific extras (free-form). */
                 metadata?: unknown;
-                /** Format: date-time */
+                /**
+                 * Format: date-time
+                 * @description When Codex detected this release.
+                 */
                 observedAt: string;
                 /**
                  * @description Where to acquire the release. Conventionally a human-readable
                  *     landing page (Nyaa view page, MangaUpdates release page).
                  */
                 payloadUrl: string;
+                /**
+                 * Format: date-time
+                 * @description Upstream publish date from the source feed. `null` when unavailable.
+                 */
+                releasedAt?: string | null;
                 /**
                  * Format: uuid
                  * @example 550e8400-e29b-41d4-a716-446655440002
@@ -16029,13 +16037,21 @@ export interface components {
             mediaUrlKind?: string | null;
             /** @description Source-specific extras (free-form). */
             metadata?: unknown;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description When Codex detected this release.
+             */
             observedAt: string;
             /**
              * @description Where to acquire the release. Conventionally a human-readable
              *     landing page (Nyaa view page, MangaUpdates release page).
              */
             payloadUrl: string;
+            /**
+             * Format: date-time
+             * @description Upstream publish date from the source feed. `null` when unavailable.
+             */
+            releasedAt?: string | null;
             /**
              * Format: uuid
              * @example 550e8400-e29b-41d4-a716-446655440002
@@ -26206,6 +26222,12 @@ export interface operations {
                 language?: string | null;
                 /** @description Restrict to series belonging to this library. */
                 libraryId?: string | null;
+                /**
+                 * @description Sort order as `"field,direction"`. Supported fields: `series`
+                 *     (default), `observed`, `released`. Directions: `asc` (default),
+                 *     `desc`. Unknown values fall back to `series,asc`.
+                 */
+                sort?: string | null;
                 page?: number;
                 pageSize?: number;
             };

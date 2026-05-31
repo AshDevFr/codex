@@ -50,6 +50,7 @@ impl AcceptedCandidate {
             confidence: c.series_match.confidence,
             metadata: c.metadata,
             observed_at: c.observed_at,
+            released_at: c.released_at,
             initial_state: None,
         }
     }
@@ -157,6 +158,7 @@ mod tests {
             info_hash: None,
             metadata: None,
             observed_at: Utc::now(),
+            released_at: None,
         }
     }
 

@@ -40,6 +40,10 @@ function entry(overrides: Partial<ReleaseLedgerEntry>): ReleaseLedgerEntry {
     confidence: 0.95,
     state: "announced",
     observedAt: "2026-05-01T00:00:00Z",
+    // Default to a present release date so the Released cell renders a date,
+    // not a dash — keeps the Ch/Vol "—" assertions unambiguous. Tests that
+    // care about the null case set releasedAt explicitly.
+    releasedAt: "2026-05-01T00:00:00Z",
     createdAt: "2026-05-01T00:00:00Z",
     chapters: null,
     volumes: null,
@@ -177,5 +181,64 @@ describe("ReleasesTable row actions", () => {
     renderRow(entry({ id: "row-99", state: "marked_acquired" }), { onReset });
     await userEvent.setup().click(screen.getByLabelText("Reset"));
     expect(onReset).toHaveBeenCalledWith("row-99");
+  });
+});
+
+describe("ReleasesTable sortable headers", () => {
+  it("renders plain, non-interactive headers when onSort is omitted", () => {
+    renderRow(entry({}), { showSeriesColumn: true });
+    expect(
+      screen.queryByRole("button", { name: "Sort by Series" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Sort by Observed" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("invokes onSort with the column field when a header is clicked", async () => {
+    const onSort = vi.fn();
+    renderRow(entry({}), {
+      showSeriesColumn: true,
+      sortField: "series",
+      sortDirection: "asc",
+      onSort,
+    });
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Sort by Observed" }));
+    expect(onSort).toHaveBeenCalledWith("observed");
+    await user.click(screen.getByRole("button", { name: "Sort by Released" }));
+    expect(onSort).toHaveBeenCalledWith("released");
+    await user.click(screen.getByRole("button", { name: "Sort by Series" }));
+    expect(onSort).toHaveBeenCalledWith("series");
+  });
+
+  it("marks the active column with aria-sort reflecting the direction", () => {
+    renderRow(entry({}), {
+      showSeriesColumn: true,
+      sortField: "observed",
+      sortDirection: "desc",
+      onSort: vi.fn(),
+    });
+    expect(
+      screen.getByRole("button", { name: "Sort by Observed" }),
+    ).toHaveAttribute("aria-sort", "descending");
+    expect(
+      screen.getByRole("button", { name: "Sort by Series" }),
+    ).toHaveAttribute("aria-sort", "none");
+  });
+});
+
+describe("ReleasesTable Released column", () => {
+  it("renders the release date when releasedAt is present", () => {
+    // Local-time (no `Z`) at midday so `format(..., "yyyy-MM-dd")` yields a
+    // stable date regardless of the test machine's timezone.
+    renderRow(entry({ releasedAt: "2026-03-17T12:00:00" }));
+    expect(screen.getByText("2026-03-17")).toBeInTheDocument();
+  });
+
+  it("renders a dash for the release date when releasedAt is null", () => {
+    // Give Ch/Vol a value so the only dash on the row is the Released cell.
+    renderRow(entry({ releasedAt: null, chapters: [{ start: 1, end: 1 }] }));
+    expect(screen.getByText("—")).toBeInTheDocument();
   });
 });

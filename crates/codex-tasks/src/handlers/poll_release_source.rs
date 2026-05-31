@@ -766,6 +766,7 @@ mod tests {
             state: "announced".to_string(),
             metadata: None,
             observed_at: Utc::now(),
+            released_at: None,
             created_at: Utc::now(),
         };
 
@@ -826,6 +827,7 @@ mod tests {
             state: "announced".to_string(),
             metadata: None,
             observed_at: Utc::now(),
+            released_at: None,
             created_at: Utc::now(),
         };
         emit_release_announced(&broadcaster, &row, "release-nyaa", "Whatever".to_string());

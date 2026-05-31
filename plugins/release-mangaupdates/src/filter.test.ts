@@ -12,7 +12,7 @@ function item(overrides: Partial<ParsedRssItem> = {}): ParsedRssItem {
     group: "G",
     language: "en",
     link: "https://example.com",
-    observedAt: new Date().toISOString(),
+    releasedAt: new Date().toISOString(),
     ...overrides,
   };
 }

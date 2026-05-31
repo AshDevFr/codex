@@ -42,7 +42,7 @@ use crate::{
 };
 use codex_db::entities::release_ledger::state as ledger_state;
 use codex_db::repositories::{
-    LedgerInboxFilter, LibraryRepository, PluginsRepository, ReleaseLedgerRepository,
+    InboxSort, LedgerInboxFilter, LibraryRepository, PluginsRepository, ReleaseLedgerRepository,
     ReleaseSourceRepository, ReleaseSourceUpdate, SeriesRepository,
 };
 use codex_events::{EntityChangeEvent, EntityEvent};
@@ -227,6 +227,11 @@ pub struct ReleaseInboxParams {
     /// Restrict to series belonging to this library.
     #[serde(default)]
     pub library_id: Option<Uuid>,
+    /// Sort order as `"field,direction"`. Supported fields: `series`
+    /// (default), `observed`, `released`. Directions: `asc` (default),
+    /// `desc`. Unknown values fall back to `series,asc`.
+    #[serde(default)]
+    pub sort: Option<String>,
     #[serde(default = "default_page")]
     pub page: u64,
     #[serde(default = "default_page_size")]
@@ -281,9 +286,20 @@ pub async fn list_release_inbox(
         language: params.language.clone(),
         library_id: params.library_id,
     };
-    let rows = ReleaseLedgerRepository::list_inbox(&state.db, filter.clone(), page_size, offset)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to list inbox: {}", e)))?;
+    let sort = params
+        .sort
+        .as_deref()
+        .map(InboxSort::parse)
+        .unwrap_or_default();
+    let rows = ReleaseLedgerRepository::list_inbox_sorted(
+        &state.db,
+        filter.clone(),
+        sort,
+        page_size,
+        offset,
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to list inbox: {}", e)))?;
     let total = ReleaseLedgerRepository::count_inbox(&state.db, filter)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to count inbox: {}", e)))?;
@@ -309,6 +325,9 @@ pub async fn list_release_inbox(
     }
     if let Some(lib) = params.library_id {
         builder = builder.with_param("libraryId", &lib.to_string());
+    }
+    if let Some(ref s) = params.sort {
+        builder = builder.with_param("sort", s);
     }
     let response = PaginatedResponse::with_builder(dtos, page, page_size, total, &builder);
     Ok(paginated_response(response, &builder))

@@ -42,8 +42,9 @@ export interface ParsedRssItem {
   group: string | null;
   /** Release page URL on MangaUpdates. Used as `payloadUrl`. */
   link: string;
-  /** ISO-8601 string. Falls back to "now" when pubDate is missing/invalid. */
-  observedAt: string;
+  /** ISO-8601 upstream publish date (from `<pubDate>`), or null when the
+   *  feed carried no usable date. This is the release date, not detection. */
+  releasedAt: string | null;
 }
 
 /** Sentinel returned when the language tag can't be detected. */
@@ -176,16 +177,17 @@ export function parseTitle(title: string): {
 
 /**
  * Best-effort `pubDate` -> ISO-8601 conversion. MangaUpdates uses RFC-2822
- * style dates (`Mon, 04 May 2026 02:31:00 GMT`). Falls back to "now" on
- * invalid input — never throws, since one bad pubDate shouldn't drop the
- * whole feed.
+ * style dates (`Mon, 04 May 2026 02:31:00 GMT`). Returns `null` on missing or
+ * invalid input — the release date is unknown then, so the host stores NULL
+ * rather than a misleading fallback. Never throws: one bad pubDate shouldn't
+ * drop the whole feed.
  */
-function pubDateToIso(raw: string | null): string {
+function pubDateToIso(raw: string | null): string | null {
   if (raw) {
     const d = new Date(raw);
     if (!Number.isNaN(d.getTime())) return d.toISOString();
   }
-  return new Date().toISOString();
+  return null;
 }
 
 /**
@@ -251,7 +253,7 @@ export function parseItem(itemXml: string): ParsedRssItem | null {
     group,
     language,
     link: link ?? "",
-    observedAt: pubDateToIso(pubDate),
+    releasedAt: pubDateToIso(pubDate),
   };
 }
 
