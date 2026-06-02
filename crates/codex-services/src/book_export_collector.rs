@@ -99,6 +99,7 @@ impl BookExportField {
         BookExportField::Title,
         BookExportField::Summary,
         BookExportField::Year,
+        BookExportField::CreatedAt,
         BookExportField::Authors,
         BookExportField::Genres,
         BookExportField::SeriesName,
