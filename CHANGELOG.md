@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.33.1] - 2026-06-02
+
+### 🚀 Features
+
+- *(exports)* Add created_at and external ratings to LLM presets
+
 ## [1.33.0] - 2026-05-31
 
 ### 🚀 Features
