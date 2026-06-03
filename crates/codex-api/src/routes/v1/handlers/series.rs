@@ -5323,13 +5323,13 @@ pub async fn create_external_link(
     }))
 }
 
-/// Delete an external link by source name
+/// Delete an external link by ID
 #[utoipa::path(
     delete,
-    path = "/api/v1/series/{series_id}/external-links/{source}",
+    path = "/api/v1/series/{series_id}/external-links/{link_id}",
     params(
         ("series_id" = Uuid, Path, description = "Series ID"),
-        ("source" = String, Path, description = "Source name (e.g., 'myanimelist', 'mangadex')")
+        ("link_id" = Uuid, Path, description = "External link ID")
     ),
     responses(
         (status = 204, description = "External link deleted"),
@@ -5345,7 +5345,7 @@ pub async fn create_external_link(
 pub async fn delete_external_link(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
-    Path((series_id, source)): Path<(Uuid, String)>,
+    Path((series_id, link_id)): Path<(Uuid, Uuid)>,
 ) -> Result<StatusCode, ApiError> {
     require_permission!(auth, Permission::SeriesWrite)?;
 
@@ -5355,13 +5355,18 @@ pub async fn delete_external_link(
         .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
 
-    let deleted = ExternalLinkRepository::delete_by_source(&state.db, series_id, &source)
+    // Ensure the link exists and belongs to this series before deleting
+    let belongs = ExternalLinkRepository::belongs_to_series(&state.db, link_id, series_id)
         .await
-        .map_err(|e| ApiError::Internal(format!("Failed to delete external link: {}", e)))?;
+        .map_err(|e| ApiError::Internal(format!("Failed to verify external link: {}", e)))?;
 
-    if !deleted {
+    if !belongs {
         return Err(ApiError::NotFound("External link not found".to_string()));
     }
+
+    ExternalLinkRepository::delete(&state.db, link_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to delete external link: {}", e)))?;
 
     // Emit update event
     let event = EntityChangeEvent {

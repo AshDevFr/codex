@@ -236,7 +236,7 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             post(handlers::create_external_link),
         )
         .route(
-            "/series/{series_id}/external-links/{source}",
+            "/series/{series_id}/external-links/{link_id}",
             delete(handlers::delete_external_link),
         )
         // Series external IDs routes

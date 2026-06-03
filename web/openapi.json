@@ -12079,12 +12079,12 @@
         ]
       }
     },
-    "/api/v1/series/{series_id}/external-links/{source}": {
+    "/api/v1/series/{series_id}/external-links/{link_id}": {
       "delete": {
         "tags": [
           "Series"
         ],
-        "summary": "Delete an external link by source name",
+        "summary": "Delete an external link by ID",
         "operationId": "delete_external_link",
         "parameters": [
           {
@@ -12098,12 +12098,13 @@
             }
           },
           {
-            "name": "source",
+            "name": "link_id",
             "in": "path",
-            "description": "Source name (e.g., 'myanimelist', 'mangadex')",
+            "description": "External link ID",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             }
           }
         ],

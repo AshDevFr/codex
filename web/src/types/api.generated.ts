@@ -4147,7 +4147,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/series/{series_id}/external-links/{source}": {
+    "/api/v1/series/{series_id}/external-links/{link_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -4157,7 +4157,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Delete an external link by source name */
+        /** Delete an external link by ID */
         delete: operations["delete_external_link"];
         options?: never;
         head?: never;
@@ -28794,8 +28794,8 @@ export interface operations {
             path: {
                 /** @description Series ID */
                 series_id: string;
-                /** @description Source name (e.g., 'myanimelist', 'mangadex') */
-                source: string;
+                /** @description External link ID */
+                link_id: string;
             };
             cookie?: never;
         };

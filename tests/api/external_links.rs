@@ -314,16 +314,17 @@ async fn test_delete_external_link() {
     let (_library_id, series_id) = create_test_series(&db).await;
 
     use codex::db::repositories::ExternalLinkRepository;
-    ExternalLinkRepository::create(&db, series_id, "myanimelist", "https://mal.net/1", None)
-        .await
-        .unwrap();
+    let link =
+        ExternalLinkRepository::create(&db, series_id, "myanimelist", "https://mal.net/1", None)
+            .await
+            .unwrap();
 
     let state = create_test_auth_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router(state).await;
 
     let request = delete_request_with_auth(
-        &format!("/api/v1/series/{}/external-links/myanimelist", series_id),
+        &format!("/api/v1/series/{}/external-links/{}", series_id, link.id),
         &token,
     );
     let (status, _response): (StatusCode, Option<()>) = make_json_request(app, request).await;
@@ -338,27 +339,39 @@ async fn test_delete_external_link() {
 }
 
 #[tokio::test]
-async fn test_delete_external_link_case_insensitive() {
+async fn test_delete_external_link_only_deletes_target() {
     let (db, _temp_dir) = setup_test_db().await;
     let (_library_id, series_id) = create_test_series(&db).await;
 
     use codex::db::repositories::ExternalLinkRepository;
-    ExternalLinkRepository::create(&db, series_id, "myanimelist", "https://mal.net/1", None)
-        .await
-        .unwrap();
+    let mal =
+        ExternalLinkRepository::create(&db, series_id, "myanimelist", "https://mal.net/1", None)
+            .await
+            .unwrap();
+    let anilist =
+        ExternalLinkRepository::create(&db, series_id, "anilist", "https://anilist.co/1", None)
+            .await
+            .unwrap();
 
     let state = create_test_auth_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router(state).await;
 
-    // Delete using different case
+    // Delete only the MAL link by ID
     let request = delete_request_with_auth(
-        &format!("/api/v1/series/{}/external-links/MyAnimeList", series_id),
+        &format!("/api/v1/series/{}/external-links/{}", series_id, mal.id),
         &token,
     );
     let (status, _response): (StatusCode, Option<()>) = make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::NO_CONTENT);
+
+    // The AniList link must remain untouched
+    let remaining = ExternalLinkRepository::get_for_series(&db, series_id)
+        .await
+        .unwrap();
+    assert_eq!(remaining.len(), 1);
+    assert_eq!(remaining[0].id, anilist.id);
 }
 
 #[tokio::test]
@@ -371,7 +384,11 @@ async fn test_delete_external_link_not_found() {
     let app = create_test_router(state).await;
 
     let request = delete_request_with_auth(
-        &format!("/api/v1/series/{}/external-links/nonexistent", series_id),
+        &format!(
+            "/api/v1/series/{}/external-links/{}",
+            series_id,
+            Uuid::new_v4()
+        ),
         &token,
     );
     let (status, _response): (StatusCode, Option<ErrorResponse>) =
@@ -390,7 +407,11 @@ async fn test_delete_external_link_series_not_found() {
 
     let fake_id = Uuid::new_v4();
     let request = delete_request_with_auth(
-        &format!("/api/v1/series/{}/external-links/myanimelist", fake_id),
+        &format!(
+            "/api/v1/series/{}/external-links/{}",
+            fake_id,
+            Uuid::new_v4()
+        ),
         &token,
     );
     let (status, _response): (StatusCode, Option<ErrorResponse>) =
