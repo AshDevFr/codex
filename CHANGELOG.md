@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.33.2] - 2026-06-03
+
+### 🐛 Bug Fixes
+
+- *(api)* Delete series external links by ID instead of source name
+
 ## [1.33.1] - 2026-06-02
 
 ### 🚀 Features
