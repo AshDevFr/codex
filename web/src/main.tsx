@@ -20,10 +20,16 @@ import "./index.css";
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 5000, // 5 seconds - reduced for real-time updates
-      refetchOnWindowFocus: true, // Refetch when switching tabs
-      refetchOnMount: true, // Refetch when component mounts
-      refetchOnReconnect: true, // Refetch when network reconnects
+      // Freshness is driven by SSE entity events (useEntityEvents), which
+      // invalidate the relevant query keys when data actually changes. So we
+      // don't need aggressive time-based refetching. A longer staleTime plus
+      // no refetch-on-focus avoids a refetch storm when the user has many tabs
+      // open and switches between them (each switch previously refetched every
+      // active query, e.g. the heavy series list).
+      staleTime: 30_000, // 30 seconds; SSE invalidation handles real-time changes
+      refetchOnWindowFocus: false, // Rely on SSE, not tab-focus, for freshness
+      refetchOnMount: true, // Refetch on mount only if data is stale
+      refetchOnReconnect: true, // Refetch after network loss (may have missed SSE events)
       retry: (failureCount, error) => {
         // Don't retry on client errors (4xx) - axios handles 429 retries internally
         const apiError = error as { error?: string };
