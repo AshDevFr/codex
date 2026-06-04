@@ -847,7 +847,10 @@ pub async fn bulk_reset_series_metadata(
             _ => continue,
         };
 
-        // Clear all associated data
+        // Clear all associated data, bounded so this does not hold one pool
+        // connection per query at once.
+        let limiter = crate::db_batch::fan_out_limiter(crate::db_batch::DEFAULT_BATCH_FAN_OUT);
+        use crate::db_batch::with_permit;
         let (
             genres_res,
             tags_res,
@@ -858,14 +861,38 @@ pub async fn bulk_reset_series_metadata(
             covers_res,
             sharing_res,
         ) = tokio::join!(
-            GenreRepository::set_genres_for_series(&state.db, *series_id, vec![]),
-            TagRepository::set_tags_for_series(&state.db, *series_id, vec![]),
-            AlternateTitleRepository::delete_all_for_series(&state.db, *series_id, None),
-            SeriesExternalIdRepository::delete_all_for_series(&state.db, *series_id),
-            ExternalRatingRepository::delete_all_for_series(&state.db, *series_id),
-            ExternalLinkRepository::delete_all_for_series(&state.db, *series_id),
-            SeriesCoversRepository::delete_by_series(&state.db, *series_id),
-            SharingTagRepository::set_tags_for_series(&state.db, *series_id, vec![]),
+            with_permit(
+                &limiter,
+                GenreRepository::set_genres_for_series(&state.db, *series_id, vec![])
+            ),
+            with_permit(
+                &limiter,
+                TagRepository::set_tags_for_series(&state.db, *series_id, vec![])
+            ),
+            with_permit(
+                &limiter,
+                AlternateTitleRepository::delete_all_for_series(&state.db, *series_id, None)
+            ),
+            with_permit(
+                &limiter,
+                SeriesExternalIdRepository::delete_all_for_series(&state.db, *series_id)
+            ),
+            with_permit(
+                &limiter,
+                ExternalRatingRepository::delete_all_for_series(&state.db, *series_id)
+            ),
+            with_permit(
+                &limiter,
+                ExternalLinkRepository::delete_all_for_series(&state.db, *series_id)
+            ),
+            with_permit(
+                &limiter,
+                SeriesCoversRepository::delete_by_series(&state.db, *series_id)
+            ),
+            with_permit(
+                &limiter,
+                SharingTagRepository::set_tags_for_series(&state.db, *series_id, vec![])
+            ),
         );
 
         // Log errors but continue with other series

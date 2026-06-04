@@ -206,11 +206,22 @@ pub async fn books_to_dtos(
 
     // Fan out one batched query per related table. Previous per-row loops
     // produced O(books) sequential DB roundtrips here.
+    let limiter = crate::db_batch::fan_out_limiter(crate::db_batch::DEFAULT_BATCH_FAN_OUT);
+    use crate::db_batch::with_permit;
     let (series_metadata_result, book_metadata_result, libraries_result, progress_result) = tokio::join!(
-        SeriesMetadataRepository::get_by_series_ids(db, &series_ids),
-        BookMetadataRepository::get_by_book_ids(db, &book_ids),
-        LibraryRepository::get_by_ids(db, &library_ids),
-        ReadProgressRepository::get_for_user_books(db, user_id, &book_ids),
+        with_permit(
+            &limiter,
+            SeriesMetadataRepository::get_by_series_ids(db, &series_ids)
+        ),
+        with_permit(
+            &limiter,
+            BookMetadataRepository::get_by_book_ids(db, &book_ids)
+        ),
+        with_permit(&limiter, LibraryRepository::get_by_ids(db, &library_ids)),
+        with_permit(
+            &limiter,
+            ReadProgressRepository::get_for_user_books(db, user_id, &book_ids)
+        ),
     );
 
     let series_metadata_map = series_metadata_result
@@ -337,12 +348,21 @@ pub async fn books_to_full_dtos_batched(
         .into_iter()
         .collect();
 
-    // Fetch all related data in parallel
+    // Fetch all related data in parallel, bounded so a single request cannot
+    // hold one pool connection per query and exhaust the pool.
+    let limiter = crate::db_batch::fan_out_limiter(crate::db_batch::DEFAULT_BATCH_FAN_OUT);
+    use crate::db_batch::with_permit;
     let (metadata_map, series_metadata_map, library_map, progress_map, genres_map, tags_map) = tokio::join!(
-        BookMetadataRepository::get_by_book_ids(db, &book_ids),
-        SeriesMetadataRepository::get_by_series_ids(db, &series_ids),
-        LibraryRepository::get_by_ids(db, &library_ids),
-        async {
+        with_permit(
+            &limiter,
+            BookMetadataRepository::get_by_book_ids(db, &book_ids)
+        ),
+        with_permit(
+            &limiter,
+            SeriesMetadataRepository::get_by_series_ids(db, &series_ids)
+        ),
+        with_permit(&limiter, LibraryRepository::get_by_ids(db, &library_ids)),
+        with_permit(&limiter, async {
             // Fetch read progress for all books
             let mut map = HashMap::new();
             for book_id in &book_ids {
@@ -353,9 +373,15 @@ pub async fn books_to_full_dtos_batched(
                 }
             }
             Ok::<_, anyhow::Error>(map)
-        },
-        GenreRepository::get_genres_for_book_ids(db, &book_ids),
-        TagRepository::get_tags_for_book_ids(db, &book_ids),
+        }),
+        with_permit(
+            &limiter,
+            GenreRepository::get_genres_for_book_ids(db, &book_ids)
+        ),
+        with_permit(
+            &limiter,
+            TagRepository::get_tags_for_book_ids(db, &book_ids)
+        ),
     );
 
     // Handle errors

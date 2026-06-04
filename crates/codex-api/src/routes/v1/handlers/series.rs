@@ -259,6 +259,10 @@ async fn series_to_dtos_batched(
         .into_iter()
         .collect();
 
+    // Bound how many of these related-table queries run at once so a single
+    // request cannot hold one pool connection per query and exhaust the pool.
+    let limiter = crate::db_batch::fan_out_limiter(crate::db_batch::DEFAULT_BATCH_FAN_OUT);
+    use crate::db_batch::with_permit;
     let (
         metadata_map,
         book_counts_map,
@@ -270,21 +274,42 @@ async fn series_to_dtos_batched(
         tracking_map,
         ext_ids_map,
     ) = tokio::join!(
-        SeriesMetadataRepository::get_by_series_ids(db, &series_ids),
-        SeriesRepository::get_book_counts_for_series_ids(db, &series_ids),
-        SeriesRepository::get_book_classification_aggregates_for_series_ids(db, &series_ids),
-        async {
+        with_permit(
+            &limiter,
+            SeriesMetadataRepository::get_by_series_ids(db, &series_ids)
+        ),
+        with_permit(
+            &limiter,
+            SeriesRepository::get_book_counts_for_series_ids(db, &series_ids)
+        ),
+        with_permit(
+            &limiter,
+            SeriesRepository::get_book_classification_aggregates_for_series_ids(db, &series_ids)
+        ),
+        with_permit(&limiter, async {
             if let Some(uid) = user_id {
                 BookRepository::count_unread_in_series_ids(db, &series_ids, uid).await
             } else {
                 Ok(HashMap::new())
             }
-        },
-        SeriesCoversRepository::get_selected_for_series_ids(db, &series_ids),
-        SeriesCoversRepository::has_custom_cover_for_series_ids(db, &series_ids),
-        LibraryRepository::get_by_ids(db, &library_ids),
-        SeriesTrackingRepository::get_for_series_ids(db, &series_ids),
-        SeriesExternalIdRepository::get_for_series_ids(db, &series_ids),
+        }),
+        with_permit(
+            &limiter,
+            SeriesCoversRepository::get_selected_for_series_ids(db, &series_ids)
+        ),
+        with_permit(
+            &limiter,
+            SeriesCoversRepository::has_custom_cover_for_series_ids(db, &series_ids)
+        ),
+        with_permit(&limiter, LibraryRepository::get_by_ids(db, &library_ids)),
+        with_permit(
+            &limiter,
+            SeriesTrackingRepository::get_for_series_ids(db, &series_ids)
+        ),
+        with_permit(
+            &limiter,
+            SeriesExternalIdRepository::get_for_series_ids(db, &series_ids)
+        ),
     );
 
     let metadata_map =
@@ -408,7 +433,11 @@ async fn series_to_full_dtos_batched(
         .into_iter()
         .collect();
 
-    // Fetch all related data in parallel using batched queries
+    // Fetch all related data using batched queries, but bound how many run at
+    // once so a single request cannot hold one pool connection per query and
+    // exhaust the pool under concurrent load.
+    let limiter = crate::db_batch::fan_out_limiter(crate::db_batch::DEFAULT_BATCH_FAN_OUT);
+    use crate::db_batch::with_permit;
     let (
         metadata_map,
         book_counts_map,
@@ -425,26 +454,62 @@ async fn series_to_full_dtos_batched(
         ext_ids_map,
         tracking_map,
     ) = tokio::join!(
-        SeriesMetadataRepository::get_by_series_ids(db, &series_ids),
-        SeriesRepository::get_book_counts_for_series_ids(db, &series_ids),
-        SeriesRepository::get_book_classification_aggregates_for_series_ids(db, &series_ids),
-        async {
+        with_permit(
+            &limiter,
+            SeriesMetadataRepository::get_by_series_ids(db, &series_ids)
+        ),
+        with_permit(
+            &limiter,
+            SeriesRepository::get_book_counts_for_series_ids(db, &series_ids)
+        ),
+        with_permit(
+            &limiter,
+            SeriesRepository::get_book_classification_aggregates_for_series_ids(db, &series_ids)
+        ),
+        with_permit(&limiter, async {
             if let Some(uid) = user_id {
                 BookRepository::count_unread_in_series_ids(db, &series_ids, uid).await
             } else {
                 Ok(HashMap::new())
             }
-        },
-        SeriesCoversRepository::get_selected_for_series_ids(db, &series_ids),
-        SeriesCoversRepository::has_custom_cover_for_series_ids(db, &series_ids),
-        LibraryRepository::get_by_ids(db, &library_ids),
-        GenreRepository::get_genres_for_series_ids(db, &series_ids),
-        TagRepository::get_tags_for_series_ids(db, &series_ids),
-        AlternateTitleRepository::get_for_series_ids(db, &series_ids),
-        ExternalRatingRepository::get_for_series_ids(db, &series_ids),
-        ExternalLinkRepository::get_for_series_ids(db, &series_ids),
-        SeriesExternalIdRepository::get_for_series_ids(db, &series_ids),
-        SeriesTrackingRepository::get_for_series_ids(db, &series_ids),
+        }),
+        with_permit(
+            &limiter,
+            SeriesCoversRepository::get_selected_for_series_ids(db, &series_ids)
+        ),
+        with_permit(
+            &limiter,
+            SeriesCoversRepository::has_custom_cover_for_series_ids(db, &series_ids)
+        ),
+        with_permit(&limiter, LibraryRepository::get_by_ids(db, &library_ids)),
+        with_permit(
+            &limiter,
+            GenreRepository::get_genres_for_series_ids(db, &series_ids)
+        ),
+        with_permit(
+            &limiter,
+            TagRepository::get_tags_for_series_ids(db, &series_ids)
+        ),
+        with_permit(
+            &limiter,
+            AlternateTitleRepository::get_for_series_ids(db, &series_ids)
+        ),
+        with_permit(
+            &limiter,
+            ExternalRatingRepository::get_for_series_ids(db, &series_ids)
+        ),
+        with_permit(
+            &limiter,
+            ExternalLinkRepository::get_for_series_ids(db, &series_ids)
+        ),
+        with_permit(
+            &limiter,
+            SeriesExternalIdRepository::get_for_series_ids(db, &series_ids)
+        ),
+        with_permit(
+            &limiter,
+            SeriesTrackingRepository::get_for_series_ids(db, &series_ids)
+        ),
     );
 
     // Handle errors
@@ -3044,7 +3109,10 @@ pub async fn reset_series_metadata(
         .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
 
-    // Clear all associated data in parallel
+    // Clear all associated data in parallel, bounded so this does not hold one
+    // pool connection per query at once.
+    let limiter = crate::db_batch::fan_out_limiter(crate::db_batch::DEFAULT_BATCH_FAN_OUT);
+    use crate::db_batch::with_permit;
     let (
         genres_res,
         tags_res,
@@ -3055,14 +3123,38 @@ pub async fn reset_series_metadata(
         covers_res,
         sharing_tags_res,
     ) = tokio::join!(
-        GenreRepository::set_genres_for_series(&state.db, series_id, vec![]),
-        TagRepository::set_tags_for_series(&state.db, series_id, vec![]),
-        AlternateTitleRepository::delete_all_for_series(&state.db, series_id, None),
-        SeriesExternalIdRepository::delete_all_for_series(&state.db, series_id),
-        ExternalRatingRepository::delete_all_for_series(&state.db, series_id),
-        ExternalLinkRepository::delete_all_for_series(&state.db, series_id),
-        SeriesCoversRepository::delete_by_series(&state.db, series_id),
-        SharingTagRepository::set_tags_for_series(&state.db, series_id, vec![]),
+        with_permit(
+            &limiter,
+            GenreRepository::set_genres_for_series(&state.db, series_id, vec![])
+        ),
+        with_permit(
+            &limiter,
+            TagRepository::set_tags_for_series(&state.db, series_id, vec![])
+        ),
+        with_permit(
+            &limiter,
+            AlternateTitleRepository::delete_all_for_series(&state.db, series_id, None)
+        ),
+        with_permit(
+            &limiter,
+            SeriesExternalIdRepository::delete_all_for_series(&state.db, series_id)
+        ),
+        with_permit(
+            &limiter,
+            ExternalRatingRepository::delete_all_for_series(&state.db, series_id)
+        ),
+        with_permit(
+            &limiter,
+            ExternalLinkRepository::delete_all_for_series(&state.db, series_id)
+        ),
+        with_permit(
+            &limiter,
+            SeriesCoversRepository::delete_by_series(&state.db, series_id)
+        ),
+        with_permit(
+            &limiter,
+            SharingTagRepository::set_tags_for_series(&state.db, series_id, vec![])
+        ),
     );
 
     // Check for errors
@@ -3384,12 +3476,29 @@ pub async fn get_series_metadata(
         .ok_or_else(|| ApiError::Internal("Series metadata not found".to_string()))?;
 
     // Fetch all related data in parallel
+    let limiter = crate::db_batch::fan_out_limiter(crate::db_batch::DEFAULT_BATCH_FAN_OUT);
+    use crate::db_batch::with_permit;
     let (genres_result, tags_result, alt_titles_result, ext_ratings_result, ext_links_result) = tokio::join!(
-        GenreRepository::get_genres_for_series(&state.db, series_id),
-        TagRepository::get_tags_for_series(&state.db, series_id),
-        AlternateTitleRepository::get_for_series(&state.db, series_id),
-        ExternalRatingRepository::get_for_series(&state.db, series_id),
-        ExternalLinkRepository::get_for_series(&state.db, series_id),
+        with_permit(
+            &limiter,
+            GenreRepository::get_genres_for_series(&state.db, series_id)
+        ),
+        with_permit(
+            &limiter,
+            TagRepository::get_tags_for_series(&state.db, series_id)
+        ),
+        with_permit(
+            &limiter,
+            AlternateTitleRepository::get_for_series(&state.db, series_id)
+        ),
+        with_permit(
+            &limiter,
+            ExternalRatingRepository::get_for_series(&state.db, series_id)
+        ),
+        with_permit(
+            &limiter,
+            ExternalLinkRepository::get_for_series(&state.db, series_id)
+        ),
     );
 
     let genres =
