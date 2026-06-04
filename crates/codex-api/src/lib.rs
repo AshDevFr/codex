@@ -1,3 +1,4 @@
+pub mod db_batch;
 pub mod docs;
 pub mod error;
 pub mod extractors;
