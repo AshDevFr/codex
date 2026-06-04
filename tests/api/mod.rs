@@ -37,6 +37,7 @@ mod pages;
 mod pdf_cache;
 mod plugin_metrics;
 mod plugins;
+mod pool_contention;
 mod rate_limit;
 mod read_progress;
 mod recommendations;
