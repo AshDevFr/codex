@@ -900,15 +900,12 @@ pub async fn list_series(
         Ok(paginated_response(response, &link_builder))
     } else {
         let user_id = Some(auth.user_id);
-        let dtos: Vec<SeriesDto> = futures::future::join_all(
-            series_list
-                .into_iter()
-                .map(|series| series_to_dto(&state.db, series, user_id)),
-        )
-        .await
-        .into_iter()
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| ApiError::Internal(format!("Failed to build series DTOs: {:?}", e)))?;
+        // Batched assembly: one bounded set of queries per related table instead
+        // of an unbounded per-series fan-out. The per-series path (join_all over
+        // the singular series_to_dto) is an N+1 that, on a large page, fires
+        // hundreds of concurrent connection acquisitions from a single request
+        // and can exhaust the pool.
+        let dtos = series_to_dtos_batched(&state.db, series_list, user_id).await?;
 
         let response =
             SeriesListResponse::with_builder(dtos, page, page_size, total, &link_builder);
@@ -1550,15 +1547,12 @@ pub async fn list_series_filtered(
         Ok(paginated_response(response, &link_builder))
     } else {
         let user_id = Some(auth.user_id);
-        let dtos: Vec<SeriesDto> = futures::future::join_all(
-            series_list
-                .into_iter()
-                .map(|series| series_to_dto(&state.db, series, user_id)),
-        )
-        .await
-        .into_iter()
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| ApiError::Internal(format!("Failed to build series DTOs: {:?}", e)))?;
+        // Batched assembly: one bounded set of queries per related table instead
+        // of an unbounded per-series fan-out. The per-series path (join_all over
+        // the singular series_to_dto) is an N+1 that, on a large page, fires
+        // hundreds of concurrent connection acquisitions from a single request
+        // and can exhaust the pool.
+        let dtos = series_to_dtos_batched(&state.db, series_list, user_id).await?;
 
         let response =
             SeriesListResponse::with_builder(dtos, page, page_size, total, &link_builder);
@@ -2240,15 +2234,12 @@ pub async fn list_in_progress_series(
         Ok(Json(full_dtos).into_response())
     } else {
         let user_id = Some(auth.user_id);
-        let dtos: Vec<SeriesDto> = futures::future::join_all(
-            series_list
-                .into_iter()
-                .map(|series| series_to_dto(&state.db, series, user_id)),
-        )
-        .await
-        .into_iter()
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| ApiError::Internal(format!("Failed to build series DTOs: {:?}", e)))?;
+        // Batched assembly: one bounded set of queries per related table instead
+        // of an unbounded per-series fan-out. The per-series path (join_all over
+        // the singular series_to_dto) is an N+1 that, on a large page, fires
+        // hundreds of concurrent connection acquisitions from a single request
+        // and can exhaust the pool.
+        let dtos = series_to_dtos_batched(&state.db, series_list, user_id).await?;
 
         Ok(Json(dtos).into_response())
     }
@@ -2319,15 +2310,12 @@ pub async fn list_recently_added_series(
         Ok(Json(full_dtos).into_response())
     } else {
         let user_id = Some(auth.user_id);
-        let dtos: Vec<SeriesDto> = futures::future::join_all(
-            series_list
-                .into_iter()
-                .map(|series| series_to_dto(&state.db, series, user_id)),
-        )
-        .await
-        .into_iter()
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| ApiError::Internal(format!("Failed to build series DTOs: {:?}", e)))?;
+        // Batched assembly: one bounded set of queries per related table instead
+        // of an unbounded per-series fan-out. The per-series path (join_all over
+        // the singular series_to_dto) is an N+1 that, on a large page, fires
+        // hundreds of concurrent connection acquisitions from a single request
+        // and can exhaust the pool.
+        let dtos = series_to_dtos_batched(&state.db, series_list, user_id).await?;
 
         Ok(Json(dtos).into_response())
     }
@@ -2380,15 +2368,12 @@ pub async fn list_library_recently_added_series(
         Ok(Json(full_dtos).into_response())
     } else {
         let user_id = Some(auth.user_id);
-        let dtos: Vec<SeriesDto> = futures::future::join_all(
-            series_list
-                .into_iter()
-                .map(|series| series_to_dto(&state.db, series, user_id)),
-        )
-        .await
-        .into_iter()
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| ApiError::Internal(format!("Failed to build series DTOs: {:?}", e)))?;
+        // Batched assembly: one bounded set of queries per related table instead
+        // of an unbounded per-series fan-out. The per-series path (join_all over
+        // the singular series_to_dto) is an N+1 that, on a large page, fires
+        // hundreds of concurrent connection acquisitions from a single request
+        // and can exhaust the pool.
+        let dtos = series_to_dtos_batched(&state.db, series_list, user_id).await?;
 
         Ok(Json(dtos).into_response())
     }
@@ -2436,15 +2421,12 @@ pub async fn list_recently_updated_series(
         Ok(Json(full_dtos).into_response())
     } else {
         let user_id = Some(auth.user_id);
-        let dtos: Vec<SeriesDto> = futures::future::join_all(
-            series_list
-                .into_iter()
-                .map(|series| series_to_dto(&state.db, series, user_id)),
-        )
-        .await
-        .into_iter()
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| ApiError::Internal(format!("Failed to build series DTOs: {:?}", e)))?;
+        // Batched assembly: one bounded set of queries per related table instead
+        // of an unbounded per-series fan-out. The per-series path (join_all over
+        // the singular series_to_dto) is an N+1 that, on a large page, fires
+        // hundreds of concurrent connection acquisitions from a single request
+        // and can exhaust the pool.
+        let dtos = series_to_dtos_batched(&state.db, series_list, user_id).await?;
 
         Ok(Json(dtos).into_response())
     }
@@ -2496,15 +2478,12 @@ pub async fn list_library_recently_updated_series(
         Ok(Json(full_dtos).into_response())
     } else {
         let user_id = Some(auth.user_id);
-        let dtos: Vec<SeriesDto> = futures::future::join_all(
-            series_list
-                .into_iter()
-                .map(|series| series_to_dto(&state.db, series, user_id)),
-        )
-        .await
-        .into_iter()
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| ApiError::Internal(format!("Failed to build series DTOs: {:?}", e)))?;
+        // Batched assembly: one bounded set of queries per related table instead
+        // of an unbounded per-series fan-out. The per-series path (join_all over
+        // the singular series_to_dto) is an N+1 that, on a large page, fires
+        // hundreds of concurrent connection acquisitions from a single request
+        // and can exhaust the pool.
+        let dtos = series_to_dtos_batched(&state.db, series_list, user_id).await?;
 
         Ok(Json(dtos).into_response())
     }
@@ -2599,15 +2578,12 @@ pub async fn list_library_series(
         Ok(paginated_response(response, &link_builder))
     } else {
         let user_id = Some(auth.user_id);
-        let dtos: Vec<SeriesDto> = futures::future::join_all(
-            series_list
-                .into_iter()
-                .map(|series| series_to_dto(&state.db, series, user_id)),
-        )
-        .await
-        .into_iter()
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| ApiError::Internal(format!("Failed to build series DTOs: {:?}", e)))?;
+        // Batched assembly: one bounded set of queries per related table instead
+        // of an unbounded per-series fan-out. The per-series path (join_all over
+        // the singular series_to_dto) is an N+1 that, on a large page, fires
+        // hundreds of concurrent connection acquisitions from a single request
+        // and can exhaust the pool.
+        let dtos = series_to_dtos_batched(&state.db, series_list, user_id).await?;
 
         let response =
             SeriesListResponse::with_builder(dtos, page, page_size, total, &link_builder);
@@ -2672,15 +2648,12 @@ pub async fn list_library_in_progress_series(
         Ok(Json(full_dtos).into_response())
     } else {
         let user_id = Some(auth.user_id);
-        let dtos: Vec<SeriesDto> = futures::future::join_all(
-            series_list
-                .into_iter()
-                .map(|series| series_to_dto(&state.db, series, user_id)),
-        )
-        .await
-        .into_iter()
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| ApiError::Internal(format!("Failed to build series DTOs: {:?}", e)))?;
+        // Batched assembly: one bounded set of queries per related table instead
+        // of an unbounded per-series fan-out. The per-series path (join_all over
+        // the singular series_to_dto) is an N+1 that, on a large page, fires
+        // hundreds of concurrent connection acquisitions from a single request
+        // and can exhaust the pool.
+        let dtos = series_to_dtos_batched(&state.db, series_list, user_id).await?;
 
         Ok(Json(dtos).into_response())
     }

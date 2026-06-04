@@ -1,6 +1,7 @@
 import { Anchor } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useQueryClient } from "@tanstack/react-query";
+import { throttle } from "es-toolkit";
 import { useEffect, useState } from "react";
 import { eventsApi } from "@/api/events";
 import { navigationService } from "@/services/navigation";
@@ -134,9 +135,25 @@ export function useEntityEvents() {
       return;
     }
 
+    // Throttle the heavy list invalidations: a burst of entity events (e.g. a
+    // scan or bulk thumbnail regen) collapses into at most one series/books
+    // list refetch per interval instead of one per event.
+    const invalidateSeriesList = throttle(
+      () => queryClient.invalidateQueries({ queryKey: ["series"] }),
+      1500,
+    );
+    const invalidateBooksList = throttle(
+      () => queryClient.invalidateQueries({ queryKey: ["books"] }),
+      1500,
+    );
+    const listInvalidate: ListInvalidators = {
+      series: invalidateSeriesList,
+      books: invalidateBooksList,
+    };
+
     const unsubscribe = eventsApi.subscribeToEntityEvents(
       (event: EntityChangeEvent) => {
-        handleEntityEvent(event, queryClient);
+        handleEntityEvent(event, queryClient, listInvalidate);
       },
       (error: Error) => {
         console.error("[SSE] Connection error:", error);
@@ -149,6 +166,9 @@ export function useEntityEvents() {
 
     return () => {
       unsubscribe();
+      // Drop any pending trailing refetch so we don't fire after teardown/logout.
+      invalidateSeriesList.cancel();
+      invalidateBooksList.cancel();
     };
   }, [queryClient, isAuthenticated]);
 
@@ -160,9 +180,17 @@ export function useEntityEvents() {
 /**
  * Handle entity change events and invalidate appropriate query caches
  */
+/** Throttled invalidators for the heavy list queries. A scan/analyze can emit
+ * hundreds of entity events; invalidating the (large) series/books list on each
+ * one would refetch it hundreds of times. Throttling coalesces a burst into at
+ * most one refetch per interval (leading + trailing), so a single event still
+ * updates promptly while a sustained stream refreshes ~once/interval. */
+type ListInvalidators = { series: () => void; books: () => void };
+
 function handleEntityEvent(
   event: EntityChangeEvent,
   queryClient: ReturnType<typeof useQueryClient>,
+  listInvalidate: ListInvalidators,
 ) {
   log("Received entity event:", event.type, event);
 
@@ -171,13 +199,11 @@ function handleEntityEvent(
     case "book_created":
     case "book_updated":
     case "book_deleted": {
-      // Invalidate book queries - use "all" to ensure Recommended section updates
-      // even when user switches between tabs
-      queryClient.invalidateQueries({
-        queryKey: ["books"],
-      });
+      // Invalidate the (heavy) book list, throttled so a scan adding many
+      // books coalesces into a handful of refetches instead of one per book.
+      listInvalidate.books();
 
-      // Invalidate specific book if it's an update
+      // Invalidate specific book if it's an update (targeted + cheap)
       if (event.type === "book_updated") {
         queryClient.invalidateQueries({
           queryKey: ["books", event.bookId],
@@ -190,10 +216,8 @@ function handleEntityEvent(
           queryKey: ["libraries", event.libraryId],
         });
 
-        // Invalidate series in this library
-        queryClient.invalidateQueries({
-          queryKey: ["series"],
-        });
+        // Series in this library may have changed (book counts, etc.)
+        listInvalidate.series();
       }
       break;
     }
@@ -203,10 +227,9 @@ function handleEntityEvent(
     case "series_deleted":
     case "series_bulk_purged":
     case "series_metadata_updated": {
-      // Invalidate series queries - use default to ensure Recommended section updates
-      queryClient.invalidateQueries({
-        queryKey: ["series"],
-      });
+      // Invalidate the (heavy) series list, throttled so a bulk operation
+      // emitting many series events coalesces into a handful of refetches.
+      listInvalidate.series();
 
       // Invalidate specific series if it's an update
       if (
@@ -247,35 +270,21 @@ function handleEntityEvent(
         `Cover updated for ${event.entityType} ${event.entityId}, cache-bust timestamp: ${timestamp}`,
       );
 
+      // A cover change only affects the entity's IMAGE, not its list data.
+      // MediaCard / detail views read the cache-bust timestamp recorded above
+      // from the cover store and re-render the image on their own — no list
+      // refetch is needed. Re-pulling the whole series/books list on every
+      // cover event caused a refetch storm during bulk thumbnail regeneration
+      // (one heavy refetch per series, hundreds of them). So invalidate only
+      // the specific entity's detail query (cheap, keeps cover-source fields
+      // current); never the list.
       if (event.entityType === "book") {
-        // Invalidate the specific book query
         queryClient.invalidateQueries({
           queryKey: ["books", event.entityId],
         });
-        // Invalidate all book list queries (marks them as stale)
-        queryClient.invalidateQueries({
-          queryKey: ["books"],
-        });
-        // Force immediate refetch of active queries to trigger component re-render
-        // This ensures MediaCard components pick up the new cache-busting timestamp
-        queryClient.refetchQueries({
-          queryKey: ["books"],
-          type: "active",
-        });
       } else if (event.entityType === "series") {
-        // Invalidate the specific series query
         queryClient.invalidateQueries({
           queryKey: ["series", event.entityId],
-        });
-        // Invalidate all series list queries (marks them as stale)
-        queryClient.invalidateQueries({
-          queryKey: ["series"],
-        });
-        // Force immediate refetch of active queries to trigger component re-render
-        // This ensures MediaCard components pick up the new cache-busting timestamp
-        queryClient.refetchQueries({
-          queryKey: ["series"],
-          type: "active",
         });
       }
       break;
@@ -297,12 +306,8 @@ function handleEntityEvent(
       // When a library is deleted, also invalidate all books and series queries
       // since they may contain data from the deleted library
       if (event.type === "library_deleted") {
-        queryClient.invalidateQueries({
-          queryKey: ["books"],
-        });
-        queryClient.invalidateQueries({
-          queryKey: ["series"],
-        });
+        listInvalidate.books();
+        listInvalidate.series();
       }
       break;
     }
