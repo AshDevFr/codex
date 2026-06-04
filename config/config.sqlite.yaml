@@ -15,8 +15,15 @@ database:
       synchronous: NORMAL
       # Note: foreign_keys is ALWAYS ON for data integrity (cannot be disabled)
     # Connection Pool Settings (optional - defaults shown)
-    # max_connections: 16
+    # max_connections: 64
     # min_connections: 2
+    # Per-request query fan-out bound: how many related-table queries a single
+    # list/detail request runs at once (caps connections held per request).
+    # Kept low for SQLite (writes serialize; queries are cheap lookups).
+    # batch_fan_out: 4
+    # Separate pool for in-process background work (task workers, scheduler,
+    # pollers) so heavy background queries cannot drain the API pool.
+    # background_max_connections: 4
     # acquire_timeout_seconds: 30
     # idle_timeout_seconds: 300
     # max_lifetime_seconds: 1800

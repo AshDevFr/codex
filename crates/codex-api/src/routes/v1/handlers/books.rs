@@ -206,7 +206,7 @@ pub async fn books_to_dtos(
 
     // Fan out one batched query per related table. Previous per-row loops
     // produced O(books) sequential DB roundtrips here.
-    let limiter = crate::db_batch::fan_out_limiter(crate::db_batch::DEFAULT_BATCH_FAN_OUT);
+    let limiter = crate::db_batch::fan_out_limiter(crate::db_batch::configured_fan_out());
     use crate::db_batch::with_permit;
     let (series_metadata_result, book_metadata_result, libraries_result, progress_result) = tokio::join!(
         with_permit(
@@ -350,7 +350,7 @@ pub async fn books_to_full_dtos_batched(
 
     // Fetch all related data in parallel, bounded so a single request cannot
     // hold one pool connection per query and exhaust the pool.
-    let limiter = crate::db_batch::fan_out_limiter(crate::db_batch::DEFAULT_BATCH_FAN_OUT);
+    let limiter = crate::db_batch::fan_out_limiter(crate::db_batch::configured_fan_out());
     use crate::db_batch::with_permit;
     let (metadata_map, series_metadata_map, library_map, progress_map, genres_map, tags_map) = tokio::join!(
         with_permit(

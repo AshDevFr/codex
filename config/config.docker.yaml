@@ -17,6 +17,16 @@ database:
     # Connection Pool Settings (optional - defaults shown)
     # max_connections: 100
     # min_connections: 5
+    # Per-request query fan-out bound: how many related-table queries a single
+    # list/detail request runs at once (caps connections held per request).
+    # Higher than SQLite since Postgres runs queries truly concurrently.
+    # batch_fan_out: 8
+    # Separate pool for in-process background work (task workers, scheduler,
+    # pollers). NOTE: additive to max_connections; ensure the Postgres server's
+    # max_connections covers the total when workers run in the same process.
+    # Multi-pod deployments run serve with CODEX_DISABLE_WORKERS=true, so no
+    # extra pool is created there.
+    # background_max_connections: 16
     # acquire_timeout_seconds: 30
     # idle_timeout_seconds: 600
     # max_lifetime_seconds: 3600

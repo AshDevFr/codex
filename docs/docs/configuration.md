@@ -73,23 +73,29 @@ database:
   sqlite:
     path: ./data/codex.db
     # Connection pool settings
-    max_connections: 16        # Maximum pool size (default: 16)
+    max_connections: 64        # Maximum pool size (default: 64)
     min_connections: 2         # Minimum warm connections (default: 2)
     acquire_timeout_seconds: 30  # Wait time for connection (default: 30)
     idle_timeout_seconds: 300    # Idle connection timeout (default: 300 = 5 min)
     max_lifetime_seconds: 1800   # Max connection lifetime (default: 1800 = 30 min)
+    batch_fan_out: 4           # Per-request query fan-out bound (default: 4)
+    background_max_connections: 4  # Background-work pool size (default: 4)
 ```
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `max_connections` | `16` | Maximum connections in pool |
+| `max_connections` | `64` | Maximum connections in pool |
 | `min_connections` | `2` | Minimum warm connections |
 | `acquire_timeout_seconds` | `30` | How long to wait for a connection |
 | `idle_timeout_seconds` | `300` | Idle connection timeout (5 min) |
 | `max_lifetime_seconds` | `1800` | Maximum connection lifetime (30 min) |
+| `batch_fan_out` | `4` | Max related-table queries one request runs at once |
+| `background_max_connections` | `4` | Connections for the in-process background pool |
 
 :::tip SQLite Pool Sizing
-SQLite with WAL mode handles concurrent reads well, but writes are serialized. The default of 16 connections works well for most workloads. Increase if you see "connection pool timeout" errors during heavy load.
+SQLite with WAL mode handles concurrent reads well, but writes are serialized. Connections are cheap file handles under WAL, so the default of 64 gives headroom for many concurrent readers (e.g. multiple browser tabs).
+
+`batch_fan_out` caps how many related-table queries a single list/detail request runs concurrently, so a few simultaneous requests cannot each grab a connection per query and exhaust the pool. `background_max_connections` gives in-process task workers, the scheduler, and pollers a **separate** pool, so a scan or analysis burst cannot starve interactive API requests. Increase `max_connections` if you still see "connection pool timeout" errors under heavy load.
 :::
 
 ### PostgreSQL (Recommended for Production)
@@ -112,7 +118,13 @@ database:
     acquire_timeout_seconds: 30  # Wait time for connection (default: 30)
     idle_timeout_seconds: 600    # Idle connection timeout (default: 600 = 10 min)
     max_lifetime_seconds: 3600   # Max connection lifetime (default: 3600 = 1 hour)
+    batch_fan_out: 8           # Per-request query fan-out bound (default: 8)
+    background_max_connections: 16  # Background-work pool size (default: 16)
 ```
+
+:::warning PostgreSQL connection budget
+`background_max_connections` is **additive** to `max_connections` whenever task workers run in the same process as the web server. Ensure the PostgreSQL server's own `max_connections` covers the total (API pool + background pool). Multi-pod deployments run the web server with `CODEX_DISABLE_WORKERS=true`, so no background pool is created there. Codex logs a warning at startup if the configured pools exceed the server limit.
+:::
 
 #### PostgreSQL SSL Modes
 

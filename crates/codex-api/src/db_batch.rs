@@ -15,14 +15,33 @@
 //! a homogeneous `buffer_unordered` stream would require.
 
 use std::future::Future;
+use std::sync::OnceLock;
 use tokio::sync::Semaphore;
 
-/// Default per-request fan-out bound.
-///
-/// Phase 3 of the DB-resilience work replaces this constant with a per-backend
-/// configurable value (SQLite low, PostgreSQL higher). Until then a single
-/// conservative default applies to every backend.
+/// Fallback per-request fan-out bound used until [`set_fan_out`] is called
+/// (e.g. in tests that exercise handlers without going through `serve`).
 pub const DEFAULT_BATCH_FAN_OUT: usize = 4;
+
+/// Process-wide resolved fan-out bound, set once at startup from the per-backend
+/// database config. It is a process constant (the backend never changes at
+/// runtime), so a global avoids threading the value through every converter and
+/// call site. Unset → [`DEFAULT_BATCH_FAN_OUT`].
+static CONFIGURED_FAN_OUT: OnceLock<usize> = OnceLock::new();
+
+/// Set the process-wide fan-out bound from configuration. Called once during
+/// startup. Clamped to at least 1. Subsequent calls are ignored (the first
+/// value wins), which keeps it stable across the process lifetime.
+pub fn set_fan_out(bound: usize) {
+    let _ = CONFIGURED_FAN_OUT.set(bound.max(1));
+}
+
+/// The configured fan-out bound, or [`DEFAULT_BATCH_FAN_OUT`] if unset.
+pub fn configured_fan_out() -> usize {
+    CONFIGURED_FAN_OUT
+        .get()
+        .copied()
+        .unwrap_or(DEFAULT_BATCH_FAN_OUT)
+}
 
 /// Build a [`Semaphore`] that bounds concurrent batched reads to `bound`.
 ///
@@ -55,6 +74,15 @@ mod tests {
     fn fan_out_limiter_clamps_zero_to_one() {
         assert_eq!(fan_out_limiter(0).available_permits(), 1);
         assert_eq!(fan_out_limiter(4).available_permits(), 4);
+    }
+
+    #[test]
+    fn configured_fan_out_is_always_positive() {
+        // Whether or not set_fan_out has run in this process, the bound must be
+        // >= 1 so a request can always acquire a permit. (We avoid calling
+        // set_fan_out here: CONFIGURED_FAN_OUT is process-global and a write
+        // would leak into other tests in this binary.)
+        assert!(configured_fan_out() >= 1);
     }
 
     /// `with_permit` must (a) return each arm's value in order and (b) never let

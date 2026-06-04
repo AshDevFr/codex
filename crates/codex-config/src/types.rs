@@ -501,6 +501,50 @@ impl DatabaseConfig {
                 .unwrap_or(30),
         }
     }
+
+    /// Per-request query fan-out bound for the current database type.
+    ///
+    /// Bounds how many related-table queries a single request runs at once, and
+    /// therefore how many pool connections it can hold. Clamped to at least 1.
+    pub fn batch_fan_out(&self) -> usize {
+        let raw = match self.db_type {
+            DatabaseType::Postgres => self.postgres.as_ref().map(|c| c.batch_fan_out).unwrap_or(8),
+            DatabaseType::SQLite => self.sqlite.as_ref().map(|c| c.batch_fan_out).unwrap_or(4),
+        };
+        raw.max(1)
+    }
+
+    /// Maximum connections for the separate background-work pool, by database type.
+    pub fn background_max_connections(&self) -> u32 {
+        match self.db_type {
+            DatabaseType::Postgres => self
+                .postgres
+                .as_ref()
+                .map(|c| c.background_max_connections)
+                .unwrap_or(16),
+            DatabaseType::SQLite => self
+                .sqlite
+                .as_ref()
+                .map(|c| c.background_max_connections)
+                .unwrap_or(4),
+        }
+    }
+
+    /// Maximum connections for the primary (API) pool, by database type.
+    pub fn max_connections(&self) -> u32 {
+        match self.db_type {
+            DatabaseType::Postgres => self
+                .postgres
+                .as_ref()
+                .map(|c| c.max_connections)
+                .unwrap_or(100),
+            DatabaseType::SQLite => self
+                .sqlite
+                .as_ref()
+                .map(|c| c.max_connections)
+                .unwrap_or(64),
+        }
+    }
 }
 
 impl Default for DatabaseConfig {
@@ -578,6 +622,19 @@ pub struct PostgresConfig {
     /// Maximum time a database operation can hold a connection before timing out.
     /// Prevents indefinite connection holds from slow queries or stuck operations.
     pub operation_deadline_seconds: u64,
+
+    /// Maximum number of related-table queries a single request runs at once
+    /// (default: 8). Bounds how many pool connections one request can hold while
+    /// enriching list/detail rows. Higher than SQLite because PostgreSQL
+    /// executes queries truly concurrently, so the parallelism is worth keeping.
+    pub batch_fan_out: usize,
+
+    /// Maximum connections for the separate background-work pool (default: 16)
+    /// used by in-process task workers, the scheduler, and pollers.
+    /// NOTE: this is additive to `max_connections`; ensure the PostgreSQL
+    /// server's `max_connections` accommodates the total when workers run in
+    /// the same process (validated with a warning at startup).
+    pub background_max_connections: u32,
 }
 
 impl Default for PostgresConfig {
@@ -599,6 +656,11 @@ impl Default for PostgresConfig {
             idle_timeout_seconds: env_or("CODEX_DATABASE_POSTGRES_IDLE_TIMEOUT", 600),
             max_lifetime_seconds: env_or("CODEX_DATABASE_POSTGRES_MAX_LIFETIME", 3600),
             operation_deadline_seconds: env_or("CODEX_DATABASE_POSTGRES_OPERATION_DEADLINE", 30),
+            batch_fan_out: env_or("CODEX_DATABASE_POSTGRES_BATCH_FAN_OUT", 8),
+            background_max_connections: env_or(
+                "CODEX_DATABASE_POSTGRES_BACKGROUND_MAX_CONNECTIONS",
+                16,
+            ),
         }
     }
 }
@@ -610,14 +672,29 @@ pub struct SQLiteConfig {
     pub pragmas: Option<HashMap<String, String>>,
 
     // Connection Pool Settings
-    /// Maximum number of connections in the pool (default: 16)
+    /// Maximum number of connections in the pool (default: 64)
     /// SQLite with WAL mode handles concurrent reads well, but writes are serialized.
-    /// 16 connections is enough for most workloads without overwhelming the single-writer lock.
+    /// Connections are cheap file handles under WAL; a larger pool gives headroom
+    /// for concurrent readers (e.g. many browser tabs) without overwhelming the
+    /// single-writer lock.
     pub max_connections: u32,
 
     /// Minimum number of connections to maintain in the pool (default: 2)
     /// Keep a couple warm connections ready
     pub min_connections: u32,
+
+    /// Maximum number of related-table queries a single request runs at once
+    /// (default: 4). List/detail handlers enrich rows from many tables; this
+    /// bounds how many of those run concurrently, and therefore how many pool
+    /// connections one request can hold, so a few concurrent requests cannot
+    /// exhaust the pool. Kept low for SQLite (writes serialize; queries are
+    /// cheap indexed lookups, so parallelism gains are marginal).
+    pub batch_fan_out: usize,
+
+    /// Maximum connections for the separate background-work pool (default: 4)
+    /// used by task workers, the scheduler, and pollers when they run in the
+    /// same process, so heavy background work cannot drain the API pool.
+    pub background_max_connections: u32,
 
     /// Connection acquire timeout in seconds (default: 30)
     /// How long to wait for a connection before failing
@@ -650,12 +727,17 @@ impl Default for SQLiteConfig {
                 .unwrap_or_else(|| "data/codex.db".to_string()),
             pragmas: Some(pragmas),
             // Pool settings - SQLite is more conservative due to single-writer lock
-            max_connections: env_or("CODEX_DATABASE_SQLITE_MAX_CONNECTIONS", 16),
+            max_connections: env_or("CODEX_DATABASE_SQLITE_MAX_CONNECTIONS", 64),
             min_connections: env_or("CODEX_DATABASE_SQLITE_MIN_CONNECTIONS", 2),
             acquire_timeout_seconds: env_or("CODEX_DATABASE_SQLITE_ACQUIRE_TIMEOUT", 30),
             idle_timeout_seconds: env_or("CODEX_DATABASE_SQLITE_IDLE_TIMEOUT", 300),
             max_lifetime_seconds: env_or("CODEX_DATABASE_SQLITE_MAX_LIFETIME", 1800),
             operation_deadline_seconds: env_or("CODEX_DATABASE_SQLITE_OPERATION_DEADLINE", 30),
+            batch_fan_out: env_or("CODEX_DATABASE_SQLITE_BATCH_FAN_OUT", 4),
+            background_max_connections: env_or(
+                "CODEX_DATABASE_SQLITE_BACKGROUND_MAX_CONNECTIONS",
+                4,
+            ),
         }
     }
 }
@@ -1405,6 +1487,50 @@ verification_url_base: https://codex.example.com
         // Test default values (should be 30 seconds)
         let config = DatabaseConfig::default();
         assert_eq!(config.operation_deadline_seconds(), 30);
+    }
+
+    #[test]
+    fn test_fan_out_and_background_pool_accessors() {
+        // SQLite: explicit values flow through the accessors.
+        let sqlite = DatabaseConfig {
+            db_type: DatabaseType::SQLite,
+            postgres: None,
+            sqlite: Some(SQLiteConfig {
+                batch_fan_out: 6,
+                background_max_connections: 3,
+                max_connections: 64,
+                ..SQLiteConfig::default()
+            }),
+        };
+        assert_eq!(sqlite.batch_fan_out(), 6);
+        assert_eq!(sqlite.background_max_connections(), 3);
+        assert_eq!(sqlite.max_connections(), 64);
+
+        // batch_fan_out is clamped to at least 1 (a 0 would deadlock a request).
+        let zero = DatabaseConfig {
+            db_type: DatabaseType::SQLite,
+            postgres: None,
+            sqlite: Some(SQLiteConfig {
+                batch_fan_out: 0,
+                ..SQLiteConfig::default()
+            }),
+        };
+        assert_eq!(zero.batch_fan_out(), 1);
+
+        // Postgres: explicit values flow through the accessors.
+        let postgres = DatabaseConfig {
+            db_type: DatabaseType::Postgres,
+            postgres: Some(PostgresConfig {
+                batch_fan_out: 12,
+                background_max_connections: 20,
+                max_connections: 100,
+                ..PostgresConfig::default()
+            }),
+            sqlite: None,
+        };
+        assert_eq!(postgres.batch_fan_out(), 12);
+        assert_eq!(postgres.background_max_connections(), 20);
+        assert_eq!(postgres.max_connections(), 100);
     }
 
     #[test]

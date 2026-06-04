@@ -49,6 +49,10 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     // Initialize database connection
     let db = init_database(&config).await?;
 
+    // Resolve the per-request query fan-out bound for this backend once, so the
+    // list/detail handlers cap how many pool connections a single request holds.
+    codex_api::db_batch::set_fan_out(config.database.batch_fan_out());
+
     // Create cancellation token for graceful shutdown of background tasks
     let background_task_cancel = CancellationToken::new();
 
@@ -116,10 +120,17 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     let background_db = if disable_workers {
         None
     } else {
-        let background_max = match config.database.db_type {
-            DatabaseType::SQLite => 4,
-            DatabaseType::Postgres => 16,
-        };
+        let background_max = config.database.background_max_connections();
+        // On Postgres the background pool is additive to the API pool; warn (not
+        // fatal) if the combined demand likely exceeds the server's limit.
+        if config.database.db_type == DatabaseType::Postgres {
+            warn_if_pg_budget_exceeded(
+                db.sea_orm_connection(),
+                config.database.max_connections(),
+                background_max,
+            )
+            .await;
+        }
         Some(codex_db::Database::new_background(&config.database, background_max).await?)
     };
     // Connection handed to background subsystems: the dedicated pool when one
@@ -673,6 +684,57 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     info!("Shutdown complete");
     server_result?;
     Ok(())
+}
+
+/// Warn (non-fatal) when the API pool plus the additive background pool exceed
+/// the PostgreSQL server's `max_connections`. Best-effort: if the value can't be
+/// read, the check is skipped quietly. SQLite has no server-side connection
+/// limit, so this only runs for Postgres.
+async fn warn_if_pg_budget_exceeded(
+    conn: &sea_orm::DatabaseConnection,
+    api_max: u32,
+    background_max: u32,
+) {
+    use sea_orm::{ConnectionTrait, Statement};
+
+    let requested = api_max + background_max;
+    let backend = conn.get_database_backend();
+    match conn
+        .query_one(Statement::from_string(
+            backend,
+            "SHOW max_connections".to_string(),
+        ))
+        .await
+    {
+        Ok(Some(row)) => {
+            // Postgres returns max_connections as a text column.
+            let server_max = row
+                .try_get::<String>("", "max_connections")
+                .ok()
+                .and_then(|s| s.parse::<u32>().ok());
+            match server_max {
+                Some(server_max) if requested > server_max => {
+                    tracing::warn!(
+                        "Configured connection pools (API {api_max} + background {background_max} \
+                         = {requested}) exceed PostgreSQL server max_connections ({server_max}). \
+                         Reduce database.postgres.max_connections or background_max_connections, \
+                         or raise the server limit, to avoid connection failures."
+                    );
+                }
+                Some(server_max) => {
+                    info!(
+                        "PostgreSQL connection budget OK: API {api_max} + background \
+                         {background_max} = {requested} <= server max {server_max}"
+                    );
+                }
+                None => {}
+            }
+        }
+        Ok(None) => {}
+        Err(e) => {
+            tracing::warn!("Could not read PostgreSQL max_connections for budget check: {e}");
+        }
+    }
 }
 
 /// Wait for shutdown signal (SIGTERM or SIGINT/Ctrl+C)

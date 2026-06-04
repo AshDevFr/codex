@@ -849,7 +849,7 @@ pub async fn bulk_reset_series_metadata(
 
         // Clear all associated data, bounded so this does not hold one pool
         // connection per query at once.
-        let limiter = crate::db_batch::fan_out_limiter(crate::db_batch::DEFAULT_BATCH_FAN_OUT);
+        let limiter = crate::db_batch::fan_out_limiter(crate::db_batch::configured_fan_out());
         use crate::db_batch::with_permit;
         let (
             genres_res,
