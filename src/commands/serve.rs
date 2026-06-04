@@ -99,6 +99,36 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         .map(|v| v.eq_ignore_ascii_case("true") || v == "1")
         .unwrap_or(false);
 
+    // Background connection pool isolation.
+    //
+    // Task workers, the scheduler, and pollers do heavy/bursty DB work that, on
+    // a shared pool, can hold every connection and starve interactive API
+    // requests (acute on SQLite, whose pool is small). When workers run in this
+    // process, give that background work its own smaller pool so a scan storm
+    // cannot drain the pool serving HTTP requests. Web-only deployments
+    // (workers disabled) keep a single pool — there is no in-process background
+    // work to isolate.
+    //
+    // NOTE: on Postgres this pool is additive to the API pool, so the server's
+    // max_connections must accommodate the total. The common multi-pod Postgres
+    // deployment runs serve with CODEX_DISABLE_WORKERS=true, so no extra pool is
+    // created there. Phase 3 makes the size configurable and validates the total.
+    let background_db = if disable_workers {
+        None
+    } else {
+        let background_max = match config.database.db_type {
+            DatabaseType::SQLite => 4,
+            DatabaseType::Postgres => 16,
+        };
+        Some(codex_db::Database::new_background(&config.database, background_max).await?)
+    };
+    // Connection handed to background subsystems: the dedicated pool when one
+    // exists, otherwise the primary pool (single-pool/web-only mode).
+    let background_conn = background_db
+        .as_ref()
+        .map(|d| d.sea_orm_connection().clone())
+        .unwrap_or_else(|| db.sea_orm_connection().clone());
+
     // Initialize thumbnail service (needed for both workers, API handlers, and scheduler)
     let thumbnail_service = Arc::new(codex_services::ThumbnailService::new(config.files.clone()));
     info!(
@@ -110,11 +140,8 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     info!("Initializing job scheduler...");
     let scheduler: Arc<tokio::sync::Mutex<codex_scheduler::Scheduler>> =
         Arc::new(tokio::sync::Mutex::new(
-            codex_scheduler::Scheduler::new(
-                db.sea_orm_connection().clone(),
-                &config.scheduler.timezone,
-            )
-            .await?,
+            codex_scheduler::Scheduler::new(background_conn.clone(), &config.scheduler.timezone)
+                .await?,
         ));
     scheduler.lock().await.start().await?;
     info!("Job scheduler started successfully");
@@ -141,7 +168,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     // gauges have current values. Cheap: five `COUNT(*)` queries. The poller
     // exits as soon as the cancellation token fires.
     let inventory_poller_handle = codex_api::observability::inventory::spawn_poller(
-        Arc::new(db.sea_orm_connection().clone()),
+        Arc::new(background_conn.clone()),
         std::time::Duration::from_secs(30),
         background_task_cancel.clone(),
     );
@@ -405,9 +432,10 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
 
         info!("Starting {} task queue worker(s)...", worker_count);
 
-        // Spawn multiple workers for parallel task processing
+        // Spawn multiple workers for parallel task processing on the isolated
+        // background pool so heavy task DB work cannot starve API requests.
         let (handles, channels) = spawn_workers(
-            db.sea_orm_connection(),
+            &background_conn,
             worker_count,
             event_broadcaster.clone(),
             settings_service.clone(),
