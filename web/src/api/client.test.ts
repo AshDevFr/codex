@@ -427,6 +427,11 @@ describe("Rate Limit Retry Logic", () => {
 });
 
 describe("Refresh Token Retry Logic", () => {
+  // The client logs a warning when it clears the session on refresh failure;
+  // several tests here exercise that path. Silence it to keep the output clean
+  // while still letting tests assert it was emitted.
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+
   beforeEach(() => {
     localStorage.clear();
     vi.clearAllMocks();
@@ -445,6 +450,7 @@ describe("Refresh Token Retry Logic", () => {
       isAuthenticated: true,
     });
     vi.spyOn(navigationService, "navigateTo").mockImplementation(() => {});
+    warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -455,6 +461,7 @@ describe("Refresh Token Retry Logic", () => {
       isAuthenticated: false,
     });
     localStorage.clear();
+    vi.restoreAllMocks();
   });
 
   function getResponseInterceptor() {
@@ -547,9 +554,6 @@ describe("Refresh Token Retry Logic", () => {
         transient: true,
       }),
     );
-    // Suppress the diagnostic warn the interceptor emits.
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-
     const mockError = {
       response: { status: 401, data: { error: "Unauthorized" } },
       config: { url: "/books/abc/progress", method: "put", headers: {} },
@@ -566,8 +570,6 @@ describe("Refresh Token Retry Logic", () => {
     expect(useAuthStore.getState().refreshToken).toBe("old-refresh");
     expect(navigationService.navigateTo).not.toHaveBeenCalled();
     expect(warnSpy).toHaveBeenCalled();
-
-    warnSpy.mockRestore();
   });
 
   it("keeps the session alive when /auth/refresh fails transiently (5xx)", async () => {
@@ -578,7 +580,6 @@ describe("Refresh Token Retry Logic", () => {
         status: 503,
       }),
     );
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     const mockError = {
       response: { status: 401, data: { error: "Unauthorized" } },
@@ -590,8 +591,6 @@ describe("Refresh Token Retry Logic", () => {
 
     expect(useAuthStore.getState().isAuthenticated).toBe(true);
     expect(navigationService.navigateTo).not.toHaveBeenCalled();
-
-    warnSpy.mockRestore();
   });
 
   it("does not loop: a request that 401s again after retry surfaces the error", async () => {

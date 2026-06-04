@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { cacheNameForBook, matchDownloadedBookRequest } from "./routeMatcher";
+import {
+  cacheNameForBook,
+  matchDownloadedBookRequest,
+  shouldServeSpaShell,
+} from "./routeMatcher";
 
 function u(path: string): URL {
   return new URL(`https://example.com${path}`);
@@ -124,5 +128,34 @@ describe("cacheNameForBook", () => {
   it("produces a deterministic per-book cache name", () => {
     expect(cacheNameForBook("abc")).toBe("codex-book-abc");
     expect(cacheNameForBook("xyz-123")).toBe("codex-book-xyz-123");
+  });
+});
+
+describe("shouldServeSpaShell", () => {
+  it("serves the SPA shell for client-side app routes", () => {
+    expect(shouldServeSpaShell("/")).toBe(true);
+    expect(shouldServeSpaShell("/library/123/series/abc")).toBe(true);
+    expect(shouldServeSpaShell("/settings")).toBe(true);
+  });
+
+  it("bypasses the SPA shell for the bare /docs Scalar route", () => {
+    // Regression: /docs is a leaf route. A denylist anchored to /docs/ would
+    // miss the bare path and the active SW would serve the React shell, which
+    // has no /docs route (404).
+    expect(shouldServeSpaShell("/docs")).toBe(false);
+    expect(shouldServeSpaShell("/docs/")).toBe(false);
+  });
+
+  it("bypasses the SPA shell for backend API prefixes", () => {
+    expect(shouldServeSpaShell("/api/v1/books")).toBe(false);
+    expect(shouldServeSpaShell("/opds/v2/catalog")).toBe(false);
+    expect(shouldServeSpaShell("/komga/api/v1/series")).toBe(false);
+    expect(shouldServeSpaShell("/health")).toBe(false);
+  });
+
+  it("does not over-match app routes that merely start with a backend word", () => {
+    // /docsomething is a hypothetical app route, not the Scalar docs page.
+    expect(shouldServeSpaShell("/docsomething")).toBe(true);
+    expect(shouldServeSpaShell("/healthcheck")).toBe(true);
   });
 });

@@ -32,6 +32,7 @@ import {
 import {
   cacheNameForBook,
   matchDownloadedBookRequest,
+  NAVIGATION_DENYLIST,
 } from "./lib/offline/routeMatcher";
 
 declare const self: ServiceWorkerGlobalScope & {
@@ -44,14 +45,8 @@ cleanupOutdatedCaches();
 
 // 2) SPA navigation fallback. Serve /index.html for client-side routes so
 //    deep links (e.g. /library/123/series/abc) resolve under standalone
-//    display mode. Backend paths are excluded so they always hit network.
-const NAVIGATION_DENYLIST = [
-  /^\/api\//,
-  /^\/opds\//,
-  /^\/komga\//,
-  /^\/docs\//,
-  /^\/health$/,
-];
+//    display mode. Backend paths (NAVIGATION_DENYLIST) are excluded so they
+//    always hit network.
 registerRoute(
   new NavigationRoute(createHandlerBoundToURL("/index.html"), {
     denylist: NAVIGATION_DENYLIST,
