@@ -100,7 +100,7 @@ describe("useEntityEvents", () => {
     });
   });
 
-  it("should invalidate and refetch queries and record cover update on CoverUpdated event", async () => {
+  it("should record cover update and invalidate only the specific entity on CoverUpdated event (no list refetch)", async () => {
     let capturedCallback: ((event: EntityChangeEvent) => void) | undefined;
 
     vi.spyOn(eventsApi.eventsApi, "subscribeToEntityEvents").mockImplementation(
@@ -136,19 +136,21 @@ describe("useEntityEvents", () => {
     }
 
     await waitFor(() => {
-      // Invalidate the specific series
+      // Only the specific series detail query is invalidated (cheap, targeted)
       expect(invalidateSpy).toHaveBeenCalledWith({
         queryKey: ["series", "series-123"],
       });
-      // Invalidate all series list queries
-      expect(invalidateSpy).toHaveBeenCalledWith({
-        queryKey: ["series"],
-      });
-      // Refetch all active series queries to trigger component re-render
-      expect(refetchSpy).toHaveBeenCalledWith({
-        queryKey: ["series"],
-        type: "active",
-      });
+    });
+
+    // A cover change must NOT refetch the heavy list — the image refreshes via
+    // the cover-timestamp store. Re-pulling the list per cover event was the
+    // refetch storm we removed.
+    expect(invalidateSpy).not.toHaveBeenCalledWith({
+      queryKey: ["series"],
+    });
+    expect(refetchSpy).not.toHaveBeenCalledWith({
+      queryKey: ["series"],
+      type: "active",
     });
 
     // Verify cover update was recorded in the store for cache-busting
@@ -293,7 +295,7 @@ describe("useEntityEvents", () => {
     });
   });
 
-  it("should invalidate Recommended section queries on cover_updated event", async () => {
+  it("should NOT invalidate list/Recommended queries on cover_updated (image refresh is store-driven)", async () => {
     let capturedCallback: ((event: EntityChangeEvent) => void) | undefined;
 
     vi.spyOn(eventsApi.eventsApi, "subscribeToEntityEvents").mockImplementation(
@@ -302,6 +304,9 @@ describe("useEntityEvents", () => {
         return mockUnsubscribe;
       },
     );
+
+    // Reset cover updates store for isolation
+    useCoverUpdatesStore.setState({ updates: {} });
 
     // Set up queries that match the Recommended section's query keys
     queryClient.setQueryData(["series", "recently-added", "lib-1"], []);
@@ -328,30 +333,30 @@ describe("useEntityEvents", () => {
       capturedCallback(seriesEvent);
     }
 
-    // All series queries should be invalidated (stale)
+    // Confirm the handler ran by checking it recorded the cover timestamp
+    // (the image-refresh mechanism).
     await waitFor(() => {
-      const recentlyAddedState = queryClient.getQueryState([
-        "series",
-        "recently-added",
-        "lib-1",
-      ]);
-      const recentlyUpdatedState = queryClient.getQueryState([
-        "series",
-        "recently-updated",
-        "lib-1",
-      ]);
-
-      expect(recentlyAddedState?.isInvalidated).toBe(true);
-      expect(recentlyUpdatedState?.isInvalidated).toBe(true);
+      expect(
+        useCoverUpdatesStore.getState().getCoverTimestamp("series-123"),
+      ).toBeDefined();
     });
 
-    // Books queries should NOT be invalidated by series cover update
-    const booksRecentlyAddedState = queryClient.getQueryState([
-      "books",
-      "recently-added",
-      "lib-1",
-    ]);
-    expect(booksRecentlyAddedState?.isInvalidated).toBe(false);
+    // A series cover update must NOT invalidate the series list/Recommended
+    // queries — only the image refreshes via the store. This is what removes
+    // the per-cover refetch storm.
+    expect(
+      queryClient.getQueryState(["series", "recently-added", "lib-1"])
+        ?.isInvalidated,
+    ).toBe(false);
+    expect(
+      queryClient.getQueryState(["series", "recently-updated", "lib-1"])
+        ?.isInvalidated,
+    ).toBe(false);
+    // And it does not touch books either.
+    expect(
+      queryClient.getQueryState(["books", "recently-added", "lib-1"])
+        ?.isInvalidated,
+    ).toBe(false);
 
     // Simulate receiving a cover_updated event for a book
     const bookEvent: EntityChangeEvent = {
@@ -366,22 +371,21 @@ describe("useEntityEvents", () => {
       capturedCallback(bookEvent);
     }
 
-    // All book queries should now be invalidated (stale)
+    // Likewise a book cover update records its timestamp but does not
+    // invalidate the book list/Recommended queries.
     await waitFor(() => {
-      const booksRecentlyAddedState = queryClient.getQueryState([
-        "books",
-        "recently-added",
-        "lib-1",
-      ]);
-      const booksInProgressState = queryClient.getQueryState([
-        "books",
-        "in-progress",
-        "lib-1",
-      ]);
-
-      expect(booksRecentlyAddedState?.isInvalidated).toBe(true);
-      expect(booksInProgressState?.isInvalidated).toBe(true);
+      expect(
+        useCoverUpdatesStore.getState().getCoverTimestamp("book-456"),
+      ).toBeDefined();
     });
+    expect(
+      queryClient.getQueryState(["books", "recently-added", "lib-1"])
+        ?.isInvalidated,
+    ).toBe(false);
+    expect(
+      queryClient.getQueryState(["books", "in-progress", "lib-1"])
+        ?.isInvalidated,
+    ).toBe(false);
   });
 
   it("should invalidate and refetch plugin queries on plugin events", async () => {

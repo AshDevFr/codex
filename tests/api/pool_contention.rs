@@ -27,7 +27,13 @@ use tempfile::TempDir;
 /// Number of concurrent `GET /api/v1/series` requests to fire.
 const CONCURRENT_REQUESTS: usize = 24;
 /// Series to seed so the list endpoint does real per-row enrichment work.
-const SEEDED_SERIES: usize = 25;
+///
+/// Sized large enough that a regression to the old per-series N+1 fan-out
+/// (`join_all` over the singular `series_to_dto`, ~6 queries per series, all
+/// unbounded) would demand far more than the 4-connection pool can supply and
+/// blow the acquire timeout — whereas the batched converter issues a fixed
+/// handful of queries regardless of page size.
+const SEEDED_SERIES: usize = 60;
 
 /// Build a SQLite database with a small connection pool and a short acquire
 /// timeout, so connection starvation surfaces as a fast failure rather than a
