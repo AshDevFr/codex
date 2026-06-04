@@ -174,6 +174,38 @@ impl Database {
         Ok(Self { conn })
     }
 
+    /// Create a separate connection pool for background work.
+    ///
+    /// Task workers, the scheduler, and pollers do heavy or bursty database
+    /// work that, on a shared pool, can hold every connection and starve the
+    /// interactive API requests (acute on SQLite, whose pool is small). Giving
+    /// background work its own, smaller pool keeps a scan storm from draining
+    /// the pool that serves HTTP requests.
+    ///
+    /// The pool targets the *same* database (SQLite file / Postgres server) as
+    /// [`Database::new`], reusing identical connect and pragma setup, but with
+    /// an independent pool capped at `max_connections`. It deliberately does
+    /// **not** run migrations — the primary connection owns schema setup.
+    pub async fn new_background(config: &DatabaseConfig, max_connections: u32) -> Result<Self> {
+        let mut cfg = config.clone();
+        match cfg.db_type {
+            DatabaseType::SQLite => {
+                if let Some(sqlite) = cfg.sqlite.as_mut() {
+                    sqlite.max_connections = max_connections;
+                    sqlite.min_connections = sqlite.min_connections.min(max_connections);
+                }
+            }
+            DatabaseType::Postgres => {
+                if let Some(postgres) = cfg.postgres.as_mut() {
+                    postgres.max_connections = max_connections;
+                    postgres.min_connections = postgres.min_connections.min(max_connections);
+                }
+            }
+        }
+        info!("Initializing separate background connection pool...");
+        Self::new(&cfg).await
+    }
+
     /// Run database migrations
     ///
     /// This will apply all pending migrations. Migrator::up() is idempotent,
@@ -492,6 +524,64 @@ mod tests {
         assert!(db.sea_orm_connection().ping().await.is_ok());
 
         db.close().await;
+    }
+
+    #[tokio::test]
+    async fn test_new_background_is_independent_pool_over_same_db() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test.db");
+
+        let config = DatabaseConfig {
+            db_type: DatabaseType::SQLite,
+            postgres: None,
+            sqlite: Some(SQLiteConfig {
+                path: db_path.to_str().unwrap().to_string(),
+                pragmas: None,
+                max_connections: 16,
+                ..SQLiteConfig::default()
+            }),
+        };
+
+        // Primary pool owns schema setup.
+        let primary = Database::new(&config).await.unwrap();
+        primary.run_migrations().await.unwrap();
+
+        // Background pool: separate, smaller pool over the same file. No
+        // migrations run here; it must still see the primary's schema.
+        let background = Database::new_background(&config, 4).await.unwrap();
+        assert!(background.health_check().await.is_ok());
+
+        // A write through the primary pool is visible through the background
+        // pool — proving they target the same database, not two pools over two
+        // independent `:memory:` databases.
+        let backend = primary.sea_orm_connection().get_database_backend();
+        primary
+            .sea_orm_connection()
+            .execute(sea_orm::Statement::from_string(
+                backend,
+                "CREATE TABLE pool_probe (id INTEGER PRIMARY KEY)".to_string(),
+            ))
+            .await
+            .unwrap();
+        background
+            .sea_orm_connection()
+            .execute(sea_orm::Statement::from_string(
+                backend,
+                "INSERT INTO pool_probe (id) VALUES (1)".to_string(),
+            ))
+            .await
+            .unwrap();
+        let row = primary
+            .sea_orm_connection()
+            .query_one(sea_orm::Statement::from_string(
+                backend,
+                "SELECT COUNT(*) AS n FROM pool_probe".to_string(),
+            ))
+            .await
+            .unwrap()
+            .unwrap();
+        let count: i64 = row.try_get("", "n").unwrap();
+        assert_eq!(count, 1);
     }
 
     #[tokio::test]
