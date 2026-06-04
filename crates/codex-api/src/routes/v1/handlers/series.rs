@@ -261,7 +261,7 @@ async fn series_to_dtos_batched(
 
     // Bound how many of these related-table queries run at once so a single
     // request cannot hold one pool connection per query and exhaust the pool.
-    let limiter = crate::db_batch::fan_out_limiter(crate::db_batch::DEFAULT_BATCH_FAN_OUT);
+    let limiter = crate::db_batch::fan_out_limiter(crate::db_batch::configured_fan_out());
     use crate::db_batch::with_permit;
     let (
         metadata_map,
@@ -436,7 +436,7 @@ async fn series_to_full_dtos_batched(
     // Fetch all related data using batched queries, but bound how many run at
     // once so a single request cannot hold one pool connection per query and
     // exhaust the pool under concurrent load.
-    let limiter = crate::db_batch::fan_out_limiter(crate::db_batch::DEFAULT_BATCH_FAN_OUT);
+    let limiter = crate::db_batch::fan_out_limiter(crate::db_batch::configured_fan_out());
     use crate::db_batch::with_permit;
     let (
         metadata_map,
@@ -3111,7 +3111,7 @@ pub async fn reset_series_metadata(
 
     // Clear all associated data in parallel, bounded so this does not hold one
     // pool connection per query at once.
-    let limiter = crate::db_batch::fan_out_limiter(crate::db_batch::DEFAULT_BATCH_FAN_OUT);
+    let limiter = crate::db_batch::fan_out_limiter(crate::db_batch::configured_fan_out());
     use crate::db_batch::with_permit;
     let (
         genres_res,
@@ -3476,7 +3476,7 @@ pub async fn get_series_metadata(
         .ok_or_else(|| ApiError::Internal("Series metadata not found".to_string()))?;
 
     // Fetch all related data in parallel
-    let limiter = crate::db_batch::fan_out_limiter(crate::db_batch::DEFAULT_BATCH_FAN_OUT);
+    let limiter = crate::db_batch::fan_out_limiter(crate::db_batch::configured_fan_out());
     use crate::db_batch::with_permit;
     let (genres_result, tags_result, alt_titles_result, ext_ratings_result, ext_links_result) = tokio::join!(
         with_permit(

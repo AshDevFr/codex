@@ -39,9 +39,22 @@ database:
 WAL mode allows readers while a write is in progress, dramatically improving responsiveness during library scans.
 :::
 
+#### Connection Pool Behaviour Under Load
+
+Two settings keep a single SQLite instance from stalling when many requests arrive at once (for example, several open browser tabs):
+
+- **`batch_fan_out`** (default `4`) bounds how many related-table queries a single list/detail request runs concurrently. Without this bound, one request could hold a connection per query and a few simultaneous requests would exhaust the pool, causing multi-second `connection pool timeout` waits.
+- **`background_max_connections`** (default `4`) gives in-process task workers, the scheduler, and pollers a **separate** connection pool. A library scan or analysis burst therefore cannot drain the pool that serves interactive API requests. This pool is only created when workers run in the same process (the default single-container `serve`); web-only deployments keep a single pool.
+
+If you still hit pool-timeout warnings under heavy concurrent browsing, raise `max_connections` (cheap under WAL — connections are just file handles).
+
+:::note
+These settings reduce connection contention, but **writes still serialize** on SQLite: a heavy scan slows other writes regardless of pool sizing. That is inherent to SQLite. For write-heavy or many-user workloads, use PostgreSQL.
+:::
+
 #### SQLite Limitations
 
-- **Single writer**: Only one process can write at a time
+- **Single writer**: Only one process can write at a time (heavy scans slow all writes)
 - **No horizontal scaling**: Cannot run multiple Codex instances
 - **Concurrent users**: Best for 5-10 simultaneous users
 - **File locking**: Network filesystems (NFS, SMB) may cause issues
