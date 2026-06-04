@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.33.3] - 2026-06-04
+
+### 🐛 Bug Fixes
+
+- *(pwa)* Serve API docs for bare /docs path under active service worker
+
 ## [1.33.2] - 2026-06-03
 
 ### 🐛 Bug Fixes
