@@ -26,12 +26,11 @@ import {
   IconTag,
   IconTrash,
 } from "@tabler/icons-react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { bulkMetadataApi } from "@/api/bulkMetadata";
-import { genresApi } from "@/api/genres";
-import { tagsApi } from "@/api/tags";
 import { CustomMetadataEditor } from "@/components/forms/CustomMetadataEditor";
+import { useAllGenres, useAllTags } from "@/hooks/useReferenceData";
 import {
   AUTHOR_ROLE_DISPLAY,
   BOOK_TYPE_DISPLAY,
@@ -248,19 +247,9 @@ export function BulkMetadataEditModal({
   const [customMetadataLocked, setCustomMetadataLocked] = useState(false);
   const [customMetadataTouched, setCustomMetadataTouched] = useState(false);
 
-  // Fetch all genres for autocomplete
-  const { data: allGenres } = useQuery({
-    queryKey: ["genres"],
-    queryFn: () => genresApi.getAll(),
-    enabled: opened,
-  });
-
-  // Fetch all tags for autocomplete
-  const { data: allTags } = useQuery({
-    queryKey: ["tags"],
-    queryFn: () => tagsApi.getAll(),
-    enabled: opened,
-  });
+  // Fetch all genres + tags for autocomplete (shared, long-cached reference data)
+  const { data: allGenres } = useAllGenres(opened);
+  const { data: allTags } = useAllTags(opened);
 
   const genreNames = useMemo(
     () => allGenres?.map((g) => g.name) ?? [],

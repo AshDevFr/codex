@@ -55,6 +55,7 @@ import {
 } from "@/components/forms/lockable";
 import { extractSourceFromUrl } from "@/components/series/ExternalLinks";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useAllGenres, useAllTags } from "@/hooks/useReferenceData";
 import type { BookAuthor, BookAuthorRole } from "@/types/book-metadata";
 import { AUTHOR_ROLE_DISPLAY } from "@/types/book-metadata";
 
@@ -220,19 +221,9 @@ export function SeriesMetadataEditModal({
     enabled: opened,
   });
 
-  // Fetch all genres for suggestions
-  const { data: allGenres } = useQuery({
-    queryKey: ["genres"],
-    queryFn: () => genresApi.getAll(),
-    enabled: opened,
-  });
-
-  // Fetch all tags for suggestions
-  const { data: allTags } = useQuery({
-    queryKey: ["tags"],
-    queryFn: () => tagsApi.getAll(),
-    enabled: opened,
-  });
+  // Fetch all genres + tags for suggestions (shared, long-cached reference data)
+  const { data: allGenres } = useAllGenres(opened);
+  const { data: allTags } = useAllTags(opened);
 
   // Fetch existing covers for this series
   const { data: existingCovers, refetch: refetchCovers } = useQuery({

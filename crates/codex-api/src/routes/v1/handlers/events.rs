@@ -1,9 +1,11 @@
 use crate::{AppState, error::ApiError, extractors::AuthContext, permissions::Permission};
 use axum::{
     extract::State,
-    response::sse::{Event, KeepAlive, Sse},
+    response::{
+        IntoResponse,
+        sse::{Event, KeepAlive, Sse},
+    },
 };
-use futures::stream::Stream;
 use std::{convert::Infallible, sync::Arc, time::Duration};
 use tokio::time::timeout;
 use tracing::{debug, warn};
@@ -48,7 +50,7 @@ use tracing::{debug, warn};
 pub async fn entity_events_stream(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
-) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, ApiError> {
+) -> Result<impl IntoResponse, ApiError> {
     // Require read access to libraries
     auth.require_permission(&Permission::LibrariesRead)?;
 
@@ -86,7 +88,7 @@ pub async fn entity_events_stream(
                     match serde_json::to_string(&event) {
                         Ok(json) => {
                             debug!("Sending entity event to client: {:?}", event.event);
-                            yield Ok(Event::default().data(json));
+                            yield Ok::<Event, Infallible>(Event::default().data(json));
                         }
                         Err(e) => {
                             warn!("Failed to serialize entity event: {}", e);
@@ -118,11 +120,16 @@ pub async fn entity_events_stream(
         debug!("Entity events stream ended for user {}", auth.user_id);
     };
 
-    Ok(Sse::new(stream).keep_alive(
+    let sse = Sse::new(stream).keep_alive(
         KeepAlive::new()
             .interval(Duration::from_secs(15))
             .text("keep-alive"),
-    ))
+    );
+    // Disable proxy/CDN response buffering so the 15s keep-alive (and events)
+    // reach the client promptly. Without this, nginx-style proxies buffer the
+    // stream and an idle-timeout closes the connection, forcing the client to
+    // reconnect every ~minute (which then re-runs refetch-on-reconnect).
+    Ok(([("X-Accel-Buffering", "no")], sse))
 }
 
 /// Subscribe to real-time task progress events via SSE
@@ -169,7 +176,7 @@ pub async fn entity_events_stream(
 pub async fn task_progress_stream(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
-) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, ApiError> {
+) -> Result<impl IntoResponse, ApiError> {
     // Require read access to libraries
     auth.require_permission(&Permission::LibrariesRead)?;
 
@@ -210,7 +217,7 @@ pub async fn task_progress_stream(
                                 "Sending task progress event to client: task_id={}, type={}, status={:?}",
                                 event.task_id, event.task_type, event.status
                             );
-                            yield Ok(Event::default().data(json));
+                            yield Ok::<Event, Infallible>(Event::default().data(json));
                         }
                         Err(e) => {
                             warn!("Failed to serialize task progress event: {}", e);
@@ -242,11 +249,14 @@ pub async fn task_progress_stream(
         debug!("Task progress stream ended for user {}", auth.user_id);
     };
 
-    Ok(Sse::new(stream).keep_alive(
+    let sse = Sse::new(stream).keep_alive(
         KeepAlive::new()
             .interval(Duration::from_secs(15))
             .text("keep-alive"),
-    ))
+    );
+    // See entity_events_stream: disable proxy buffering so keep-alives are not
+    // held back and the connection isn't idle-timed-out into a reconnect loop.
+    Ok(([("X-Accel-Buffering", "no")], sse))
 }
 
 #[cfg(test)]

@@ -13,8 +13,13 @@ import { PERMISSIONS } from "@/types/permissions";
 type ConnectionState = "connecting" | "connected" | "disconnected" | "failed";
 
 /** Poll cadence for the processing-tasks / pending-counts backstop. SSE pushes
- * live progress; this catches anything the event stream missed. */
-const POLL_INTERVAL_MS = 10_000;
+ * live progress, so polling only catches what the event stream missed — and is
+ * adaptive: fast while work is in flight, slow when idle. With nothing running
+ * there is nothing to reconcile, so a long idle interval keeps an open tab from
+ * hammering `/tasks` + `/tasks/stats` forever (SSE still announces new work the
+ * instant it starts, which flips polling back to the active cadence). */
+const POLL_ACTIVE_MS = 10_000;
+const POLL_IDLE_MS = 60_000;
 /** How long a completed/failed task lingers in the active list so the UI can
  * show its terminal state before it disappears. */
 const COMPLETED_TASK_LINGER_MS = 5_000;
@@ -91,7 +96,11 @@ class TaskProgressManager {
   private pendingCounts: PendingTaskCounts = {};
   private connectionState: ConnectionState = "disconnected";
   private readonly listeners = new Set<() => void>();
-  private pollTimer: ReturnType<typeof setInterval> | null = null;
+  private pollTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Current cadence of the armed poll timer, so re-evaluation can skip
+   * re-arming when the cadence hasn't changed (avoids timer thrash while a
+   * stream of SSE progress events flows). `null` means no timer is armed. */
+  private pollMode: "active" | "idle" | null = null;
   private sseUnsubscribe: (() => void) | null = null;
   /** Per-task deletion timers for terminal tasks (the 5s linger). Tracked so
    * teardown can clear them and avoid firing after the last unsubscribe. */
@@ -118,7 +127,9 @@ class TaskProgressManager {
 
   getSnapshot = (): TaskProgressSnapshot => this.snapshot;
 
-  /** Rebuild the cached snapshot from current state and notify subscribers. */
+  /** Rebuild the cached snapshot from current state and notify subscribers.
+   * Also re-evaluates the poll cadence: any state change (poll result, SSE
+   * event, terminal-task removal) can flip the active/idle decision. */
   private commit() {
     this.snapshot = {
       activeTasks: sortTasks(Array.from(this.tasks.values())),
@@ -128,28 +139,81 @@ class TaskProgressManager {
     for (const listener of this.listeners) {
       listener();
     }
+    this.scheduleNextPoll();
   }
 
+  /** Is there work worth polling for? Running/pending tasks need progress
+   * reconciliation; a non-zero pending count means work is about to start.
+   * When neither holds, there is nothing for the backstop poll to catch, so it
+   * drops to the idle cadence (SSE still announces new work instantly). */
+  private hasActiveWork(): boolean {
+    for (const task of this.tasks.values()) {
+      if (task.status === "running" || task.status === "pending") {
+        return true;
+      }
+    }
+    for (const count of Object.values(this.pendingCounts)) {
+      if (count > 0) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** (Re)arm the single backstop poll timer at the cadence matching current
+   * activity. No-op when the correct cadence is already armed, so a burst of
+   * SSE events doesn't keep resetting (and starving) the timer. */
+  private scheduleNextPoll() {
+    if (this.listeners.size === 0) {
+      return; // stopped — don't arm a timer with no subscribers
+    }
+    const desired: "active" | "idle" = this.hasActiveWork() ? "active" : "idle";
+    if (this.pollTimer !== null && this.pollMode === desired) {
+      return;
+    }
+    if (this.pollTimer !== null) {
+      clearTimeout(this.pollTimer);
+    }
+    this.pollMode = desired;
+    this.pollTimer = setTimeout(
+      () => {
+        this.pollTimer = null;
+        this.pollMode = null;
+        void this.poll();
+      },
+      desired === "active" ? POLL_ACTIVE_MS : POLL_IDLE_MS,
+    );
+  }
+
+  /** One backstop poll cycle. Each refresh commits, which re-arms the next
+   * poll; the trailing schedule guarantees the loop survives even if both
+   * fetches error (and thus skip their commit). */
+  private poll = async () => {
+    await this.refreshPendingCounts();
+    await this.refreshProcessingTasks("preserve");
+    this.scheduleNextPoll();
+  };
+
   private start() {
-    // Prime immediately, then poll as a backstop to the SSE stream.
+    // Prime immediately; the commit from each refresh arms the backstop poll at
+    // the right cadence. Arm an idle timer up front too, so the loop runs even
+    // if the initial fetches never resolve.
     void this.refreshPendingCounts();
     void this.refreshProcessingTasks("replace");
-    this.pollTimer = setInterval(() => {
-      void this.refreshPendingCounts();
-      void this.refreshProcessingTasks("preserve");
-    }, POLL_INTERVAL_MS);
     this.sseUnsubscribe = subscribeToTaskProgress(
       this.handleEvent,
       this.handleError,
       this.handleConnectionStateChange,
     );
+    this.scheduleNextPoll();
   }
 
   private stop() {
     if (this.pollTimer) {
-      clearInterval(this.pollTimer);
+      clearTimeout(this.pollTimer);
       this.pollTimer = null;
     }
+    this.pollMode = null;
     this.sseUnsubscribe?.();
     this.sseUnsubscribe = null;
     for (const timer of this.lingerTimers.values()) {
@@ -172,6 +236,8 @@ class TaskProgressManager {
       if (!is401(error)) {
         console.error("Failed to fetch pending task counts:", error);
       }
+      // Keep the backstop loop alive even when a poll fails (no commit ran).
+      this.scheduleNextPoll();
     }
   };
 
