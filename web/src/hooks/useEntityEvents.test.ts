@@ -136,9 +136,9 @@ describe("useEntityEvents", () => {
     }
 
     await waitFor(() => {
-      // Only the specific series detail query is invalidated (cheap, targeted)
+      // Only the series detail DTO is invalidated (carries cover-source fields).
       expect(invalidateSpy).toHaveBeenCalledWith({
-        queryKey: ["series", "series-123"],
+        queryKey: ["series", "series-123", "full"],
       });
     });
 
@@ -147,6 +147,12 @@ describe("useEntityEvents", () => {
     // refetch storm we removed.
     expect(invalidateSpy).not.toHaveBeenCalledWith({
       queryKey: ["series"],
+    });
+    // ...nor the bare ["series", id] prefix, which would also drag in the
+    // series' tracking/aliases/releases queries that a cover change never
+    // touches (a thumbnail-regen burst amplifier).
+    expect(invalidateSpy).not.toHaveBeenCalledWith({
+      queryKey: ["series", "series-123"],
     });
     expect(refetchSpy).not.toHaveBeenCalledWith({
       queryKey: ["series"],

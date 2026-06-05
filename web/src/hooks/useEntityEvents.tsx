@@ -303,20 +303,29 @@ function handleEntityEvent(
       // emitting many series events coalesces into a handful of refetches.
       listInvalidate.series();
 
-      // Invalidate specific series if it's an update
+      // Invalidate specific series if it's an update.
       if (
         event.type === "series_updated" ||
         event.type === "series_metadata_updated"
       ) {
-        queryClient.invalidateQueries({
-          queryKey: ["series", event.seriesId],
-        });
-        // For metadata updates, also refetch active queries to immediately update the UI
-        if (event.type === "series_metadata_updated") {
-          queryClient.refetchQueries({
-            queryKey: ["series", event.seriesId],
-            type: "active",
-          });
+        // A content/metadata change affects the detail DTO and the metadata
+        // view — NOT the independent sub-resources (tracking config, aliases,
+        // release ledger), which change only via their own event types
+        // (release_announced, etc.). Invalidating the bare ["series", id]
+        // prefix would refetch all of them: an analyze run over many series
+        // with detail tabs open turned that into a needless
+        // tracking+aliases+releases refetch burst per analyzed series.
+        const detailKeys = [
+          ["series", event.seriesId, "full"],
+          ["series", event.seriesId, "metadata"],
+        ] as const;
+        for (const queryKey of detailKeys) {
+          queryClient.invalidateQueries({ queryKey });
+          // For metadata updates, refetch the active detail views immediately
+          // so the open page reflects the change without waiting for staleness.
+          if (event.type === "series_metadata_updated") {
+            queryClient.refetchQueries({ queryKey, type: "active" });
+          }
         }
       }
 
@@ -348,15 +357,18 @@ function handleEntityEvent(
       // refetch is needed. Re-pulling the whole series/books list on every
       // cover event caused a refetch storm during bulk thumbnail regeneration
       // (one heavy refetch per series, hundreds of them). So invalidate only
-      // the specific entity's detail query (cheap, keeps cover-source fields
-      // current); never the list.
+      // the entity's DETAIL DTO (which carries the cover-source fields), not
+      // the bare ["series"/"books", id] prefix — that prefix also matches the
+      // independent sub-resources (tracking/aliases/releases for series,
+      // genres/tags/external-* for books) that a cover change never touches,
+      // and bulk thumbnail regen turned that into a per-entity refetch burst.
       if (event.entityType === "book") {
         queryClient.invalidateQueries({
-          queryKey: ["books", event.entityId],
+          queryKey: ["books", event.entityId, "detail"],
         });
       } else if (event.entityType === "series") {
         queryClient.invalidateQueries({
-          queryKey: ["series", event.entityId],
+          queryKey: ["series", event.entityId, "full"],
         });
       }
       break;
