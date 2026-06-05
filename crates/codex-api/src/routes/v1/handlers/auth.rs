@@ -19,7 +19,7 @@ use codex_db::{
     entities::users,
     repositories::{EmailVerificationTokenRepository, SettingsRepository, UserRepository},
 };
-use codex_services::RefreshTokenError;
+use codex_services::{RefreshTokenError, RefreshTokenService};
 use codex_utils::password;
 use sea_orm::ActiveModelTrait;
 use sea_orm::Set;
@@ -43,6 +43,34 @@ fn extract_user_agent(headers: &HeaderMap) -> Option<String> {
         s.truncate(USER_AGENT_MAX_LEN);
     }
     Some(s)
+}
+
+/// Issue a refresh token for `user_id` when the feature is enabled, capturing a
+/// best-effort `User-Agent` / IP for the persisted row. Returns the plain token
+/// (shown to the client exactly once) or `None` when refresh tokens are disabled.
+///
+/// This is the single issuance seam shared by every login method (password
+/// login, OIDC callback, ...). Routing all of them through one function keeps
+/// the refresh flow uniform: a prior regression issued refresh tokens for
+/// password login only, silently leaving OIDC sessions without one, so they were
+/// still logged out the moment their access token expired.
+pub async fn issue_refresh_token_if_enabled(
+    refresh_token_service: &RefreshTokenService,
+    refresh_token_enabled: bool,
+    user_id: Uuid,
+    headers: &HeaderMap,
+    client_info: &ClientInfo,
+) -> Result<Option<String>, ApiError> {
+    if !refresh_token_enabled {
+        return Ok(None);
+    }
+
+    let user_agent = extract_user_agent(headers);
+    let issued = refresh_token_service
+        .issue(user_id, user_agent, client_info.ip_address.clone())
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to issue refresh token: {}", e)))?;
+    Ok(Some(issued.plain_token))
 }
 
 /// Parse permissions from JSON value (stored as array of strings in database)
@@ -141,17 +169,14 @@ pub async fn login(
     // Optionally issue a refresh token alongside the access token.
     // Persisted as sha256 with a fresh `family_id`; the plain value is shown
     // to the client exactly once in this response.
-    let refresh_token = if state.auth_config.refresh_token_enabled {
-        let user_agent = extract_user_agent(&request_headers);
-        let issued = state
-            .refresh_token_service
-            .issue(user.id, user_agent, client_info.ip_address.clone())
-            .await
-            .map_err(|e| ApiError::Internal(format!("Failed to issue refresh token: {}", e)))?;
-        Some(issued.plain_token)
-    } else {
-        None
-    };
+    let refresh_token = issue_refresh_token_if_enabled(
+        &state.refresh_token_service,
+        state.auth_config.refresh_token_enabled,
+        user.id,
+        &request_headers,
+        &client_info,
+    )
+    .await?;
 
     // Build response
     let role = user.get_role().to_string();

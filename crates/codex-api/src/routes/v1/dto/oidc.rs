@@ -71,6 +71,13 @@ pub struct OidcCallbackResponse {
     )]
     pub access_token: String,
 
+    /// Refresh token, issued only when `auth.refresh_token_enabled` is true.
+    ///
+    /// Omitted from the payload entirely when refresh tokens are disabled, so
+    /// the redirect fragment stays compact for the legacy access-token-only flow.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub refresh_token: Option<String>,
+
     /// Token type (always "Bearer")
     #[schema(example = "Bearer")]
     pub token_type: String,
@@ -168,6 +175,42 @@ mod tests {
 
         assert_eq!(query.error.as_deref(), Some("access_denied"));
         assert_eq!(query.error_description.as_deref(), Some("User cancelled"));
+    }
+
+    fn sample_callback_response(refresh_token: Option<String>) -> OidcCallbackResponse {
+        OidcCallbackResponse {
+            access_token: "access".to_string(),
+            refresh_token,
+            token_type: "Bearer".to_string(),
+            expires_in: 86400,
+            user: crate::routes::v1::dto::UserInfo {
+                id: uuid::Uuid::nil(),
+                username: "alice".to_string(),
+                email: "alice@example.com".to_string(),
+                role: "reader".to_string(),
+                email_verified: true,
+                permissions: vec![],
+            },
+            new_account: false,
+            provider: "authentik".to_string(),
+        }
+    }
+
+    #[test]
+    fn test_callback_response_includes_refresh_token_when_present() {
+        let response = sample_callback_response(Some("refresh-value".to_string()));
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"refreshToken\":\"refresh-value\""));
+    }
+
+    #[test]
+    fn test_callback_response_omits_refresh_token_when_absent() {
+        let response = sample_callback_response(None);
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(
+            !json.contains("refreshToken"),
+            "refreshToken must be omitted entirely when None, got: {json}"
+        );
     }
 
     #[test]

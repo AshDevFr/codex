@@ -31115,6 +31115,13 @@
             "description": "OIDC provider used for authentication",
             "example": "authentik"
           },
+          "refreshToken": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Refresh token, issued only when `auth.refresh_token_enabled` is true.\n\nOmitted from the payload entirely when refresh tokens are disabled, so\nthe redirect fragment stays compact for the legacy access-token-only flow."
+          },
           "tokenType": {
             "type": "string",
             "description": "Token type (always \"Bearer\")",

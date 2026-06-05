@@ -7,8 +7,12 @@ use super::super::dto::{
     OidcCallbackQuery, OidcCallbackResponse, OidcLoginResponse, OidcProviderInfo,
     OidcProvidersResponse, UserInfo,
 };
-use super::auth::build_auth_cookie;
-use crate::{error::ApiError, extractors::AppState, permissions::UserRole};
+use super::auth::{build_auth_cookie, issue_refresh_token_if_enabled};
+use crate::{
+    error::ApiError,
+    extractors::{AppState, ClientInfo},
+    permissions::UserRole,
+};
 use axum::{
     Json,
     extract::{Path, Query, State},
@@ -152,6 +156,8 @@ pub async fn login(
 pub async fn callback(
     State(state): State<Arc<AppState>>,
     Path(provider): Path<String>,
+    client_info: ClientInfo,
+    request_headers: HeaderMap,
     Query(query): Query<OidcCallbackQuery>,
 ) -> Result<Response, ApiError> {
     // Check for IdP-reported errors first
@@ -393,11 +399,23 @@ pub async fn callback(
         .generate_token(user.id, user.username.clone(), user.get_role())
         .map_err(|e| ApiError::Internal(format!("Failed to generate token: {}", e)))?;
 
+    // Issue a refresh token through the same seam password login uses, so OIDC
+    // sessions survive access-token expiry instead of being bounced to login.
+    let refresh_token = issue_refresh_token_if_enabled(
+        &state.refresh_token_service,
+        state.auth_config.refresh_token_enabled,
+        user.id,
+        &request_headers,
+        &client_info,
+    )
+    .await?;
+
     // Build response data for frontend
     let role = user.get_role().to_string();
     let permissions = parse_permissions_json(&user.permissions);
     let response = OidcCallbackResponse {
         access_token: access_token.clone(),
+        refresh_token,
         token_type: "Bearer".to_string(),
         expires_in: state.auth_config.jwt_expiry_hours as u64 * 3600,
         user: UserInfo {

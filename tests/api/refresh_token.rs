@@ -10,12 +10,13 @@
 mod common;
 
 use chrono::{Duration, Utc};
-use codex::api::extractors::AppState;
 use codex::api::extractors::auth::UserAuthCache;
+use codex::api::extractors::{AppState, ClientInfo};
 use codex::api::routes::create_router;
 use codex::api::routes::v1::dto::auth::{
     LoginRequest, LoginResponse, LogoutRequest, RefreshRequest, TokenPair,
 };
+use codex::api::routes::v1::handlers::auth::issue_refresh_token_if_enabled;
 use codex::config::{
     AuthConfig, DatabaseConfig, EmailConfig, FilesConfig, ObservabilityConfig, PdfConfig,
 };
@@ -335,6 +336,69 @@ async fn logout_revokes_supplied_refresh_token() {
         .unwrap()
         .unwrap();
     assert!(row.revoked_at.is_some());
+}
+
+/// The shared issuance seam used by every login method (password login, OIDC
+/// callback). When enabled it persists a row and hands back the plain token;
+/// when disabled it is a no-op. This is the function the OIDC callback relies on
+/// to stop logging SSO users out mid-session.
+#[tokio::test]
+async fn issue_helper_persists_token_when_enabled() {
+    let (db, _tmp) = setup_test_db().await;
+    let hash = password::hash_password("pw").unwrap();
+    let user = create_test_user("grace", "grace@example.com", &hash, false);
+    let saved = UserRepository::create(&db, &user).await.unwrap();
+
+    let service = RefreshTokenService::new(db.clone(), 30);
+    let client_info = ClientInfo {
+        ip_address: Some("203.0.113.7".to_string()),
+    };
+
+    let issued = issue_refresh_token_if_enabled(
+        &service,
+        true,
+        saved.id,
+        &hyper::HeaderMap::new(),
+        &client_info,
+    )
+    .await
+    .unwrap();
+
+    let plain = issued.expect("token issued when enabled");
+    assert!(!plain.is_empty());
+
+    let row = RefreshTokenRepository::get_by_hash(&db, &RefreshTokenService::hash_token(&plain))
+        .await
+        .unwrap()
+        .expect("persisted refresh-token row");
+    assert_eq!(row.user_id, saved.id);
+    assert_eq!(row.ip_address.as_deref(), Some("203.0.113.7"));
+    assert!(row.revoked_at.is_none());
+}
+
+#[tokio::test]
+async fn issue_helper_is_noop_when_disabled() {
+    let (db, _tmp) = setup_test_db().await;
+    let hash = password::hash_password("pw").unwrap();
+    let user = create_test_user("heidi", "heidi@example.com", &hash, false);
+    let saved = UserRepository::create(&db, &user).await.unwrap();
+
+    let service = RefreshTokenService::new(db.clone(), 30);
+    let client_info = ClientInfo { ip_address: None };
+
+    let issued = issue_refresh_token_if_enabled(
+        &service,
+        false,
+        saved.id,
+        &hyper::HeaderMap::new(),
+        &client_info,
+    )
+    .await
+    .unwrap();
+
+    // Disabled is a pure early return: no token handed back and, because the
+    // helper bails before touching the service, nothing is persisted.
+    assert!(issued.is_none(), "no token when feature disabled");
 }
 
 #[tokio::test]

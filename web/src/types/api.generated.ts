@@ -13229,6 +13229,13 @@ export interface components {
              */
             provider: string;
             /**
+             * @description Refresh token, issued only when `auth.refresh_token_enabled` is true.
+             *
+             *     Omitted from the payload entirely when refresh tokens are disabled, so
+             *     the redirect fragment stays compact for the legacy access-token-only flow.
+             */
+            refreshToken?: string | null;
+            /**
              * @description Token type (always "Bearer")
              * @example Bearer
              */
