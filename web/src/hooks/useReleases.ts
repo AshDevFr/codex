@@ -1,5 +1,10 @@
 import { notifications } from "@mantine/notifications";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  type QueryClient,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import {
   type BulkReleaseActionRequest,
@@ -34,6 +39,31 @@ export const releasesKeys = {
   sourcesRoot: ["release-sources"] as const,
 };
 
+/**
+ * Refresh the per-series release views touched by a release-state change.
+ *
+ * Release ledger panels are keyed `["series", id, "releases", …]`, which do NOT
+ * start with `["releases"]`, so the inbox/facets invalidation misses them. The
+ * previous code reached them with a bare `["series"]` invalidation — but that
+ * prefix-matches *every* series query (full, metadata, covers, tracking,
+ * aliases, and all the lists/home sections), none of which a release-state
+ * change touches (the series DTO carries no release-derived fields). With
+ * several detail tabs open, one dismiss/acquire became a full-namespace
+ * refetch. This targets only the release ledger panels (and, for ledger-wiping
+ * resets, the tracking row whose latest_known high-water mark can move).
+ */
+function invalidateSeriesReleaseViews(
+  queryClient: QueryClient,
+  opts?: { tracking?: boolean },
+) {
+  queryClient.invalidateQueries({
+    predicate: (query) =>
+      query.queryKey[0] === "series" &&
+      (query.queryKey[2] === "releases" ||
+        (opts?.tracking === true && query.queryKey[2] === "tracking")),
+  });
+}
+
 export function useReleaseFacets(params: ReleaseFacetsParams = {}) {
   return useQuery<ReleaseFacets>({
     queryKey: releasesKeys.facets(params),
@@ -49,7 +79,7 @@ export function useDeleteRelease() {
       // Delete touches the ledger and (server-side) the source's etag.
       // Invalidate both so the table and the source-admin row refresh.
       queryClient.invalidateQueries({ queryKey: ["releases"] });
-      queryClient.invalidateQueries({ queryKey: ["series"] });
+      invalidateSeriesReleaseViews(queryClient);
       queryClient.invalidateQueries({ queryKey: releasesKeys.sourcesRoot });
     },
     onError: notifyError("Failed to delete release"),
@@ -88,7 +118,7 @@ export function useBulkReleaseAction() {
         color: action === "delete" ? "orange" : "blue",
       });
       queryClient.invalidateQueries({ queryKey: ["releases"] });
-      queryClient.invalidateQueries({ queryKey: ["series"] });
+      invalidateSeriesReleaseViews(queryClient);
       if (action === "delete") {
         queryClient.invalidateQueries({ queryKey: releasesKeys.sourcesRoot });
       }
@@ -132,7 +162,7 @@ export function useDismissRelease() {
     mutationFn: (releaseId) => releasesApi.dismiss(releaseId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["releases"] });
-      queryClient.invalidateQueries({ queryKey: ["series"] });
+      invalidateSeriesReleaseViews(queryClient);
     },
     onError: notifyError("Failed to dismiss release"),
   });
@@ -144,7 +174,7 @@ export function useMarkReleaseAcquired() {
     mutationFn: (releaseId) => releasesApi.markAcquired(releaseId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["releases"] });
-      queryClient.invalidateQueries({ queryKey: ["series"] });
+      invalidateSeriesReleaseViews(queryClient);
     },
     onError: notifyError("Failed to mark release acquired"),
   });
@@ -161,7 +191,7 @@ export function usePatchRelease() {
       releasesApi.patchEntry(releaseId, update),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["releases"] });
-      queryClient.invalidateQueries({ queryKey: ["series"] });
+      invalidateSeriesReleaseViews(queryClient);
     },
     onError: notifyError("Failed to update release"),
   });
@@ -292,7 +322,7 @@ export function useResetReleaseSource() {
       // Reset wipes ledger rows, so invalidate everything that reads them.
       queryClient.invalidateQueries({ queryKey: releasesKeys.sourcesRoot });
       queryClient.invalidateQueries({ queryKey: releasesKeys.inboxRoot });
-      queryClient.invalidateQueries({ queryKey: ["series"] });
+      invalidateSeriesReleaseViews(queryClient, { tracking: true });
     },
     onError: notifyError("Failed to reset source"),
   });
@@ -323,7 +353,7 @@ export function useResetAllReleaseSources() {
       // covers everything that reads ledger rows.
       queryClient.invalidateQueries({ queryKey: releasesKeys.sourcesRoot });
       queryClient.invalidateQueries({ queryKey: releasesKeys.inboxRoot });
-      queryClient.invalidateQueries({ queryKey: ["series"] });
+      invalidateSeriesReleaseViews(queryClient, { tracking: true });
     },
     onError: notifyError("Failed to reset sources"),
   });
