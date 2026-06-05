@@ -806,6 +806,96 @@ async fn test_list_on_deck_empty_when_no_completed_books() {
     assert_eq!(book_list.total, 0);
 }
 
+#[tokio::test]
+async fn test_list_on_deck_paginates_across_series() {
+    use codex::db::repositories::{BookMetadataRepository, ReadProgressRepository};
+
+    let (db, _temp_dir) = setup_test_db().await;
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let password_hash = password::hash_password("admin123").unwrap();
+    let admin = create_test_user("admin", "admin@example.com", &password_hash, true);
+    let admin_user = UserRepository::create(&db, &admin).await.unwrap();
+    let token = state
+        .jwt_service
+        .generate_token(
+            admin_user.id,
+            admin_user.username.clone(),
+            admin_user.get_role(),
+        )
+        .unwrap();
+
+    // 3 series, each with 1 completed book + several unread books. The first
+    // unread (book 2) of each series is the expected on-deck pick.
+    let mut expected_first_unread = std::collections::HashSet::new();
+    for s in 0..3 {
+        let series = SeriesRepository::create(&db, library.id, &format!("Series {s}"), None)
+            .await
+            .unwrap();
+        let mut ids = Vec::new();
+        // 6 books per series: proves we return only the first unread, not all of them.
+        for i in 1..=6 {
+            let book = create_test_book_model(
+                series.id,
+                library.id,
+                &format!("/test/s{s}-book{i}.cbz"),
+                &format!("s{s}-book{i}.cbz"),
+                Some(format!("Book {i}")),
+            );
+            let created = BookRepository::create(&db, &book, None).await.unwrap();
+            BookMetadataRepository::create_with_title_and_number(
+                &db,
+                created.id,
+                Some(format!("Book {i}")),
+                Some(sea_orm::prelude::Decimal::from(i)),
+            )
+            .await
+            .unwrap();
+            ids.push(created.id);
+        }
+        // Complete book 1 → first unread is book 2.
+        ReadProgressRepository::upsert(&db, admin_user.id, ids[0], 10, true)
+            .await
+            .unwrap();
+        expected_first_unread.insert(ids[1]);
+    }
+
+    let app = create_test_router(state).await;
+
+    // Page 1 (pageSize 2): 2 of 3 on-deck series.
+    let req = get_request_with_auth("/api/v1/books/on-deck?page=1&pageSize=2", &token);
+    let (status, resp): (StatusCode, Option<BookListResponse>) =
+        make_json_request(app.clone(), req).await;
+    assert_eq!(status, StatusCode::OK);
+    let page1 = resp.unwrap();
+    assert_eq!(page1.total, 3, "three series have an on-deck book");
+    assert_eq!(page1.data.len(), 2);
+
+    // Page 2 (pageSize 2): the remaining series. This also guards the offset
+    // fix — the old code multiplied the offset by page_size and returned [].
+    let req2 = get_request_with_auth("/api/v1/books/on-deck?page=2&pageSize=2", &token);
+    let (status2, resp2): (StatusCode, Option<BookListResponse>) =
+        make_json_request(app, req2).await;
+    assert_eq!(status2, StatusCode::OK);
+    let page2 = resp2.unwrap();
+    assert_eq!(page2.total, 3);
+    assert_eq!(page2.data.len(), 1, "page 2 returns the third series");
+
+    // Union across pages == the first-unread book of each series (one per series),
+    // with no duplicates — proving series-level pagination and first-per-series.
+    let returned: std::collections::HashSet<_> = page1
+        .data
+        .iter()
+        .chain(page2.data.iter())
+        .map(|b| b.id)
+        .collect();
+    assert_eq!(returned, expected_first_unread);
+}
+
 // ============================================================================
 // Recently Added Books Tests
 // ============================================================================

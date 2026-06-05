@@ -1618,7 +1618,8 @@ impl BookRepository {
         db: &DatabaseConnection,
         user_id: Uuid,
         library_id: Option<Uuid>,
-        page: u64,
+        // 0-indexed row offset (callers pass `(page - 1) * page_size`).
+        offset: u64,
         page_size: u64,
         visibility: Option<&SeriesVisibility>,
     ) -> Result<(Vec<books::Model>, u64)> {
@@ -1674,17 +1675,52 @@ impl BookRepository {
             .await
             .context("Failed to get in-progress series")?;
 
-        // Step 3: Calculate eligible series (completed - in_progress)
-        let eligible_series: Vec<Uuid> = completed_series
+        // Step 3: Calculate eligible series (completed - in_progress).
+        let in_progress_set: std::collections::HashSet<Uuid> =
+            in_progress_series.into_iter().collect();
+        let mut eligible_series: Vec<Uuid> = completed_series
             .into_iter()
-            .filter(|s| !in_progress_series.contains(s))
+            .filter(|s| !in_progress_set.contains(s))
             .collect();
+
+        // Apply series-level visibility by pruning the eligible set: a book is
+        // visible iff its series is, so we never need to push the visibility
+        // predicate into the (heavier) book queries below. Mirrors
+        // `apply_book_visibility` semantics (deny wins; `Some(allow)` = whitelist).
+        if let Some(vis) = visibility
+            && !vis.is_unrestricted()
+        {
+            let excluded: std::collections::HashSet<Uuid> =
+                vis.excluded_series_ids.iter().copied().collect();
+            let allowed: Option<std::collections::HashSet<Uuid>> = vis
+                .allowed_series_ids
+                .as_ref()
+                .map(|ids| ids.iter().copied().collect());
+            eligible_series.retain(|s| {
+                !excluded.contains(s) && allowed.as_ref().is_none_or(|a| a.contains(s))
+            });
+        }
+
+        // Restrict to a single library if requested (series belong to one library).
+        if let Some(lib_id) = library_id
+            && !eligible_series.is_empty()
+        {
+            eligible_series = series::Entity::find()
+                .select_only()
+                .column(series::Column::Id)
+                .filter(series::Column::Id.is_in(eligible_series.clone()))
+                .filter(series::Column::LibraryId.eq(lib_id))
+                .into_tuple::<Uuid>()
+                .all(db)
+                .await
+                .context("Failed to filter eligible series by library")?;
+        }
 
         if eligible_series.is_empty() {
             return Ok((vec![], 0));
         }
 
-        // Step 4: Get all book IDs that have progress for this user (to exclude from unread)
+        // Step 4: Book IDs that have progress for this user (to exclude from unread).
         let books_with_progress: Vec<Uuid> = read_progress::Entity::find()
             .select_only()
             .column(read_progress::Column::BookId)
@@ -1694,30 +1730,58 @@ impl BookRepository {
             .await
             .context("Failed to get books with progress")?;
 
-        // Step 5: Get all books in eligible series that are unread
-        let mut unread_query = Books::find()
+        // Step 5: Of the eligible series, find which ones actually have an unread
+        // book (an eligible series whose books are all read has no on-deck book).
+        // This is the total, and it returns only series IDs — not the full row set
+        // the old implementation loaded into memory.
+        let mut on_deck_series_query = Books::find()
+            .select_only()
+            .column(books::Column::SeriesId)
+            .distinct()
             .filter(books::Column::SeriesId.is_in(eligible_series.clone()))
             .filter(books::Column::Deleted.eq(false));
-
-        // Exclude books that have progress
         if !books_with_progress.is_empty() {
-            unread_query = unread_query.filter(books::Column::Id.is_not_in(books_with_progress));
+            on_deck_series_query = on_deck_series_query
+                .filter(books::Column::Id.is_not_in(books_with_progress.clone()));
         }
+        let on_deck_series: std::collections::HashSet<Uuid> = on_deck_series_query
+            .into_tuple::<Uuid>()
+            .all(db)
+            .await
+            .context("Failed to find on-deck series")?
+            .into_iter()
+            .collect();
 
-        // Filter by library if specified
-        if let Some(lib_id) = library_id {
-            unread_query = unread_query
-                .join(JoinType::InnerJoin, books::Relation::Series.def())
-                .filter(series::Column::LibraryId.eq(lib_id));
+        // Step 6: Order the on-deck series by most-recent completed read (desc) and
+        // paginate the *series* list before touching any book rows.
+        let mut ordered_series: Vec<Uuid> = eligible_series
+            .into_iter()
+            .filter(|s| on_deck_series.contains(s))
+            .collect();
+        ordered_series.sort_by(|a, b| series_last_read.get(b).cmp(&series_last_read.get(a)));
+
+        let total = ordered_series.len() as u64;
+        // `offset` is already a 0-indexed row offset. (The previous
+        // implementation multiplied it by page_size again, so on-deck
+        // pagination past page 1 returned the wrong rows / nothing.)
+        let start = offset as usize;
+        if start >= ordered_series.len() {
+            return Ok((vec![], total));
         }
+        let end = (start + page_size as usize).min(ordered_series.len());
+        let page_series = &ordered_series[start..end];
 
-        // Hide books in series the caller cannot see.
-        unread_query = apply_book_visibility(unread_query, visibility);
-
-        // Order by series, then by book number/title/filename (from metadata)
+        // Step 7: Load unread books only for the page's series, then pick the first
+        // per series. Bounded by page_size, not by the user's library size.
         use crate::entities::book_metadata;
 
-        let all_unread_books = unread_query
+        let mut page_query = Books::find()
+            .filter(books::Column::SeriesId.is_in(page_series.to_vec()))
+            .filter(books::Column::Deleted.eq(false));
+        if !books_with_progress.is_empty() {
+            page_query = page_query.filter(books::Column::Id.is_not_in(books_with_progress));
+        }
+        let page_unread = page_query
             .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
             .order_by_asc(books::Column::SeriesId)
             .order_by_asc(book_metadata::Column::Number)
@@ -1726,35 +1790,19 @@ impl BookRepository {
             .order_by_asc(books::Column::FileName)
             .all(db)
             .await
-            .context("Failed to get unread books")?;
+            .context("Failed to get unread books for page")?;
 
-        // Step 6: Pick the first book from each series
-        let mut seen_series: std::collections::HashSet<Uuid> = std::collections::HashSet::new();
-        let mut on_deck_books: Vec<books::Model> = Vec::new();
-
-        for book in all_unread_books {
-            if !seen_series.contains(&book.series_id) {
-                seen_series.insert(book.series_id);
-                on_deck_books.push(book);
-            }
+        let mut first_by_series: std::collections::HashMap<Uuid, books::Model> =
+            std::collections::HashMap::new();
+        for book in page_unread {
+            first_by_series.entry(book.series_id).or_insert(book);
         }
 
-        // Sort by most recently read series first (descending activity timestamp)
-        on_deck_books.sort_by(|a, b| {
-            let a_activity = series_last_read.get(&a.series_id);
-            let b_activity = series_last_read.get(&b.series_id);
-            b_activity.cmp(&a_activity)
-        });
-
-        let total = on_deck_books.len() as u64;
-
-        // Apply pagination
-        let start = (page * page_size) as usize;
-        if start >= on_deck_books.len() {
-            return Ok((vec![], total));
-        }
-        let end = (start + page_size as usize).min(on_deck_books.len());
-        let paginated_books = on_deck_books[start..end].to_vec();
+        // Emit in the (recency-ordered) page sequence.
+        let paginated_books: Vec<books::Model> = page_series
+            .iter()
+            .filter_map(|s| first_by_series.remove(s))
+            .collect();
 
         Ok((paginated_books, total))
     }
