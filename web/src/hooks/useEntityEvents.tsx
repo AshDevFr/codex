@@ -16,6 +16,28 @@ type ConnectionState = "connecting" | "connected" | "disconnected" | "failed";
 
 const log = createDevLog("[SSE]");
 
+/** Second key segment of every series LIST/grid/home-section query (see
+ * SeriesSection / SeriesSection home rows). Detail queries are keyed
+ * ["series", <id>, ...] instead, so invalidating these prefixes refreshes the
+ * lists without touching open detail tabs. Keep in sync with the query keys in
+ * the components that own these lists. */
+const SERIES_LIST_SECTIONS = [
+  "search",
+  "alphabetical-groups",
+  "recently-added",
+  "recently-updated",
+] as const;
+
+/** Second key segment of every book LIST/home-section query (see Recommended
+ * section rows + the books grid). Detail queries are ["books", <id>, ...]. */
+const BOOKS_LIST_SECTIONS = [
+  "search",
+  "in-progress",
+  "on-deck",
+  "recently-added",
+  "recently-read",
+] as const;
+
 /** Per-series state for the aggregated release toast. Lives at module scope
  * so a burst of `release_announced` events for the same series collapses
  * into a single toast that updates in place rather than spawning N toasts.
@@ -138,17 +160,59 @@ export function useEntityEvents() {
     // Throttle the heavy list invalidations: a burst of entity events (e.g. a
     // scan or bulk thumbnail regen) collapses into at most one series/books
     // list refetch per interval instead of one per event.
-    const invalidateSeriesList = throttle(
-      () => queryClient.invalidateQueries({ queryKey: ["series"] }),
-      1500,
-    );
-    const invalidateBooksList = throttle(
-      () => queryClient.invalidateQueries({ queryKey: ["books"] }),
-      1500,
-    );
+    //
+    // IMPORTANT: invalidate the specific list/grid/home-section query keys, NOT
+    // the bare ["series"] / ["books"] roots. React Query matches by prefix, so
+    // ["series"] also matches every open detail query — ["series", id, "full"],
+    // "tracking", "aliases", "releases", "covers" — and ["books"] matches
+    // ["books", id, ...]. With several detail tabs open during a scan, the bare
+    // root turned one list refetch into a full+tracking+aliases+releases refetch
+    // wave on every tab. Targeting the section prefixes refreshes the lists
+    // (counts, membership) while leaving open detail tabs untouched; a detail
+    // that genuinely changed is refreshed by the targeted ["series", id] /
+    // ["books", id] invalidation in the per-event branches below.
+    const invalidateSeriesList = throttle(() => {
+      for (const section of SERIES_LIST_SECTIONS) {
+        queryClient.invalidateQueries({ queryKey: ["series", section] });
+      }
+    }, 1500);
+    const invalidateBooksList = throttle(() => {
+      for (const section of BOOKS_LIST_SECTIONS) {
+        queryClient.invalidateQueries({ queryKey: ["books", section] });
+      }
+    }, 1500);
+
+    // Coalesce a burst of `release_announced` events (a poll or a source reset
+    // can announce hundreds of releases in one wave) into a single refetch
+    // wave — the release-tracking equivalent of the list throttle above.
+    // Affected series IDs accumulate between flushes; the throttled flush
+    // refetches the shared inbox/facets once plus each touched series' ledger
+    // and tracking row, then clears the set.
+    const pendingReleaseSeriesIds = new Set<string>();
+    const flushReleaseInvalidations = throttle(() => {
+      // Inbox + facets (keyed ["releases", ...]). One refetch per wave instead
+      // of one per event.
+      queryClient.invalidateQueries({ queryKey: ["releases"] });
+      for (const id of pendingReleaseSeriesIds) {
+        // Per-series ledger view + the tracking row that drives the Behind-by
+        // badge's moving value (latest_known_*). The heavy ["series", id,
+        // "full"] query is intentionally NOT invalidated: a release
+        // announcement advances tracking.latestKnownChapter, not the series'
+        // localMaxChapter (local books) or upstream gap (metadata), so the
+        // badge recomputes from the tracking refetch alone.
+        queryClient.invalidateQueries({ queryKey: ["series", id, "releases"] });
+        queryClient.invalidateQueries({ queryKey: ["series", id, "tracking"] });
+      }
+      pendingReleaseSeriesIds.clear();
+    }, 1500);
+
     const listInvalidate: ListInvalidators = {
       series: invalidateSeriesList,
       books: invalidateBooksList,
+      release: (seriesId: string) => {
+        pendingReleaseSeriesIds.add(seriesId);
+        flushReleaseInvalidations();
+      },
     };
 
     const unsubscribe = eventsApi.subscribeToEntityEvents(
@@ -169,6 +233,7 @@ export function useEntityEvents() {
       // Drop any pending trailing refetch so we don't fire after teardown/logout.
       invalidateSeriesList.cancel();
       invalidateBooksList.cancel();
+      flushReleaseInvalidations.cancel();
     };
   }, [queryClient, isAuthenticated]);
 
@@ -185,7 +250,14 @@ export function useEntityEvents() {
  * one would refetch it hundreds of times. Throttling coalesces a burst into at
  * most one refetch per interval (leading + trailing), so a single event still
  * updates promptly while a sustained stream refreshes ~once/interval. */
-type ListInvalidators = { series: () => void; books: () => void };
+type ListInvalidators = {
+  series: () => void;
+  books: () => void;
+  /** Queue a throttled refetch wave for release views touched by a
+   * `release_announced` burst (shared inbox/facets + this series' ledger and
+   * tracking row). Coalesces a poll/reset storm into ~one wave per interval. */
+  release: (seriesId: string) => void;
+};
 
 function handleEntityEvent(
   event: EntityChangeEvent,
@@ -363,22 +435,13 @@ function handleEntityEvent(
       }
       useReleaseAnnouncementsStore.getState().bump();
 
-      // Refresh inbox + per-series ledger views in case the user is
-      // watching them.
-      queryClient.invalidateQueries({ queryKey: ["releases"] });
-      queryClient.invalidateQueries({
-        queryKey: ["series", event.seriesId, "releases"],
-      });
-      // Refresh the series tracking row so the Behind-by-N badge can
-      // pick up the latest_known_* high-water mark advance.
-      queryClient.invalidateQueries({
-        queryKey: ["series", event.seriesId, "tracking"],
-      });
-      // Refresh the full series so localMaxChapter / upstream gap props
-      // recompute against the latest state.
-      queryClient.invalidateQueries({
-        queryKey: ["series", event.seriesId, "full"],
-      });
+      // Refresh inbox + per-series ledger + the tracking row (drives the
+      // Behind-by-N badge's latest_known_* high-water mark) — but throttled,
+      // so a poll/reset announcing hundreds of releases coalesces into ~one
+      // refetch wave instead of one heavy cascade per event. The series'
+      // heavy ["...","full"] query is deliberately not refetched here (see the
+      // flush comment): a release advances tracking, not local book counts.
+      listInvalidate.release(event.seriesId);
 
       // Surface a low-priority toast. To avoid spamming the user when a
       // single poll lands a dozen releases for one series, we aggregate by

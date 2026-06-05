@@ -140,6 +140,33 @@ describe("useTaskProgress", () => {
     expect(mockUnsubscribe).toHaveBeenCalled();
   });
 
+  it("shares one poller + SSE subscription across many mounted instances", () => {
+    const mockSubscribe = vi
+      .spyOn(tasksApi, "subscribeToTaskProgress")
+      .mockReturnValue(mockUnsubscribe);
+
+    // Three components reading task progress at once (e.g. the global
+    // indicator + badge + a settings page).
+    const a = renderHook(() => useTaskProgress());
+    const b = renderHook(() => useTaskProgress());
+    const c = renderHook(() => useTaskProgress());
+
+    // Exactly one SSE subscription and one initial poll regardless of mounts —
+    // this is the whole point of the shared manager (no per-instance request
+    // storm).
+    expect(mockSubscribe).toHaveBeenCalledTimes(1);
+    expect(tasksApi.fetchPendingTaskCounts).toHaveBeenCalledTimes(1);
+    expect(tasksApi.fetchTasksByStatus).toHaveBeenCalledTimes(1);
+
+    // The shared subscription stays alive until the LAST consumer unmounts.
+    a.unmount();
+    b.unmount();
+    expect(mockUnsubscribe).not.toHaveBeenCalled();
+
+    c.unmount();
+    expect(mockUnsubscribe).toHaveBeenCalledTimes(1);
+  });
+
   it("should track active tasks", () => {
     let capturedCallback: ((event: TaskProgressEvent) => void) | undefined;
 

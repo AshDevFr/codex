@@ -194,12 +194,20 @@ describe("useEntityEvents", () => {
     }
 
     await waitFor(() => {
+      // The series LIST is refreshed via its section keys, not the bare
+      // ["series"] root (which would also nuke every open detail tab's
+      // full/tracking/aliases/releases queries — the refetch storm).
       expect(invalidateSpy).toHaveBeenCalledWith({
-        queryKey: ["series"],
+        queryKey: ["series", "search"],
       });
       expect(invalidateSpy).toHaveBeenCalledWith({
         queryKey: ["libraries", "lib-2"],
       });
+    });
+
+    // Must NOT invalidate the bare root — that over-matches detail queries.
+    expect(invalidateSpy).not.toHaveBeenCalledWith({
+      queryKey: ["series"],
     });
   });
 
@@ -285,12 +293,13 @@ describe("useEntityEvents", () => {
       expect(invalidateSpy).toHaveBeenCalledWith({
         queryKey: ["library", "lib-123"],
       });
-      // Should also invalidate books and series queries
+      // Should also refresh the books + series LISTS via their section keys
+      // (not the bare roots, which would also refetch open detail tabs).
       expect(invalidateSpy).toHaveBeenCalledWith({
-        queryKey: ["books"],
+        queryKey: ["books", "search"],
       });
       expect(invalidateSpy).toHaveBeenCalledWith({
-        queryKey: ["series"],
+        queryKey: ["series", "search"],
       });
     });
   });
@@ -481,6 +490,59 @@ describe("useEntityEvents", () => {
         queryKey: ["plugin-actions"],
         type: "active",
       });
+    });
+  });
+
+  it("refreshes release/tracking views on release_announced but NOT the heavy series 'full' query", async () => {
+    let capturedCallback: ((event: EntityChangeEvent) => void) | undefined;
+
+    vi.spyOn(eventsApi.eventsApi, "subscribeToEntityEvents").mockImplementation(
+      (onEvent) => {
+        capturedCallback = onEvent;
+        return mockUnsubscribe;
+      },
+    );
+
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+    renderHook(() => useEntityEvents(), { wrapper });
+
+    await waitFor(() => {
+      expect(capturedCallback).toBeDefined();
+    });
+
+    const event = {
+      type: "release_announced",
+      seriesId: "series-789",
+      seriesTitle: "Test Series",
+      pluginId: "release-nyaa",
+      language: "en",
+      chapter: 42,
+      volume: null,
+      ledgerId: "ledger-1",
+      sourceId: "source-1",
+      timestamp: "2026-01-07T12:00:00Z",
+    } as unknown as EntityChangeEvent;
+
+    capturedCallback?.(event);
+
+    await waitFor(() => {
+      // Shared inbox/facets + this series' ledger and tracking row refresh.
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["releases"] });
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: ["series", "series-789", "releases"],
+      });
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: ["series", "series-789", "tracking"],
+      });
+    });
+
+    // The heavy series detail assembly must NOT be refetched on a release: a
+    // release advances tracking.latestKnownChapter, not localMaxChapter or the
+    // upstream gap, so the Behind-by badge recomputes from the tracking refetch
+    // alone. Refetching "full" per event was the ?full=true storm.
+    expect(invalidateSpy).not.toHaveBeenCalledWith({
+      queryKey: ["series", "series-789", "full"],
     });
   });
 
