@@ -276,8 +276,10 @@ pub async fn get_books_ondeck(
     require_permission!(auth, Permission::BooksRead)?;
 
     let user_id = auth.user_id;
+    // Komga pagination is 0-indexed; convert to a 0-indexed row offset.
     let page = query.page.max(0) as u64;
     let size = query.size.clamp(1, 500) as u64;
+    let offset = page * size;
 
     let content_filter = ContentFilter::for_user(&state.db, user_id)
         .await
@@ -290,7 +292,7 @@ pub async fn get_books_ondeck(
         &state.db,
         user_id,
         query.library_id,
-        page,
+        offset,
         size,
         visibility.as_ref(),
     )
