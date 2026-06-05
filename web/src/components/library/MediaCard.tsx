@@ -180,7 +180,15 @@ export const MediaCard = memo(function MediaCard({
         message: "Book analysis has been queued",
         color: "blue",
       });
-      queryClient.invalidateQueries({ queryKey: ["books"] });
+      // Analysis is async: only a task is queued here, nothing has changed yet.
+      // The real refresh arrives via the book_updated SSE event on completion,
+      // so nudge just this book's detail (cheap) rather than the whole
+      // ["books"] namespace, which would refetch every open list/detail tab.
+      if (book) {
+        queryClient.invalidateQueries({
+          queryKey: ["books", book.id, "detail"],
+        });
+      }
     },
     onError: (error: Error) => {
       notifications.show({
@@ -203,7 +211,14 @@ export const MediaCard = memo(function MediaCard({
         message: "All books in series queued for analysis",
         color: "blue",
       });
-      queryClient.invalidateQueries({ queryKey: ["series"] });
+      // Async enqueue — refresh just this series' detail; the series_metadata
+      // /book_updated SSE events refresh the rest on completion (was ["series"],
+      // which refetched every open detail tab + list for nothing).
+      if (series) {
+        queryClient.invalidateQueries({
+          queryKey: ["series", series.id, "full"],
+        });
+      }
     },
     onError: (error: Error) => {
       notifications.show({
@@ -225,7 +240,13 @@ export const MediaCard = memo(function MediaCard({
         message: "Unanalyzed books queued for analysis",
         color: "blue",
       });
-      queryClient.invalidateQueries({ queryKey: ["series"] });
+      // Async enqueue — refresh just this series' detail; SSE refreshes the
+      // rest on completion (was the whole ["series"] namespace).
+      if (series) {
+        queryClient.invalidateQueries({
+          queryKey: ["series", series.id, "full"],
+        });
+      }
     },
     onError: (error: Error) => {
       notifications.show({

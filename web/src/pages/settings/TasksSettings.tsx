@@ -26,6 +26,7 @@ import {
   IconX,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { throttle } from "es-toolkit";
 import { useEffect, useState } from "react";
 import { api } from "@/api/client";
 import {
@@ -213,27 +214,43 @@ export function TasksSettings() {
 
   // Subscribe to real-time task progress
   useEffect(() => {
+    // A bulk analyze/scan can complete thousands of tasks, each firing a
+    // terminal SSE event. Refetching the task list (4 status fetches when the
+    // filter is "all") + stats on every one is a request storm. Throttle the
+    // refresh so a completion flood coalesces into ≤1 refetch per interval; the
+    // 5s refetchInterval on both queries is the backstop for anything dropped.
+    const refreshTaskViews = throttle(() => {
+      refetchTasks();
+      queryClient.invalidateQueries({ queryKey: ["task-stats"] });
+    }, 1500);
+
     const unsubscribe = subscribeToTaskProgress(
       (event) => {
+        const terminal =
+          event.status === "completed" || event.status === "failed";
         setActiveProgress((prev) => {
           const next = new Map(prev);
-          if (event.status === "completed" || event.status === "failed") {
+          if (terminal) {
             next.delete(event.taskId);
-            // Refetch tasks when a task completes
-            refetchTasks();
-            queryClient.invalidateQueries({ queryKey: ["task-stats"] });
           } else {
             next.set(event.taskId, event);
           }
           return next;
         });
+        // Side-effect kept out of the state updater (updaters must stay pure).
+        if (terminal) {
+          refreshTaskViews();
+        }
       },
       (error) => {
         console.error("Task progress error:", error);
       },
     );
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      refreshTaskViews.cancel();
+    };
   }, [refetchTasks, queryClient]);
 
   // Mutations
