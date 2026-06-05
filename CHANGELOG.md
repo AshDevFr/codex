@@ -2,6 +2,17 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.34.1] - 2026-06-05
+
+### 🚀 Features
+
+- *(auth)* Issue refresh tokens for OIDC logins
+- *(auth)* Store OIDC refresh token to keep SSO sessions alive
+
+### 📚 Documentation
+
+- *(config)* Note refresh tokens cover OIDC logins
+
 ## [1.34.0] - 2026-06-05
 
 ### 🚀 Features
