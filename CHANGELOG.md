@@ -2,6 +2,31 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.34.0] - 2026-06-05
+
+### 🚀 Features
+
+- *(config)* Make DB fan-out bound and background pool size configurable
+
+### 🐛 Bug Fixes
+
+- *(series)* Eliminate list N+1 and SSE-driven refetch storm
+
+### ⚡ Performance
+
+- *(api)* Bound per-request DB query fan-out to prevent pool exhaustion
+- *(db)* Isolate background-task DB pool from the API pool
+- *(web)* Relax query refetch defaults to avoid multi-tab refetch storms
+- *(on-deck)* Paginate by series instead of loading all unread books
+- *(web)* Eliminate residual SSE refetch and task-poll storms
+- *(web)* Narrow per-event series/cover invalidations to the detail DTO
+- *(web)* Narrow over-broad query invalidations and throttle task-page refresh
+- Cut idle background fetching across SSE, task polling, and reference data
+
+### 🧪 Testing
+
+- *(api)* Add connection-pool contention regression test
+
 ## [1.33.3] - 2026-06-04
 
 ### 🐛 Bug Fixes
