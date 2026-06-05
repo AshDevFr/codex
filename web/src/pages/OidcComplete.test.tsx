@@ -86,6 +86,42 @@ describe("OidcComplete Component", () => {
     });
   });
 
+  it("should store the refresh token when present in the fragment", async () => {
+    const dataWithRefresh = {
+      ...mockAuthData,
+      refreshToken: "oidc-refresh-token-456",
+    };
+    const encoded = encodeAuthData(dataWithRefresh);
+    window.location.hash = `#${encoded}`;
+
+    renderWithProviders(<OidcComplete />);
+
+    await waitFor(() => {
+      expect(localStorage.getItem("jwt_refresh_token")).toBe(
+        "oidc-refresh-token-456",
+      );
+      expect(useAuthStore.getState().refreshToken).toBe(
+        "oidc-refresh-token-456",
+      );
+    });
+  });
+
+  it("should authenticate without a refresh token (back-compat)", async () => {
+    // mockAuthData carries no refreshToken (server has the feature disabled).
+    const encoded = encodeAuthData(mockAuthData);
+    window.location.hash = `#${encoded}`;
+
+    renderWithProviders(<OidcComplete />);
+
+    await waitFor(() => {
+      expect(localStorage.getItem("jwt_token")).toBe("oidc-jwt-token-123");
+      expect(useAuthStore.getState().isAuthenticated).toBe(true);
+    });
+    // No refresh token should be persisted.
+    expect(localStorage.getItem("jwt_refresh_token")).toBeNull();
+    expect(useAuthStore.getState().refreshToken).toBeNull();
+  });
+
   it("should redirect to login with error when no fragment data", async () => {
     window.location.hash = "";
 

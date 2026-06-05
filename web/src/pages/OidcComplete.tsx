@@ -6,6 +6,9 @@ import type { User } from "@/types";
 
 interface OidcCallbackData {
   accessToken: string;
+  // Present only when the server has refresh tokens enabled. Without it the
+  // session reverts to access-token-only and gets logged out at expiry.
+  refreshToken?: string | null;
   tokenType: string;
   expiresIn: number;
   user: User;
@@ -38,8 +41,10 @@ export function OidcComplete() {
 
     const data = decodeFragment();
     if (data) {
-      // Store auth data (same as normal login)
-      setAuth(data.user, data.accessToken);
+      // Store auth data (same as normal login). The refresh token lets the
+      // axios interceptor silently rotate an expired access token instead of
+      // bouncing the user to /login mid-session.
+      setAuth(data.user, data.accessToken, data.refreshToken ?? null);
 
       // Clear the fragment from the URL to prevent token leakage
       window.history.replaceState(null, "", "/");
