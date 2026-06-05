@@ -193,7 +193,7 @@ openssl rand -base64 32
 
 ### Refresh Tokens
 
-When `refresh_token_enabled` is `true` (default), `POST /api/v1/auth/login` returns a `refreshToken` alongside the access token. The frontend transparently exchanges an expired access token for a fresh pair on the next API call via `POST /api/v1/auth/refresh`, so users are not bounced to the login screen mid-session.
+When `refresh_token_enabled` is `true` (default), both password login (`POST /api/v1/auth/login`) and OIDC single sign-on return a `refreshToken` alongside the access token. The frontend transparently exchanges an expired access token for a fresh pair on the next API call via `POST /api/v1/auth/refresh`, so users are not bounced to the login screen mid-session, regardless of how they signed in.
 
 - **Rotation:** every refresh issues a new refresh token and revokes the old one atomically.
 - **Theft detection:** replaying an already-rotated (revoked) refresh token revokes every refresh token in that login's family, forcing all sessions for that login to re-authenticate. This matches the OAuth 2.0 security recommendations (RFC 6819).
