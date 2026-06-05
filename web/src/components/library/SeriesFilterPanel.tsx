@@ -28,10 +28,9 @@ import { useQuery } from "@tanstack/react-query";
 import { type ReactNode, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { FilterPresetDto } from "@/api/filterPresets";
-import { genresApi } from "@/api/genres";
 import { sharingTagsApi } from "@/api/sharingTags";
-import { tagsApi } from "@/api/tags";
 import { useDraftSeriesFilterState } from "@/hooks/useDraftSeriesFilterState";
+import { useAllGenres, useAllTags } from "@/hooks/useReferenceData";
 import { useSeriesFilterState } from "@/hooks/useSeriesFilterState";
 import { useAuthStore } from "@/store/authStore";
 import {
@@ -180,19 +179,10 @@ export function SeriesFilterPanel({ libraryId }: SeriesFilterPanelProps = {}) {
     close();
   };
 
-  // Fetch available genres (global, not library-specific)
-  const { data: genres = [], isLoading: genresLoading } = useQuery({
-    queryKey: ["genres"],
-    queryFn: () => genresApi.getAll(),
-    staleTime: 60000, // Cache for 1 minute
-  });
-
-  // Fetch available tags (global, not library-specific)
-  const { data: tags = [], isLoading: tagsLoading } = useQuery({
-    queryKey: ["tags"],
-    queryFn: () => tagsApi.getAll(),
-    staleTime: 60000,
-  });
+  // Fetch available genres + tags (global reference data, shared + long-cached
+  // so the multi-page sweep doesn't re-run on every remount / reconnect).
+  const { data: genres = [], isLoading: genresLoading } = useAllGenres();
+  const { data: tags = [], isLoading: tagsLoading } = useAllTags();
 
   // Fetch sharing tags (admin only)
   const { data: sharingTags = [], isLoading: sharingTagsLoading } = useQuery({
