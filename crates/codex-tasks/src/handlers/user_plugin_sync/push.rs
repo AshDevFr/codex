@@ -8,11 +8,40 @@ use uuid::Uuid;
 
 use codex_db::repositories::{
     BookRepository, ReadProgressRepository, SeriesExternalIdRepository, SeriesMetadataRepository,
-    UserSeriesRatingRepository,
+    SeriesRepository, UserSeriesRatingRepository,
 };
+use codex_services::plugin::library::library_names;
 use codex_services::plugin::sync::{SyncEntry, SyncProgress, SyncReadingStatus};
 
 use super::settings::CodexSyncSettings;
+
+/// Resolve `series_id -> (library_id, library_name)` for the given series so
+/// push entries can carry their library context. Degrades to an empty map on
+/// failure; entries then fall back to empty library fields.
+async fn series_library_info(
+    db: &DatabaseConnection,
+    series_ids: &[Uuid],
+) -> HashMap<Uuid, (String, String)> {
+    let series = SeriesRepository::get_by_ids(db, series_ids)
+        .await
+        .unwrap_or_default();
+
+    let library_ids: Vec<Uuid> = {
+        let mut ids: Vec<Uuid> = series.iter().map(|s| s.library_id).collect();
+        ids.sort_unstable();
+        ids.dedup();
+        ids
+    };
+    let names = library_names(db, &library_ids).await;
+
+    series
+        .into_iter()
+        .map(|s| {
+            let name = names.get(&s.library_id).cloned().unwrap_or_default();
+            (s.id, (s.library_id.to_string(), name))
+        })
+        .collect()
+}
 
 /// Build push entries from a user's Codex reading progress.
 ///
@@ -56,6 +85,9 @@ pub(crate) async fn build_push_entries(
 
     // Collect all series IDs for batch queries
     let series_ids: Vec<Uuid> = external_ids.iter().map(|e| e.series_id).collect();
+
+    // Resolve library context (id + name) for each series so entries carry it.
+    let lib_info = series_library_info(db, &series_ids).await;
 
     // 2. Batch-fetch all books grouped by series (1 query instead of N)
     let books_map = match BookRepository::get_by_series_ids(db, &series_ids).await {
@@ -270,6 +302,14 @@ pub(crate) async fn build_push_entries(
             notes,
             latest_updated_at: latest_updated_at.map(|dt| dt.to_rfc3339()),
             title: metadata_map.get(&ext_id.series_id).map(|m| m.title.clone()),
+            library_id: lib_info
+                .get(&ext_id.series_id)
+                .map(|(id, _)| id.clone())
+                .unwrap_or_default(),
+            library_name: lib_info
+                .get(&ext_id.series_id)
+                .map(|(_, name)| name.clone())
+                .unwrap_or_default(),
         });
     }
 
@@ -355,6 +395,9 @@ async fn build_unmatched_entries(
     }
 
     let unmatched_ids_vec: Vec<Uuid> = unmatched_series_ids.iter().copied().collect();
+
+    // Resolve library context (id + name) for each unmatched series.
+    let lib_info = series_library_info(db, &unmatched_ids_vec).await;
 
     // 3. Batch-fetch books, progress, and metadata for unmatched series
     let books_map = match BookRepository::get_by_series_ids(db, &unmatched_ids_vec).await {
@@ -529,6 +572,14 @@ async fn build_unmatched_entries(
             notes,
             latest_updated_at: latest_updated_at.map(|dt| dt.to_rfc3339()),
             title: Some(title),
+            library_id: lib_info
+                .get(&series_id)
+                .map(|(id, _)| id.clone())
+                .unwrap_or_default(),
+            library_name: lib_info
+                .get(&series_id)
+                .map(|(_, name)| name.clone())
+                .unwrap_or_default(),
         });
     }
 

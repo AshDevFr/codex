@@ -910,6 +910,13 @@ pub enum ExternalLinkType {
 pub struct UserLibraryEntry {
     /// Codex series ID
     pub series_id: String,
+    /// ID of the library the series belongs to, so recommendation plugins can
+    /// scope behaviour per library.
+    #[serde(default)]
+    pub library_id: String,
+    /// Human-readable name of the library the series belongs to.
+    #[serde(default)]
+    pub library_name: String,
     /// Primary title
     pub title: String,
     /// Alternative titles (native, romaji, etc.)
@@ -2138,6 +2145,8 @@ mod tests {
     fn test_user_library_entry_full_serialization() {
         let entry = UserLibraryEntry {
             series_id: "550e8400-e29b-41d4-a716-446655440000".to_string(),
+            library_id: "11111111-1111-1111-1111-111111111111".to_string(),
+            library_name: "Manga".to_string(),
             title: "One Piece".to_string(),
             alternate_titles: vec!["ワンピース".to_string()],
             year: Some(1997),
@@ -2176,7 +2185,20 @@ mod tests {
         assert_eq!(json["booksOwned"], 100);
         assert_eq!(json["userRating"], 95);
         assert_eq!(json["userNotes"], "Masterpiece");
+        assert_eq!(json["libraryId"], "11111111-1111-1111-1111-111111111111");
+        assert_eq!(json["libraryName"], "Manga");
         assert!(!json.as_object().unwrap().contains_key("completedAt"));
+    }
+
+    #[test]
+    fn test_user_library_entry_library_fields_default_when_absent() {
+        let json = serde_json::json!({
+            "seriesId": "abc",
+            "title": "Test"
+        });
+        let entry: UserLibraryEntry = serde_json::from_value(json).unwrap();
+        assert_eq!(entry.library_id, "");
+        assert_eq!(entry.library_name, "");
     }
 
     #[test]
@@ -2200,6 +2222,8 @@ mod tests {
             started_at: None,
             last_read_at: None,
             completed_at: None,
+            library_id: String::new(),
+            library_name: String::new(),
         };
         let json = serde_json::to_value(&entry).unwrap();
         assert_eq!(json["seriesId"], "abc");
@@ -2316,6 +2340,8 @@ mod tests {
             started_at: None,
             last_read_at: None,
             completed_at: None,
+            library_id: String::new(),
+            library_name: String::new(),
         };
         let json = serde_json::to_value(&entry).unwrap();
         let ids = json["externalIds"].as_array().unwrap();
