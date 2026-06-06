@@ -28,7 +28,7 @@ use uuid::Uuid;
 use crate::handlers::TaskHandler;
 use crate::types::TaskResult;
 use codex_db::entities::tasks;
-use codex_db::repositories::{UserPluginDataRepository, UserPluginsRepository};
+use codex_db::repositories::{PluginsRepository, UserPluginDataRepository, UserPluginsRepository};
 use codex_events::{EventBroadcaster, TaskProgressEvent};
 use codex_services::SettingsService;
 use codex_services::plugin::PluginManager;
@@ -184,6 +184,20 @@ impl TaskHandler for UserPluginSyncHandler {
             let do_push = sync_mode == "both" || sync_mode == "push";
             let codex_settings = CodexSyncSettings::from_user_config(&user_config);
 
+            // Admin-configured library scope for this plugin (empty = all libraries).
+            let allowed_library_ids: Vec<Uuid> =
+                match PluginsRepository::get_by_id(db, plugin_id).await {
+                    Ok(Some(plugin)) => plugin.library_ids_vec(),
+                    _ => Vec::new(),
+                };
+            if !allowed_library_ids.is_empty() {
+                debug!(
+                    "Task {}: Plugin scoped to {} libraries",
+                    task.id,
+                    allowed_library_ids.len()
+                );
+            }
+
             debug!(
                 "Task {}: syncMode={} (pull={}, push={})",
                 task.id, sync_mode, do_pull, do_push
@@ -308,6 +322,7 @@ impl TaskHandler for UserPluginSyncHandler {
                                 user_id,
                                 task.id,
                                 codex_settings.sync_ratings,
+                                &allowed_library_ids,
                             )
                             .await;
 
@@ -343,7 +358,15 @@ impl TaskHandler for UserPluginSyncHandler {
             // Step 3: Push progress to external service
             let (pushed_count, push_failures, push_error) = if do_push {
                 let entries = if let Some(ref source) = external_id_source {
-                    push::build_push_entries(db, user_id, source, task.id, &codex_settings).await
+                    push::build_push_entries(
+                        db,
+                        user_id,
+                        source,
+                        task.id,
+                        &codex_settings,
+                        &allowed_library_ids,
+                    )
+                    .await
                 } else {
                     warn!(
                         "Task {}: Plugin has no externalIdSource in manifest — cannot build push entries",

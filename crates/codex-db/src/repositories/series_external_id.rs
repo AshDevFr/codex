@@ -275,6 +275,35 @@ impl SeriesExternalIdRepository {
             .collect())
     }
 
+    /// Find ALL series external IDs by multiple external ID values and source,
+    /// grouped by external_id.
+    ///
+    /// Unlike [`find_by_external_ids_and_source`], this preserves every match
+    /// when the same `external_id` maps to multiple series (e.g. the same title
+    /// duplicated across libraries). Used during pull sync so progress can be
+    /// applied to all in-scope duplicates.
+    pub async fn find_all_by_external_ids_and_source(
+        db: &DatabaseConnection,
+        external_ids: &[String],
+        source: &str,
+    ) -> Result<HashMap<String, Vec<SeriesExternalId>>> {
+        if external_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let results = SeriesExternalIds::find()
+            .filter(series_external_ids::Column::ExternalId.is_in(external_ids.to_vec()))
+            .filter(series_external_ids::Column::Source.eq(source))
+            .all(db)
+            .await?;
+
+        let mut map: HashMap<String, Vec<SeriesExternalId>> = HashMap::new();
+        for e in results {
+            map.entry(e.external_id.clone()).or_default().push(e);
+        }
+        Ok(map)
+    }
+
     /// Check if an external ID record belongs to a specific series
     pub async fn belongs_to_series(
         db: &DatabaseConnection,
@@ -1320,5 +1349,64 @@ mod tests {
         assert_eq!(result.len(), 1);
         assert!(result.contains_key("111"));
         assert!(!result.contains_key("222"));
+    }
+
+    #[tokio::test]
+    async fn test_find_all_by_external_ids_and_source_groups_cross_library_duplicates() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        // Same external_id (same title) duplicated across two libraries.
+        let library_a = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Library A",
+            "/a",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+        let library_b = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Library B",
+            "/b",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series_a = SeriesRepository::create(db.sea_orm_connection(), library_a.id, "Dup", None)
+            .await
+            .unwrap();
+        let series_b = SeriesRepository::create(db.sea_orm_connection(), library_b.id, "Dup", None)
+            .await
+            .unwrap();
+
+        for sid in [series_a.id, series_b.id] {
+            SeriesExternalIdRepository::create(
+                db.sea_orm_connection(),
+                sid,
+                "api:anilist",
+                "12345",
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+        }
+
+        let result = SeriesExternalIdRepository::find_all_by_external_ids_and_source(
+            db.sea_orm_connection(),
+            &["12345".to_string()],
+            "api:anilist",
+        )
+        .await
+        .unwrap();
+
+        // Both series are returned under the single external_id key.
+        let matches = result.get("12345").unwrap();
+        assert_eq!(matches.len(), 2);
+        let series_ids: std::collections::HashSet<Uuid> =
+            matches.iter().map(|e| e.series_id).collect();
+        assert!(series_ids.contains(&series_a.id));
+        assert!(series_ids.contains(&series_b.id));
     }
 }
