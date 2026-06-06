@@ -30,16 +30,23 @@ pub async fn library_names(db: &DatabaseConnection, library_ids: &[Uuid]) -> Has
     }
 }
 
-/// Build the full user library as `Vec<UserLibraryEntry>` for recommendation plugins.
+/// Build the user library as `Vec<UserLibraryEntry>` for recommendation plugins.
 ///
-/// Fetches all series, metadata, genres, tags, external IDs, reading progress,
+/// Fetches series, metadata, genres, tags, external IDs, reading progress,
 /// and user ratings in batch, then assembles them into library entries.
+///
+/// Only series in a library the plugin is scoped to are included.
+/// `allowed_library_ids` empty means "all libraries".
 pub async fn build_user_library(
     db: &DatabaseConnection,
     user_id: Uuid,
+    allowed_library_ids: &[Uuid],
 ) -> Result<Vec<UserLibraryEntry>> {
-    // 1. Get all series
-    let all_series = SeriesRepository::list_all(db, None).await?;
+    // 1. Get all series, then drop any outside the plugin's library scope.
+    let mut all_series = SeriesRepository::list_all(db, None).await?;
+    if !allowed_library_ids.is_empty() {
+        all_series.retain(|s| allowed_library_ids.contains(&s.library_id));
+    }
     if all_series.is_empty() {
         return Ok(vec![]);
     }
@@ -215,4 +222,45 @@ pub async fn build_user_library(
     );
 
     Ok(entries)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use codex_db::ScanningStrategy;
+    use codex_db::repositories::{LibraryRepository, SeriesRepository};
+    use codex_db::test_helpers::create_test_db;
+
+    #[tokio::test]
+    async fn test_build_user_library_respects_library_scope_and_stamps_info() {
+        let (db, _temp_dir) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let user_id = Uuid::new_v4();
+
+        let lib_a = LibraryRepository::create(conn, "Library A", "/a", ScanningStrategy::Default)
+            .await
+            .unwrap();
+        let lib_b = LibraryRepository::create(conn, "Library B", "/b", ScanningStrategy::Default)
+            .await
+            .unwrap();
+        SeriesRepository::create(conn, lib_a.id, "Series A", None)
+            .await
+            .unwrap();
+        SeriesRepository::create(conn, lib_b.id, "Series B", None)
+            .await
+            .unwrap();
+
+        // Scoped to library A: only its series, stamped with library context.
+        let entries = build_user_library(conn, user_id, &[lib_a.id])
+            .await
+            .unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].title, "Series A");
+        assert_eq!(entries[0].library_id, lib_a.id.to_string());
+        assert_eq!(entries[0].library_name, "Library A");
+
+        // Empty scope = all libraries.
+        let all = build_user_library(conn, user_id, &[]).await.unwrap();
+        assert_eq!(all.len(), 2);
+    }
 }

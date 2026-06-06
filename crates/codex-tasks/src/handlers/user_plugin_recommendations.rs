@@ -300,21 +300,35 @@ impl TaskHandler for UserPluginRecommendationsHandler {
 
             emit_phase(event_broadcaster, task, PHASE_BUILD_LIBRARY, None);
 
-            // Build user library data
-            let library = build_user_library(db, user_id).await.unwrap_or_else(|e| {
-                warn!(
-                    "Task {}: Failed to build user library, using empty: {}",
-                    task.id, e
-                );
-                vec![]
-            });
+            // Load the plugin once: its admin library scope bounds the library
+            // we build, and its external_id_source drives exclude_ids below.
+            let plugin_model = PluginsRepository::get_by_id(db, plugin_id)
+                .await
+                .ok()
+                .flatten();
+            let allowed_library_ids: Vec<Uuid> = plugin_model
+                .as_ref()
+                .map(|p| p.library_ids_vec())
+                .unwrap_or_default();
 
-            // Resolve the plugin's external_id_source so we can populate exclude_ids
-            // with external IDs from series the user has already read (Reading or Completed).
-            // Unread series are NOT excluded — the user may want recommendations for titles
-            // they own but haven't started yet.
-            let exclude_ids = match PluginsRepository::get_by_id(db, plugin_id).await {
-                Ok(Some(plugin_model)) => {
+            // Build user library data, scoped to the plugin's allowed libraries.
+            let library = build_user_library(db, user_id, &allowed_library_ids)
+                .await
+                .unwrap_or_else(|e| {
+                    warn!(
+                        "Task {}: Failed to build user library, using empty: {}",
+                        task.id, e
+                    );
+                    vec![]
+                });
+
+            // Populate exclude_ids with external IDs from series the user has
+            // already read (Reading or Completed). Unread series are NOT excluded
+            // — the user may want recommendations for titles they own but haven't
+            // started yet. Derived from the scoped `library`, so exclusions stay
+            // within the plugin's library scope.
+            let exclude_ids = match plugin_model.as_ref() {
+                Some(plugin_model) => {
                     let source = plugin_model
                         .manifest
                         .as_ref()
@@ -343,7 +357,7 @@ impl TaskHandler for UserPluginRecommendationsHandler {
                         vec![]
                     }
                 }
-                _ => vec![],
+                None => vec![],
             };
 
             debug!(
