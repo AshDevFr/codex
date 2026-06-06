@@ -2088,6 +2088,74 @@ async fn test_has_pending_or_processing_different_task_type() {
     assert!(!result, "Should not match different task_type");
 }
 
+/// Enqueuing UserPluginSync for two different users of the same plugin must
+/// create two independent tasks. Regression guard for the scheduled fan-out:
+/// the enqueue dedup keys on (plugin_id, user_id), not task_type alone.
+#[tokio::test]
+async fn test_enqueue_user_plugin_sync_independent_per_user() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let plugin_id = Uuid::new_v4();
+    let user_a = Uuid::new_v4();
+    let user_b = Uuid::new_v4();
+
+    let id_a = TaskRepository::enqueue(
+        &db,
+        TaskType::UserPluginSync {
+            plugin_id,
+            user_id: user_a,
+        },
+        None,
+    )
+    .await
+    .expect("enqueue A");
+    let id_b = TaskRepository::enqueue(
+        &db,
+        TaskType::UserPluginSync {
+            plugin_id,
+            user_id: user_b,
+        },
+        None,
+    )
+    .await
+    .expect("enqueue B");
+
+    assert_ne!(id_a, id_b, "different users must get distinct sync tasks");
+    assert!(
+        TaskRepository::has_pending_or_processing(&db, "user_plugin_sync", plugin_id, user_a)
+            .await
+            .unwrap()
+    );
+    assert!(
+        TaskRepository::has_pending_or_processing(&db, "user_plugin_sync", plugin_id, user_b)
+            .await
+            .unwrap()
+    );
+}
+
+/// Enqueuing UserPluginSync twice for the *same* (plugin, user) coalesces onto
+/// the in-flight task instead of stacking duplicates.
+#[tokio::test]
+async fn test_enqueue_user_plugin_sync_coalesces_same_user() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let plugin_id = Uuid::new_v4();
+    let user_id = Uuid::new_v4();
+    let task_type = || TaskType::UserPluginSync { plugin_id, user_id };
+
+    let first = TaskRepository::enqueue(&db, task_type(), None)
+        .await
+        .expect("enqueue first");
+    let second = TaskRepository::enqueue(&db, task_type(), None)
+        .await
+        .expect("enqueue second");
+
+    assert_eq!(
+        first, second,
+        "second enqueue for the same user must return the in-flight task"
+    );
+}
+
 /// Test has_pending_or_processing with recommendations task type
 #[tokio::test]
 async fn test_find_duplicates_handler_reads_trusted_sources_setting() {

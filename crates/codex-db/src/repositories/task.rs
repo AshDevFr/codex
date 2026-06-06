@@ -380,7 +380,11 @@ impl TaskRepository {
     ///    task types whose identity lives in `params` (e.g.
     ///    `PollReleaseSource`). Without this, two such tasks differing only
     ///    in `params` would falsely collide on `task_type` alone.
-    /// 3. None — only `task_type` and status are matched. This is the
+    /// 3. The `(plugin_id, user_id)` pair returned by
+    ///    `TaskType::plugin_user_dedup()`, for per-user plugin tasks (e.g.
+    ///    `UserPluginSync`). Without this, the scheduled fan-out's per-user
+    ///    tasks would all collide on `task_type` alone and collapse into one.
+    /// 4. None — only `task_type` and status are matched. This is the
     ///    desired behavior for singleton task types like `FindDuplicates`.
     async fn find_existing_task(
         db: &DatabaseConnection,
@@ -402,6 +406,19 @@ impl TaskRepository {
             query = query.filter(tasks::Column::SeriesId.eq(ser_id));
         } else if let Some(lib_id) = library_id {
             query = query.filter(tasks::Column::LibraryId.eq(lib_id));
+        } else if let Some((plugin_id, user_id)) = task.plugin_user_dedup() {
+            // Per-user plugin tasks identify by (plugin_id, user_id) in params;
+            // dedup on BOTH keys so different users (or the same user across
+            // plugins) keep independent tasks instead of coalescing by type.
+            return match Self::find_pending_or_processing_task(db, task_type, plugin_id, user_id)
+                .await?
+            {
+                Some((id, _status)) => Tasks::find_by_id(id)
+                    .one(db)
+                    .await
+                    .context("Failed to load existing task by id"),
+                None => Ok(None),
+            };
         } else if let Some((key, value)) = task.dedup_params() {
             // Params-based dedup: route through the helper that knows how
             // to query JSON params portably across SQLite and Postgres.

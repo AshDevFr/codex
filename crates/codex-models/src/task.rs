@@ -539,6 +539,23 @@ impl TaskType {
         }
     }
 
+    /// For task types whose identity is a `(plugin_id, user_id)` pair stored in
+    /// JSON params (no FK columns), return that pair so enqueue can dedup on
+    /// BOTH keys.
+    ///
+    /// Without this, `find_existing_task` has no entity id and no single-key
+    /// [`Self::dedup_params`], so it falls back to matching on `task_type`
+    /// alone and would coalesce unrelated users' tasks into one. That matters
+    /// most for the scheduled fan-out, which enqueues one `UserPluginSync` per
+    /// connected user of the same plugin: type-only coalescing would collapse
+    /// them all into a single task.
+    pub fn plugin_user_dedup(&self) -> Option<(Uuid, Uuid)> {
+        match self {
+            TaskType::UserPluginSync { plugin_id, user_id } => Some((*plugin_id, *user_id)),
+            _ => None,
+        }
+    }
+
     /// Extract all fields needed for database insertion
     /// Returns: (type_string, library_id, series_id, book_id, params)
     pub fn extract_fields(
