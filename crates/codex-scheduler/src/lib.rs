@@ -7,8 +7,11 @@ use tokio_cron_scheduler::{Job, JobScheduler};
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
-use codex_db::entities::library_jobs;
-use codex_db::repositories::{LibraryJobRepository, LibraryRepository, TaskRepository};
+use codex_db::entities::{library_jobs, plugins, user_plugins};
+use codex_db::repositories::{
+    LibraryJobRepository, LibraryRepository, PluginsRepository, TaskRepository,
+    UserPluginsRepository,
+};
 use codex_scanner::{ScanMode, ScanningConfig};
 use codex_services::library_jobs::{LibraryJobConfig, parse_job_config};
 use codex_services::settings::SettingsService;
@@ -90,6 +93,9 @@ impl Scheduler {
 
         // Load plugin data cleanup schedule (OAuth flows, expired storage)
         self.load_plugin_data_cleanup_schedule().await?;
+
+        // Load admin-configured per-plugin user-sync schedules
+        self.load_plugin_sync_schedules().await?;
 
         // Load refresh-token cleanup schedule
         self.load_refresh_token_cleanup_schedule().await?;
@@ -720,6 +726,91 @@ impl Scheduler {
         Ok(())
     }
 
+    /// Load admin-configured per-plugin user-sync schedules.
+    ///
+    /// Each enabled plugin with a `sync_cron_schedule` and the `user_read_sync`
+    /// capability gets one cron entry. When it fires, the scheduler fans out a
+    /// `UserPluginSync` task for every connected user who opted into auto sync.
+    /// The row set is small (admin-managed), so a full reload is cheap.
+    async fn load_plugin_sync_schedules(&mut self) -> Result<()> {
+        let plugins = PluginsRepository::list_sync_scheduled(&self.db).await?;
+        for plugin in plugins {
+            if let Err(e) = self.add_plugin_sync_schedule(&plugin).await {
+                warn!(
+                    "Failed to add sync schedule for plugin {} ('{}'): {}",
+                    plugin.id, plugin.name, e
+                );
+            }
+        }
+        Ok(())
+    }
+
+    /// Register a single plugin's user-sync cron entry.
+    ///
+    /// Skips (without erroring the whole load) plugins whose cached manifest
+    /// does not declare the `user_read_sync` capability, so we never schedule a
+    /// cron that can only fan out to zero eligible connections. Uses the server
+    /// default timezone; cadence is an admin/integration concern, not per-user.
+    async fn add_plugin_sync_schedule(&mut self, plugin: &plugins::Model) -> Result<()> {
+        let Some(cron_raw) = plugin.sync_cron_schedule.as_deref() else {
+            return Ok(());
+        };
+
+        let supports_sync = plugin
+            .cached_manifest()
+            .map(|m| m.capabilities.user_read_sync)
+            .unwrap_or(false);
+        if !supports_sync {
+            warn!(
+                "Plugin {} ('{}') has a sync cron but no user_read_sync capability; skipping",
+                plugin.id, plugin.name
+            );
+            return Ok(());
+        }
+
+        let cron = normalize_cron_expression(cron_raw)
+            .context("Invalid cron expression for plugin sync schedule")?;
+        let tz = self.default_tz;
+
+        let db = self.db.clone();
+        let plugin_id = plugin.id;
+        let plugin_name = plugin.name.clone();
+
+        let job = Job::new_async_tz(cron.as_str(), tz, move |_uuid, _lock| {
+            let db = db.clone();
+            let plugin_name = plugin_name.clone();
+            Box::pin(async move {
+                match fan_out_plugin_sync(&db, plugin_id).await {
+                    Ok(summary) => info!(
+                        "Plugin sync '{}' ({}): {} eligible, {} enqueued, {} skipped (ineligible), {} skipped (in flight)",
+                        plugin_name,
+                        plugin_id,
+                        summary.candidates,
+                        summary.enqueued,
+                        summary.skipped_ineligible,
+                        summary.skipped_in_flight
+                    ),
+                    Err(e) => error!(
+                        "Plugin sync fan-out failed for '{}' ({}): {}",
+                        plugin_name, plugin_id, e
+                    ),
+                }
+            })
+        })
+        .context("Failed to create plugin sync cron")?;
+
+        self.scheduler
+            .add(job)
+            .await
+            .context("Failed to add plugin sync cron to scheduler")?;
+
+        info!(
+            "Added plugin sync schedule for '{}' ({}) cron='{}' tz={}",
+            plugin.name, plugin.id, cron, tz
+        );
+        Ok(())
+    }
+
     /// Reload all schedules (useful when libraries or settings are updated)
     pub async fn reload_schedules(&mut self) -> Result<()> {
         info!("Reloading all schedules");
@@ -804,13 +895,106 @@ pub async fn has_active_refresh_for_job(db: &DatabaseConnection, job_id: Uuid) -
     Ok(result.is_some())
 }
 
+/// Whether a connection is eligible for an automatic (scheduled) sync.
+///
+/// Eligible only when the connection is enabled, authenticated, and the user
+/// has opted into auto sync (`config._codex.autoSync`). `get_users_with_plugin`
+/// already filters to enabled rows, but we re-check `enabled` so the predicate
+/// is self-contained and correct in isolation. A connection whose token has
+/// expired but is otherwise authenticated is still eligible here; the sync
+/// handler is responsible for surfacing/refreshing auth (v1 does not refresh in
+/// the cron path).
+pub(crate) fn is_auto_sync_eligible(up: &user_plugins::Model) -> bool {
+    up.enabled && up.is_authenticated() && up.auto_sync_enabled()
+}
+
+/// Outcome of one plugin-sync fan-out, used for the per-firing log line.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct FanOutSummary {
+    /// Connections eligible for auto sync (enabled + authenticated + opted in).
+    pub candidates: usize,
+    /// Eligible connections for which a new sync task was enqueued.
+    pub enqueued: usize,
+    /// Connections skipped because they were not eligible.
+    pub skipped_ineligible: usize,
+    /// Eligible connections skipped because a sync was already pending/processing.
+    pub skipped_in_flight: usize,
+}
+
+/// Enqueue a `UserPluginSync` task for every eligible connection of `plugin_id`.
+///
+/// Skips any connection that already has a pending/processing sync, reusing the
+/// exact per-(user, plugin) dedup the manual trigger endpoint uses
+/// ([`TaskRepository::has_pending_or_processing`]). A slow plugin therefore
+/// never stacks duplicate tasks across cron ticks. Execution rate is bounded
+/// downstream by the task queue + worker concurrency, so no jitter is applied.
+pub(crate) async fn fan_out_plugin_sync(
+    db: &DatabaseConnection,
+    plugin_id: Uuid,
+) -> Result<FanOutSummary> {
+    let connections = UserPluginsRepository::get_users_with_plugin(db, plugin_id).await?;
+    let mut summary = FanOutSummary::default();
+
+    for up in &connections {
+        if !is_auto_sync_eligible(up) {
+            summary.skipped_ineligible += 1;
+            continue;
+        }
+        summary.candidates += 1;
+
+        match TaskRepository::has_pending_or_processing(
+            db,
+            "user_plugin_sync",
+            plugin_id,
+            up.user_id,
+        )
+        .await
+        {
+            Ok(true) => {
+                summary.skipped_in_flight += 1;
+                continue;
+            }
+            Ok(false) => {}
+            Err(e) => {
+                // Don't let one bad check abort the whole fan-out; skip this user.
+                warn!(
+                    "Failed to check in-flight sync for user {} plugin {}: {}; skipping",
+                    up.user_id, plugin_id, e
+                );
+                summary.skipped_in_flight += 1;
+                continue;
+            }
+        }
+
+        let task_type = TaskType::UserPluginSync {
+            plugin_id,
+            user_id: up.user_id,
+        };
+        match TaskRepository::enqueue(db, task_type, None).await {
+            Ok(_) => summary.enqueued += 1,
+            Err(e) => {
+                error!(
+                    "Failed to enqueue auto sync for user {} plugin {}: {}",
+                    up.user_id, plugin_id, e
+                );
+                summary.skipped_in_flight += 1;
+            }
+        }
+    }
+
+    Ok(summary)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use codex_db::repositories::LibraryRepository;
+    use chrono::Utc;
+    use codex_db::entities::users;
+    use codex_db::repositories::{LibraryRepository, UserRepository};
     use codex_db::test_helpers::setup_test_db;
     use codex_models::ScanningStrategy;
     use codex_tasks::types::TaskType;
+    use sea_orm::{ActiveModelTrait, Set};
 
     #[test]
     fn test_scheduler_can_be_created() {
@@ -863,5 +1047,174 @@ mod tests {
         let active_b = has_active_refresh_for_job(&db, job_b).await.unwrap();
         assert!(active_a, "job A has the in-flight task");
         assert!(!active_b, "job B has no in-flight task");
+    }
+
+    /// Build an in-memory user_plugins row for predicate testing (no DB).
+    fn make_up(enabled: bool, authed: bool, auto: bool) -> user_plugins::Model {
+        user_plugins::Model {
+            id: Uuid::new_v4(),
+            plugin_id: Uuid::new_v4(),
+            user_id: Uuid::new_v4(),
+            credentials: if authed { Some(vec![1, 2, 3]) } else { None },
+            config: if auto {
+                serde_json::json!({ "_codex": { "autoSync": true } })
+            } else {
+                serde_json::json!({})
+            },
+            oauth_access_token: None,
+            oauth_refresh_token: None,
+            oauth_expires_at: None,
+            oauth_scope: None,
+            external_user_id: None,
+            external_username: None,
+            external_avatar_url: None,
+            enabled,
+            health_status: "unknown".to_string(),
+            failure_count: 0,
+            last_failure_at: None,
+            last_success_at: None,
+            last_sync_at: None,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        }
+    }
+
+    #[test]
+    fn is_auto_sync_eligible_matrix() {
+        assert!(
+            is_auto_sync_eligible(&make_up(true, true, true)),
+            "enabled + authed + auto is eligible"
+        );
+        assert!(
+            !is_auto_sync_eligible(&make_up(false, true, true)),
+            "disabled is ineligible"
+        );
+        assert!(
+            !is_auto_sync_eligible(&make_up(true, false, true)),
+            "unauthenticated is ineligible"
+        );
+        assert!(
+            !is_auto_sync_eligible(&make_up(true, true, false)),
+            "manual (opt-out) is ineligible"
+        );
+    }
+
+    async fn create_sync_plugin(db: &DatabaseConnection, name: &str) -> Uuid {
+        PluginsRepository::create(
+            db,
+            name,
+            name,
+            None,
+            "user",
+            "node",
+            vec![],
+            vec![],
+            None,
+            vec![],
+            vec![],
+            vec![],
+            None,
+            "env",
+            None,
+            true,
+            None,
+            Some(60),
+            None,
+        )
+        .await
+        .unwrap()
+        .id
+    }
+
+    /// Create a real connection (user + user_plugins row) and set its auth /
+    /// auto-sync state via a direct ActiveModel update. Returns the user id.
+    async fn create_connection(
+        db: &DatabaseConnection,
+        plugin_id: Uuid,
+        authed: bool,
+        auto: bool,
+    ) -> Uuid {
+        let user = users::Model {
+            id: Uuid::new_v4(),
+            username: format!("u_{}", Uuid::new_v4()),
+            email: format!("{}@example.com", Uuid::new_v4()),
+            password_hash: "hash".to_string(),
+            role: "reader".to_string(),
+            is_active: true,
+            email_verified: false,
+            permissions: serde_json::json!([]),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            last_login_at: None,
+        };
+        let user = UserRepository::create(db, &user).await.unwrap();
+
+        let up = UserPluginsRepository::create(db, plugin_id, user.id)
+            .await
+            .unwrap();
+        let mut active: user_plugins::ActiveModel = up.into();
+        if authed {
+            active.credentials = Set(Some(vec![1, 2, 3]));
+        }
+        if auto {
+            active.config = Set(serde_json::json!({ "_codex": { "autoSync": true } }));
+        }
+        active.update(db).await.unwrap();
+
+        user.id
+    }
+
+    #[tokio::test]
+    async fn fan_out_enqueues_only_eligible_and_dedups() {
+        let db = setup_test_db().await;
+        let plugin_id = create_sync_plugin(&db, "sync_plugin").await;
+        let other_plugin = create_sync_plugin(&db, "other_plugin").await;
+
+        let user_a = create_connection(&db, plugin_id, true, true).await; // eligible
+        let _user_b = create_connection(&db, plugin_id, true, false).await; // manual
+        let _user_c = create_connection(&db, plugin_id, false, true).await; // unauthed
+        let user_d = create_connection(&db, plugin_id, true, true).await; // eligible, in flight
+        TaskRepository::enqueue(
+            &db,
+            TaskType::UserPluginSync {
+                plugin_id,
+                user_id: user_d,
+            },
+            None,
+        )
+        .await
+        .unwrap();
+        // Eligible connection on a different plugin must be untouched.
+        let user_e = create_connection(&db, other_plugin, true, true).await;
+
+        let summary = fan_out_plugin_sync(&db, plugin_id).await.unwrap();
+        assert_eq!(summary.candidates, 2, "A and D are eligible");
+        assert_eq!(summary.enqueued, 1, "only A is enqueued");
+        assert_eq!(summary.skipped_ineligible, 2, "B (manual) and C (unauthed)");
+        assert_eq!(summary.skipped_in_flight, 1, "D already pending");
+
+        assert!(
+            TaskRepository::has_pending_or_processing(&db, "user_plugin_sync", plugin_id, user_a)
+                .await
+                .unwrap(),
+            "A now has a sync task"
+        );
+        assert!(
+            !TaskRepository::has_pending_or_processing(
+                &db,
+                "user_plugin_sync",
+                other_plugin,
+                user_e
+            )
+            .await
+            .unwrap(),
+            "other plugin's user must not be enqueued by this plugin's fan-out"
+        );
+
+        // Second tick while A's task is still pending: nothing new is enqueued.
+        let summary2 = fan_out_plugin_sync(&db, plugin_id).await.unwrap();
+        assert_eq!(summary2.candidates, 2);
+        assert_eq!(summary2.enqueued, 0, "dedup across cron ticks");
+        assert_eq!(summary2.skipped_in_flight, 2, "A and D both in flight now");
     }
 }
