@@ -15854,6 +15854,17 @@ export interface components {
              */
             score: number;
             /**
+             * @description External ID source of the producing plugin (e.g. "anilist"). Used by the
+             *     UI to filter/group by source.
+             */
+            source?: string;
+            /**
+             * @description Display name of the plugin instance that produced this recommendation.
+             *     When the same item is recommended by several instances, this is the
+             *     highest-scoring contributor.
+             */
+            sourcePlugin?: string;
+            /**
              * Format: int32
              * @description Year the series started
              */
@@ -15877,6 +15888,29 @@ export interface components {
              */
             totalVolumeCount?: number | null;
         };
+        /** @description One recommendation provider instance contributing to the merged response. */
+        RecommendationSourceDto: {
+            /** @description Whether this instance's results came from cache */
+            cached?: boolean;
+            /** @description When this instance's recommendations were generated */
+            generatedAt?: string | null;
+            /**
+             * Format: uuid
+             * @description Plugin ID
+             */
+            pluginId: string;
+            /** @description Plugin display name */
+            pluginName: string;
+            /** @description External ID source of this plugin (e.g. "anilist"). */
+            source?: string;
+            /**
+             * Format: uuid
+             * @description ID of the running/pending refresh task for this instance, if any
+             */
+            taskId?: string | null;
+            /** @description Status of a running/pending refresh task for this instance, if any */
+            taskStatus?: string | null;
+        };
         /** @description A tag with relevance rank from the source service */
         RecommendationTagDto: {
             /** @description Tag category (e.g., "Genre", "Theme") */
@@ -15893,34 +15927,23 @@ export interface components {
         RecommendationsRefreshResponse: {
             /** @description Human-readable status message */
             message: string;
-            /**
-             * Format: uuid
-             * @description Task ID for tracking the refresh operation
-             */
-            taskId: string;
+            /** @description Task IDs enqueued — one per enabled recommendation provider instance */
+            taskIds?: string[];
         };
-        /** @description Response from GET /api/v1/user/recommendations */
+        /**
+         * @description Response from GET /api/v1/user/recommendations
+         *
+         *     Recommendations from all enabled recommendation-provider instances are
+         *     merged into a single list (deduped by external ID, highest score wins,
+         *     reasons combined), each item tagged with its `source`/`sourcePlugin`.
+         *     `sources` carries per-instance status so the UI can show provenance and
+         *     per-source refresh/staleness state.
+         */
         RecommendationsResponse: {
-            /** @description Whether these are cached results */
-            cached?: boolean;
-            /** @description When these recommendations were generated */
-            generatedAt?: string | null;
-            /**
-             * Format: uuid
-             * @description Plugin that provided these recommendations
-             */
-            pluginId: string;
-            /** @description Plugin display name */
-            pluginName: string;
-            /** @description Personalized recommendations */
+            /** @description Merged, deduped recommendations across all enabled provider instances */
             recommendations: components["schemas"]["RecommendationDto"][];
-            /**
-             * Format: uuid
-             * @description ID of the running/pending background task, if any
-             */
-            taskId?: string | null;
-            /** @description Status of a running/pending background task ("pending" or "running"), if any */
-            taskStatus?: string | null;
+            /** @description The provider instances that contributed (status, provenance) */
+            sources?: components["schemas"]["RecommendationSourceDto"][];
         };
         /** @description Refresh-token exchange request body. */
         RefreshRequest: {

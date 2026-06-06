@@ -4,6 +4,7 @@ import {
   Button,
   Group,
   Loader,
+  SegmentedControl,
   SimpleGrid,
   Stack,
   Text,
@@ -79,10 +80,14 @@ export function Recommendations() {
     refetchInterval: taskRunning ? 3000 : false,
   });
 
-  // Determine if a task is active (from response or SSE)
+  // Per-source provenance/status (a user can enable several providers).
+  const sources = useMemo(() => recData?.sources ?? [], [recData]);
+
+  // Determine if a task is active for any source (from response or SSE)
   const isTaskActive =
-    recData?.taskStatus === "pending" ||
-    recData?.taskStatus === "running" ||
+    sources.some(
+      (s) => s.taskStatus === "pending" || s.taskStatus === "running",
+    ) ||
     (recTask != null &&
       (recTask.status === "running" || recTask.status === "pending"));
 
@@ -143,11 +148,36 @@ export function Recommendations() {
   const [filters, setFilters] = useState<RecommendationFilterState>({
     ...DEFAULT_FILTERS,
   });
+  // Merged single list vs grouped-by-source view (only meaningful with >1 source)
+  const [viewMode, setViewMode] = useState<"merged" | "grouped">("merged");
   const recommendations = recData?.recommendations ?? [];
   const filteredRecommendations = useMemo(
     () => applyFilters(recommendations, filters),
     [recommendations, filters],
   );
+
+  const hasMultipleSources = sources.length > 1;
+  const anyCached = sources.some((s) => s.cached);
+  const sourceNames = sources.map((s) => s.pluginName);
+  const oldestGeneratedAt = useMemo(() => {
+    const times = sources
+      .map((s) => s.generatedAt)
+      .filter((t): t is string => !!t)
+      .sort();
+    return times[0];
+  }, [sources]);
+
+  // Group filtered recommendations by source plugin, preserving first-seen order.
+  const groupedRecommendations = useMemo(() => {
+    const map = new Map<string, typeof filteredRecommendations>();
+    for (const rec of filteredRecommendations) {
+      const key = rec.sourcePlugin || "Unknown source";
+      const list = map.get(key) ?? [];
+      list.push(rec);
+      map.set(key, list);
+    }
+    return [...map.entries()];
+  }, [filteredRecommendations]);
 
   // Loading state
   if (isLoading) {
@@ -215,7 +245,7 @@ export function Recommendations() {
         <Group justify="space-between" align="center">
           <Group gap="sm" align="center">
             <Title order={1}>Recommendations</Title>
-            {recData?.cached && (
+            {anyCached && (
               <Text size="sm" c="dimmed">
                 (cached)
               </Text>
@@ -242,22 +272,36 @@ export function Recommendations() {
           </Group>
         </Group>
 
-        {/* Plugin info */}
-        {recData && (
+        {/* Source info */}
+        {sourceNames.length > 0 && (
           <Text size="sm" c="dimmed">
-            Powered by {recData.pluginName}
-            {recData.generatedAt &&
-              ` \u00B7 Generated ${new Date(recData.generatedAt).toLocaleDateString()}`}
+            Powered by {sourceNames.join(", ")}
+            {oldestGeneratedAt &&
+              ` \u00B7 Generated ${new Date(oldestGeneratedAt).toLocaleDateString()}`}
           </Text>
         )}
 
-        {/* Filters */}
+        {/* Filters + view toggle */}
         {recommendations.length > 0 && (
-          <RecommendationFilters
-            recommendations={recommendations}
-            filters={filters}
-            onChange={setFilters}
-          />
+          <Group justify="space-between" align="flex-start" wrap="nowrap">
+            <RecommendationFilters
+              recommendations={recommendations}
+              filters={filters}
+              onChange={setFilters}
+            />
+            {hasMultipleSources && (
+              <SegmentedControl
+                size="xs"
+                value={viewMode}
+                onChange={(v) => setViewMode(v as "merged" | "grouped")}
+                data={[
+                  { label: "Merged", value: "merged" },
+                  { label: "By source", value: "grouped" },
+                ]}
+                data-testid="rec-view-toggle"
+              />
+            )}
+          </Group>
         )}
 
         {/* Filtered count */}
@@ -295,21 +339,52 @@ export function Recommendations() {
         )}
 
         {/* Recommendation cards */}
-        <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md">
-          {filteredRecommendations.map((rec) => (
-            <RecommendationCard
-              key={rec.externalId}
-              recommendation={rec}
-              onDismiss={(id, reason) =>
-                dismissMutation.mutate({ externalId: id, reason })
-              }
-              dismissing={
-                dismissMutation.isPending &&
-                dismissMutation.variables?.externalId === rec.externalId
-              }
-            />
-          ))}
-        </SimpleGrid>
+        {hasMultipleSources && viewMode === "grouped" ? (
+          <Stack gap="lg">
+            {groupedRecommendations.map(([sourceName, recs]) => (
+              <Stack key={sourceName} gap="sm">
+                <Group gap="xs" align="center">
+                  <Title order={3}>{sourceName}</Title>
+                  <Text size="sm" c="dimmed">
+                    ({recs.length})
+                  </Text>
+                </Group>
+                <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md">
+                  {recs.map((rec) => (
+                    <RecommendationCard
+                      key={rec.externalId}
+                      recommendation={rec}
+                      onDismiss={(id, reason) =>
+                        dismissMutation.mutate({ externalId: id, reason })
+                      }
+                      dismissing={
+                        dismissMutation.isPending &&
+                        dismissMutation.variables?.externalId === rec.externalId
+                      }
+                    />
+                  ))}
+                </SimpleGrid>
+              </Stack>
+            ))}
+          </Stack>
+        ) : (
+          <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md">
+            {filteredRecommendations.map((rec) => (
+              <RecommendationCard
+                key={rec.externalId}
+                recommendation={rec}
+                showSource={hasMultipleSources}
+                onDismiss={(id, reason) =>
+                  dismissMutation.mutate({ externalId: id, reason })
+                }
+                dismissing={
+                  dismissMutation.isPending &&
+                  dismissMutation.variables?.externalId === rec.externalId
+                }
+              />
+            ))}
+          </SimpleGrid>
+        )}
       </Stack>
     </Box>
   );

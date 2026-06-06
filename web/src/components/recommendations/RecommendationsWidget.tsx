@@ -30,9 +30,9 @@ export function RecommendationsWidget() {
   }
 
   const limited = recommendations.slice(0, MAX_RECOMMENDATIONS);
-  const subtitle = data?.pluginName
-    ? `Powered by ${data.pluginName}`
-    : undefined;
+  const sourceNames = (data?.sources ?? []).map((s) => s.pluginName);
+  const subtitle =
+    sourceNames.length > 0 ? `Powered by ${sourceNames.join(", ")}` : undefined;
 
   return (
     <HorizontalCarousel title="Recommended For You" subtitle={subtitle}>

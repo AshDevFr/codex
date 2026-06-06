@@ -132,9 +132,9 @@ describe("RecommendationsWidget", () => {
               inLibrary: false,
             },
           ],
-          pluginId: "plugin-1",
-          pluginName: "AniList Recs",
-          cached: false,
+          sources: [
+            { pluginId: "plugin-1", pluginName: "AniList Recs", cached: false },
+          ],
         });
       }),
     );

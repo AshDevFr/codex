@@ -986,6 +986,7 @@ The following paths are exempt from rate limiting:
 
             // Recommendation DTOs
             v1::dto::recommendations::RecommendationDto,
+            v1::dto::recommendations::RecommendationSourceDto,
             v1::dto::recommendations::RecommendationsResponse,
             v1::dto::recommendations::RecommendationsRefreshResponse,
             v1::dto::recommendations::DismissRecommendationRequest,

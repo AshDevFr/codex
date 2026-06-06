@@ -129,9 +129,9 @@ describe("Recommendations", () => {
       http.get("*/user/recommendations", () => {
         return HttpResponse.json({
           recommendations: [],
-          pluginId: "plugin-1",
-          pluginName: "AniList Recs",
-          cached: false,
+          sources: [
+            { pluginId: "plugin-1", pluginName: "AniList Recs", cached: false },
+          ],
         });
       }),
     );
@@ -147,9 +147,9 @@ describe("Recommendations", () => {
       http.get("*/user/recommendations", () => {
         return HttpResponse.json({
           recommendations: [],
-          pluginId: "plugin-1",
-          pluginName: "AniList Recs",
-          cached: true,
+          sources: [
+            { pluginId: "plugin-1", pluginName: "AniList Recs", cached: true },
+          ],
         });
       }),
     );
@@ -178,5 +178,50 @@ describe("Recommendations", () => {
         screen.getByRole("button", { name: /Refresh/ }),
       ).toBeInTheDocument();
     });
+  });
+
+  it("merges multiple sources and lists them all", async () => {
+    server.use(
+      http.get("*/user/recommendations", () => {
+        return HttpResponse.json({
+          recommendations: [
+            {
+              externalId: "1",
+              title: "Manga Pick",
+              score: 0.9,
+              reason: "from manga",
+              inLibrary: false,
+              sourcePlugin: "Manga Recs",
+              source: "anilist",
+            },
+            {
+              externalId: "2",
+              title: "Comics Pick",
+              score: 0.8,
+              reason: "from comics",
+              inLibrary: false,
+              sourcePlugin: "Comics Recs",
+              source: "anilist",
+            },
+          ],
+          sources: [
+            { pluginId: "p1", pluginName: "Manga Recs", cached: true },
+            { pluginId: "p2", pluginName: "Comics Recs", cached: true },
+          ],
+        });
+      }),
+    );
+
+    renderWithProviders(<Recommendations />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Manga Pick")).toBeInTheDocument();
+      expect(screen.getByText("Comics Pick")).toBeInTheDocument();
+    });
+    // Both sources credited and the view toggle is offered.
+    expect(
+      screen.getByText(/Powered by Manga Recs, Comics Recs/),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("rec-view-toggle")).toBeInTheDocument();
   });
 });
