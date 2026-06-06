@@ -51,6 +51,7 @@ fn create_plugin_with_permissions(permissions: &[&str]) -> plugins::Model {
         use_existing_external_id: true,
         metadata_targets: None,
         internal_config: None,
+        sync_cron_schedule: None,
         created_at: Utc::now(),
         updated_at: Utc::now(),
         created_by: None,

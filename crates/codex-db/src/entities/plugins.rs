@@ -129,6 +129,17 @@ pub struct Model {
     #[sea_orm(column_type = "Text")]
     pub internal_config: Option<String>,
 
+    /// Admin-managed cron schedule for automatic user-plugin syncs.
+    ///
+    /// - `None`: no scheduled sync (default).
+    /// - `Some(cron)`: a normalized cron expression. When the schedule fires,
+    ///   the scheduler enqueues a `UserPluginSync` task for every connected
+    ///   user whose connection is enabled, authenticated, and opted into auto
+    ///   sync (`config._codex.autoSync`). Only meaningful for plugins whose
+    ///   manifest declares the `user_read_sync` capability.
+    #[sea_orm(column_type = "Text")]
+    pub sync_cron_schedule: Option<String>,
+
     // Timestamps
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -1030,6 +1041,7 @@ mod tests {
             use_existing_external_id: true,
             metadata_targets: None,
             internal_config: None,
+            sync_cron_schedule: None,
             created_at: Utc::now(),
             updated_at: Utc::now(),
             created_by: None,
@@ -1211,6 +1223,7 @@ mod tests {
             use_existing_external_id: true,
             metadata_targets: None,
             internal_config: None,
+            sync_cron_schedule: None,
             created_at: Utc::now(),
             updated_at: Utc::now(),
             created_by: None,
@@ -1261,6 +1274,7 @@ mod tests {
             use_existing_external_id: true,
             metadata_targets: None,
             internal_config: None,
+            sync_cron_schedule: None,
             created_at: Utc::now(),
             updated_at: Utc::now(),
             created_by: None,
@@ -1322,6 +1336,7 @@ mod tests {
             use_existing_external_id: true,
             metadata_targets: None,
             internal_config: None,
+            sync_cron_schedule: None,
             created_at: Utc::now(),
             updated_at: Utc::now(),
             created_by: None,
@@ -1366,6 +1381,7 @@ mod tests {
             use_existing_external_id: true,
             metadata_targets: None,
             internal_config: Some("not valid json".to_string()),
+            sync_cron_schedule: None,
             created_at: Utc::now(),
             updated_at: Utc::now(),
             created_by: None,
