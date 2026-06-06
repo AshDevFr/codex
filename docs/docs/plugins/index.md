@@ -59,6 +59,21 @@ Each plugin requests specific permissions for the metadata fields it can write. 
 
 If you've manually edited a metadata field, you can lock it to prevent plugins from overwriting your changes. Toggle the lock icon next to any field in the metadata editor.
 
+### Library Scope & Running a Plugin Per-Library
+
+Every plugin can be **scoped to specific libraries**. In the plugin's configuration (**Settings > Plugins**, edit a plugin), the **Library access** control is either "All libraries" or a specific set. This scope is honored by metadata, **sync**, and **recommendation** plugins alike — a scoped plugin only acts on series in its allowed libraries.
+
+To run the **same plugin against different libraries with different configuration** (for example, one AniList Sync for your Manga library and another for Comics), add it more than once:
+
+1. From the **Official Plugins** gallery, an already-installed plugin shows an **"Add another"** button that pre-fills the command and a non-colliding name (e.g. `sync-anilist-2`).
+2. Give the new instance its own name, credentials/config, and library scope.
+
+Each instance has isolated storage and its own credentials. **Scope same-source instances to _disjoint_ libraries** — if two instances of the same integration both cover the same library, that series is synced twice (wasteful, and the last run wins).
+
+For recommendations, results from **all** enabled recommendation instances are merged into one list on the Recommendations page (deduplicated, each item tagged with the source it came from). You can switch between a merged list and a per-source grouped view, and filter by source.
+
+Seed configs can declare scope too: add a `libraries: [<name>, ...]` list to a plugin entry (names must match the seeded libraries; absent = all). See `config/seed-config.sample.yaml`.
+
 ## Codex Sync Settings
 
 When using sync plugins (like AniList Sync), Codex provides a set of **generic sync settings** that apply to all sync plugins. These settings control which entries the server sends to the plugin.
@@ -217,3 +232,12 @@ Plugins declare their protocol version via `protocolVersion: "1.0"` in the manif
 - **Old methods are preserved** within a major version. If a method signature changes in a backward-incompatible way, a new method name is used.
 
 This means plugins built for protocol `1.x` will continue to work as long as the server supports major version `1`. New optional fields (like `latestUpdatedAt` on `SyncEntry` or `totalVolumes` on `SyncProgress`) are additive and do not require a version bump.
+
+### Library Context in Payloads
+
+Every series/book entry the server sends to **sync** (`SyncEntry`) and **recommendation** (`UserLibraryEntry`) plugins carries the library it belongs to:
+
+- `libraryId` — the Codex library UUID
+- `libraryName` — the library's display name
+
+These are additive fields; plugins that don't need them can ignore them. They let a plugin branch its behavior per library (for example, applying different mappings for a Manga vs a Comics library). On pulled sync entries (data coming _from_ the external service) these fields are empty, since the external service doesn't know about Codex libraries.

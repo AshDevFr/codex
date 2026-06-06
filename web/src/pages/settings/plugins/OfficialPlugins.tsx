@@ -14,7 +14,6 @@ import {
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import {
-  IconCheck,
   IconChevronDown,
   IconChevronLeft,
   IconChevronRight,
@@ -277,15 +276,23 @@ function PluginFlipCard({ plugin, isInstalled, onAdd }: PluginFlipCardProps) {
             </Box>
             <Group justify="flex-end">
               {isInstalled ? (
-                <Button
-                  size="compact-xs"
-                  variant="light"
-                  color="green"
-                  leftSection={<IconCheck size={14} />}
-                  disabled
+                // Already installed once — still allow a second instance (e.g.
+                // scoped to a different library). The create form pre-fills the
+                // command/args and a non-colliding name.
+                <Tooltip
+                  label="Add another instance (e.g. scoped to a different library)"
+                  openDelay={300}
                 >
-                  Added
-                </Button>
+                  <Button
+                    size="compact-xs"
+                    variant="subtle"
+                    color="green"
+                    leftSection={<IconPlus size={14} />}
+                    onClick={() => onAdd(plugin)}
+                  >
+                    Add another
+                  </Button>
+                </Tooltip>
               ) : (
                 <Button
                   size="compact-xs"

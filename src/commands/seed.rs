@@ -72,6 +72,12 @@ pub struct SeedPluginConfig {
     /// `InitializeParams.adminConfig` on first start.
     #[serde(default, alias = "admin_config")]
     pub config: Option<serde_json::Value>,
+    /// Libraries (by name) this plugin is scoped to. Empty/absent = all
+    /// libraries (matching `plugins.library_ids`). Names are resolved to
+    /// library IDs at seed time, so the referenced libraries must be declared
+    /// in the same seed config (libraries are seeded before plugins).
+    #[serde(default)]
+    pub libraries: Vec<String>,
     #[serde(default = "default_true")]
     pub enabled: bool,
 }
@@ -168,14 +174,16 @@ pub async fn seed_command(config_path: PathBuf, seed_config_path: Option<PathBuf
         seed_users(db_conn, seed_config.as_ref()).await?;
     }
 
-    // Seed plugins and libraries (these are idempotent, always attempt)
+    // Seed libraries and plugins (these are idempotent, always attempt).
+    // Libraries are seeded BEFORE plugins so that a plugin's `libraries` scope
+    // (referenced by name) can be resolved to library IDs.
     if let Some(ref seed_cfg) = seed_config {
-        if !seed_cfg.plugins.is_empty() {
-            seed_plugins(db_conn, &seed_cfg.plugins).await?;
-        }
-
         if !seed_cfg.libraries.is_empty() {
             seed_libraries(db_conn, &seed_cfg.libraries).await?;
+        }
+
+        if !seed_cfg.plugins.is_empty() {
+            seed_plugins(db_conn, &seed_cfg.plugins).await?;
         }
     }
 
@@ -302,7 +310,30 @@ async fn seed_plugins(
     let mut created = 0;
     let mut skipped = 0;
 
+    // Build a library name → id index so plugins can be scoped by library name.
+    // Libraries are seeded first, so this reflects the just-seeded set.
+    let library_index: HashMap<String, Uuid> = LibraryRepository::list_all(db_conn)
+        .await?
+        .into_iter()
+        .map(|lib| (lib.name, lib.id))
+        .collect();
+
     for plugin_cfg in plugins {
+        // Resolve the plugin's library scope (by name) to IDs. Empty = all.
+        let library_ids: Vec<Uuid> = plugin_cfg
+            .libraries
+            .iter()
+            .map(|name| {
+                library_index.get(name).copied().ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "Plugin '{}' references unknown library '{}'. Declare the library in the seed config's `libraries` section.",
+                        plugin_cfg.name,
+                        name
+                    )
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+
         // Check if plugin already exists by name
         let existing = PluginsRepository::get_by_name(db_conn, &plugin_cfg.name).await?;
 
@@ -335,7 +366,7 @@ async fn seed_plugins(
             None, // working_directory
             plugin_cfg.permissions.clone(),
             plugin_cfg.scopes.clone(),
-            vec![],                          // library_ids (empty = all libraries)
+            library_ids,                     // library scope (empty = all libraries)
             plugin_cfg.credentials.as_ref(), // credentials
             &plugin_cfg.credential_delivery, // credential_delivery
             plugin_cfg.config.clone(),       // admin config
@@ -741,5 +772,94 @@ plugins:
     fn test_seed_config_from_file_not_found() {
         let result = SeedConfig::from_file("/nonexistent/path.yaml");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_seed_plugin_libraries_parsing() {
+        let yaml = r#"
+plugins:
+  - name: anilist-manga
+    display_name: AniList Manga
+    command: node
+    libraries: [Manga, Comics]
+  - name: anilist-all
+    display_name: AniList All
+    command: node
+"#;
+        let config: SeedConfig = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(config.plugins[0].libraries, vec!["Manga", "Comics"]);
+        // Absent `libraries` defaults to empty (all libraries).
+        assert!(config.plugins[1].libraries.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_seed_plugins_resolves_library_scope_by_name() {
+        use codex_db::test_helpers::create_test_db;
+
+        let (db, _tmp) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+
+        let yaml = r#"
+libraries:
+  - name: Manga
+    path: /libraries/manga
+  - name: Comics
+    path: /libraries/comics
+plugins:
+  - name: anilist-manga
+    display_name: AniList Manga
+    command: node
+    libraries: [Manga]
+  - name: anilist-all
+    display_name: AniList All
+    command: node
+"#;
+        let config: SeedConfig = serde_yaml::from_str(yaml).unwrap();
+
+        // Seed libraries first, then plugins (the order seed_command uses).
+        seed_libraries(conn, &config.libraries).await.unwrap();
+        seed_plugins(conn, &config.plugins).await.unwrap();
+
+        let manga = LibraryRepository::get_by_path(conn, "/libraries/manga")
+            .await
+            .unwrap()
+            .unwrap();
+
+        // Scoped plugin resolved the name to the library's UUID.
+        let scoped = PluginsRepository::get_by_name(conn, "anilist-manga")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(scoped.library_ids_vec(), vec![manga.id]);
+
+        // Unscoped plugin applies to all libraries (empty).
+        let all = PluginsRepository::get_by_name(conn, "anilist-all")
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(all.library_ids_vec().is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_seed_plugins_errors_on_unknown_library() {
+        use codex_db::test_helpers::create_test_db;
+
+        let (db, _tmp) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+
+        let yaml = r#"
+plugins:
+  - name: broken
+    display_name: Broken
+    command: node
+    libraries: [DoesNotExist]
+"#;
+        let config: SeedConfig = serde_yaml::from_str(yaml).unwrap();
+
+        let err = seed_plugins(conn, &config.plugins).await.unwrap_err();
+        assert!(
+            err.to_string().contains("unknown library"),
+            "expected unknown-library error, got: {err}"
+        );
     }
 }
