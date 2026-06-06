@@ -12,10 +12,23 @@ use uuid::Uuid;
 use crate::plugin::protocol::{UserLibraryEntry, UserLibraryExternalId, UserReadingStatus};
 use codex_db::entities::SeriesStatus;
 use codex_db::repositories::{
-    AlternateTitleRepository, BookRepository, GenreRepository, ReadProgressRepository,
-    SeriesExternalIdRepository, SeriesMetadataRepository, SeriesRepository, TagRepository,
-    UserSeriesRatingRepository,
+    AlternateTitleRepository, BookRepository, GenreRepository, LibraryRepository,
+    ReadProgressRepository, SeriesExternalIdRepository, SeriesMetadataRepository, SeriesRepository,
+    TagRepository, UserSeriesRatingRepository,
 };
+
+/// Resolve a set of library IDs to a `library_id -> library_name` map in a
+/// single query. Used to stamp `library_name` onto entries sent to plugins.
+/// Returns an empty map (and logs) on failure so callers can degrade gracefully.
+pub async fn library_names(db: &DatabaseConnection, library_ids: &[Uuid]) -> HashMap<Uuid, String> {
+    match LibraryRepository::get_by_ids(db, library_ids).await {
+        Ok(libs) => libs.into_iter().map(|(id, lib)| (id, lib.name)).collect(),
+        Err(e) => {
+            warn!("Failed to fetch library names for {library_ids:?}: {e}");
+            HashMap::new()
+        }
+    }
+}
 
 /// Build the full user library as `Vec<UserLibraryEntry>` for recommendation plugins.
 ///
@@ -32,6 +45,15 @@ pub async fn build_user_library(
     }
 
     let series_ids: Vec<Uuid> = all_series.iter().map(|s| s.id).collect();
+
+    // Resolve library names so each entry can carry its library context.
+    let library_ids: Vec<Uuid> = {
+        let mut ids: Vec<Uuid> = all_series.iter().map(|s| s.library_id).collect();
+        ids.sort_unstable();
+        ids.dedup();
+        ids
+    };
+    let lib_names = library_names(db, &library_ids).await;
 
     // 2. Batch-fetch all related data
     let metadata_map = SeriesMetadataRepository::get_by_series_ids(db, &series_ids).await?;
@@ -157,6 +179,11 @@ pub async fn build_user_library(
 
         entries.push(UserLibraryEntry {
             series_id: series.id.to_string(),
+            library_id: series.library_id.to_string(),
+            library_name: lib_names
+                .get(&series.library_id)
+                .cloned()
+                .unwrap_or_default(),
             title,
             alternate_titles,
             year: meta.and_then(|m| m.year),

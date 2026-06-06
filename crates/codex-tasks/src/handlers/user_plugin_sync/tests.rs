@@ -266,6 +266,8 @@ async fn test_match_and_apply_no_source() {
         notes: None,
         latest_updated_at: None,
         title: None,
+        library_id: String::new(),
+        library_name: String::new(),
     }];
 
     let (matched, applied) = pull::match_and_apply_pulled_entries(
@@ -323,6 +325,8 @@ async fn test_match_and_apply_with_matches() {
             notes: None,
             latest_updated_at: None,
             title: None,
+            library_id: String::new(),
+            library_name: String::new(),
         },
         SyncEntry {
             external_id: "99999".to_string(), // no match
@@ -334,6 +338,8 @@ async fn test_match_and_apply_with_matches() {
             notes: None,
             latest_updated_at: None,
             title: None,
+            library_id: String::new(),
+            library_name: String::new(),
         },
     ];
 
@@ -402,6 +408,8 @@ async fn test_match_and_apply_pulled_entries_applies_progress() {
         notes: None,
         latest_updated_at: None,
         title: None,
+        library_id: String::new(),
+        library_name: String::new(),
     }];
 
     let (matched, applied) = pull::match_and_apply_pulled_entries(
@@ -498,6 +506,8 @@ async fn test_match_and_apply_skips_already_read() {
         notes: None,
         latest_updated_at: None,
         title: None,
+        library_id: String::new(),
+        library_name: String::new(),
     }];
 
     let (matched, applied) = pull::match_and_apply_pulled_entries(
@@ -586,6 +596,9 @@ async fn test_build_push_entries_with_progress() {
     // "volumes" mode sends only volumes (not chapters, to avoid misleading activity)
     assert_eq!(entries[0].progress.as_ref().unwrap().volumes, Some(2));
     assert!(entries[0].progress.as_ref().unwrap().chapters.is_none());
+    // Each entry carries its library context for the plugin.
+    assert_eq!(entries[0].library_id, library.id.to_string());
+    assert_eq!(entries[0].library_name, "Test Library");
 }
 
 #[tokio::test]
@@ -1071,6 +1084,8 @@ async fn test_apply_pulled_entry_uses_volumes() {
         notes: None,
         latest_updated_at: None,
         title: None,
+        library_id: String::new(),
+        library_name: String::new(),
     };
 
     // Build pre-fetched maps for apply_pulled_entry (via match_and_apply which calls it)
@@ -1365,6 +1380,8 @@ async fn test_apply_pulled_rating_no_existing() {
         notes: Some("Good so far".to_string()),
         latest_updated_at: None,
         title: None,
+        library_id: String::new(),
+        library_name: String::new(),
     }];
 
     let (matched, _applied) = pull::match_and_apply_pulled_entries(
@@ -1454,6 +1471,8 @@ async fn test_apply_pulled_rating_existing_not_overwritten() {
         notes: Some("AniList notes".to_string()),
         latest_updated_at: None,
         title: None,
+        library_id: String::new(),
+        library_name: String::new(),
     }];
 
     let (_matched, _applied) = pull::match_and_apply_pulled_entries(
@@ -1528,6 +1547,8 @@ async fn test_apply_pulled_rating_disabled() {
         notes: Some("Should not be stored".to_string()),
         latest_updated_at: None,
         title: None,
+        library_id: String::new(),
+        library_name: String::new(),
     }];
 
     let (_matched, _applied) = pull::match_and_apply_pulled_entries(

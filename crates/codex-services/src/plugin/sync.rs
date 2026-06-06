@@ -102,6 +102,15 @@ pub struct SyncEntry {
     /// to search the external service by title when no external ID is present.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
+    /// ID of the library the series belongs to. Populated on push so plugins
+    /// can scope behaviour per library. Empty on pulled entries (the external
+    /// service does not send it back).
+    #[serde(default)]
+    pub library_id: String,
+    /// Human-readable name of the library the series belongs to. Populated on
+    /// push; empty on pulled entries.
+    #[serde(default)]
+    pub library_name: String,
 }
 
 /// Reading progress details
@@ -369,6 +378,8 @@ mod tests {
             notes: Some("Great series!".to_string()),
             latest_updated_at: Some("2026-02-01T12:00:00Z".to_string()),
             title: None,
+            library_id: String::new(),
+            library_name: String::new(),
         };
         let json = serde_json::to_value(&entry).unwrap();
         assert_eq!(json["externalId"], "12345");
@@ -485,6 +496,8 @@ mod tests {
                     notes: None,
                     latest_updated_at: None,
                     title: None,
+                    library_id: String::new(),
+                    library_name: String::new(),
                 },
                 SyncEntry {
                     external_id: "2".to_string(),
@@ -496,6 +509,8 @@ mod tests {
                     notes: None,
                     latest_updated_at: None,
                     title: None,
+                    library_id: String::new(),
+                    library_name: String::new(),
                 },
             ],
         };
@@ -622,6 +637,8 @@ mod tests {
                 notes: None,
                 latest_updated_at: None,
                 title: None,
+                library_id: String::new(),
+                library_name: String::new(),
             }],
             next_cursor: Some("page2".to_string()),
             has_more: true,
@@ -715,6 +732,8 @@ mod tests {
             notes: None,
             latest_updated_at: None,
             title: Some("Berserk".to_string()),
+            library_id: String::new(),
+            library_name: String::new(),
         };
         let json = serde_json::to_value(&entry).unwrap();
         assert_eq!(json["title"], "Berserk");
@@ -733,6 +752,8 @@ mod tests {
             notes: None,
             latest_updated_at: None,
             title: None,
+            library_id: String::new(),
+            library_name: String::new(),
         };
         let json = serde_json::to_value(&entry).unwrap();
         assert!(!json.as_object().unwrap().contains_key("title"));
@@ -758,6 +779,38 @@ mod tests {
         });
         let entry: SyncEntry = serde_json::from_value(json).unwrap();
         assert!(entry.title.is_none());
+    }
+
+    #[test]
+    fn test_sync_entry_library_fields_serialize_as_camel_case() {
+        let entry = SyncEntry {
+            external_id: "42".to_string(),
+            status: SyncReadingStatus::Reading,
+            progress: None,
+            score: None,
+            started_at: None,
+            completed_at: None,
+            notes: None,
+            latest_updated_at: None,
+            title: None,
+            library_id: "11111111-1111-1111-1111-111111111111".to_string(),
+            library_name: "Manga".to_string(),
+        };
+        let json = serde_json::to_value(&entry).unwrap();
+        assert_eq!(json["libraryId"], "11111111-1111-1111-1111-111111111111");
+        assert_eq!(json["libraryName"], "Manga");
+    }
+
+    #[test]
+    fn test_sync_entry_library_fields_default_when_absent() {
+        // Pulled entries (from the plugin) omit library context; must not fail.
+        let json = json!({
+            "externalId": "42",
+            "status": "completed"
+        });
+        let entry: SyncEntry = serde_json::from_value(json).unwrap();
+        assert_eq!(entry.library_id, "");
+        assert_eq!(entry.library_name, "");
     }
 
     // =========================================================================
