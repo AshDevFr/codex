@@ -71,6 +71,10 @@ pub struct UserPluginDto {
     pub user_setup_instructions: Option<String>,
     /// Per-user configuration
     pub config: serde_json::Value,
+    /// Whether this connection is opted into automatic scheduled syncs
+    /// (host-side preference, derived from `config._codex.autoSync`). When
+    /// false (the default), syncs run only when manually triggered.
+    pub auto_sync: bool,
     /// Plugin capabilities (derived from manifest)
     pub capabilities: UserPluginCapabilitiesDto,
     /// User-facing configuration schema (from plugin manifest)
@@ -123,6 +127,15 @@ pub struct UserPluginCapabilitiesDto {
 pub struct UpdateUserPluginConfigRequest {
     /// Configuration overrides for this plugin
     pub config: serde_json::Value,
+}
+
+/// Request to set a connection's automatic-sync preference (manual vs auto).
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SetSyncModeRequest {
+    /// `true` opts the connection into scheduled syncs on the plugin's
+    /// admin-configured cadence; `false` is manual-only (the default).
+    pub auto: bool,
 }
 
 /// Request to set user credentials (e.g., personal access token)
@@ -378,6 +391,7 @@ mod tests {
             description: None,
             user_setup_instructions: None,
             config: serde_json::json!({}),
+            auto_sync: false,
             capabilities: UserPluginCapabilitiesDto {
                 read_sync: true,
                 user_recommendation_provider: false,
@@ -426,6 +440,7 @@ mod tests {
             description: None,
             user_setup_instructions: None,
             config: serde_json::json!({}),
+            auto_sync: false,
             capabilities: UserPluginCapabilitiesDto {
                 read_sync: true,
                 user_recommendation_provider: false,
@@ -469,6 +484,7 @@ mod tests {
             description: None,
             user_setup_instructions: None,
             config: serde_json::json!({}),
+            auto_sync: false,
             capabilities: UserPluginCapabilitiesDto {
                 read_sync: true,
                 user_recommendation_provider: false,

@@ -47,6 +47,11 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/user/plugins/{plugin_id}/config",
             patch(handlers::user_plugins::update_user_plugin_config),
         )
+        // Auto/manual scheduled-sync preference
+        .route(
+            "/user/plugins/{plugin_id}/sync-mode",
+            patch(handlers::user_plugins::set_sync_mode),
+        )
         // User credentials (personal access token)
         .route(
             "/user/plugins/{plugin_id}/credentials",

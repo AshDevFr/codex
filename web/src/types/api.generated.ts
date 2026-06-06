@@ -5247,6 +5247,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/user/plugins/{plugin_id}/sync-mode": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Set a connection's automatic-sync preference (manual vs auto)
+         * @description Writes the host-only `config._codex.autoSync` flag (the plugin never sees
+         *     it). When `true`, the connection is synced automatically on the plugin's
+         *     admin-configured cron; when `false` (the default) syncs run only on demand.
+         *     Only allowed for plugins whose manifest declares the `user_read_sync`
+         *     capability.
+         */
+        patch: operations["set_sync_mode"];
+        trace?: never;
+    };
     "/api/v1/user/plugins/{plugin_id}/sync/status": {
         parameters: {
             query?: never;
@@ -15104,6 +15128,12 @@ export interface components {
             /** @description Handlebars template for customizing search queries */
             searchQueryTemplate?: string | null;
             /**
+             * @description Admin-managed cron schedule for automatic user-plugin syncs
+             *     (null = no scheduled sync)
+             * @example 0 0 *\/6 * * *
+             */
+            syncCronSchedule?: string | null;
+            /**
              * Format: date-time
              * @description When the plugin was last updated
              */
@@ -17799,6 +17829,14 @@ export interface components {
              */
             tags: string[];
         };
+        /** @description Request to set a connection's automatic-sync preference (manual vs auto). */
+        SetSyncModeRequest: {
+            /**
+             * @description `true` opts the connection into scheduled syncs on the plugin's
+             *     admin-configured cadence; `false` is manual-only (the default).
+             */
+            auto: boolean;
+        };
         /** @description Request to set user credentials (e.g., personal access token) */
         SetUserCredentialsRequest: {
             /** @description The access token or API key to store */
@@ -19267,6 +19305,13 @@ export interface components {
             searchPreprocessingRules?: unknown;
             /** @description Handlebars template for customizing search queries (null = clear template) */
             searchQueryTemplate?: unknown;
+            /**
+             * @description Admin-managed cron schedule for automatic user-plugin syncs.
+             *     Omit to leave unchanged; `null` clears it (no scheduled sync); a string
+             *     sets/normalizes it. Only allowed on plugins whose manifest declares the
+             *     `user_read_sync` capability.
+             */
+            syncCronSchedule?: unknown;
             /** @description Whether to skip search when external ID exists for this plugin */
             useExistingExternalId?: boolean | null;
             /** @description Updated working directory */
@@ -19546,6 +19591,12 @@ export interface components {
         };
         /** @description User plugin instance status */
         UserPluginDto: {
+            /**
+             * @description Whether this connection is opted into automatic scheduled syncs
+             *     (host-side preference, derived from `config._codex.autoSync`). When
+             *     false (the default), syncs run only when manually triggered.
+             */
+            autoSync: boolean;
             /** @description Plugin capabilities (derived from manifest) */
             capabilities: components["schemas"]["UserPluginCapabilitiesDto"];
             /** @description Per-user configuration */
@@ -31403,6 +31454,54 @@ export interface operations {
             };
             /** @description Sync already in progress */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    set_sync_mode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Plugin ID to set sync mode for */
+                plugin_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetSyncModeRequest"];
+            };
+        };
+        responses: {
+            /** @description Sync mode updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserPluginDto"];
+                };
+            };
+            /** @description Plugin does not support sync */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plugin not enabled for this user */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -157,6 +157,12 @@ pub struct PluginDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub internal_config: Option<InternalPluginConfig>,
 
+    /// Admin-managed cron schedule for automatic user-plugin syncs
+    /// (null = no scheduled sync)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "0 0 */6 * * *")]
+    pub sync_cron_schedule: Option<String>,
+
     /// Number of users who have enabled this plugin (only for user-type plugins)
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(example = 3)]
@@ -224,6 +230,7 @@ impl From<plugins::Model> for PluginDto {
                 .internal_config
                 .as_deref()
                 .and_then(|s| serde_json::from_str(s).ok()),
+            sync_cron_schedule: model.sync_cron_schedule,
             user_count: None,
         }
     }
@@ -718,6 +725,18 @@ pub struct UpdatePluginRequest {
     /// Validated as InternalPluginConfig on the server
     #[serde(skip_serializing_if = "Option::is_none")]
     pub internal_config: Option<serde_json::Value>,
+
+    /// Admin-managed cron schedule for automatic user-plugin syncs.
+    /// Omit to leave unchanged; `null` clears it (no scheduled sync); a string
+    /// sets/normalizes it. Only allowed on plugins whose manifest declares the
+    /// `user_read_sync` capability.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_optional_nullable"
+    )]
+    #[schema(example = "0 0 */6 * * *")]
+    pub sync_cron_schedule: Option<serde_json::Value>,
 }
 
 // =============================================================================
