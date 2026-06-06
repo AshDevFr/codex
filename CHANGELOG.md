@@ -2,6 +2,20 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.35.0] - 2026-06-06
+
+### 🚀 Features
+
+- *(plugins)* Send library context with sync and recommendation entries
+- *(plugins)* Scope sync push and pull to a plugin's allowed libraries
+- *(plugins)* Scope recommendation generation to a plugin's allowed libraries
+- *(recommendations)* Merge recommendations across all enabled provider instances
+- *(plugins)* Library-scoped seed config and multi-instance admin UX
+
+### 🐛 Bug Fixes
+
+- *(plugins)* Show library filter for sync and recommendation plugins
+
 ## [1.34.1] - 2026-06-05
 
 ### 🚀 Features
