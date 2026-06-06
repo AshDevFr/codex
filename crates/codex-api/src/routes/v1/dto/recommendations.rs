@@ -81,38 +81,66 @@ pub struct RecommendationDto {
     /// Popularity ranking/count on the source service
     #[serde(skip_serializing_if = "Option::is_none")]
     pub popularity: Option<i32>,
+    /// Display name of the plugin instance that produced this recommendation.
+    /// When the same item is recommended by several instances, this is the
+    /// highest-scoring contributor.
+    #[serde(default)]
+    pub source_plugin: String,
+    /// External ID source of the producing plugin (e.g. "anilist"). Used by the
+    /// UI to filter/group by source.
+    #[serde(default)]
+    pub source: String,
 }
 
-/// Response from GET /api/v1/user/recommendations
+/// One recommendation provider instance contributing to the merged response.
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct RecommendationsResponse {
-    /// Personalized recommendations
-    pub recommendations: Vec<RecommendationDto>,
-    /// Plugin that provided these recommendations
+pub struct RecommendationSourceDto {
+    /// Plugin ID
     pub plugin_id: Uuid,
     /// Plugin display name
     pub plugin_name: String,
-    /// When these recommendations were generated
+    /// External ID source of this plugin (e.g. "anilist").
+    #[serde(default)]
+    pub source: String,
+    /// When this instance's recommendations were generated
     #[serde(skip_serializing_if = "Option::is_none")]
     pub generated_at: Option<String>,
-    /// Whether these are cached results
+    /// Whether this instance's results came from cache
     #[serde(default)]
     pub cached: bool,
-    /// Status of a running/pending background task ("pending" or "running"), if any
+    /// Status of a running/pending refresh task for this instance, if any
     #[serde(skip_serializing_if = "Option::is_none")]
     pub task_status: Option<String>,
-    /// ID of the running/pending background task, if any
+    /// ID of the running/pending refresh task for this instance, if any
     #[serde(skip_serializing_if = "Option::is_none")]
     pub task_id: Option<Uuid>,
+}
+
+/// Response from GET /api/v1/user/recommendations
+///
+/// Recommendations from all enabled recommendation-provider instances are
+/// merged into a single list (deduped by external ID, highest score wins,
+/// reasons combined), each item tagged with its `source`/`sourcePlugin`.
+/// `sources` carries per-instance status so the UI can show provenance and
+/// per-source refresh/staleness state.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RecommendationsResponse {
+    /// Merged, deduped recommendations across all enabled provider instances
+    pub recommendations: Vec<RecommendationDto>,
+    /// The provider instances that contributed (status, provenance)
+    #[serde(default)]
+    pub sources: Vec<RecommendationSourceDto>,
 }
 
 /// Response from POST /api/v1/user/recommendations/refresh
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RecommendationsRefreshResponse {
-    /// Task ID for tracking the refresh operation
-    pub task_id: Uuid,
+    /// Task IDs enqueued — one per enabled recommendation provider instance
+    #[serde(default)]
+    pub task_ids: Vec<Uuid>,
     /// Human-readable status message
     pub message: String,
 }
@@ -162,9 +190,13 @@ mod tests {
             total_chapter_count: None,
             rating: None,
             popularity: None,
+            source_plugin: "AniList Recs".to_string(),
+            source: "anilist".to_string(),
         };
         let json = serde_json::to_value(&dto).unwrap();
         let obj = json.as_object().unwrap();
+        assert_eq!(json["sourcePlugin"], "AniList Recs");
+        assert_eq!(json["source"], "anilist");
         assert!(!obj.contains_key("externalUrl"));
         assert!(!obj.contains_key("coverUrl"));
         assert!(!obj.contains_key("summary"));
@@ -182,20 +214,26 @@ mod tests {
     fn test_recommendations_response_serialization() {
         let resp = RecommendationsResponse {
             recommendations: vec![],
-            plugin_id: Uuid::new_v4(),
-            plugin_name: "AniList Recs".to_string(),
-            generated_at: Some("2026-02-06T12:00:00Z".to_string()),
-            cached: true,
-            task_status: None,
-            task_id: None,
+            sources: vec![RecommendationSourceDto {
+                plugin_id: Uuid::new_v4(),
+                plugin_name: "AniList Recs".to_string(),
+                source: "anilist".to_string(),
+                generated_at: Some("2026-02-06T12:00:00Z".to_string()),
+                cached: true,
+                task_status: None,
+                task_id: None,
+            }],
         };
         let json = serde_json::to_value(&resp).unwrap();
         assert!(json["recommendations"].as_array().unwrap().is_empty());
-        assert!(json["cached"].as_bool().unwrap());
-        assert_eq!(json["pluginName"], "AniList Recs");
+        let sources = json["sources"].as_array().unwrap();
+        assert_eq!(sources.len(), 1);
+        assert_eq!(sources[0]["pluginName"], "AniList Recs");
+        assert_eq!(sources[0]["source"], "anilist");
+        assert!(sources[0]["cached"].as_bool().unwrap());
         // task_status and task_id should be absent when None
-        assert!(json.get("taskStatus").is_none());
-        assert!(json.get("taskId").is_none());
+        assert!(sources[0].get("taskStatus").is_none());
+        assert!(sources[0].get("taskId").is_none());
     }
 
     #[test]
@@ -213,35 +251,35 @@ mod tests {
     }
 
     #[test]
-    fn test_recommendations_response_with_task_status() {
+    fn test_recommendation_source_with_task_status() {
         let task_id = Uuid::new_v4();
-        let resp = RecommendationsResponse {
-            recommendations: vec![],
+        let source = RecommendationSourceDto {
             plugin_id: Uuid::new_v4(),
             plugin_name: "AniList Recs".to_string(),
+            source: "anilist".to_string(),
             generated_at: None,
             cached: false,
             task_status: Some("pending".to_string()),
             task_id: Some(task_id),
         };
-        let json = serde_json::to_value(&resp).unwrap();
+        let json = serde_json::to_value(&source).unwrap();
         assert_eq!(json["taskStatus"], "pending");
         assert_eq!(json["taskId"], task_id.to_string());
     }
 
     #[test]
-    fn test_recommendations_response_with_running_status() {
+    fn test_recommendation_source_with_running_status() {
         let task_id = Uuid::new_v4();
-        let resp = RecommendationsResponse {
-            recommendations: vec![],
+        let source = RecommendationSourceDto {
             plugin_id: Uuid::new_v4(),
             plugin_name: "Test Plugin".to_string(),
+            source: "anilist".to_string(),
             generated_at: Some("2026-02-11T10:00:00Z".to_string()),
             cached: true,
             task_status: Some("running".to_string()),
             task_id: Some(task_id),
         };
-        let json = serde_json::to_value(&resp).unwrap();
+        let json = serde_json::to_value(&source).unwrap();
         assert_eq!(json["taskStatus"], "running");
         assert_eq!(json["taskId"], task_id.to_string());
         assert!(json["cached"].as_bool().unwrap());

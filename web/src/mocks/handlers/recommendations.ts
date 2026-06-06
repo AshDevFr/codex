@@ -290,14 +290,38 @@ export const recommendationsHandlers = [
   http.get("/api/v1/user/recommendations", async () => {
     await delay(200);
 
+    // Demonstrate the multi-source merge: split the mock list across two
+    // provider instances so the merged/grouped toggle and source filter
+    // have something to work with.
+    const generatedAt = new Date(Date.now() - 3600000).toISOString();
+    const stamped = mockRecommendations.map((rec, i) =>
+      i % 2 === 0
+        ? { ...rec, sourcePlugin: "AniList Manga", source: "anilist" }
+        : { ...rec, sourcePlugin: "AniList Comics", source: "anilist" },
+    );
+
     const response: RecommendationsResponse = {
-      recommendations: mockRecommendations,
-      pluginId: "00000000-0000-0000-0000-000000000001",
-      pluginName: "AniList",
-      generatedAt: new Date(Date.now() - 3600000).toISOString(),
-      cached: true,
-      taskStatus: isRefreshing ? "running" : null,
-      taskId: isRefreshing ? "00000000-0000-0000-0000-000000000099" : null,
+      recommendations: stamped,
+      sources: [
+        {
+          pluginId: "00000000-0000-0000-0000-000000000001",
+          pluginName: "AniList Manga",
+          source: "anilist",
+          generatedAt,
+          cached: true,
+          taskStatus: isRefreshing ? "running" : null,
+          taskId: isRefreshing ? "00000000-0000-0000-0000-000000000099" : null,
+        },
+        {
+          pluginId: "00000000-0000-0000-0000-000000000002",
+          pluginName: "AniList Comics",
+          source: "anilist",
+          generatedAt,
+          cached: true,
+          taskStatus: null,
+          taskId: null,
+        },
+      ],
     };
 
     return HttpResponse.json(response);
@@ -321,7 +345,7 @@ export const recommendationsHandlers = [
     }, 3000);
 
     return HttpResponse.json({
-      taskId: "00000000-0000-0000-0000-000000000099",
+      taskIds: ["00000000-0000-0000-0000-000000000099"],
       message: "Recommendation refresh started",
     });
   }),

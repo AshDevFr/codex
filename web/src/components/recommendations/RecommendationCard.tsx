@@ -58,12 +58,15 @@ interface RecommendationCardProps {
   recommendation: RecommendationDto;
   onDismiss: (externalId: string, reason: string) => void;
   dismissing?: boolean;
+  /** Show a "via <plugin>" badge identifying the source instance (merged view) */
+  showSource?: boolean;
 }
 
 export function RecommendationCard({
   recommendation,
   onDismiss,
   dismissing,
+  showSource,
 }: RecommendationCardProps) {
   const {
     externalId,
@@ -84,6 +87,7 @@ export function RecommendationCard({
     totalChapterCount,
     rating,
     popularity,
+    sourcePlugin,
   } = recommendation;
 
   const borderColor = topBorderColor(inCodex, inLibrary);
@@ -152,10 +156,17 @@ export function RecommendationCard({
           )}
         </Group>
 
-        {/* Match score */}
-        <Text size="sm" fw={500} c="yellow.7" mb={8}>
-          {formatScore(score)} match
-        </Text>
+        {/* Match score + optional source provenance */}
+        <Group gap={6} mb={8} align="center" wrap="wrap">
+          <Text size="sm" fw={500} c="yellow.7">
+            {formatScore(score)} match
+          </Text>
+          {showSource && sourcePlugin && (
+            <Badge size="xs" variant="light" color="gray">
+              via {sourcePlugin}
+            </Badge>
+          )}
+        </Group>
 
         {/* Meta badges */}
         <Group gap={4} wrap="wrap" mb={12}>

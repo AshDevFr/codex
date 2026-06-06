@@ -59,6 +59,23 @@ describe("RecommendationCard", () => {
     expect(screen.getByText("95% match")).toBeInTheDocument();
   });
 
+  it("shows a 'via <plugin>' badge only when showSource is set", () => {
+    const rec = { ...fullRecommendation, sourcePlugin: "Manga Recs" };
+    const { rerender } = renderWithProviders(
+      <RecommendationCard recommendation={rec} onDismiss={vi.fn()} />,
+    );
+    expect(screen.queryByText("via Manga Recs")).not.toBeInTheDocument();
+
+    rerender(
+      <RecommendationCard
+        recommendation={rec}
+        onDismiss={vi.fn()}
+        showSource
+      />,
+    );
+    expect(screen.getByText("via Manga Recs")).toBeInTheDocument();
+  });
+
   it("renders reason text", () => {
     renderWithProviders(<RecommendationCard {...defaultProps} />);
     expect(

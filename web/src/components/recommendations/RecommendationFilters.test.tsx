@@ -272,6 +272,37 @@ describe("applyFilters", () => {
     });
     expect(result).toHaveLength(0);
   });
+
+  it("includes/excludes by source plugin", () => {
+    const recs = [
+      makeRec({ externalId: "1", sourcePlugin: "Manga Recs" }),
+      makeRec({ externalId: "2", sourcePlugin: "Comics Recs" }),
+      makeRec({ externalId: "3", sourcePlugin: "Manga Recs" }),
+    ];
+
+    const included = applyFilters(recs, {
+      ...DEFAULT_FILTERS,
+      sources: includeGroup("Manga Recs"),
+    });
+    expect(included.map((r) => r.externalId)).toEqual(["1", "3"]);
+
+    const excluded = applyFilters(recs, {
+      ...DEFAULT_FILTERS,
+      sources: excludeGroup("Manga Recs"),
+    });
+    expect(excluded.map((r) => r.externalId)).toEqual(["2"]);
+  });
+});
+
+describe("extractFilterOptions sources", () => {
+  it("collects distinct source plugins", () => {
+    const opts = extractFilterOptions([
+      makeRec({ externalId: "1", sourcePlugin: "Manga Recs" }),
+      makeRec({ externalId: "2", sourcePlugin: "Comics Recs" }),
+      makeRec({ externalId: "3", sourcePlugin: "Manga Recs" }),
+    ]);
+    expect(opts.sources).toEqual(new Set(["Manga Recs", "Comics Recs"]));
+  });
 });
 
 // =============================================================================

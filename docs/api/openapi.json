@@ -35545,6 +35545,14 @@
             "format": "double",
             "description": "Confidence/relevance score (0.0 to 1.0)"
           },
+          "source": {
+            "type": "string",
+            "description": "External ID source of the producing plugin (e.g. \"anilist\"). Used by the\nUI to filter/group by source."
+          },
+          "sourcePlugin": {
+            "type": "string",
+            "description": "Display name of the plugin instance that produced this recommendation.\nWhen the same item is recommended by several instances, this is the\nhighest-scoring contributor."
+          },
           "startYear": {
             "type": [
               "integer",
@@ -35599,6 +35607,55 @@
           }
         }
       },
+      "RecommendationSourceDto": {
+        "type": "object",
+        "description": "One recommendation provider instance contributing to the merged response.",
+        "required": [
+          "pluginId",
+          "pluginName"
+        ],
+        "properties": {
+          "cached": {
+            "type": "boolean",
+            "description": "Whether this instance's results came from cache"
+          },
+          "generatedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "When this instance's recommendations were generated"
+          },
+          "pluginId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Plugin ID"
+          },
+          "pluginName": {
+            "type": "string",
+            "description": "Plugin display name"
+          },
+          "source": {
+            "type": "string",
+            "description": "External ID source of this plugin (e.g. \"anilist\")."
+          },
+          "taskId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "ID of the running/pending refresh task for this instance, if any"
+          },
+          "taskStatus": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Status of a running/pending refresh task for this instance, if any"
+          }
+        }
+      },
       "RecommendationTagDto": {
         "type": "object",
         "description": "A tag with relevance rank from the source service",
@@ -35627,7 +35684,6 @@
         "type": "object",
         "description": "Response from POST /api/v1/user/recommendations/refresh",
         "required": [
-          "taskId",
           "message"
         ],
         "properties": {
@@ -35635,63 +35691,36 @@
             "type": "string",
             "description": "Human-readable status message"
           },
-          "taskId": {
-            "type": "string",
-            "format": "uuid",
-            "description": "Task ID for tracking the refresh operation"
+          "taskIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Task IDs enqueued — one per enabled recommendation provider instance"
           }
         }
       },
       "RecommendationsResponse": {
         "type": "object",
-        "description": "Response from GET /api/v1/user/recommendations",
+        "description": "Response from GET /api/v1/user/recommendations\n\nRecommendations from all enabled recommendation-provider instances are\nmerged into a single list (deduped by external ID, highest score wins,\nreasons combined), each item tagged with its `source`/`sourcePlugin`.\n`sources` carries per-instance status so the UI can show provenance and\nper-source refresh/staleness state.",
         "required": [
-          "recommendations",
-          "pluginId",
-          "pluginName"
+          "recommendations"
         ],
         "properties": {
-          "cached": {
-            "type": "boolean",
-            "description": "Whether these are cached results"
-          },
-          "generatedAt": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "When these recommendations were generated"
-          },
-          "pluginId": {
-            "type": "string",
-            "format": "uuid",
-            "description": "Plugin that provided these recommendations"
-          },
-          "pluginName": {
-            "type": "string",
-            "description": "Plugin display name"
-          },
           "recommendations": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/RecommendationDto"
             },
-            "description": "Personalized recommendations"
+            "description": "Merged, deduped recommendations across all enabled provider instances"
           },
-          "taskId": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "format": "uuid",
-            "description": "ID of the running/pending background task, if any"
-          },
-          "taskStatus": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Status of a running/pending background task (\"pending\" or \"running\"), if any"
+          "sources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RecommendationSourceDto"
+            },
+            "description": "The provider instances that contributed (status, provenance)"
           }
         }
       },

@@ -41,6 +41,8 @@ export interface RecommendationFilterState {
   countries: TriStateGroup;
   /** Seed (basedOn) filter */
   seeds: TriStateGroup;
+  /** Source plugin filter (which recommendation instance produced the item) */
+  sources: TriStateGroup;
   /** Min score range [0, 100] */
   scoreRange: [number, number];
 }
@@ -56,6 +58,7 @@ export const DEFAULT_FILTERS: RecommendationFilterState = {
   formats: emptyGroup(),
   countries: emptyGroup(),
   seeds: emptyGroup(),
+  sources: emptyGroup(),
   scoreRange: [0, 100],
 };
 
@@ -95,6 +98,7 @@ export function extractFilterOptions(recommendations: RecommendationDto[]) {
   const formats = new Set<string>();
   const countries = new Set<string>();
   const seeds = new Set<string>();
+  const sources = new Set<string>();
 
   for (const rec of recommendations) {
     if (rec.status) statuses.add(rec.status);
@@ -103,9 +107,10 @@ export function extractFilterOptions(recommendations: RecommendationDto[]) {
     if (rec.format) formats.add(rec.format);
     if (rec.countryOfOrigin) countries.add(rec.countryOfOrigin);
     for (const s of rec.basedOn ?? []) seeds.add(s);
+    if (rec.sourcePlugin) sources.add(rec.sourcePlugin);
   }
 
-  return { statuses, genres, tags, formats, countries, seeds };
+  return { statuses, genres, tags, formats, countries, seeds, sources };
 }
 
 /** Get included values from a tri-state group */
@@ -228,6 +233,19 @@ export function applyFilters(
       }
     }
 
+    // Source filter (which plugin instance produced the recommendation)
+    if (groupHasActive(filters.sources)) {
+      const included = getIncluded(filters.sources);
+      const excluded = getExcluded(filters.sources);
+      const src = rec.sourcePlugin ?? "";
+      if (included.length > 0 && !included.includes(src)) {
+        return false;
+      }
+      if (excluded.length > 0 && excluded.includes(src)) {
+        return false;
+      }
+    }
+
     // Score filter
     const scorePercent = Math.round(rec.score * 100);
     if (
@@ -250,6 +268,7 @@ export function activeFilterCount(filters: RecommendationFilterState): number {
   if (groupHasActive(filters.formats)) count++;
   if (groupHasActive(filters.countries)) count++;
   if (groupHasActive(filters.seeds)) count++;
+  if (groupHasActive(filters.sources)) count++;
   if (filters.scoreRange[0] > 0 || filters.scoreRange[1] < 100) count++;
   return count;
 }
@@ -279,7 +298,13 @@ export function RecommendationFilters({
   const setTriState = (
     key: keyof Pick<
       RecommendationFilterState,
-      "statuses" | "genres" | "tags" | "formats" | "countries" | "seeds"
+      | "statuses"
+      | "genres"
+      | "tags"
+      | "formats"
+      | "countries"
+      | "seeds"
+      | "sources"
     >,
     value: string,
     state: TriState,
@@ -296,7 +321,13 @@ export function RecommendationFilters({
   const getState = (
     key: keyof Pick<
       RecommendationFilterState,
-      "statuses" | "genres" | "tags" | "formats" | "countries" | "seeds"
+      | "statuses"
+      | "genres"
+      | "tags"
+      | "formats"
+      | "countries"
+      | "seeds"
+      | "sources"
     >,
     value: string,
   ): TriState => {
@@ -414,6 +445,25 @@ export function RecommendationFilters({
                       label={STATUS_LABELS[status] ?? status}
                       state={getState("statuses", status)}
                       onChange={(s) => setTriState("statuses", status, s)}
+                    />
+                  ))}
+                </Group>
+              </div>
+            )}
+
+            {/* Source filter — only useful with more than one provider */}
+            {options.sources.size > 1 && (
+              <div>
+                <Text size="sm" fw={500} mb={4}>
+                  Source
+                </Text>
+                <Group gap={6}>
+                  {[...options.sources].sort().map((src) => (
+                    <TriStateChip
+                      key={src}
+                      label={src}
+                      state={getState("sources", src)}
+                      onChange={(s) => setTriState("sources", src, s)}
                     />
                   ))}
                 </Group>

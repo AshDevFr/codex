@@ -6,7 +6,7 @@
 
 use super::super::dto::recommendations::{
     DismissRecommendationRequest, DismissRecommendationResponse, RecommendationDto,
-    RecommendationsRefreshResponse, RecommendationsResponse,
+    RecommendationSourceDto, RecommendationsRefreshResponse, RecommendationsResponse,
 };
 use crate::extractors::auth::AuthContext;
 use crate::{error::ApiError, extractors::AppState};
@@ -26,24 +26,25 @@ use std::sync::Arc;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
-/// Find the user's recommendation plugin.
+type RecPlugin = (
+    codex_db::entities::plugins::Model,
+    codex_db::entities::user_plugins::Model,
+);
+
+/// Find ALL of the user's enabled recommendation-provider plugin instances.
 ///
-/// Returns the plugin definition and user plugin instance for the first enabled
-/// recommendation provider plugin the user has connected.
-async fn find_recommendation_plugin(
+/// A user can enable the same plugin more than once (as distinct instances,
+/// e.g. scoped to different libraries); every enabled recommendation provider
+/// contributes to the merged response.
+async fn find_recommendation_plugins(
     db: &sea_orm::DatabaseConnection,
     user_id: Uuid,
-) -> Result<
-    (
-        codex_db::entities::plugins::Model,
-        codex_db::entities::user_plugins::Model,
-    ),
-    ApiError,
-> {
+) -> Result<Vec<RecPlugin>, ApiError> {
     let user_instances = UserPluginsRepository::get_enabled_for_user(db, user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to get user plugins: {}", e)))?;
 
+    let mut result = Vec::new();
     for instance in user_instances {
         let plugin = PluginsRepository::get_by_id(db, instance.plugin_id)
             .await
@@ -58,15 +59,28 @@ async fn find_recommendation_plugin(
                 .unwrap_or(false);
 
             if is_rec_provider {
-                return Ok((plugin, instance));
+                result.push((plugin, instance));
             }
         }
     }
 
-    Err(ApiError::NotFound(
-        "No recommendation plugin enabled. Enable a recommendation plugin in Settings > Integrations."
-            .to_string(),
-    ))
+    if result.is_empty() {
+        return Err(ApiError::NotFound(
+            "No recommendation plugin enabled. Enable a recommendation plugin in Settings > Integrations."
+                .to_string(),
+        ));
+    }
+
+    Ok(result)
+}
+
+/// Resolve a plugin's `external_id_source` (e.g. "anilist"), if declared.
+fn plugin_source(plugin: &codex_db::entities::plugins::Model) -> Option<String> {
+    plugin
+        .manifest
+        .as_ref()
+        .and_then(|m| serde_json::from_value::<PluginManifest>(m.clone()).ok())
+        .and_then(|m| m.capabilities.external_id_source)
 }
 
 /// Default max age for recommendations in hours before considered stale
@@ -92,25 +106,47 @@ pub async fn get_recommendations(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
 ) -> Result<Json<RecommendationsResponse>, ApiError> {
-    let (plugin, instance) = find_recommendation_plugin(&state.db, auth.user_id).await?;
+    let instances = find_recommendation_plugins(&state.db, auth.user_id).await?;
 
-    debug!(
-        user_id = %auth.user_id,
-        plugin_id = %plugin.id,
-        "Reading cached recommendations from DB"
-    );
+    let mut all_recommendations: Vec<RecommendationDto> = Vec::new();
+    let mut sources: Vec<RecommendationSourceDto> = Vec::new();
 
-    // Read cached recommendations from user_plugin_data
+    for (plugin, instance) in &instances {
+        let (recs, source) =
+            collect_instance_recommendations(&state, auth.user_id, plugin, instance).await;
+        all_recommendations.extend(recs);
+        sources.push(source);
+    }
+
+    // Merge across instances: dedupe by external ID (highest score wins,
+    // reasons combined), then order by score desc.
+    let recommendations = merge_recommendations(all_recommendations);
+
+    Ok(Json(RecommendationsResponse {
+        recommendations,
+        sources,
+    }))
+}
+
+/// Read one instance's cached recommendations, handle staleness/auto-refresh,
+/// enrich with Codex presence, stamp provenance, and return its contribution
+/// plus a source-status entry.
+async fn collect_instance_recommendations(
+    state: &AppState,
+    user_id: Uuid,
+    plugin: &codex_db::entities::plugins::Model,
+    instance: &codex_db::entities::user_plugins::Model,
+) -> (Vec<RecommendationDto>, RecommendationSourceDto) {
+    let source = plugin_source(plugin).unwrap_or_default();
+
     let cached_entry = UserPluginDataRepository::get(&state.db, instance.id, "recommendations")
         .await
-        .map_err(|e| ApiError::Internal(format!("Failed to read cached recommendations: {}", e)))?;
+        .unwrap_or(None);
 
-    // Try to deserialize cached data
     let cached_response = cached_entry.as_ref().and_then(|entry| {
         serde_json::from_value::<RecommendationResponse>(entry.data.clone()).ok()
     });
 
-    // Check staleness
     let max_age_hours = plugin
         .config
         .get("recommendations_max_age_hours")
@@ -122,112 +158,161 @@ pub async fn get_recommendations(
         age.num_hours() >= max_age_hours
     });
 
-    let has_data = cached_response.is_some();
-
-    // Check for active task
+    // Per-instance active-task guard so we never double-enqueue.
     let active_task = TaskRepository::find_pending_or_processing_task(
         &state.db,
         "user_plugin_recommendations",
         plugin.id,
-        auth.user_id,
+        user_id,
     )
     .await
-    .map_err(|e| ApiError::Internal(format!("Failed to check task status: {}", e)))?;
+    .unwrap_or(None);
 
-    // Auto-trigger refresh if empty or stale and no task already running
-    if is_stale && active_task.is_none() {
-        debug!(
-            user_id = %auth.user_id,
-            plugin_id = %plugin.id,
-            has_data = has_data,
-            "Recommendations empty or stale, auto-triggering refresh task"
-        );
-
+    // Auto-trigger a refresh for this instance if stale and nothing running.
+    let (task_status, task_id) = if is_stale && active_task.is_none() {
         let task_type = TaskType::UserPluginRecommendations {
             plugin_id: plugin.id,
-            user_id: auth.user_id,
+            user_id,
         };
-
         match TaskRepository::enqueue(&state.db, task_type, None).await {
             Ok(task_id) => {
                 info!(
-                    user_id = %auth.user_id,
+                    user_id = %user_id,
                     plugin_id = %plugin.id,
                     task_id = %task_id,
                     "Auto-enqueued recommendations refresh task"
                 );
-                // Return response with the newly created task info
-                let (mut recommendations, generated_at, cached) = match cached_response {
-                    Some(resp) => (
-                        resp.recommendations
-                            .into_iter()
-                            .map(to_recommendation_dto)
-                            .collect(),
-                        resp.generated_at,
-                        true,
-                    ),
-                    None => (vec![], None, false),
-                };
-
-                enrich_and_filter_codex_presence(&state.db, &mut recommendations, &plugin).await;
-
-                return Ok(Json(RecommendationsResponse {
-                    recommendations,
-                    plugin_id: plugin.id,
-                    plugin_name: plugin.display_name.clone(),
-                    generated_at,
-                    cached,
-                    task_status: Some("pending".to_string()),
-                    task_id: Some(task_id),
-                }));
+                (Some("pending".to_string()), Some(task_id))
             }
             Err(e) => {
                 warn!(
-                    user_id = %auth.user_id,
+                    user_id = %user_id,
                     plugin_id = %plugin.id,
                     error = %e,
                     "Failed to auto-enqueue refresh task"
                 );
+                (None, None)
             }
         }
-    }
-
-    // Map DB status "processing" → API "running" for frontend consistency
-    let (task_status, task_id) = match active_task {
-        Some((id, status)) => {
-            let api_status = match status.as_str() {
-                "processing" => "running",
-                other => other,
-            };
-            (Some(api_status.to_string()), Some(id))
+    } else {
+        // Map DB status "processing" → API "running" for frontend consistency.
+        match active_task {
+            Some((id, status)) => {
+                let api_status = match status.as_str() {
+                    "processing" => "running",
+                    other => other,
+                };
+                (Some(api_status.to_string()), Some(id))
+            }
+            None => (None, None),
         }
-        None => (None, None),
     };
 
-    // Build response from cached data
     let (mut recommendations, generated_at, cached) = match cached_response {
         Some(resp) => (
             resp.recommendations
                 .into_iter()
-                .map(to_recommendation_dto)
+                .map(|r| to_recommendation_dto(r, plugin.display_name.clone(), source.clone()))
                 .collect(),
             resp.generated_at,
             true,
         ),
-        None => (vec![], None, false),
+        None => (Vec::new(), None, false),
     };
 
-    enrich_and_filter_codex_presence(&state.db, &mut recommendations, &plugin).await;
+    enrich_and_filter_codex_presence(&state.db, &mut recommendations, plugin).await;
 
-    Ok(Json(RecommendationsResponse {
-        recommendations,
+    let source_dto = RecommendationSourceDto {
         plugin_id: plugin.id,
         plugin_name: plugin.display_name.clone(),
+        source,
         generated_at,
         cached,
         task_status,
         task_id,
-    }))
+    };
+
+    (recommendations, source_dto)
+}
+
+/// Merge recommendations from several instances into one list: dedupe by
+/// external ID keeping the highest score, combining the distinct reasons and
+/// unioning `based_on`; then order by score descending. Stable for equal
+/// scores (insertion order preserved).
+fn merge_recommendations(recs: Vec<RecommendationDto>) -> Vec<RecommendationDto> {
+    use std::collections::HashMap;
+
+    let mut order: Vec<String> = Vec::new();
+    let mut by_id: HashMap<String, RecommendationDto> = HashMap::new();
+
+    for rec in recs {
+        match by_id.get_mut(&rec.external_id) {
+            None => {
+                order.push(rec.external_id.clone());
+                by_id.insert(rec.external_id.clone(), rec);
+            }
+            Some(existing) => {
+                let combined_reason = combine_reasons(&existing.reason, &rec.reason);
+                let combined_based_on = union_strings(&existing.based_on, &rec.based_on);
+                let in_codex = existing.in_codex || rec.in_codex;
+                let in_library = existing.in_library || rec.in_library;
+
+                if rec.score > existing.score {
+                    // Higher-scoring contributor becomes the base.
+                    let mut winner = rec;
+                    winner.reason = combined_reason;
+                    winner.based_on = combined_based_on;
+                    winner.in_codex = in_codex;
+                    winner.in_library = in_library;
+                    *existing = winner;
+                } else {
+                    existing.reason = combined_reason;
+                    existing.based_on = combined_based_on;
+                    existing.in_codex = in_codex;
+                    existing.in_library = in_library;
+                }
+            }
+        }
+    }
+
+    let mut merged: Vec<RecommendationDto> = order
+        .into_iter()
+        .filter_map(|id| by_id.remove(&id))
+        .collect();
+
+    // Stable sort: equal scores keep insertion order.
+    merged.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    merged
+}
+
+/// Combine two recommendation reasons, keeping distinct text joined with " · ".
+fn combine_reasons(a: &str, b: &str) -> String {
+    if a.is_empty() {
+        return b.to_string();
+    }
+    if b.is_empty() || a == b || a.contains(b) {
+        return a.to_string();
+    }
+    if b.contains(a) {
+        return b.to_string();
+    }
+    format!("{a} · {b}")
+}
+
+/// Union of two string lists preserving order, first-seen wins.
+fn union_strings(a: &[String], b: &[String]) -> Vec<String> {
+    let mut out = a.to_vec();
+    for s in b {
+        if !out.contains(s) {
+            out.push(s.clone());
+        }
+    }
+    out
 }
 
 /// Refresh recommendations
@@ -249,45 +334,59 @@ pub async fn refresh_recommendations(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
 ) -> Result<Json<RecommendationsRefreshResponse>, ApiError> {
-    let (plugin, _instance) = find_recommendation_plugin(&state.db, auth.user_id).await?;
+    let instances = find_recommendation_plugins(&state.db, auth.user_id).await?;
 
-    // Check for duplicate pending/processing recommendation task
-    let has_existing = TaskRepository::has_pending_or_processing(
-        &state.db,
-        "user_plugin_recommendations",
-        plugin.id,
-        auth.user_id,
-    )
-    .await
-    .map_err(|e| ApiError::Internal(format!("Failed to check existing tasks: {}", e)))?;
+    // Enqueue a refresh for every instance that doesn't already have one
+    // running. Conflict only if ALL instances are already refreshing.
+    let mut task_ids = Vec::new();
+    let mut names = Vec::new();
+    let mut already_running = 0usize;
 
-    if has_existing {
+    for (plugin, _instance) in &instances {
+        let has_existing = TaskRepository::has_pending_or_processing(
+            &state.db,
+            "user_plugin_recommendations",
+            plugin.id,
+            auth.user_id,
+        )
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to check existing tasks: {}", e)))?;
+
+        if has_existing {
+            already_running += 1;
+            continue;
+        }
+
+        let task_type = TaskType::UserPluginRecommendations {
+            plugin_id: plugin.id,
+            user_id: auth.user_id,
+        };
+
+        let task_id = TaskRepository::enqueue(&state.db, task_type, None)
+            .await
+            .map_err(|e| {
+                ApiError::Internal(format!("Failed to enqueue recommendations task: {}", e))
+            })?;
+
+        info!(
+            user_id = %auth.user_id,
+            plugin_id = %plugin.id,
+            task_id = %task_id,
+            "Enqueued recommendations refresh task"
+        );
+        task_ids.push(task_id);
+        names.push(plugin.display_name.clone());
+    }
+
+    if task_ids.is_empty() && already_running == instances.len() {
         return Err(ApiError::Conflict(
             "Recommendation refresh already in progress".to_string(),
         ));
     }
 
-    let task_type = TaskType::UserPluginRecommendations {
-        plugin_id: plugin.id,
-        user_id: auth.user_id,
-    };
-
-    let task_id = TaskRepository::enqueue(&state.db, task_type, None)
-        .await
-        .map_err(|e| {
-            ApiError::Internal(format!("Failed to enqueue recommendations task: {}", e))
-        })?;
-
-    info!(
-        user_id = %auth.user_id,
-        plugin_id = %plugin.id,
-        task_id = %task_id,
-        "Enqueued recommendations refresh task"
-    );
-
     Ok(Json(RecommendationsRefreshResponse {
-        task_id,
-        message: format!("Refreshing recommendations from {}", plugin.display_name),
+        task_ids,
+        message: format!("Refreshing recommendations from {}", names.join(", ")),
     }))
 }
 
@@ -355,6 +454,8 @@ async fn enrich_and_filter_codex_presence(
 /// into the API response type field-by-field.
 fn to_recommendation_dto(
     r: codex_services::plugin::recommendations::Recommendation,
+    source_plugin: String,
+    source: String,
 ) -> RecommendationDto {
     use super::super::dto::recommendations::RecommendationTagDto;
 
@@ -388,6 +489,8 @@ fn to_recommendation_dto(
         total_chapter_count: r.total_chapter_count,
         rating: r.rating,
         popularity: r.popularity,
+        source_plugin,
+        source,
     }
 }
 
@@ -415,49 +518,16 @@ pub async fn dismiss_recommendation(
     Path(external_id): Path<String>,
     Json(request): Json<DismissRecommendationRequest>,
 ) -> Result<Json<DismissRecommendationResponse>, ApiError> {
-    let (plugin, instance) = find_recommendation_plugin(&state.db, auth.user_id).await?;
+    let instances = find_recommendation_plugins(&state.db, auth.user_id).await?;
 
     debug!(
         user_id = %auth.user_id,
-        plugin_id = %plugin.id,
         external_id = %external_id,
-        "Dismissing recommendation (non-blocking)"
+        instances = instances.len(),
+        "Dismissing recommendation across all instances (non-blocking)"
     );
 
-    // 1. Read cached recommendations from DB
-    let cached_entry = UserPluginDataRepository::get(&state.db, instance.id, "recommendations")
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to read cached recommendations: {}", e)))?;
-
-    // 2. Filter out the dismissed entry and write back
-    if let Some(entry) = cached_entry
-        && let Ok(mut cached) = serde_json::from_value::<RecommendationResponse>(entry.data.clone())
-    {
-        let before_count = cached.recommendations.len();
-        cached
-            .recommendations
-            .retain(|r| r.external_id != external_id);
-
-        if cached.recommendations.len() < before_count {
-            let updated_data = serde_json::to_value(&cached).map_err(|e| {
-                ApiError::Internal(format!("Failed to serialize recommendations: {}", e))
-            })?;
-
-            UserPluginDataRepository::set(
-                &state.db,
-                instance.id,
-                "recommendations",
-                updated_data,
-                None,
-            )
-            .await
-            .map_err(|e| {
-                ApiError::Internal(format!("Failed to update cached recommendations: {}", e))
-            })?;
-        }
-    }
-
-    // 3. Parse dismiss reason
+    // Parse dismiss reason once.
     let reason = request.reason.and_then(|r| match r.as_str() {
         "not_interested" => Some("not_interested".to_string()),
         "already_read" => Some("already_read".to_string()),
@@ -465,21 +535,67 @@ pub async fn dismiss_recommendation(
         _ => None,
     });
 
-    // 4. Enqueue async task to notify plugin
-    let task_type = TaskType::UserPluginRecommendationDismiss {
-        plugin_id: plugin.id,
-        user_id: auth.user_id,
-        external_id: external_id.clone(),
-        reason,
-    };
+    // The same external ID can appear in multiple instances' caches (the same
+    // title recommended by more than one provider). Remove it from each cache
+    // that has it and notify only those plugins.
+    for (plugin, instance) in &instances {
+        let cached_entry = UserPluginDataRepository::get(&state.db, instance.id, "recommendations")
+            .await
+            .map_err(|e| {
+                ApiError::Internal(format!("Failed to read cached recommendations: {}", e))
+            })?;
 
-    if let Err(e) = TaskRepository::enqueue(&state.db, task_type, None).await {
-        warn!(
-            plugin_id = %plugin.id,
-            external_id = %external_id,
-            error = %e,
-            "Failed to enqueue dismiss task (dismissal from cache still succeeded)"
-        );
+        let removed = if let Some(entry) = cached_entry
+            && let Ok(mut cached) =
+                serde_json::from_value::<RecommendationResponse>(entry.data.clone())
+        {
+            let before_count = cached.recommendations.len();
+            cached
+                .recommendations
+                .retain(|r| r.external_id != external_id);
+
+            if cached.recommendations.len() < before_count {
+                let updated_data = serde_json::to_value(&cached).map_err(|e| {
+                    ApiError::Internal(format!("Failed to serialize recommendations: {}", e))
+                })?;
+
+                UserPluginDataRepository::set(
+                    &state.db,
+                    instance.id,
+                    "recommendations",
+                    updated_data,
+                    None,
+                )
+                .await
+                .map_err(|e| {
+                    ApiError::Internal(format!("Failed to update cached recommendations: {}", e))
+                })?;
+                true
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+
+        // Only notify plugins whose cache actually contained the item.
+        if removed {
+            let task_type = TaskType::UserPluginRecommendationDismiss {
+                plugin_id: plugin.id,
+                user_id: auth.user_id,
+                external_id: external_id.clone(),
+                reason: reason.clone(),
+            };
+
+            if let Err(e) = TaskRepository::enqueue(&state.db, task_type, None).await {
+                warn!(
+                    plugin_id = %plugin.id,
+                    external_id = %external_id,
+                    error = %e,
+                    "Failed to enqueue dismiss task (dismissal from cache still succeeded)"
+                );
+            }
+        }
     }
 
     Ok(Json(DismissRecommendationResponse { dismissed: true }))
@@ -560,8 +676,10 @@ mod tests {
             popularity: Some(50000),
         };
 
-        let dto = to_recommendation_dto(rec);
+        let dto = to_recommendation_dto(rec, "AniList Recs".to_string(), "anilist".to_string());
 
+        assert_eq!(dto.source_plugin, "AniList Recs");
+        assert_eq!(dto.source, "anilist");
         assert_eq!(dto.external_id, "12345");
         assert_eq!(
             dto.external_url.as_deref(),
@@ -615,7 +733,7 @@ mod tests {
             popularity: None,
         };
 
-        let dto = to_recommendation_dto(rec);
+        let dto = to_recommendation_dto(rec, "AniList Recs".to_string(), "anilist".to_string());
 
         assert_eq!(dto.external_id, "99");
         assert!(dto.external_url.is_none());
@@ -641,70 +759,83 @@ mod tests {
         use codex_db::entities::SeriesStatus;
 
         let recs = vec![
-            to_recommendation_dto(Recommendation {
-                external_id: "1".to_string(),
-                external_url: Some("https://example.com/1".to_string()),
-                title: "Manga A".to_string(),
-                cover_url: Some("https://img.example.com/a.jpg".to_string()),
-                summary: Some("Description A".to_string()),
-                genres: vec!["Action".to_string()],
-                tags: None,
-                score: 0.9,
-                reason: "Based on your library".to_string(),
-                based_on: vec!["Source A".to_string()],
-                codex_series_id: None,
-                in_library: false,
-                status: Some(SeriesStatus::Ongoing),
-                format: Some("MANGA".to_string()),
-                country_of_origin: Some("JP".to_string()),
-                start_year: Some(2005),
-                total_volume_count: Some(30),
-                total_chapter_count: None,
-                rating: Some(88),
-                popularity: Some(75000),
-            }),
-            to_recommendation_dto(Recommendation {
-                external_id: "2".to_string(),
-                external_url: None,
-                title: "Manga B".to_string(),
-                cover_url: None,
-                summary: None,
-                genres: vec![],
-                tags: None,
-                score: 0.7,
-                reason: "Popular in your genre".to_string(),
-                based_on: vec![],
-                codex_series_id: Some("series-id".to_string()),
-                in_library: true,
-                status: None,
-                format: None,
-                country_of_origin: None,
-                start_year: None,
-                total_volume_count: None,
-                total_chapter_count: None,
-                rating: None,
-                popularity: None,
-            }),
+            to_recommendation_dto(
+                Recommendation {
+                    external_id: "1".to_string(),
+                    external_url: Some("https://example.com/1".to_string()),
+                    title: "Manga A".to_string(),
+                    cover_url: Some("https://img.example.com/a.jpg".to_string()),
+                    summary: Some("Description A".to_string()),
+                    genres: vec!["Action".to_string()],
+                    tags: None,
+                    score: 0.9,
+                    reason: "Based on your library".to_string(),
+                    based_on: vec!["Source A".to_string()],
+                    codex_series_id: None,
+                    in_library: false,
+                    status: Some(SeriesStatus::Ongoing),
+                    format: Some("MANGA".to_string()),
+                    country_of_origin: Some("JP".to_string()),
+                    start_year: Some(2005),
+                    total_volume_count: Some(30),
+                    total_chapter_count: None,
+                    rating: Some(88),
+                    popularity: Some(75000),
+                },
+                "AniList Recs".to_string(),
+                "anilist".to_string(),
+            ),
+            to_recommendation_dto(
+                Recommendation {
+                    external_id: "2".to_string(),
+                    external_url: None,
+                    title: "Manga B".to_string(),
+                    cover_url: None,
+                    summary: None,
+                    genres: vec![],
+                    tags: None,
+                    score: 0.7,
+                    reason: "Popular in your genre".to_string(),
+                    based_on: vec![],
+                    codex_series_id: Some("series-id".to_string()),
+                    in_library: true,
+                    status: None,
+                    format: None,
+                    country_of_origin: None,
+                    start_year: None,
+                    total_volume_count: None,
+                    total_chapter_count: None,
+                    rating: None,
+                    popularity: None,
+                },
+                "AniList Recs".to_string(),
+                "anilist".to_string(),
+            ),
         ];
 
         let plugin_id = Uuid::new_v4();
         let response = RecommendationsResponse {
             recommendations: recs,
-            plugin_id,
-            plugin_name: "AniList Recommendations".to_string(),
-            generated_at: Some("2026-02-09T12:00:00Z".to_string()),
-            cached: true,
-            task_status: None,
-            task_id: None,
+            sources: vec![RecommendationSourceDto {
+                plugin_id,
+                plugin_name: "AniList Recommendations".to_string(),
+                source: "anilist".to_string(),
+                generated_at: Some("2026-02-09T12:00:00Z".to_string()),
+                cached: true,
+                task_status: None,
+                task_id: None,
+            }],
         };
 
         let json = serde_json::to_value(&response).unwrap();
 
-        // Top-level fields
-        assert_eq!(json["pluginId"], plugin_id.to_string());
-        assert_eq!(json["pluginName"], "AniList Recommendations");
-        assert_eq!(json["generatedAt"], "2026-02-09T12:00:00Z");
-        assert!(json["cached"].as_bool().unwrap());
+        // Source provenance
+        let sources = json["sources"].as_array().unwrap();
+        assert_eq!(sources.len(), 1);
+        assert_eq!(sources[0]["pluginId"], plugin_id.to_string());
+        assert_eq!(sources[0]["pluginName"], "AniList Recommendations");
+        assert_eq!(sources[0]["generatedAt"], "2026-02-09T12:00:00Z");
+        assert!(sources[0]["cached"].as_bool().unwrap());
 
         // Recommendations array
         let recs_arr = json["recommendations"].as_array().unwrap();
@@ -748,6 +879,82 @@ mod tests {
         assert!(rec1.get("totalVolumeCount").is_none());
         assert!(rec1.get("rating").is_none());
         assert!(rec1.get("popularity").is_none());
+    }
+
+    /// Build a minimal RecommendationDto for merge tests.
+    fn merge_test_dto(
+        external_id: &str,
+        score: f64,
+        reason: &str,
+        source_plugin: &str,
+    ) -> RecommendationDto {
+        RecommendationDto {
+            external_id: external_id.to_string(),
+            external_url: None,
+            title: format!("Title {external_id}"),
+            cover_url: None,
+            summary: None,
+            genres: vec![],
+            tags: None,
+            score,
+            reason: reason.to_string(),
+            based_on: vec![],
+            codex_series_id: None,
+            in_library: false,
+            in_codex: false,
+            status: None,
+            format: None,
+            country_of_origin: None,
+            start_year: None,
+            total_volume_count: None,
+            total_chapter_count: None,
+            rating: None,
+            popularity: None,
+            source_plugin: source_plugin.to_string(),
+            source: "anilist".to_string(),
+        }
+    }
+
+    #[test]
+    fn test_merge_dedupes_keeps_highest_score_and_combines_reasons() {
+        // Same external ID "42" from two instances; "1" and "3" unique.
+        let recs = vec![
+            merge_test_dto("1", 0.5, "low one", "Manga"),
+            merge_test_dto("42", 0.6, "from manga", "Manga"),
+            merge_test_dto("42", 0.9, "from comics", "Comics"),
+            merge_test_dto("3", 0.95, "top", "Comics"),
+        ];
+
+        let merged = merge_recommendations(recs);
+
+        // "42" deduped to one entry.
+        assert_eq!(merged.len(), 3);
+
+        // Ordered by score desc: 3 (0.95), 42 (0.9), 1 (0.5).
+        assert_eq!(merged[0].external_id, "3");
+        assert_eq!(merged[1].external_id, "42");
+        assert_eq!(merged[2].external_id, "1");
+
+        // The deduped "42" kept the highest score and the winning source,
+        // and combined both reasons.
+        let dup = &merged[1];
+        assert!((dup.score - 0.9).abs() < f64::EPSILON);
+        assert_eq!(dup.source_plugin, "Comics");
+        assert!(dup.reason.contains("from comics"));
+        assert!(dup.reason.contains("from manga"));
+    }
+
+    #[test]
+    fn test_merge_identical_reason_not_duplicated() {
+        let recs = vec![
+            merge_test_dto("7", 0.8, "same reason", "Manga"),
+            merge_test_dto("7", 0.6, "same reason", "Comics"),
+        ];
+        let merged = merge_recommendations(recs);
+        assert_eq!(merged.len(), 1);
+        assert_eq!(merged[0].reason, "same reason");
+        // Higher score wins its source.
+        assert_eq!(merged[0].source_plugin, "Manga");
     }
 
     /// Verify that RecommendationResponse round-trips through serde_json::Value.

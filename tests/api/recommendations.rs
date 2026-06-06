@@ -319,7 +319,7 @@ async fn test_refresh_recommendations_enqueues_task() {
 
     assert_eq!(status, StatusCode::OK);
     let body = response.expect("Expected response body");
-    assert!(body.get("taskId").is_some());
+    assert_eq!(body["taskIds"].as_array().unwrap().len(), 1);
     assert!(
         body["message"]
             .as_str()
@@ -480,10 +480,12 @@ async fn test_get_recommendations_returns_empty_and_triggers_task() {
     assert_eq!(status, StatusCode::OK);
     let body = response.expect("Expected response body");
     assert!(body["recommendations"].as_array().unwrap().is_empty());
-    assert_eq!(body["pluginName"], "AniList Recommendations");
-    // Should have auto-triggered a task
-    assert_eq!(body["taskStatus"], "pending");
-    assert!(body.get("taskId").is_some());
+    let sources = body["sources"].as_array().unwrap();
+    assert_eq!(sources.len(), 1);
+    assert_eq!(sources[0]["pluginName"], "AniList Recommendations");
+    // Should have auto-triggered a task for this source
+    assert_eq!(sources[0]["taskStatus"], "pending");
+    assert!(sources[0].get("taskId").is_some());
 }
 
 #[tokio::test]
@@ -545,7 +547,8 @@ async fn test_get_recommendations_returns_cached_data() {
     let recs = body["recommendations"].as_array().unwrap();
     assert_eq!(recs.len(), 1);
     assert_eq!(recs[0]["title"], "Cached Manga");
-    assert!(body["cached"].as_bool().unwrap());
+    let sources = body["sources"].as_array().unwrap();
+    assert!(sources[0]["cached"].as_bool().unwrap());
 }
 
 #[tokio::test]
@@ -770,7 +773,7 @@ async fn test_refresh_recommendations_deduplication() {
         make_json_request(app, request).await;
     assert_eq!(status, StatusCode::OK);
     let body = response.expect("Expected response body");
-    assert!(body.get("taskId").is_some());
+    assert_eq!(body["taskIds"].as_array().unwrap().len(), 1);
 
     // Second refresh — should return 409 Conflict
     let app = create_test_router(state.clone()).await;
@@ -1044,4 +1047,102 @@ async fn test_get_recommendations_no_filter_without_external_id_source() {
         2,
         "Without externalIdSource, no filtering should happen"
     );
+}
+
+// =============================================================================
+// Multi-Instance Merge Tests
+// =============================================================================
+
+#[tokio::test]
+async fn test_get_recommendations_merges_multiple_instances() {
+    // Two enabled recommendation providers, each with its own cached results.
+    // GET should merge them into one list (deduping a shared external ID,
+    // highest score wins) and report both under `sources`.
+    ensure_test_encryption_key();
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (user_id, token) = create_user_and_token(&db, &state, "testuser").await;
+
+    // Two distinct plugin rows (the "same plugin twice" pattern uses distinct
+    // names); both are recommendation providers.
+    let plugin_a = create_recommendation_plugin(&db, "rec-manga", "Manga Recommendations").await;
+    let plugin_b = create_recommendation_plugin(&db, "rec-comics", "Comics Recommendations").await;
+
+    for plugin_id in [plugin_a, plugin_b] {
+        let app = create_test_router(state.clone()).await;
+        let request = post_request_with_auth(
+            &format!("/api/v1/user/plugins/{}/enable", plugin_id),
+            &token,
+        );
+        let (status, _): (StatusCode, Option<serde_json::Value>) =
+            make_json_request(app, request).await;
+        assert_eq!(status, StatusCode::OK);
+    }
+
+    let instance_a = UserPluginsRepository::get_by_user_and_plugin(&db, user_id, plugin_a)
+        .await
+        .unwrap()
+        .unwrap();
+    let instance_b = UserPluginsRepository::get_by_user_and_plugin(&db, user_id, plugin_b)
+        .await
+        .unwrap()
+        .unwrap();
+
+    // Instance A: items "1" (0.6) and shared "99" (0.6).
+    codex::db::repositories::UserPluginDataRepository::set(
+        &db,
+        instance_a.id,
+        "recommendations",
+        json!({
+            "recommendations": [
+                { "externalId": "1", "title": "Manga Only", "score": 0.6, "reason": "from manga" },
+                { "externalId": "99", "title": "Shared", "score": 0.6, "reason": "manga says hi" }
+            ],
+            "generatedAt": "2026-02-12T10:00:00Z",
+            "cached": true
+        }),
+        None,
+    )
+    .await
+    .unwrap();
+
+    // Instance B: items "2" (0.8) and shared "99" (0.9 — higher).
+    codex::db::repositories::UserPluginDataRepository::set(
+        &db,
+        instance_b.id,
+        "recommendations",
+        json!({
+            "recommendations": [
+                { "externalId": "2", "title": "Comics Only", "score": 0.8, "reason": "from comics" },
+                { "externalId": "99", "title": "Shared", "score": 0.9, "reason": "comics says hi" }
+            ],
+            "generatedAt": "2026-02-12T10:00:00Z",
+            "cached": true
+        }),
+        None,
+    )
+    .await
+    .unwrap();
+
+    let app = create_test_router(state.clone()).await;
+    let request = get_request_with_auth("/api/v1/user/recommendations", &token);
+    let (status, response): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body = response.expect("Expected response body");
+
+    // Both instances reported as sources.
+    let sources = body["sources"].as_array().unwrap();
+    assert_eq!(sources.len(), 2);
+
+    // "99" deduped → 3 unique items, ordered by score desc: 99 (0.9), 2 (0.8), 1 (0.6).
+    let recs = body["recommendations"].as_array().unwrap();
+    assert_eq!(recs.len(), 3);
+    assert_eq!(recs[0]["externalId"], "99");
+    assert_eq!(recs[0]["score"], 0.9);
+    // The winning (higher-score) source produced the deduped item.
+    assert_eq!(recs[0]["sourcePlugin"], "Comics Recommendations");
+    assert_eq!(recs[1]["externalId"], "2");
+    assert_eq!(recs[2]["externalId"], "1");
 }
