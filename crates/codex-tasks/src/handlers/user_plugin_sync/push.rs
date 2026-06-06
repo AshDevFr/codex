@@ -16,12 +16,13 @@ use codex_services::plugin::sync::{SyncEntry, SyncProgress, SyncReadingStatus};
 use super::settings::CodexSyncSettings;
 
 /// Resolve `series_id -> (library_id, library_name)` for the given series so
-/// push entries can carry their library context. Degrades to an empty map on
-/// failure; entries then fall back to empty library fields.
+/// push entries can carry their library context and be filtered by library
+/// scope. Degrades to an empty map on failure; entries then fall back to empty
+/// library fields.
 async fn series_library_info(
     db: &DatabaseConnection,
     series_ids: &[Uuid],
-) -> HashMap<Uuid, (String, String)> {
+) -> HashMap<Uuid, (Uuid, String)> {
     let series = SeriesRepository::get_by_ids(db, series_ids)
         .await
         .unwrap_or_default();
@@ -38,9 +39,15 @@ async fn series_library_info(
         .into_iter()
         .map(|s| {
             let name = names.get(&s.library_id).cloned().unwrap_or_default();
-            (s.id, (s.library_id.to_string(), name))
+            (s.id, (s.library_id, name))
         })
         .collect()
+}
+
+/// Whether a series in `library_id` is in scope for a plugin allowed to act on
+/// `allowed_library_ids`. An empty allowed set means "all libraries".
+fn library_in_scope(allowed_library_ids: &[Uuid], library_id: Uuid) -> bool {
+    allowed_library_ids.is_empty() || allowed_library_ids.contains(&library_id)
 }
 
 /// Build push entries from a user's Codex reading progress.
@@ -49,12 +56,16 @@ async fn series_library_info(
 /// aggregates book-level reading progress into a single `SyncEntry`.
 /// Behaviour is controlled by `CodexSyncSettings` (which series to
 /// include, whether partial-progress books count, ratings).
+///
+/// Only series in a library the plugin is scoped to are included.
+/// `allowed_library_ids` empty means "all libraries".
 pub(crate) async fn build_push_entries(
     db: &DatabaseConnection,
     user_id: Uuid,
     external_id_source: &str,
     task_id: Uuid,
     settings: &CodexSyncSettings,
+    allowed_library_ids: &[Uuid],
 ) -> Vec<SyncEntry> {
     // 1. Get all series that have external IDs for this source (1 query)
     let external_ids =
@@ -76,18 +87,28 @@ pub(crate) async fn build_push_entries(
         external_id_source
     );
 
-    let external_ids_count = external_ids.len();
-    let matched_series_ids: HashSet<Uuid> = external_ids.iter().map(|e| e.series_id).collect();
-
     if external_ids.is_empty() && !settings.search_fallback {
         return vec![];
     }
 
+    // Resolve library context (id + name) for every candidate series, then drop
+    // series whose library is out of scope for this plugin.
+    let candidate_series_ids: Vec<Uuid> = external_ids.iter().map(|e| e.series_id).collect();
+    let lib_info = series_library_info(db, &candidate_series_ids).await;
+    let external_ids: Vec<_> = external_ids
+        .into_iter()
+        .filter(|e| match lib_info.get(&e.series_id) {
+            Some((lib, _)) => library_in_scope(allowed_library_ids, *lib),
+            // Unknown library (lookup failed): keep only when unscoped.
+            None => allowed_library_ids.is_empty(),
+        })
+        .collect();
+
+    let external_ids_count = external_ids.len();
+    let matched_series_ids: HashSet<Uuid> = external_ids.iter().map(|e| e.series_id).collect();
+
     // Collect all series IDs for batch queries
     let series_ids: Vec<Uuid> = external_ids.iter().map(|e| e.series_id).collect();
-
-    // Resolve library context (id + name) for each series so entries carry it.
-    let lib_info = series_library_info(db, &series_ids).await;
 
     // 2. Batch-fetch all books grouped by series (1 query instead of N)
     let books_map = match BookRepository::get_by_series_ids(db, &series_ids).await {
@@ -304,7 +325,7 @@ pub(crate) async fn build_push_entries(
             title: metadata_map.get(&ext_id.series_id).map(|m| m.title.clone()),
             library_id: lib_info
                 .get(&ext_id.series_id)
-                .map(|(id, _)| id.clone())
+                .map(|(id, _)| id.to_string())
                 .unwrap_or_default(),
             library_name: lib_info
                 .get(&ext_id.series_id)
@@ -323,8 +344,15 @@ pub(crate) async fn build_push_entries(
     // When search_fallback is enabled, also include series that have reading
     // progress but no external ID for this source. The plugin will search by title.
     if settings.search_fallback {
-        let unmatched =
-            build_unmatched_entries(db, user_id, task_id, settings, &matched_series_ids).await;
+        let unmatched = build_unmatched_entries(
+            db,
+            user_id,
+            task_id,
+            settings,
+            &matched_series_ids,
+            allowed_library_ids,
+        )
+        .await;
 
         debug!(
             "Task {}: Built {} unmatched entries for search fallback",
@@ -347,6 +375,7 @@ async fn build_unmatched_entries(
     task_id: Uuid,
     settings: &CodexSyncSettings,
     matched_series_ids: &HashSet<Uuid>,
+    allowed_library_ids: &[Uuid],
 ) -> Vec<SyncEntry> {
     // 1. Get all reading progress for this user
     let all_progress = match ReadProgressRepository::get_by_user(db, user_id).await {
@@ -456,6 +485,15 @@ async fn build_unmatched_entries(
     let mut entries = Vec::new();
 
     for &series_id in &unmatched_series_ids {
+        // Skip series outside the plugin's library scope.
+        let in_scope = match lib_info.get(&series_id) {
+            Some((lib, _)) => library_in_scope(allowed_library_ids, *lib),
+            None => allowed_library_ids.is_empty(),
+        };
+        if !in_scope {
+            continue;
+        }
+
         let title = match metadata_map.get(&series_id) {
             Some(m) => m.title.clone(),
             None => continue, // Skip series without metadata — we need a title for search
@@ -574,7 +612,7 @@ async fn build_unmatched_entries(
             title: Some(title),
             library_id: lib_info
                 .get(&series_id)
-                .map(|(id, _)| id.clone())
+                .map(|(id, _)| id.to_string())
                 .unwrap_or_default(),
             library_name: lib_info
                 .get(&series_id)

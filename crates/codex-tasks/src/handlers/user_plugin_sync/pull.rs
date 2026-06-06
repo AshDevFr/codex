@@ -7,7 +7,8 @@ use tracing::{debug, warn};
 use uuid::Uuid;
 
 use codex_db::repositories::{
-    BookRepository, ReadProgressRepository, SeriesExternalIdRepository, UserSeriesRatingRepository,
+    BookRepository, ReadProgressRepository, SeriesExternalIdRepository, SeriesRepository,
+    UserSeriesRatingRepository,
 };
 use codex_services::plugin::sync::{SyncEntry, SyncReadingStatus};
 
@@ -19,6 +20,11 @@ use codex_services::plugin::sync::{SyncEntry, SyncReadingStatus};
 /// When a match is found, applies the pulled reading progress to the user's
 /// Codex books (each book = 1 chapter).
 ///
+/// Only series in a library the plugin is scoped to are updated.
+/// `allowed_library_ids` empty means "all libraries". When a pulled entry's
+/// external ID matches series in multiple in-scope libraries (a duplicate), the
+/// progress is applied to all of them.
+///
 /// Returns `(matched, applied)` — matched entries count and books updated.
 pub(crate) async fn match_and_apply_pulled_entries(
     db: &DatabaseConnection,
@@ -27,6 +33,7 @@ pub(crate) async fn match_and_apply_pulled_entries(
     user_id: Uuid,
     task_id: Uuid,
     sync_ratings: bool,
+    allowed_library_ids: &[Uuid],
 ) -> (u32, u32) {
     let Some(source) = external_id_source else {
         debug!(
@@ -40,9 +47,11 @@ pub(crate) async fn match_and_apply_pulled_entries(
         return (0, 0);
     }
 
-    // 1. Batch-fetch all external ID → series mappings (1 query instead of N)
+    // 1. Batch-fetch all external ID → series mappings (1 query instead of N).
+    //    Grouped so the same external ID can resolve to several series
+    //    (the same title duplicated across libraries).
     let entry_external_ids: Vec<String> = entries.iter().map(|e| e.external_id.clone()).collect();
-    let ext_id_map = match SeriesExternalIdRepository::find_by_external_ids_and_source(
+    let ext_id_map = match SeriesExternalIdRepository::find_all_by_external_ids_and_source(
         db,
         &entry_external_ids,
         source,
@@ -59,8 +68,27 @@ pub(crate) async fn match_and_apply_pulled_entries(
         }
     };
 
+    // Resolve each matched series' library so out-of-scope matches can be
+    // filtered out. `series_id -> library_id`.
+    let all_matched_series_ids: Vec<Uuid> =
+        ext_id_map.values().flatten().map(|e| e.series_id).collect();
+    let series_library: HashMap<Uuid, Uuid> =
+        SeriesRepository::get_by_ids(db, &all_matched_series_ids)
+            .await
+            .unwrap_or_default()
+            .into_iter()
+            .map(|s| (s.id, s.library_id))
+            .collect();
+    let in_scope = |series_id: &Uuid| -> bool {
+        match series_library.get(series_id) {
+            Some(lib) => allowed_library_ids.is_empty() || allowed_library_ids.contains(lib),
+            // Unknown library (lookup failed): apply only when unscoped.
+            None => allowed_library_ids.is_empty(),
+        }
+    };
+
     // 2. Batch-fetch books for all matched series (1 query instead of N)
-    let matched_series_ids: Vec<Uuid> = ext_id_map.values().map(|e| e.series_id).collect();
+    let matched_series_ids: Vec<Uuid> = all_matched_series_ids.clone();
     let books_map = match BookRepository::get_by_series_ids(db, &matched_series_ids).await {
         Ok(map) => map,
         Err(e) => {
@@ -108,55 +136,68 @@ pub(crate) async fn match_and_apply_pulled_entries(
     let mut applied: u32 = 0;
 
     for entry in entries {
-        match ext_id_map.get(&entry.external_id) {
-            Some(ext_id) => {
-                debug!(
-                    "Task {}: Matched entry {} -> series {} (source: {})",
-                    task_id, entry.external_id, ext_id.series_id, source
-                );
-                matched += 1;
+        // All in-scope series this external ID maps to (duplicates update all).
+        let scoped_matches: Vec<Uuid> = ext_id_map
+            .get(&entry.external_id)
+            .map(|matches| {
+                matches
+                    .iter()
+                    .map(|e| e.series_id)
+                    .filter(|sid| in_scope(sid))
+                    .collect()
+            })
+            .unwrap_or_default();
 
-                // Apply reading progress using pre-fetched data
-                let books_applied = apply_pulled_entry(
-                    db,
-                    user_id,
-                    ext_id.series_id,
-                    entry,
-                    task_id,
-                    &books_map,
-                    &progress_map,
-                )
-                .await;
-                applied += books_applied;
+        if scoped_matches.is_empty() {
+            unmatched += 1;
+            continue;
+        }
 
-                // Apply pulled rating/notes if enabled and Codex has no existing rating
-                if sync_ratings && let Some(pulled_score) = entry.score {
-                    if !existing_ratings.contains_key(&ext_id.series_id) {
-                        let score_i32 = (pulled_score.round() as i32).clamp(1, 100);
-                        if let Err(e) = UserSeriesRatingRepository::upsert(
-                            db,
-                            user_id,
-                            ext_id.series_id,
-                            score_i32,
-                            entry.notes.clone(),
-                        )
-                        .await
-                        {
-                            warn!(
-                                "Task {}: Failed to apply pulled rating for series {}: {}",
-                                task_id, ext_id.series_id, e
-                            );
-                        }
-                    } else {
-                        debug!(
-                            "Task {}: Skipping pulled rating for series {} — Codex already has a rating",
-                            task_id, ext_id.series_id
+        matched += 1;
+
+        for series_id in scoped_matches {
+            debug!(
+                "Task {}: Matched entry {} -> series {} (source: {})",
+                task_id, entry.external_id, series_id, source
+            );
+
+            // Apply reading progress using pre-fetched data
+            let books_applied = apply_pulled_entry(
+                db,
+                user_id,
+                series_id,
+                entry,
+                task_id,
+                &books_map,
+                &progress_map,
+            )
+            .await;
+            applied += books_applied;
+
+            // Apply pulled rating/notes if enabled and Codex has no existing rating
+            if sync_ratings && let Some(pulled_score) = entry.score {
+                if !existing_ratings.contains_key(&series_id) {
+                    let score_i32 = (pulled_score.round() as i32).clamp(1, 100);
+                    if let Err(e) = UserSeriesRatingRepository::upsert(
+                        db,
+                        user_id,
+                        series_id,
+                        score_i32,
+                        entry.notes.clone(),
+                    )
+                    .await
+                    {
+                        warn!(
+                            "Task {}: Failed to apply pulled rating for series {}: {}",
+                            task_id, series_id, e
                         );
                     }
+                } else {
+                    debug!(
+                        "Task {}: Skipping pulled rating for series {} — Codex already has a rating",
+                        task_id, series_id
+                    );
                 }
-            }
-            None => {
-                unmatched += 1;
             }
         }
     }

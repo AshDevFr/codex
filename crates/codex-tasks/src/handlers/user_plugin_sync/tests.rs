@@ -277,6 +277,7 @@ async fn test_match_and_apply_no_source() {
         user_id,
         Uuid::new_v4(),
         false,
+        &[],
     )
     .await;
     assert_eq!(matched, 0);
@@ -350,6 +351,7 @@ async fn test_match_and_apply_with_matches() {
         user_id,
         Uuid::new_v4(),
         false,
+        &[],
     )
     .await;
     assert_eq!(matched, 1);
@@ -419,6 +421,7 @@ async fn test_match_and_apply_pulled_entries_applies_progress() {
         user_id,
         Uuid::new_v4(),
         false,
+        &[],
     )
     .await;
     assert_eq!(matched, 1);
@@ -517,11 +520,205 @@ async fn test_match_and_apply_skips_already_read() {
         user_id,
         Uuid::new_v4(),
         false,
+        &[],
     )
     .await;
     assert_eq!(matched, 1);
     // Only 2 books newly applied (book 1 was already read)
     assert_eq!(applied, 2);
+}
+
+/// A pulled entry for `external_id`, marked completed (used by scope tests).
+fn pulled_completed_entry(external_id: &str) -> SyncEntry {
+    SyncEntry {
+        external_id: external_id.to_string(),
+        status: SyncReadingStatus::Completed,
+        progress: None,
+        score: None,
+        started_at: None,
+        completed_at: None,
+        notes: None,
+        latest_updated_at: None,
+        title: None,
+        library_id: String::new(),
+        library_name: String::new(),
+    }
+}
+
+#[tokio::test]
+async fn test_build_push_entries_respects_library_scope() {
+    let (db, _temp_dir) = create_test_db().await;
+    let user = create_test_user(db.sea_orm_connection()).await;
+    let user_id = user.id;
+
+    // Two libraries; identical setup in each.
+    let mut library_ids = Vec::new();
+    for (name, path, ext) in [
+        ("Allowed", "/allowed", "100"),
+        ("Excluded", "/excluded", "200"),
+    ] {
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            name,
+            path,
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+        let series = SeriesRepository::create(db.sea_orm_connection(), library.id, name, None)
+            .await
+            .unwrap();
+        let book = create_test_book(db.sea_orm_connection(), series.id, library.id, 1, 50).await;
+        ReadProgressRepository::mark_as_read(db.sea_orm_connection(), user_id, book.id, 50)
+            .await
+            .unwrap();
+        SeriesExternalIdRepository::create(
+            db.sea_orm_connection(),
+            series.id,
+            "api:anilist",
+            ext,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+        library_ids.push(library.id);
+    }
+    let allowed = library_ids[0];
+
+    // Scoped to the "Allowed" library only.
+    let entries = push::build_push_entries(
+        db.sea_orm_connection(),
+        user_id,
+        "api:anilist",
+        Uuid::new_v4(),
+        &default_codex_settings(),
+        &[allowed],
+    )
+    .await;
+
+    assert_eq!(entries.len(), 1, "only the in-scope library should push");
+    assert_eq!(entries[0].external_id, "100");
+    assert_eq!(entries[0].library_id, allowed.to_string());
+
+    // Empty scope = all libraries → both push.
+    let entries_all = push::build_push_entries(
+        db.sea_orm_connection(),
+        user_id,
+        "api:anilist",
+        Uuid::new_v4(),
+        &default_codex_settings(),
+        &[],
+    )
+    .await;
+    assert_eq!(entries_all.len(), 2);
+}
+
+/// Create a library with one series (external ID `ext`) and one unread book.
+/// Returns `(library_id, book_id)`.
+async fn library_with_unread_book(
+    db: &sea_orm::DatabaseConnection,
+    name: &str,
+    path: &str,
+    ext: &str,
+) -> (Uuid, Uuid) {
+    let library = LibraryRepository::create(db, name, path, ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(db, library.id, name, None)
+        .await
+        .unwrap();
+    let book = create_test_book(db, series.id, library.id, 1, 50).await;
+    SeriesExternalIdRepository::create(db, series.id, "api:anilist", ext, None, None)
+        .await
+        .unwrap();
+    (library.id, book.id)
+}
+
+#[tokio::test]
+async fn test_pull_applies_to_cross_library_duplicates() {
+    let (db, _temp_dir) = create_test_db().await;
+    let user = create_test_user(db.sea_orm_connection()).await;
+    let user_id = user.id;
+
+    // Same external ID "555" duplicated across two libraries.
+    let (_lib_a, book_a) =
+        library_with_unread_book(db.sea_orm_connection(), "A", "/a", "555").await;
+    let (_lib_b, book_b) =
+        library_with_unread_book(db.sea_orm_connection(), "B", "/b", "555").await;
+
+    let entries = vec![pulled_completed_entry("555")];
+
+    // Unscoped (all libraries): one matched entry, both books updated.
+    let (matched, applied) = pull::match_and_apply_pulled_entries(
+        db.sea_orm_connection(),
+        &entries,
+        Some("api:anilist"),
+        user_id,
+        Uuid::new_v4(),
+        false,
+        &[],
+    )
+    .await;
+    assert_eq!(matched, 1, "one entry matched");
+    assert_eq!(applied, 2, "both duplicate series updated");
+
+    for book_id in [book_a, book_b] {
+        let progress =
+            ReadProgressRepository::get_by_user_and_book(db.sea_orm_connection(), user_id, book_id)
+                .await
+                .unwrap();
+        assert!(progress.unwrap().completed);
+    }
+}
+
+#[tokio::test]
+async fn test_pull_skips_out_of_scope_library() {
+    let (db, _temp_dir) = create_test_db().await;
+    let user = create_test_user(db.sea_orm_connection()).await;
+    let user_id = user.id;
+
+    let (lib_allowed, book_allowed) =
+        library_with_unread_book(db.sea_orm_connection(), "Allowed", "/allowed", "777").await;
+    let (_lib_excluded, book_excluded) =
+        library_with_unread_book(db.sea_orm_connection(), "Excluded", "/excluded", "777").await;
+
+    let entries = vec![pulled_completed_entry("777")];
+
+    // Scoped to the allowed library only.
+    let (matched, applied) = pull::match_and_apply_pulled_entries(
+        db.sea_orm_connection(),
+        &entries,
+        Some("api:anilist"),
+        user_id,
+        Uuid::new_v4(),
+        false,
+        &[lib_allowed],
+    )
+    .await;
+    assert_eq!(matched, 1);
+    assert_eq!(applied, 1, "only the in-scope duplicate is updated");
+
+    let allowed_progress = ReadProgressRepository::get_by_user_and_book(
+        db.sea_orm_connection(),
+        user_id,
+        book_allowed,
+    )
+    .await
+    .unwrap();
+    assert!(allowed_progress.unwrap().completed);
+
+    let excluded_progress = ReadProgressRepository::get_by_user_and_book(
+        db.sea_orm_connection(),
+        user_id,
+        book_excluded,
+    )
+    .await
+    .unwrap();
+    assert!(
+        excluded_progress.is_none(),
+        "out-of-scope library must not be touched"
+    );
 }
 
 /// Default Codex sync settings for tests (matches production defaults)
@@ -587,6 +784,7 @@ async fn test_build_push_entries_with_progress() {
         "api:anilist",
         Uuid::new_v4(),
         &default_codex_settings(),
+        &[],
     )
     .await;
 
@@ -652,6 +850,7 @@ async fn test_build_push_entries_all_completed() {
         "api:anilist",
         Uuid::new_v4(),
         &default_codex_settings(),
+        &[],
     )
     .await;
 
@@ -704,6 +903,7 @@ async fn test_build_push_entries_skips_no_progress() {
         "api:anilist",
         Uuid::new_v4(),
         &default_codex_settings(),
+        &[],
     )
     .await;
 
@@ -805,6 +1005,7 @@ async fn test_match_and_apply_empty() {
         Uuid::new_v4(),
         Uuid::new_v4(),
         false,
+        &[],
     )
     .await;
     assert_eq!(matched, 0);
@@ -893,6 +1094,7 @@ async fn test_build_push_entries_skip_completed_series() {
         "api:anilist",
         Uuid::new_v4(),
         &settings,
+        &[],
     )
     .await;
 
@@ -951,6 +1153,7 @@ async fn test_build_push_entries_skip_in_progress_series() {
         "api:anilist",
         Uuid::new_v4(),
         &settings,
+        &[],
     )
     .await;
 
@@ -1018,6 +1221,7 @@ async fn test_build_push_entries_count_in_progress_volumes() {
         "api:anilist",
         Uuid::new_v4(),
         &settings,
+        &[],
     )
     .await;
     assert_eq!(entries.len(), 1);
@@ -1036,6 +1240,7 @@ async fn test_build_push_entries_count_in_progress_volumes() {
         "api:anilist",
         Uuid::new_v4(),
         &settings_with_partial,
+        &[],
     )
     .await;
     assert_eq!(entries.len(), 1);
@@ -1108,6 +1313,7 @@ async fn test_apply_pulled_entry_uses_volumes() {
         user.id,
         Uuid::new_v4(),
         false,
+        &[],
     )
     .await;
     assert_eq!(matched, 1);
@@ -1208,6 +1414,7 @@ async fn test_build_push_entries_includes_rating() {
         "api:anilist",
         Uuid::new_v4(),
         &settings,
+        &[],
     )
     .await;
 
@@ -1269,6 +1476,7 @@ async fn test_build_push_entries_no_rating_when_disabled() {
         "api:anilist",
         Uuid::new_v4(),
         &settings,
+        &[],
     )
     .await;
 
@@ -1324,6 +1532,7 @@ async fn test_build_push_entries_no_rating_for_unrated() {
         "api:anilist",
         Uuid::new_v4(),
         &settings,
+        &[],
     )
     .await;
 
@@ -1391,6 +1600,7 @@ async fn test_apply_pulled_rating_no_existing() {
         user.id,
         Uuid::new_v4(),
         true, // sync_ratings=true
+        &[],
     )
     .await;
 
@@ -1482,6 +1692,7 @@ async fn test_apply_pulled_rating_existing_not_overwritten() {
         user.id,
         Uuid::new_v4(),
         true,
+        &[],
     )
     .await;
 
@@ -1558,6 +1769,7 @@ async fn test_apply_pulled_rating_disabled() {
         user.id,
         Uuid::new_v4(),
         false, // sync_ratings=false
+        &[],
     )
     .await;
 
@@ -1619,6 +1831,7 @@ async fn test_build_push_entries_populates_latest_updated_at() {
         "api:anilist",
         Uuid::new_v4(),
         &default_codex_settings(),
+        &[],
     )
     .await;
 
@@ -1686,6 +1899,7 @@ async fn test_build_push_entries_populates_total_volumes() {
         "api:anilist",
         Uuid::new_v4(),
         &default_codex_settings(),
+        &[],
     )
     .await;
 
@@ -1747,6 +1961,7 @@ async fn test_build_push_entries_always_sends_volumes() {
         "api:anilist",
         Uuid::new_v4(),
         &default_codex_settings(),
+        &[],
     )
     .await;
 
@@ -1849,6 +2064,7 @@ async fn test_build_push_entries_includes_unmatched_with_search_fallback() {
         "api:anilist",
         Uuid::new_v4(),
         &settings_no_fallback,
+        &[],
     )
     .await;
     assert_eq!(
@@ -1869,6 +2085,7 @@ async fn test_build_push_entries_includes_unmatched_with_search_fallback() {
         "api:anilist",
         Uuid::new_v4(),
         &settings_with_fallback,
+        &[],
     )
     .await;
     assert_eq!(
@@ -1931,6 +2148,7 @@ async fn test_build_push_entries_unmatched_skips_no_metadata() {
         "api:anilist",
         Uuid::new_v4(),
         &settings,
+        &[],
     )
     .await;
 
@@ -1986,6 +2204,7 @@ async fn test_build_push_entries_populates_title_for_matched() {
         "api:anilist",
         Uuid::new_v4(),
         &default_codex_settings(),
+        &[],
     )
     .await;
 
