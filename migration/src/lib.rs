@@ -186,6 +186,8 @@ mod m20260521_000089_rename_books_file_path_to_path;
 pub mod m20260524_000090_create_access_groups;
 // Release tracking: split observed_at (detected) from released_at (publish date)
 mod m20260530_000091_add_release_ledger_released_at;
+// Admin-managed per-plugin cron for scheduled user-plugin syncs
+mod m20260606_000092_add_plugin_sync_cron;
 
 pub struct Migrator;
 
@@ -343,6 +345,8 @@ impl MigratorTrait for Migrator {
             // Release ledger: add released_at (upstream publish date); observed_at
             // now means detection time.
             Box::new(m20260530_000091_add_release_ledger_released_at::Migration),
+            // Admin-managed per-plugin cron for scheduled user-plugin syncs
+            Box::new(m20260606_000092_add_plugin_sync_cron::Migration),
         ]
     }
 }

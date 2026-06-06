@@ -82,6 +82,23 @@ impl PluginsRepository {
         Ok(plugins)
     }
 
+    /// Get all enabled plugins that have an admin-configured sync cron schedule.
+    ///
+    /// Returns enabled plugins where `sync_cron_schedule IS NOT NULL`. The
+    /// scheduler loads these at boot (and on reload) to register one cron per
+    /// plugin; capability gating (`user_read_sync`) is applied by the caller
+    /// from the cached manifest. The row count is small (admin-managed), so
+    /// this loads the whole set without pagination.
+    pub async fn list_sync_scheduled(db: &DatabaseConnection) -> Result<Vec<plugins::Model>> {
+        let plugins = Plugins::find()
+            .filter(plugins::Column::Enabled.eq(true))
+            .filter(plugins::Column::SyncCronSchedule.is_not_null())
+            .order_by_asc(plugins::Column::Name)
+            .all(db)
+            .await?;
+        Ok(plugins)
+    }
+
     /// Get all enabled plugins with pagination
     ///
     /// Returns a tuple of (plugins, total_count) for building paginated responses.
@@ -313,6 +330,7 @@ impl PluginsRepository {
             use_existing_external_id: Set(true),
             metadata_targets: Set(None),
             internal_config: Set(None),
+            sync_cron_schedule: Set(None),
             created_at: Set(now),
             updated_at: Set(now),
             created_by: Set(created_by),
@@ -1843,5 +1861,76 @@ mod tests {
             .unwrap();
         assert_eq!(total, 3);
         assert!(plugins.is_empty());
+    }
+
+    /// Set `sync_cron_schedule` on an existing plugin row (Phase 3 will add a
+    /// dedicated repo setter; this keeps the Phase 1 test self-contained).
+    async fn set_sync_cron(db: &DatabaseConnection, id: Uuid, cron: Option<&str>) {
+        let model = PluginsRepository::get_by_id(db, id).await.unwrap().unwrap();
+        let mut active: plugins::ActiveModel = model.into();
+        active.sync_cron_schedule = Set(cron.map(|s| s.to_string()));
+        active.update(db).await.unwrap();
+    }
+
+    async fn create_plain_plugin(db: &DatabaseConnection, name: &str, enabled: bool) -> Uuid {
+        PluginsRepository::create(
+            db,
+            name,
+            name,
+            None,
+            "user",
+            "node",
+            vec![],
+            vec![],
+            None,
+            vec![],
+            vec![],
+            vec![],
+            None,
+            "env",
+            None,
+            enabled,
+            None,
+            Some(60),
+            None,
+        )
+        .await
+        .unwrap()
+        .id
+    }
+
+    #[tokio::test]
+    async fn test_list_sync_scheduled_filters_enabled_and_non_null() {
+        setup_test_encryption_key();
+        let db = setup_test_db().await;
+
+        // Enabled + cron set -> included.
+        let with_cron = create_plain_plugin(&db, "with_cron", true).await;
+        set_sync_cron(&db, with_cron, Some("0 0 * * * *")).await;
+
+        // Enabled but no cron -> excluded.
+        create_plain_plugin(&db, "no_cron", true).await;
+
+        // Cron set but disabled -> excluded.
+        let disabled = create_plain_plugin(&db, "disabled_with_cron", false).await;
+        set_sync_cron(&db, disabled, Some("0 0 * * * *")).await;
+
+        let scheduled = PluginsRepository::list_sync_scheduled(&db).await.unwrap();
+        assert_eq!(scheduled.len(), 1);
+        assert_eq!(scheduled[0].id, with_cron);
+        assert_eq!(
+            scheduled[0].sync_cron_schedule.as_deref(),
+            Some("0 0 * * * *")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_list_sync_scheduled_empty_when_none_configured() {
+        setup_test_encryption_key();
+        let db = setup_test_db().await;
+        create_plain_plugin(&db, "no_cron", true).await;
+
+        let scheduled = PluginsRepository::list_sync_scheduled(&db).await.unwrap();
+        assert!(scheduled.is_empty());
     }
 }

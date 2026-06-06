@@ -4,9 +4,11 @@
 /// JSON key for the Codex-reserved namespace in user plugin config.
 ///
 /// User plugin config objects may contain a `_codex` key whose value holds
-/// server-interpreted preferences (e.g. `includeCompleted`, `syncRatings`).
-/// The plugin itself never reads this namespace — it controls server behavior.
-pub(crate) const CODEX_CONFIG_NAMESPACE: &str = "_codex";
+/// server-interpreted preferences (e.g. `includeCompleted`, `syncRatings`,
+/// `autoSync`). The plugin itself never reads this namespace — it controls
+/// server behavior. Defined once in `codex-db` so the entity accessor
+/// (`user_plugins::Model::auto_sync_enabled`) and this parser stay in sync.
+pub(crate) use codex_db::entities::user_plugins::CODEX_CONFIG_NAMESPACE;
 
 /// Codex generic sync settings — server-interpreted preferences that control
 /// which entries to build and send to the plugin. Stored in the user plugin

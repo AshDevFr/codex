@@ -27,6 +27,21 @@ use uuid::Uuid;
 
 use super::plugins::PluginHealthStatus;
 
+/// JSON key for the Codex-reserved namespace inside `user_plugins.config`.
+///
+/// The `config` object may contain a `_codex` key whose value holds
+/// server-interpreted preferences (sync filtering, `autoSync`, …). The plugin
+/// itself never reads this namespace — it only controls host-side behavior.
+/// This is the single source of the namespace name; `codex-tasks` re-uses it.
+pub const CODEX_CONFIG_NAMESPACE: &str = "_codex";
+
+/// JSON key (inside `_codex`) for the per-user auto-sync opt-in.
+///
+/// `config._codex.autoSync = true` opts a connection into scheduled syncs that
+/// run on the plugin's admin-configured cron. Absent/false means manual-only
+/// (the default). Distinct from `syncMode`, which selects sync *direction*.
+pub const AUTO_SYNC_KEY: &str = "autoSync";
+
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
 #[sea_orm(table_name = "user_plugins")]
 pub struct Model {
@@ -172,6 +187,21 @@ impl Model {
     /// Check if the instance has any form of authentication configured
     pub fn is_authenticated(&self) -> bool {
         self.has_oauth_tokens() || self.has_credentials()
+    }
+
+    /// Whether this connection has opted into scheduled (auto) syncs.
+    ///
+    /// Reads `config._codex.autoSync` (host-side only; never sent to the
+    /// plugin). Returns `false` when the key is missing or not a `true`
+    /// boolean, so connections are manual-only by default. The scheduler
+    /// combines this with `enabled` and [`Self::is_authenticated`] to decide
+    /// whether to enqueue a sync when the plugin's cron fires.
+    pub fn auto_sync_enabled(&self) -> bool {
+        self.config
+            .get(CODEX_CONFIG_NAMESPACE)
+            .and_then(|codex| codex.get(AUTO_SYNC_KEY))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
     }
 
     /// Parse health status
@@ -321,5 +351,39 @@ mod tests {
         model.health_status = "healthy".to_string();
         model.enabled = false;
         assert!(!model.is_healthy());
+    }
+
+    #[test]
+    fn test_auto_sync_enabled_defaults_false() {
+        // Empty config, missing namespace, and missing key all read as false.
+        let model = test_model();
+        assert!(!model.auto_sync_enabled());
+
+        let mut model = test_model();
+        model.config = serde_json::json!({ "syncMode": "both" });
+        assert!(!model.auto_sync_enabled());
+
+        let mut model = test_model();
+        model.config = serde_json::json!({ "_codex": { "includeCompleted": true } });
+        assert!(!model.auto_sync_enabled());
+    }
+
+    #[test]
+    fn test_auto_sync_enabled_true() {
+        let mut model = test_model();
+        model.config = serde_json::json!({ "_codex": { "autoSync": true } });
+        assert!(model.auto_sync_enabled());
+    }
+
+    #[test]
+    fn test_auto_sync_enabled_non_bool_is_false() {
+        // A non-boolean value must not be coerced into opting in.
+        let mut model = test_model();
+        model.config = serde_json::json!({ "_codex": { "autoSync": "true" } });
+        assert!(!model.auto_sync_enabled());
+
+        let mut model = test_model();
+        model.config = serde_json::json!({ "_codex": { "autoSync": false } });
+        assert!(!model.auto_sync_enabled());
     }
 }
