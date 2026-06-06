@@ -36,10 +36,14 @@ export function isRecommendationProvider(plugin: PluginDto): boolean {
  *
  * Release-source, recommendation, and sync plugins are gated only by
  * manifest capability (checked at reverse-RPC dispatch in
- * `src/services/plugin/permissions.rs`); they don't write metadata, don't
- * expose scoped UI actions, and aren't library-filtered. Showing those
- * fields when they have no effect is misleading — an empty state suggests
- * "you forgot to configure something" when there's nothing to configure.
+ * `src/services/plugin/permissions.rs`); they don't write metadata and don't
+ * expose scoped UI actions. Showing the permission/scope selectors when they
+ * have no effect is misleading — an empty state suggests "you forgot to
+ * configure something" when there's nothing to configure.
+ *
+ * NOTE: library scoping is a separate axis — see `isLibraryScopable`. Sync and
+ * recommendation plugins ARE library-filtered even though they have no
+ * permissions/scopes.
  *
  * Plugins without a manifest are considered permissionable so the existing
  * "test this plugin to discover its capabilities" warning still triggers.
@@ -47,6 +51,24 @@ export function isRecommendationProvider(plugin: PluginDto): boolean {
 export function hasPermissionableSurface(plugin: PluginDto): boolean {
   if (!hasManifest(plugin)) return true;
   return isMetadataProvider(plugin);
+}
+
+/**
+ * Returns true if the plugin's behaviour is scoped by `library_ids`.
+ *
+ * Library scope applies to metadata, sync, and recommendation plugins — each
+ * only acts on series in its allowed libraries (sync push/pull, recommendation
+ * generation, and metadata actions). Release-source plugins are NOT
+ * library-filtered. Plugins without a manifest are treated as scopable
+ * (capabilities unknown until tested).
+ */
+export function isLibraryScopable(plugin: PluginDto): boolean {
+  if (!hasManifest(plugin)) return true;
+  return (
+    isMetadataProvider(plugin) ||
+    isSyncProvider(plugin) ||
+    isRecommendationProvider(plugin)
+  );
 }
 
 export function isOAuthPlugin(plugin: PluginDto): boolean {

@@ -12,6 +12,7 @@ import {
   getPermissionData,
   getScopeData,
   hasPermissionableSurface,
+  isLibraryScopable,
   isRecommendationProvider,
   isReleaseSource,
   isSyncProvider,
@@ -24,23 +25,52 @@ interface PermissionsTabProps {
   libraries: { id: string; name: string }[];
 }
 
+/** Library scope controls — shared by metadata, sync, and recommendation plugins. */
+function LibraryFilter({
+  form,
+  libraries,
+}: {
+  form: PluginConfigForm;
+  libraries: { id: string; name: string }[];
+}) {
+  return (
+    <>
+      <Divider label="Library Filter" labelPosition="center" />
+
+      <Switch
+        label="All Libraries"
+        description="When enabled, plugin applies to all libraries. Disable to select specific libraries."
+        {...form.getInputProps("allLibraries", { type: "checkbox" })}
+      />
+      {!form.values.allLibraries && (
+        <MultiSelect
+          label="Libraries"
+          placeholder="Select libraries"
+          description="Plugin will only act on series/books in these libraries"
+          data={libraries.map((lib) => ({
+            value: lib.id,
+            label: lib.name,
+          }))}
+          searchable
+          {...form.getInputProps("libraryIds")}
+        />
+      )}
+    </>
+  );
+}
+
 export function PermissionsTab({
   plugin,
   form,
   libraries,
 }: PermissionsTabProps) {
-  // Plugins whose only capabilities are `releaseSource`,
-  // `userRecommendationProvider`, or `userReadSync` don't go through the RBAC
-  // permission gate, don't expose scoped UI actions, and aren't
-  // library-filtered. Render an explanatory note instead of empty selectors.
-  if (!hasPermissionableSurface(plugin)) {
-    const capabilityLabel = isReleaseSource(plugin)
-      ? "Release-source"
-      : isRecommendationProvider(plugin)
-        ? "Recommendation"
-        : isSyncProvider(plugin)
-          ? "Sync"
-          : null;
+  const permissionable = hasPermissionableSurface(plugin);
+  const libraryScopable = isLibraryScopable(plugin);
+
+  // Nothing to configure — no permissions/scopes AND not library-scoped
+  // (e.g. release-source-only plugins).
+  if (!permissionable && !libraryScopable) {
+    const capabilityLabel = isReleaseSource(plugin) ? "Release-source" : null;
     return (
       <Stack gap="md">
         <Alert
@@ -55,6 +85,34 @@ export function PermissionsTab({
               : "This plugin doesn't expose any capability that uses permissions, scopes, or the library filter."}
           </Text>
         </Alert>
+      </Stack>
+    );
+  }
+
+  // Library-scopable but no permissions/scopes (sync / recommendation plugins).
+  // Show a short note, then the library filter.
+  if (!permissionable) {
+    const capabilityLabel = isRecommendationProvider(plugin)
+      ? "Recommendation"
+      : isSyncProvider(plugin)
+        ? "Sync"
+        : null;
+    return (
+      <Stack gap="md">
+        <Alert
+          icon={<IconInfoCircle size={16} />}
+          color="blue"
+          variant="light"
+          title="No permissions or scopes for this plugin"
+        >
+          <Text size="sm">
+            {capabilityLabel
+              ? `${capabilityLabel} plugins are gated by their manifest capability — they don't write metadata or expose scoped UI actions, so there are no permissions or scopes to configure. You can still scope this plugin to specific libraries below.`
+              : "This plugin has no permissions or scopes to configure, but you can scope it to specific libraries below."}
+          </Text>
+        </Alert>
+
+        <LibraryFilter form={form} libraries={libraries} />
       </Stack>
     );
   }
@@ -95,26 +153,7 @@ export function PermissionsTab({
         {...form.getInputProps("scopes")}
       />
 
-      <Divider label="Library Filter" labelPosition="center" />
-
-      <Switch
-        label="All Libraries"
-        description="When enabled, plugin applies to all libraries. Disable to select specific libraries."
-        {...form.getInputProps("allLibraries", { type: "checkbox" })}
-      />
-      {!form.values.allLibraries && (
-        <MultiSelect
-          label="Libraries"
-          placeholder="Select libraries"
-          description="Plugin will only be available for series/books in these libraries"
-          data={libraries.map((lib) => ({
-            value: lib.id,
-            label: lib.name,
-          }))}
-          searchable
-          {...form.getInputProps("libraryIds")}
-        />
-      )}
+      <LibraryFilter form={form} libraries={libraries} />
     </Stack>
   );
 }

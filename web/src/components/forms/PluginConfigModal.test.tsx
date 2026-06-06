@@ -327,7 +327,7 @@ describe("PluginConfigModal", () => {
     expect(screen.queryByText("Library Filter")).toBeNull();
   });
 
-  it("hides permission selectors for recommendation-only plugins", () => {
+  it("hides permission selectors but shows the library filter for recommendation-only plugins", () => {
     const plugin = createMockPlugin({
       manifest: {
         name: "recommendations-anilist",
@@ -349,12 +349,16 @@ describe("PluginConfigModal", () => {
     );
 
     expect(
-      screen.getByText(/No permission settings for this plugin/),
+      screen.getByText(/No permissions or scopes for this plugin/),
     ).toBeInTheDocument();
     expect(screen.queryByPlaceholderText("Select permissions")).toBeNull();
+    expect(screen.queryByPlaceholderText("Select scopes")).toBeNull();
+    // Recommendation plugins ARE library-scoped — the filter must be available.
+    expect(screen.getByText("Library Filter")).toBeInTheDocument();
+    expect(screen.getByText("All Libraries")).toBeInTheDocument();
   });
 
-  it("hides permission selectors for sync-only plugins", () => {
+  it("hides permission selectors but shows the library filter for sync-only plugins", () => {
     const plugin = createMockPlugin({
       manifest: {
         name: "sync-anilist",
@@ -376,10 +380,12 @@ describe("PluginConfigModal", () => {
     );
 
     expect(
-      screen.getByText(/No permission settings for this plugin/),
+      screen.getByText(/No permissions or scopes for this plugin/),
     ).toBeInTheDocument();
     expect(screen.queryByPlaceholderText("Select permissions")).toBeNull();
     expect(screen.queryByPlaceholderText("Select scopes")).toBeNull();
-    expect(screen.queryByText("Library Filter")).toBeNull();
+    // Sync plugins ARE library-scoped — the filter must be available.
+    expect(screen.getByText("Library Filter")).toBeInTheDocument();
+    expect(screen.getByText("All Libraries")).toBeInTheDocument();
   });
 });
