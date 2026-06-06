@@ -6,10 +6,10 @@
 
 use super::super::dto::plugins::ConfigSchemaDto;
 use super::super::dto::user_plugins::{
-    AvailablePluginDto, OAuthCallbackQuery, OAuthStartResponse, SetUserCredentialsRequest,
-    SyncStatusDto, SyncStatusQuery, SyncTriggerResponse, UpdateUserPluginConfigRequest,
-    UserPluginCapabilitiesDto, UserPluginDto, UserPluginTaskDto, UserPluginTasksQuery,
-    UserPluginsListResponse,
+    AvailablePluginDto, OAuthCallbackQuery, OAuthStartResponse, SetSyncModeRequest,
+    SetUserCredentialsRequest, SyncStatusDto, SyncStatusQuery, SyncTriggerResponse,
+    UpdateUserPluginConfigRequest, UserPluginCapabilitiesDto, UserPluginDto, UserPluginTaskDto,
+    UserPluginTasksQuery, UserPluginsListResponse,
 };
 use crate::extractors::auth::AuthContext;
 use crate::{error::ApiError, extractors::AppState};
@@ -154,6 +154,7 @@ async fn build_user_plugin_dto(
         description: manifest.as_ref().and_then(|m| m.user_description.clone()),
         user_setup_instructions: manifest.and_then(|m| m.user_setup_instructions),
         config: instance.config.clone(),
+        auto_sync: instance.auto_sync_enabled(),
         capabilities,
         user_config_schema,
         last_sync_result,
@@ -714,6 +715,97 @@ pub async fn update_user_plugin_config(
         user_id = %auth.user_id,
         plugin_id = %plugin_id,
         "User updated plugin config"
+    );
+
+    Ok(Json(
+        build_user_plugin_dto(&state.db, &updated, &plugin, None).await,
+    ))
+}
+
+/// Set a connection's automatic-sync preference (manual vs auto)
+///
+/// Writes the host-only `config._codex.autoSync` flag (the plugin never sees
+/// it). When `true`, the connection is synced automatically on the plugin's
+/// admin-configured cron; when `false` (the default) syncs run only on demand.
+/// Only allowed for plugins whose manifest declares the `user_read_sync`
+/// capability.
+#[utoipa::path(
+    patch,
+    path = "/api/v1/user/plugins/{plugin_id}/sync-mode",
+    params(
+        ("plugin_id" = Uuid, Path, description = "Plugin ID to set sync mode for")
+    ),
+    request_body = SetSyncModeRequest,
+    responses(
+        (status = 200, description = "Sync mode updated", body = UserPluginDto),
+        (status = 400, description = "Plugin does not support sync"),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Plugin not enabled for this user"),
+    ),
+    tag = "User Plugins"
+)]
+pub async fn set_sync_mode(
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+    Path(plugin_id): Path<Uuid>,
+    Json(request): Json<SetSyncModeRequest>,
+) -> Result<Json<UserPluginDto>, ApiError> {
+    use codex_db::entities::user_plugins::{AUTO_SYNC_KEY, CODEX_CONFIG_NAMESPACE};
+
+    let instance =
+        UserPluginsRepository::get_by_user_and_plugin(&state.db, auth.user_id, plugin_id)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?
+            .ok_or_else(|| ApiError::NotFound("Plugin not enabled for this user".to_string()))?;
+
+    let plugin = PluginsRepository::get_by_id(&state.db, plugin_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get plugin: {}", e)))?
+        .ok_or_else(|| ApiError::Internal("Plugin definition not found".to_string()))?;
+
+    // Only sync-capable plugins can be put into auto mode.
+    let supports_sync = parse_manifest(&plugin)
+        .map(|m| m.capabilities.user_read_sync)
+        .unwrap_or(false);
+    if !supports_sync {
+        return Err(ApiError::BadRequest(
+            "Plugin does not support reading sync".to_string(),
+        ));
+    }
+
+    // Read-modify-write the host-only `_codex.autoSync` flag, preserving every
+    // other config key (top-level plugin config and other `_codex` settings).
+    let mut config = match instance.config.clone() {
+        serde_json::Value::Object(map) => map,
+        _ => serde_json::Map::new(),
+    };
+    let codex_ns = config
+        .entry(CODEX_CONFIG_NAMESPACE)
+        .or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()));
+    if !codex_ns.is_object() {
+        *codex_ns = serde_json::Value::Object(serde_json::Map::new());
+    }
+    codex_ns
+        .as_object_mut()
+        .expect("ensured object above")
+        .insert(
+            AUTO_SYNC_KEY.to_string(),
+            serde_json::Value::Bool(request.auto),
+        );
+
+    let updated = UserPluginsRepository::update_config(
+        &state.db,
+        instance.id,
+        serde_json::Value::Object(config),
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to update sync mode: {}", e)))?;
+
+    debug!(
+        user_id = %auth.user_id,
+        plugin_id = %plugin_id,
+        auto = request.auto,
+        "User updated plugin sync mode"
     );
 
     Ok(Json(

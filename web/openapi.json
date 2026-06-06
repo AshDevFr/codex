@@ -15354,6 +15354,59 @@
         }
       }
     },
+    "/api/v1/user/plugins/{plugin_id}/sync-mode": {
+      "patch": {
+        "tags": [
+          "User Plugins"
+        ],
+        "summary": "Set a connection's automatic-sync preference (manual vs auto)",
+        "description": "Writes the host-only `config._codex.autoSync` flag (the plugin never sees\nit). When `true`, the connection is synced automatically on the plugin's\nadmin-configured cron; when `false` (the default) syncs run only on demand.\nOnly allowed for plugins whose manifest declares the `user_read_sync`\ncapability.",
+        "operationId": "set_sync_mode",
+        "parameters": [
+          {
+            "name": "plugin_id",
+            "in": "path",
+            "description": "Plugin ID to set sync mode for",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetSyncModeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Sync mode updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPluginDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Plugin does not support sync"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Plugin not enabled for this user"
+          }
+        }
+      }
+    },
     "/api/v1/user/plugins/{plugin_id}/sync/status": {
       "get": {
         "tags": [
@@ -34117,6 +34170,14 @@
             ],
             "description": "Handlebars template for customizing search queries"
           },
+          "syncCronSchedule": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Admin-managed cron schedule for automatic user-plugin syncs\n(null = no scheduled sync)",
+            "example": "0 0 */6 * * *"
+          },
           "updatedAt": {
             "type": "string",
             "format": "date-time",
@@ -38799,6 +38860,19 @@
           }
         }
       },
+      "SetSyncModeRequest": {
+        "type": "object",
+        "description": "Request to set a connection's automatic-sync preference (manual vs auto).",
+        "required": [
+          "auto"
+        ],
+        "properties": {
+          "auto": {
+            "type": "boolean",
+            "description": "`true` opts the connection into scheduled syncs on the plugin's\nadmin-configured cadence; `false` is manual-only (the default)."
+          }
+        }
+      },
       "SetUserCredentialsRequest": {
         "type": "object",
         "description": "Request to set user credentials (e.g., personal access token)",
@@ -41793,6 +41867,9 @@
           "searchQueryTemplate": {
             "description": "Handlebars template for customizing search queries (null = clear template)"
           },
+          "syncCronSchedule": {
+            "description": "Admin-managed cron schedule for automatic user-plugin syncs.\nOmit to leave unchanged; `null` clears it (no scheduled sync); a string\nsets/normalizes it. Only allowed on plugins whose manifest declares the\n`user_read_sync` capability."
+          },
           "useExistingExternalId": {
             "type": [
               "boolean",
@@ -42288,10 +42365,15 @@
           "requiresOauth",
           "oauthConfigured",
           "config",
+          "autoSync",
           "capabilities",
           "createdAt"
         ],
         "properties": {
+          "autoSync": {
+            "type": "boolean",
+            "description": "Whether this connection is opted into automatic scheduled syncs\n(host-side preference, derived from `config._codex.autoSync`). When\nfalse (the default), syncs run only when manually triggered."
+          },
           "capabilities": {
             "$ref": "#/components/schemas/UserPluginCapabilitiesDto",
             "description": "Plugin capabilities (derived from manifest)"

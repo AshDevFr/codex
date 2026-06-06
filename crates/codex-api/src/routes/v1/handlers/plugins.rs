@@ -63,6 +63,17 @@ use uuid::Uuid;
 #[allow(dead_code)] // OpenAPI documentation struct - referenced by utoipa derive macros
 pub struct PluginsApi;
 
+/// Reload the cron scheduler so per-plugin sync schedules take effect without a
+/// server restart. No-op when the scheduler isn't running (e.g. API-only mode).
+async fn reload_sync_scheduler(state: &AppState) {
+    if let Some(scheduler) = state.scheduler.as_ref() {
+        let mut s = scheduler.lock().await;
+        if let Err(e) = s.reload_schedules().await {
+            tracing::warn!("Scheduler reload after plugin change failed: {e:#}");
+        }
+    }
+}
+
 /// List all plugins
 #[utoipa::path(
     get,
@@ -496,6 +507,37 @@ pub async fn update_plugin(
         .env
         .map(|e| e.into_iter().map(|ev| (ev.key, ev.value)).collect());
 
+    // Validate + capability-gate the sync cron schedule if the field is present.
+    // Absent = leave unchanged; `null` = clear; a string = set (only on
+    // sync-capable plugins, normalized to the scheduler's 6-field cron form).
+    let sync_cron_schedule: Option<Option<String>> = match request.sync_cron_schedule {
+        None => None,
+        Some(v) if v.is_null() => Some(None),
+        Some(v) => {
+            let raw = v.as_str().ok_or_else(|| {
+                ApiError::BadRequest("syncCronSchedule must be a string or null".to_string())
+            })?;
+            let existing = PluginsRepository::get_by_id(&state.db, id)
+                .await
+                .map_err(|e| ApiError::Internal(format!("Failed to get plugin: {}", e)))?
+                .ok_or_else(|| ApiError::NotFound("Plugin not found".to_string()))?;
+            let supports_sync = existing
+                .cached_manifest()
+                .map(|m| m.capabilities.user_read_sync)
+                .unwrap_or(false);
+            if !supports_sync {
+                return Err(ApiError::BadRequest(
+                    "Plugin does not support user sync (user_read_sync); cannot set a sync schedule"
+                        .to_string(),
+                ));
+            }
+            let normalized = codex_utils::cron::validate_cron_expression(raw)
+                .map_err(|e| ApiError::BadRequest(format!("Invalid cron expression: {}", e)))?;
+            Some(Some(normalized))
+        }
+    };
+    let sync_schedule_changed = sync_cron_schedule.is_some();
+
     // Update the plugin
     let plugin = PluginsRepository::update(
         &state.db,
@@ -514,6 +556,7 @@ pub async fn update_plugin(
         Some(auth.user_id),
         request.rate_limit_requests_per_minute,
         request.request_timeout_seconds,
+        sync_cron_schedule,
     )
     .await
     .map_err(|e| {
@@ -632,6 +675,12 @@ pub async fn update_plugin(
     // Reload the plugin manager to pick up the updated plugin
     if let Err(e) = state.plugin_manager.reload(id).await {
         tracing::warn!("Failed to reload plugin manager after update: {}", e);
+    }
+
+    // If the sync schedule changed, reload the cron scheduler so the new/cleared
+    // schedule takes effect without a server restart.
+    if sync_schedule_changed {
+        reload_sync_scheduler(&state).await;
     }
 
     // Broadcast plugin updated event
@@ -754,7 +803,7 @@ pub async fn enable_plugin(
 ) -> Result<Json<PluginStatusResponse>, ApiError> {
     auth.require_permission(&Permission::PluginsManage)?;
 
-    let _plugin = PluginsRepository::enable(&state.db, id, Some(auth.user_id))
+    let plugin = PluginsRepository::enable(&state.db, id, Some(auth.user_id))
         .await
         .map_err(|e| {
             if e.to_string().contains("not found") {
@@ -767,6 +816,12 @@ pub async fn enable_plugin(
     // Reload the plugin manager to pick up the enabled plugin
     if let Err(e) = state.plugin_manager.reload(id).await {
         tracing::warn!("Failed to reload plugin manager after enable: {}", e);
+    }
+
+    // Re-register the sync cron now that the plugin is enabled (registration is
+    // gated on enabled state). Only needed when the plugin carries a schedule.
+    if plugin.sync_cron_schedule.is_some() {
+        reload_sync_scheduler(&state).await;
     }
 
     // Broadcast plugin enabled event
@@ -854,6 +909,12 @@ pub async fn disable_plugin(
     // Reload the plugin manager to remove the disabled plugin from memory
     if let Err(e) = state.plugin_manager.reload(id).await {
         tracing::warn!("Failed to reload plugin manager after disable: {}", e);
+    }
+
+    // Drop the sync cron now that the plugin is disabled (registration is gated
+    // on enabled state). Only needed when the plugin carries a schedule.
+    if plugin.sync_cron_schedule.is_some() {
+        reload_sync_scheduler(&state).await;
     }
 
     // Broadcast plugin disabled event

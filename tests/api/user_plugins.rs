@@ -1538,3 +1538,154 @@ async fn test_get_plugin_tasks_reader_role_can_access() {
     assert_eq!(task_dto.task_type, "user_plugin_sync");
     assert_eq!(task_dto.status, "pending");
 }
+
+// =============================================================================
+// Sync Mode (auto/manual) Tests
+// =============================================================================
+
+/// Enable a sync-capable plugin for a user and return the connection's plugin_id.
+async fn enable_sync_plugin_for_user(
+    state: &std::sync::Arc<codex::api::extractors::AppState>,
+    token: &str,
+    plugin_id: uuid::Uuid,
+) {
+    let app = create_test_router(state.clone()).await;
+    let request =
+        post_request_with_auth(&format!("/api/v1/user/plugins/{}/enable", plugin_id), token);
+    let (status, _): (StatusCode, Option<UserPluginDto>) = make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_set_sync_mode_defaults_to_manual() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_, token) = create_user_and_token(&db, &state, "syncuser").await;
+    let plugin_id = create_sync_plugin(&db, "sync-default", "Sync Default").await;
+
+    // Enabling does not opt into auto sync.
+    let app = create_test_router(state.clone()).await;
+    let request = post_request_with_auth(
+        &format!("/api/v1/user/plugins/{}/enable", plugin_id),
+        &token,
+    );
+    let (status, dto): (StatusCode, Option<UserPluginDto>) = make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        !dto.expect("enable body").auto_sync,
+        "new connections default to manual (auto_sync = false)"
+    );
+}
+
+#[tokio::test]
+async fn test_set_sync_mode_toggles_auto() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_, token) = create_user_and_token(&db, &state, "syncuser").await;
+    let plugin_id = create_sync_plugin(&db, "sync-toggle", "Sync Toggle").await;
+    enable_sync_plugin_for_user(&state, &token, plugin_id).await;
+
+    // Opt in.
+    let app = create_test_router(state.clone()).await;
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/user/plugins/{}/sync-mode", plugin_id),
+        &json!({ "auto": true }),
+        &token,
+    );
+    let (status, dto): (StatusCode, Option<UserPluginDto>) = make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+    let dto = dto.expect("sync-mode body");
+    assert!(dto.auto_sync, "auto should be enabled after opting in");
+    // The host-only flag lives under config._codex.autoSync.
+    assert_eq!(dto.config["_codex"]["autoSync"], serde_json::json!(true));
+
+    // Opt back out.
+    let app = create_test_router(state.clone()).await;
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/user/plugins/{}/sync-mode", plugin_id),
+        &json!({ "auto": false }),
+        &token,
+    );
+    let (status, dto): (StatusCode, Option<UserPluginDto>) = make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        !dto.expect("sync-mode body").auto_sync,
+        "auto should be disabled after opting out"
+    );
+}
+
+#[tokio::test]
+async fn test_set_sync_mode_preserves_other_codex_settings() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_, token) = create_user_and_token(&db, &state, "syncuser").await;
+    let plugin_id = create_sync_plugin(&db, "sync-merge", "Sync Merge").await;
+    enable_sync_plugin_for_user(&state, &token, plugin_id).await;
+
+    // Seed an existing _codex setting via the config endpoint.
+    let app = create_test_router(state.clone()).await;
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/user/plugins/{}/config", plugin_id),
+        &json!({ "config": { "_codex": { "includeCompleted": false }, "progressUnit": "volumes" } }),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<UserPluginDto>) = make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // Toggling auto must not clobber the other keys.
+    let app = create_test_router(state.clone()).await;
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/user/plugins/{}/sync-mode", plugin_id),
+        &json!({ "auto": true }),
+        &token,
+    );
+    let (status, dto): (StatusCode, Option<UserPluginDto>) = make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+    let dto = dto.expect("sync-mode body");
+    assert_eq!(dto.config["_codex"]["autoSync"], serde_json::json!(true));
+    assert_eq!(
+        dto.config["_codex"]["includeCompleted"],
+        serde_json::json!(false),
+        "existing _codex keys must be preserved"
+    );
+    assert_eq!(dto.config["progressUnit"], serde_json::json!("volumes"));
+}
+
+#[tokio::test]
+async fn test_set_sync_mode_rejected_for_non_sync_plugin() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_, token) = create_user_and_token(&db, &state, "syncuser").await;
+    // No manifest -> not sync-capable.
+    let plugin_id = create_user_type_plugin(&db, "no-sync", "No Sync").await;
+    enable_sync_plugin_for_user(&state, &token, plugin_id).await;
+
+    let app = create_test_router(state.clone()).await;
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/user/plugins/{}/sync-mode", plugin_id),
+        &json!({ "auto": true }),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn test_set_sync_mode_requires_enabled_connection() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_, token) = create_user_and_token(&db, &state, "syncuser").await;
+    // Capable plugin, but the user never enabled it.
+    let plugin_id = create_sync_plugin(&db, "sync-unenabled", "Sync Unenabled").await;
+
+    let app = create_test_router(state.clone()).await;
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/user/plugins/{}/sync-mode", plugin_id),
+        &json!({ "auto": true }),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}

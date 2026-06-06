@@ -28,7 +28,7 @@ use serde_json::json;
 use codex::api::routes::v1::dto::{
     PluginDto, PluginHealthResponse, PluginStatusResponse, PluginTestResult, PluginsListResponse,
 };
-use codex::db::repositories::UserRepository;
+use codex::db::repositories::{PluginsRepository, UserRepository};
 use codex::utils::password;
 
 // =============================================================================
@@ -1830,4 +1830,139 @@ async fn test_apply_book_metadata_requires_auth() {
         make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+// =============================================================================
+// Sync Cron Schedule Tests (admin-managed per-plugin cadence)
+// =============================================================================
+
+/// Create a plugin and give it a manifest declaring the `user_read_sync`
+/// capability, so it is eligible for a sync cron schedule. Returns its ID.
+async fn create_sync_capable_plugin(
+    db: &sea_orm::DatabaseConnection,
+    state: &std::sync::Arc<codex::api::extractors::AppState>,
+    token: &str,
+    name: &str,
+) -> uuid::Uuid {
+    let app = create_test_router(state.clone()).await;
+    let body = json!({
+        "name": name,
+        "displayName": name,
+        "command": "node",
+        "enabled": false,
+    });
+    let request = post_json_request_with_auth("/api/v1/admin/plugins", &body, token);
+    let (status, response): (StatusCode, Option<PluginStatusResponse>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::CREATED);
+    let id = response.expect("create body").plugin.id;
+
+    let manifest = json!({
+        "name": name,
+        "displayName": name,
+        "version": "1.0.0",
+        "protocolVersion": "1.0",
+        "capabilities": { "userReadSync": true },
+    });
+    PluginsRepository::update_manifest(db, id, Some(manifest))
+        .await
+        .unwrap();
+    id
+}
+
+#[tokio::test]
+async fn test_set_sync_cron_on_capable_plugin() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let app_state = state.clone();
+    let token = create_admin_and_token(&db, &state).await;
+    let id = create_sync_capable_plugin(&db, &app_state, &token, "sync-cap").await;
+
+    let app = create_test_router(state.clone()).await;
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/admin/plugins/{}", id),
+        &json!({ "syncCronSchedule": "0 0 * * *" }),
+        &token,
+    );
+    let (status, dto): (StatusCode, Option<PluginDto>) = make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+    let dto = dto.expect("update body");
+    // Stored normalized to the scheduler's 6-field cron form.
+    assert_eq!(dto.sync_cron_schedule.as_deref(), Some("0 0 0 * * *"));
+}
+
+#[tokio::test]
+async fn test_set_sync_cron_rejects_bad_cron() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let app_state = state.clone();
+    let token = create_admin_and_token(&db, &state).await;
+    let id = create_sync_capable_plugin(&db, &app_state, &token, "sync-badcron").await;
+
+    let app = create_test_router(state.clone()).await;
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/admin/plugins/{}", id),
+        &json!({ "syncCronSchedule": "not a cron" }),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn test_set_sync_cron_rejected_for_non_capable_plugin() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    // Plugin without a manifest -> not sync-capable.
+    let app = create_test_router(state.clone()).await;
+    let body = json!({ "name": "no-cap", "displayName": "No Cap", "command": "node" });
+    let request = post_json_request_with_auth("/api/v1/admin/plugins", &body, &token);
+    let (status, response): (StatusCode, Option<PluginStatusResponse>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::CREATED);
+    let id = response.expect("create body").plugin.id;
+
+    let app = create_test_router(state.clone()).await;
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/admin/plugins/{}", id),
+        &json!({ "syncCronSchedule": "0 0 * * *" }),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn test_clear_sync_cron_with_null() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let app_state = state.clone();
+    let token = create_admin_and_token(&db, &state).await;
+    let id = create_sync_capable_plugin(&db, &app_state, &token, "sync-clear").await;
+
+    // Set a schedule first.
+    let app = create_test_router(state.clone()).await;
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/admin/plugins/{}", id),
+        &json!({ "syncCronSchedule": "0 0 * * *" }),
+        &token,
+    );
+    let (status, dto): (StatusCode, Option<PluginDto>) = make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(dto.expect("set body").sync_cron_schedule.is_some());
+
+    // Clear it with an explicit null.
+    let app = create_test_router(state.clone()).await;
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/admin/plugins/{}", id),
+        &json!({ "syncCronSchedule": null }),
+        &token,
+    );
+    let (status, dto): (StatusCode, Option<PluginDto>) = make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(dto.expect("clear body").sync_cron_schedule, None);
 }

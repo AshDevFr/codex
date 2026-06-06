@@ -364,6 +364,7 @@ impl PluginsRepository {
         updated_by: Option<Uuid>,
         rate_limit_requests_per_minute: Option<Option<i32>>,
         request_timeout_seconds: Option<Option<i32>>,
+        sync_cron_schedule: Option<Option<String>>,
     ) -> Result<plugins::Model> {
         let existing = Self::get_by_id(db, id)
             .await?
@@ -432,6 +433,10 @@ impl PluginsRepository {
 
         if let Some(timeout) = request_timeout_seconds {
             active_model.request_timeout_seconds = Set(timeout);
+        }
+
+        if let Some(cron) = sync_cron_schedule {
+            active_model.sync_cron_schedule = Set(cron);
         }
 
         let result = active_model.update(db).await?;
