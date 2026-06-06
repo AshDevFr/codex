@@ -34,6 +34,13 @@ users:
 #   and the plugin will receive the raw text instead of an object.
 #
 # NOTE: If credentials are provided, CODEX_ENCRYPTION_KEY must be set.
+#
+# libraries: optional list of library NAMES this plugin is scoped to (must match
+#   names in the `libraries:` section below). Empty/absent = all libraries.
+#   Used by metadata, sync, and recommendation plugins. To run the same plugin
+#   per-library, add it twice under different `name`s, each scoped to one
+#   library (e.g. one AniList Sync for Manga, another for Comics). Libraries are
+#   seeded before plugins, so a referenced name that doesn't exist is an error.
 plugins:
   # MangaBaka - Manga metadata provider (requires API key)
   - name: metadata-mangabaka
@@ -112,6 +119,23 @@ plugins:
     permissions: []
     scopes: []
     credential_delivery: env
+    # Scope this instance to specific libraries (by name). Absent = all.
+    # libraries: [Manga]
+
+  # Per-library example: the same plugin registered a second time under a
+  # different name, scoped to the Comics library. Each instance has its own
+  # config/credentials and only sees the libraries listed here. Scope
+  # same-source instances to DISJOINT libraries to avoid double-syncing a series.
+  # - name: sync-anilist-comics
+  #   display_name: AniList Sync (Comics)
+  #   description: Sync reading progress for the Comics library
+  #   plugin_type: user
+  #   command: node
+  #   args: ["/opt/codex/plugins/sync-anilist/dist/index.js"]
+  #   permissions: []
+  #   scopes: []
+  #   credential_delivery: env
+  #   libraries: [Comics]
 
   # MangaUpdates Releases - Translation/scanlation release feed (no credentials needed)
   # Release-source plugins are gated by manifest capability at reverse-RPC

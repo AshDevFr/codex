@@ -1819,6 +1819,48 @@ describe("PluginsSettings - Official Plugins section", () => {
     });
   });
 
+  it("offers 'Add another' on an installed plugin, pre-filling a suffixed name", async () => {
+    const installed = createMockPlugin({
+      id: "ol-1",
+      name: "metadata-openlibrary",
+      displayName: "Open Library Metadata",
+    });
+    mockGetAll.mockResolvedValue({ plugins: [installed], total: 1 });
+
+    const user = userEvent.setup();
+    renderWithProviders(<PluginsSettings />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Official Plugins")).toBeInTheDocument();
+    });
+    await user.click(screen.getByText("Official Plugins"));
+
+    // Find the Open Library flip card and its enabled "Add another" button.
+    const pkgLink = await screen.findByText(
+      "@ashdev/codex-plugin-metadata-openlibrary",
+    );
+    const flipCard = pkgLink.closest("[class*='flipCard']") as HTMLElement;
+    const addAnother = flipCard.querySelector(
+      "button:not([disabled])",
+    ) as HTMLElement;
+    expect(addAnother).toHaveTextContent("Add another");
+    await user.click(addAnother);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: /Add Plugin/i }),
+      ).toBeInTheDocument();
+    });
+
+    // The second instance gets a distinct, non-colliding name + display name.
+    expect(screen.getByLabelText(/Display Name/i)).toHaveValue(
+      "Open Library Metadata (2)",
+    );
+    expect(screen.getByLabelText(/^Name/i)).toHaveValue(
+      "metadata-openlibrary-2",
+    );
+  });
+
   it("opens create modal with pre-filled values when Add is clicked", async () => {
     mockGetAll.mockResolvedValue({ plugins: [], total: 0 });
 

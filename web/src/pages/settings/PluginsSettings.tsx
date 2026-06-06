@@ -340,10 +340,23 @@ export function PluginsSettings() {
   });
 
   const handleAddOfficialPlugin = (official: OfficialPlugin) => {
+    // Plugin names are unique, so a second instance of the same official plugin
+    // needs a distinct name. Suffix `-2`, `-3`, … when the base name is taken
+    // (e.g. adding an instance scoped to a different library).
+    const existingNames = new Set(plugins.map((p) => p.name));
+    let name = official.name;
+    let displayName = official.displayName;
+    if (existingNames.has(name)) {
+      let suffix = 2;
+      while (existingNames.has(`${official.name}-${suffix}`)) suffix++;
+      name = `${official.name}-${suffix}`;
+      displayName = `${official.displayName} (${suffix})`;
+    }
+
     createForm.setValues({
       ...defaultFormValues,
-      name: official.name,
-      displayName: official.displayName,
+      name,
+      displayName,
       description: official.description,
       command: official.formDefaults.command,
       args: official.formDefaults.args,
