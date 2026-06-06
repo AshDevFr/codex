@@ -526,7 +526,7 @@ jobs:
     needs:
       - plan
       - host
-    if: ${{ always() && needs.host.result == 'success' }}
+    if: ${{ always() && needs.host.result == 'success' && vars.SKIP_NPM_PUBLISH != 'true' }}
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -566,7 +566,7 @@ jobs:
     needs:
       - plan
       - publish-sdk
-    if: ${{ always() && needs.publish-sdk.result == 'success' }}
+    if: ${{ always() && needs.publish-sdk.result == 'success' && vars.SKIP_NPM_PUBLISH != 'true' }}
     runs-on: ubuntu-latest
     permissions:
       id-token: write
