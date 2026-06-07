@@ -140,6 +140,24 @@ These settings control which entries Codex sends to the plugin. They apply to al
 
 These settings are stored in the user plugin config under the `_codex` namespace (e.g., `_codex.includeCompleted`). The server reads them to filter which entries to build and send — this is the server's only role. The plugin never reads these settings.
 
+### Metadata Enrichment
+
+Some plugins can act on richer series data than reading progress alone — for example, a rule-based sync plugin that only syncs series that aren't tagged a certain way. When a plugin declares the `wantsFullMetadata` capability, a **Metadata Enrichment** section appears on your connection (in **Settings** > **Integrations**), with four independent opt-ins. All are **off by default**, so nothing extra is sent unless you turn it on.
+
+| Option                  | Default | Sent data                                                                                  |
+| ----------------------- | ------- | ------------------------------------------------------------------------------------------ |
+| **Send tags**           | Off     | Each series' tags (small). Lets the plugin apply tag-based rules.                           |
+| **Send genres**         | Off     | Each series' genres (small).                                                                |
+| **Send metadata**       | Off     | Summary, authors, publisher, age rating, language, reading direction. The **heaviest** one. |
+| **Send custom metadata**| Off     | Your user-defined custom metadata fields.                                                   |
+
+Each toggle is separate so you control exactly how much data leaves your server:
+
+- **Tags and genres are cheap** — enable just these for tag/genre rules without shipping anything bulky. On a large library, **Send metadata** can add a lot (summaries are the big field), so leave it off unless the plugin needs it.
+- **Send custom metadata is a privacy decision.** Custom metadata is a free-form, user-defined field that may hold private annotations. Only enable it for plugins you trust to receive that data.
+
+These are stored under the `_codex` namespace too (`_codex.sendTags`, `_codex.sendGenres`, `_codex.sendMetadata`, `_codex.sendCustomMetadata`) and are read only by the server when building entries. The tags/genres toggles only affect sync; recommendation plugins always receive genres and tags as part of their taste signal.
+
 ### Plugin-Specific Settings
 
 These settings are specific to the AniList plugin and control how it interprets the data from Codex. Configure them in **Settings** > **Integrations** > **Plugin Settings**:
