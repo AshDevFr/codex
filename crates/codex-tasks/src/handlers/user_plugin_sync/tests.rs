@@ -1426,7 +1426,8 @@ async fn test_build_push_entries_detailed_progress_gating_and_max() {
 
     let settings = default_codex_settings();
 
-    // Without the capability: relative count only, no detail.
+    // Without the capability: accurate max numbers are still sent (Tier 1 is
+    // always on for push), but the heavy per-book breakdown is withheld.
     let plain = push::build_push_entries(
         conn,
         user.id,
@@ -1440,7 +1441,7 @@ async fn test_build_push_entries_detailed_progress_gating_and_max() {
     assert_eq!(plain.len(), 1);
     let p = plain[0].progress.as_ref().unwrap();
     assert_eq!(p.volumes, Some(4));
-    assert!(p.max_volume.is_none());
+    assert_eq!(p.max_volume, Some(8));
     assert!(p.read_books.is_none());
 
     // With the capability: accurate max plus the per-book breakdown.
@@ -1574,6 +1575,7 @@ async fn test_build_push_entries_max_chapter() {
         .await
         .unwrap();
 
+    // Default flags (no capability): Tier 1 max_chapter still flows.
     let entries = push::build_push_entries(
         conn,
         user.id,
@@ -1581,15 +1583,14 @@ async fn test_build_push_entries_max_chapter() {
         Uuid::new_v4(),
         &default_codex_settings(),
         &[],
-        push::MetadataFlags {
-            detailed_progress: true,
-            ..Default::default()
-        },
+        push::MetadataFlags::default(),
     )
     .await;
     let p = entries[0].progress.as_ref().unwrap();
     assert_eq!(p.max_chapter, Some(47.5));
     assert!(p.max_volume.is_none());
+    // The breakdown is still gated by the capability.
+    assert!(p.read_books.is_none());
 }
 
 #[tokio::test]
