@@ -29,6 +29,7 @@ import {
 } from "@tabler/icons-react";
 import { useState } from "react";
 import { CREDENTIAL_DELIVERY_OPTIONS, type PluginDto } from "@/api/plugins";
+import { CronInput } from "@/components/forms/CronInput";
 
 // Plugin form values type
 export interface PluginFormValues {
@@ -366,9 +367,9 @@ export function PluginForm({
               {manifest?.capabilities?.userReadSync && (
                 <>
                   <Divider label="Automatic Sync" labelPosition="center" />
-                  <TextInput
+                  <CronInput
                     label="Sync Schedule (cron)"
-                    placeholder="0 0 */6 * * *"
+                    placeholder="0 */6 * * *"
                     description="Cron expression that drives automatic syncs for users who opted into auto-sync. Leave empty to disable scheduled syncs (users can still sync manually)."
                     {...form.getInputProps("syncCronSchedule")}
                   />

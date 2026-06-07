@@ -43,8 +43,14 @@ pub struct UserPluginDto {
     pub plugin_type: String,
     /// Whether the user has enabled this plugin
     pub enabled: bool,
-    /// Whether the plugin is connected (has valid credentials/OAuth)
+    /// Whether the plugin is connected and ready to operate. True when the
+    /// plugin has valid credentials/OAuth, or when it requires no per-user
+    /// authentication (credential-less or shared-key plugins).
     pub connected: bool,
+    /// Whether this plugin requires per-user authentication (OAuth or required
+    /// credentials). When false, the connect/disconnect flow is not applicable;
+    /// the plugin is usable as soon as it is enabled.
+    pub requires_auth: bool,
     /// Health status of this user's plugin instance
     pub health_status: String,
     /// External service username (if connected via OAuth)
@@ -415,6 +421,7 @@ mod tests {
             plugin_type: "user".to_string(),
             enabled: true,
             connected: true,
+            requires_auth: true,
             health_status: "healthy".to_string(),
             external_username: None,
             external_avatar_url: None,
@@ -471,6 +478,7 @@ mod tests {
             plugin_type: "user".to_string(),
             enabled: true,
             connected: true,
+            requires_auth: true,
             health_status: "healthy".to_string(),
             external_username: None,
             external_avatar_url: None,
@@ -521,6 +529,7 @@ mod tests {
             plugin_type: "user".to_string(),
             enabled: true,
             connected: true,
+            requires_auth: true,
             health_status: "healthy".to_string(),
             external_username: None,
             external_avatar_url: None,

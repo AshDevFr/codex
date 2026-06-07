@@ -67,6 +67,7 @@ const responseWithEnabled: UserPluginsListResponse = {
       pluginType: "user",
       enabled: true,
       connected: true,
+      requiresAuth: true,
       healthStatus: "healthy",
       externalUsername: "@testuser",
       lastSyncAt: new Date().toISOString(),

@@ -897,15 +897,17 @@ pub async fn has_active_refresh_for_job(db: &DatabaseConnection, job_id: Uuid) -
 
 /// Whether a connection is eligible for an automatic (scheduled) sync.
 ///
-/// Eligible only when the connection is enabled, authenticated, and the user
-/// has opted into auto sync (`config._codex.autoSync`). `get_users_with_plugin`
-/// already filters to enabled rows, but we re-check `enabled` so the predicate
-/// is self-contained and correct in isolation. A connection whose token has
-/// expired but is otherwise authenticated is still eligible here; the sync
-/// handler is responsible for surfacing/refreshing auth (v1 does not refresh in
-/// the cron path).
-pub(crate) fn is_auto_sync_eligible(up: &user_plugins::Model) -> bool {
-    up.enabled && up.is_authenticated() && up.auto_sync_enabled()
+/// Eligible only when the connection is enabled, connected, and the user has
+/// opted into auto sync (`config._codex.autoSync`). "Connected" means
+/// authenticated for plugins that require per-user auth, or simply present for
+/// credential-less / shared-key plugins (`requires_auth == false`).
+/// `get_users_with_plugin` already filters to enabled rows, but we re-check
+/// `enabled` so the predicate is self-contained and correct in isolation. A
+/// connection whose token has expired but is otherwise authenticated is still
+/// eligible here; the sync handler is responsible for surfacing/refreshing auth
+/// (v1 does not refresh in the cron path).
+pub(crate) fn is_auto_sync_eligible(up: &user_plugins::Model, requires_auth: bool) -> bool {
+    up.enabled && up.is_connected(requires_auth) && up.auto_sync_enabled()
 }
 
 /// Outcome of one plugin-sync fan-out, used for the per-firing log line.
@@ -935,8 +937,17 @@ pub(crate) async fn fan_out_plugin_sync(
     let connections = UserPluginsRepository::get_users_with_plugin(db, plugin_id).await?;
     let mut summary = FanOutSummary::default();
 
+    // Whether this plugin needs per-user auth. Credential-less / shared-key
+    // plugins are eligible without per-user credentials. No manifest → assume
+    // auth is required (conservative).
+    let requires_auth = PluginsRepository::get_by_id(db, plugin_id)
+        .await?
+        .and_then(|p| p.cached_manifest())
+        .map(|m| m.requires_authentication())
+        .unwrap_or(true);
+
     for up in &connections {
-        if !is_auto_sync_eligible(up) {
+        if !is_auto_sync_eligible(up, requires_auth) {
             summary.skipped_ineligible += 1;
             continue;
         }
@@ -1081,21 +1092,37 @@ mod tests {
 
     #[test]
     fn is_auto_sync_eligible_matrix() {
+        // Auth-required plugin (requires_auth = true)
         assert!(
-            is_auto_sync_eligible(&make_up(true, true, true)),
+            is_auto_sync_eligible(&make_up(true, true, true), true),
             "enabled + authed + auto is eligible"
         );
         assert!(
-            !is_auto_sync_eligible(&make_up(false, true, true)),
+            !is_auto_sync_eligible(&make_up(false, true, true), true),
             "disabled is ineligible"
         );
         assert!(
-            !is_auto_sync_eligible(&make_up(true, false, true)),
-            "unauthenticated is ineligible"
+            !is_auto_sync_eligible(&make_up(true, false, true), true),
+            "unauthenticated is ineligible when auth is required"
         );
         assert!(
-            !is_auto_sync_eligible(&make_up(true, true, false)),
+            !is_auto_sync_eligible(&make_up(true, true, false), true),
             "manual (opt-out) is ineligible"
+        );
+
+        // No-auth plugin (requires_auth = false): eligible without credentials,
+        // but still gated by enabled + auto-sync opt-in.
+        assert!(
+            is_auto_sync_eligible(&make_up(true, false, true), false),
+            "credential-less plugin is eligible without auth"
+        );
+        assert!(
+            !is_auto_sync_eligible(&make_up(true, false, false), false),
+            "credential-less plugin still needs auto-sync opt-in"
+        );
+        assert!(
+            !is_auto_sync_eligible(&make_up(false, false, true), false),
+            "credential-less plugin still needs to be enabled"
         );
     }
 

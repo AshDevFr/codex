@@ -88,6 +88,9 @@ services:
       - ./docker/data/thumbnails:/app/data/thumbnails:rw
       - ./docker/data/uploads:/app/data/uploads:rw
       - ./docker/data/cache:/app/data/cache:rw
+      # Plugin file storage (dataDir) — where plugins write files, incl. the
+      # echo plugins' recorded request/response payloads under <plugin>/payloads/
+      - ./docker/data/plugins:/app/data/plugins:rw
       # Plugin dist directories (built by plugins-builder service)
       - ./plugins/metadata-mangabaka/dist:/opt/codex/plugins/metadata-mangabaka/dist:ro
       - ./plugins/metadata-echo/dist:/opt/codex/plugins/metadata-echo/dist:ro
@@ -171,6 +174,9 @@ services:
       - ./docker/data/thumbnails:/app/data/thumbnails:rw
       - ./docker/data/uploads:/app/data/uploads:rw
       - ./docker/data/cache:/app/data/cache:rw
+      # Plugin file storage (dataDir) — where plugins write files, incl. the
+      # echo plugins' recorded request/response payloads under <plugin>/payloads/
+      - ./docker/data/plugins:/app/data/plugins:rw
       # Plugin dist directories (built by plugins-builder service)
       - ./plugins/metadata-mangabaka/dist:/opt/codex/plugins/metadata-mangabaka/dist:ro
       - ./plugins/metadata-echo/dist:/opt/codex/plugins/metadata-echo/dist:ro

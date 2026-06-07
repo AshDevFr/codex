@@ -109,6 +109,12 @@ async fn build_user_plugin_dto(
 ) -> UserPluginDto {
     let manifest = parse_manifest(plugin);
     let oauth_config = manifest.as_ref().and_then(|m| m.oauth.clone());
+    // A plugin with no manifest is treated as requiring auth (conservative,
+    // matches prior behavior where `connected` == `is_authenticated`).
+    let requires_auth = manifest
+        .as_ref()
+        .map(|m| m.requires_authentication())
+        .unwrap_or(true);
 
     let capabilities = UserPluginCapabilitiesDto {
         read_sync: manifest
@@ -151,7 +157,8 @@ async fn build_user_plugin_dto(
         plugin_display_name: plugin.display_name.clone(),
         plugin_type: plugin.plugin_type.clone(),
         enabled: instance.enabled,
-        connected: instance.is_authenticated(),
+        connected: instance.is_connected(requires_auth),
+        requires_auth,
         health_status: instance.health_status.clone(),
         external_username: instance.external_username.clone(),
         external_avatar_url: instance.external_avatar_url.clone(),
@@ -984,8 +991,13 @@ pub async fn trigger_sync(
         ));
     }
 
-    // Verify the plugin is connected (has credentials)
-    if !instance.is_authenticated() {
+    // Verify the plugin is connected. Plugins that require per-user auth need
+    // credentials/OAuth; credential-less or shared-key plugins are always ready.
+    let requires_auth = manifest
+        .as_ref()
+        .map(|m| m.requires_authentication())
+        .unwrap_or(true);
+    if !instance.is_connected(requires_auth) {
         return Err(ApiError::BadRequest(
             "Plugin is not connected. Complete authentication before syncing.".to_string(),
         ));
@@ -1065,6 +1077,10 @@ pub async fn get_sync_status(
         .map_err(|e| ApiError::Internal(format!("Failed to get plugin: {}", e)))?
         .ok_or_else(|| ApiError::Internal("Plugin definition not found".to_string()))?;
 
+    let requires_auth = parse_manifest(&plugin)
+        .map(|m| m.requires_authentication())
+        .unwrap_or(true);
+
     // Optionally query live sync state from the plugin process
     let (external_count, pending_push, pending_pull, conflicts, live_error) = if query.live {
         debug!(
@@ -1136,7 +1152,7 @@ pub async fn get_sync_status(
     Ok(Json(SyncStatusDto {
         plugin_id: plugin.id,
         plugin_name: plugin.display_name.clone(),
-        connected: instance.is_authenticated(),
+        connected: instance.is_connected(requires_auth),
         last_sync_at: instance.last_sync_at,
         last_success_at: instance.last_success_at,
         last_failure_at: instance.last_failure_at,

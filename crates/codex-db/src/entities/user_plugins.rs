@@ -199,6 +199,18 @@ impl Model {
         self.has_oauth_tokens() || self.has_credentials()
     }
 
+    /// Whether this instance is "connected" and ready to operate.
+    ///
+    /// A plugin that requires per-user authentication is connected once it has
+    /// credentials/tokens. A plugin that needs no per-user auth (credential-less
+    /// echo/debug plugins, or plugins backed by an admin-configured shared key)
+    /// is connected as soon as it exists, since there is nothing for the user to
+    /// connect. `requires_auth` comes from the plugin manifest
+    /// (`PluginManifest::requires_authentication`).
+    pub fn is_connected(&self, requires_auth: bool) -> bool {
+        !requires_auth || self.is_authenticated()
+    }
+
     /// Whether this connection has opted into scheduled (auto) syncs.
     ///
     /// Reads `config._codex.autoSync` (host-side only; never sent to the
@@ -359,6 +371,21 @@ mod tests {
         model.credentials = None;
         model.oauth_access_token = Some(vec![4, 5, 6]);
         assert!(model.is_authenticated());
+    }
+
+    #[test]
+    fn test_is_connected() {
+        let mut model = test_model();
+
+        // No-auth plugin: connected even without any credentials.
+        assert!(model.is_connected(false));
+
+        // Auth-required plugin without credentials: not connected.
+        assert!(!model.is_connected(true));
+
+        // Auth-required plugin with credentials: connected.
+        model.credentials = Some(vec![1, 2, 3]);
+        assert!(model.is_connected(true));
     }
 
     #[test]

@@ -42458,6 +42458,7 @@
           "pluginType",
           "enabled",
           "connected",
+          "requiresAuth",
           "healthStatus",
           "requiresOauth",
           "oauthConfigured",
@@ -42484,7 +42485,7 @@
           },
           "connected": {
             "type": "boolean",
-            "description": "Whether the plugin is connected (has valid credentials/OAuth)"
+            "description": "Whether the plugin is connected and ready to operate. True when the\nplugin has valid credentials/OAuth, or when it requires no per-user\nauthentication (credential-less or shared-key plugins)."
           },
           "createdAt": {
             "type": "string",
@@ -42564,6 +42565,10 @@
           "pluginType": {
             "type": "string",
             "description": "Plugin type: \"system\" or \"user\""
+          },
+          "requiresAuth": {
+            "type": "boolean",
+            "description": "Whether this plugin requires per-user authentication (OAuth or required\ncredentials). When false, the connect/disconnect flow is not applicable;\nthe plugin is usable as soon as it is enabled."
           },
           "requiresOauth": {
             "type": "boolean",

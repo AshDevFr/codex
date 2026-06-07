@@ -19651,7 +19651,11 @@ export interface components {
             capabilities: components["schemas"]["UserPluginCapabilitiesDto"];
             /** @description Per-user configuration */
             config: unknown;
-            /** @description Whether the plugin is connected (has valid credentials/OAuth) */
+            /**
+             * @description Whether the plugin is connected and ready to operate. True when the
+             *     plugin has valid credentials/OAuth, or when it requires no per-user
+             *     authentication (credential-less or shared-key plugins).
+             */
             connected: boolean;
             /**
              * Format: date-time
@@ -19698,6 +19702,12 @@ export interface components {
             pluginName: string;
             /** @description Plugin type: "system" or "user" */
             pluginType: string;
+            /**
+             * @description Whether this plugin requires per-user authentication (OAuth or required
+             *     credentials). When false, the connect/disconnect flow is not applicable;
+             *     the plugin is usable as soon as it is enabled.
+             */
+            requiresAuth: boolean;
             /** @description Whether this plugin requires OAuth authentication */
             requiresOauth: boolean;
             sendCustomMetadata: boolean;

@@ -26,6 +26,7 @@ const connectedPlugin: UserPluginDto = {
   lastSyncAt: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
   lastSuccessAt: new Date(Date.now() - 3600000).toISOString(),
   requiresOauth: true,
+  requiresAuth: true,
   oauthConfigured: true,
   description: "Sync your reading progress with AniList",
   config: {},
@@ -44,6 +45,7 @@ const enabledNotConnected: UserPluginDto = {
   connected: false,
   healthStatus: "unknown",
   requiresOauth: true,
+  requiresAuth: true,
   oauthConfigured: true,
   description: "Sync with MyAnimeList",
   config: {},
@@ -63,11 +65,33 @@ const connectedRecommendationPlugin: UserPluginDto = {
   externalUsername: "@testuser",
   externalAvatarUrl: "https://example.com/avatar.png",
   requiresOauth: true,
+  requiresAuth: true,
   oauthConfigured: true,
   description:
     "Personalized manga recommendations powered by AniList community data",
   config: {},
   capabilities: { readSync: false, userRecommendationProvider: true },
+  createdAt: new Date().toISOString(),
+} as UserPluginDto;
+
+// A credential-less sync plugin (e.g. sync-echo): connected once enabled,
+// requires no per-user auth.
+const noAuthSyncPlugin: UserPluginDto = {
+  id: "inst-4",
+  pluginId: "plugin-6",
+  pluginName: "sync-echo",
+  pluginDisplayName: "Echo Sync Plugin",
+  pluginType: "user",
+  enabled: true,
+  connected: true,
+  requiresAuth: false,
+  requiresOauth: false,
+  oauthConfigured: false,
+  healthStatus: "healthy",
+  description: "A debug sync plugin",
+  config: {},
+  autoSync: false,
+  capabilities: { readSync: true, userRecommendationProvider: false },
   createdAt: new Date().toISOString(),
 } as UserPluginDto;
 
@@ -535,6 +559,42 @@ describe("ConnectedPluginCard", () => {
     );
     expect(
       screen.queryByRole("link", { name: /view recommendations/i }),
+    ).not.toBeInTheDocument();
+  });
+});
+
+describe("ConnectedPluginCard - no-auth plugin", () => {
+  const noAuthProps = {
+    plugin: noAuthSyncPlugin,
+    onDisconnect: vi.fn(),
+    onDisable: vi.fn(),
+    onConnect: vi.fn(),
+    onSync: vi.fn(),
+    onSetSyncMode: vi.fn(),
+    onSettings: vi.fn(),
+  };
+
+  it("shows an 'Enabled' badge rather than 'Connected'", () => {
+    renderWithProviders(<ConnectedPluginCard {...noAuthProps} />);
+    expect(screen.getByText("Enabled")).toBeInTheDocument();
+    expect(screen.queryByText("Connected")).not.toBeInTheDocument();
+  });
+
+  it("shows Sync Now and the Automatic sync toggle", () => {
+    renderWithProviders(<ConnectedPluginCard {...noAuthProps} />);
+    expect(
+      screen.getByRole("button", { name: /sync now/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Automatic sync")).toBeInTheDocument();
+  });
+
+  it("offers Disable but not Disconnect (nothing to unlink)", () => {
+    renderWithProviders(<ConnectedPluginCard {...noAuthProps} />);
+    expect(
+      screen.getByRole("button", { name: /disable/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /disconnect/i }),
     ).not.toBeInTheDocument();
   });
 });
