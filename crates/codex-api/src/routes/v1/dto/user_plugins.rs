@@ -128,6 +128,9 @@ pub struct UserPluginCapabilitiesDto {
     /// Consumes enriched series data; gates whether the `_codex.send*` metadata
     /// toggles are shown on the connection.
     pub wants_full_metadata: bool,
+    /// Consumes the per-book reading-progress breakdown (`readBooks`); when set,
+    /// the host attaches per-book volume/chapter/page detail to sync entries.
+    pub wants_detailed_progress: bool,
 }
 
 /// Request to update user plugin configuration
@@ -431,6 +434,7 @@ mod tests {
                 read_sync: true,
                 user_recommendation_provider: false,
                 wants_full_metadata: false,
+                wants_detailed_progress: false,
             },
             user_config_schema: None,
             last_sync_result: None,
@@ -439,6 +443,7 @@ mod tests {
         let json = serde_json::to_value(&dto).unwrap();
         assert_eq!(json["capabilities"]["readSync"], true);
         assert_eq!(json["capabilities"]["userRecommendationProvider"], false);
+        assert_eq!(json["capabilities"]["wantsDetailedProgress"], false);
         assert!(!json.as_object().unwrap().contains_key("userConfigSchema"));
         assert!(!json.as_object().unwrap().contains_key("lastSyncResult"));
     }
@@ -485,6 +490,7 @@ mod tests {
                 read_sync: true,
                 user_recommendation_provider: false,
                 wants_full_metadata: false,
+                wants_detailed_progress: false,
             },
             user_config_schema: Some(schema),
             last_sync_result: None,
@@ -534,6 +540,7 @@ mod tests {
                 read_sync: true,
                 user_recommendation_provider: false,
                 wants_full_metadata: false,
+                wants_detailed_progress: false,
             },
             user_config_schema: None,
             last_sync_result: Some(sync_result.clone()),

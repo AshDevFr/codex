@@ -118,6 +118,14 @@ pub struct PluginCapabilities {
     /// that don't declare this never pay the assembly or payload cost.
     #[serde(default)]
     pub wants_full_metadata: bool,
+    /// Whether this plugin consumes the per-book reading-progress breakdown
+    /// (`SyncProgress.readBooks`) on the sync entries it receives. When set, the
+    /// host fetches per-book volume/chapter/page detail and attaches it to push
+    /// entries; plugins that don't declare it never pay the extra fetch or
+    /// payload cost. Only meaningful when `user_read_sync` is true. The accurate
+    /// `maxVolume`/`maxChapter` fields are always sent and are not gated by this.
+    #[serde(default)]
+    pub wants_detailed_progress: bool,
     /// Can announce new releases (chapters/volumes) for tracked series.
     /// When present, the plugin may invoke the `releases/*` reverse-RPC
     /// methods. The capability struct declares the data the plugin needs
@@ -429,5 +437,29 @@ impl PluginScope {
             Self::LibraryDetail,
             Self::LibraryScan,
         ]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_capabilities_wants_detailed_progress_defaults_false() {
+        let caps: PluginCapabilities = serde_json::from_value(serde_json::json!({
+            "userReadSync": true
+        }))
+        .unwrap();
+        assert!(!caps.wants_detailed_progress);
+    }
+
+    #[test]
+    fn test_capabilities_wants_detailed_progress_parses_true() {
+        let caps: PluginCapabilities = serde_json::from_value(serde_json::json!({
+            "userReadSync": true,
+            "wantsDetailedProgress": true
+        }))
+        .unwrap();
+        assert!(caps.wants_detailed_progress);
     }
 }
