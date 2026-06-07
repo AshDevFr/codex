@@ -93,6 +93,7 @@ export * from "./rpc.js";
 // From sync - sync protocol types (these match Rust exactly)
 export type {
   ExternalUserInfo,
+  SyncBookProgress,
   SyncEntry,
   SyncEntryResult,
   SyncEntryResultStatus,

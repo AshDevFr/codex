@@ -79,7 +79,11 @@ export interface ExternalUserInfo {
 export interface SyncProgress {
   /** Number of chapters read */
   chapters?: number;
-  /** Number of volumes read */
+  /**
+   * Number of volumes read — the *relative* count of books read in the series
+   * (each file = 1 book), not an absolute volume number. Prefer `maxVolume` /
+   * `maxChapter` for accurate progress on libraries with gaps.
+   */
   volumes?: number;
   /** Number of pages read (for single-volume works) */
   pages?: number;
@@ -87,6 +91,45 @@ export interface SyncProgress {
   totalChapters?: number;
   /** Total number of volumes in the series (if known) */
   totalVolumes?: number;
+  /**
+   * Highest **read** volume number, derived from Codex's per-book volume
+   * detection. Unlike `volumes` (a count), this is the absolute highest volume
+   * reached, so it stays correct for libraries that don't start at volume 1 or
+   * have gaps. Present only when the plugin declares the `wantsDetailedProgress`
+   * capability.
+   */
+  maxVolume?: number;
+  /**
+   * Highest **read** chapter number (may be fractional, e.g. 47.5). Same source
+   * and gating as `maxVolume`.
+   */
+  maxChapter?: number;
+  /**
+   * Per-book reading-progress breakdown, one entry per book that has reading
+   * progress (completed or in-progress). Present only when the plugin declares
+   * the `wantsDetailedProgress` capability — lets a plugin map progress however
+   * its service expects (ranges, custom units, etc.).
+   */
+  readBooks?: SyncBookProgress[];
+}
+
+/**
+ * Per-book reading progress, the unit of {@link SyncProgress.readBooks}.
+ *
+ * Carries reading *position* (detected volume/chapter plus page progress), not
+ * bibliographic metadata.
+ */
+export interface SyncBookProgress {
+  /** Detected volume number for this book, if known. */
+  volume?: number;
+  /** Detected chapter number for this book, if known (may be fractional). */
+  chapter?: number;
+  /** Whether the user has finished this book. */
+  completed: boolean;
+  /** Current page within the book, if tracked. */
+  currentPage?: number;
+  /** Fractional progress within the book, if tracked. */
+  progressPercentage?: number;
 }
 
 // =============================================================================

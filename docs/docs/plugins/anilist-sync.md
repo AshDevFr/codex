@@ -170,10 +170,12 @@ These settings are specific to the AniList plugin and control how it interprets 
 
 ### Progress Unit: Volumes vs Chapters
 
-AniList tracks both volume and chapter progress separately. Codex always sends books-read as `volumes` in the sync data. The plugin then maps this to the correct AniList field based on your `progressUnit` setting:
+AniList tracks both volume and chapter progress separately. Codex sends the **highest read volume and chapter** for each series, derived from the volume/chapter numbers detected on your books, and the plugin maps the relevant one to AniList based on your `progressUnit` setting:
 
-- **Volumes** (default) — sends progress as `progressVolumes`, which is the natural mapping for manga volumes. AniList displays this as "Read Vol. X".
-- **Chapters** — sends progress as `progress` (chapter count). Only use this if your Codex books represent individual chapters rather than collected volumes. AniList displays this as "Read Ch. X".
+- **Volumes** (default) — sends the highest read volume as `progressVolumes`, the natural mapping for manga volumes. AniList displays this as "Read Vol. X".
+- **Chapters** — sends the highest read chapter as `progress`. Fractional chapters (e.g. a `47.5` side chapter) are floored to the last whole chapter. Only use this if your Codex books represent individual chapters rather than collected volumes. AniList displays this as "Read Ch. X".
+
+Because this uses the **highest detected number** rather than a count of files, progress stays accurate for libraries that don't start at volume 1 or have gaps — e.g. owning and reading volumes 5–8 reports volume **8**, not 4. When a book has no detected volume/chapter number, the plugin falls back to the relative count of books read.
 
 :::warning
 Using "chapters" when your books are volumes can create misleading activity on your AniList profile (e.g., showing "Read chapter 3" when you actually read volume 3, which may contain chapters 20–30).

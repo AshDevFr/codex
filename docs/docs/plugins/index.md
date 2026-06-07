@@ -176,10 +176,12 @@ The data sent to external services depends on the plugin type:
 | Plugin Type | Data Sent | Destination |
 |-------------|-----------|-------------|
 | **Metadata** | Series titles, ISBNs, search queries | Metadata provider API (e.g., Open Library) |
-| **Sync** | Series titles, reading progress (books read), scores, dates, reading status | Tracking service API (e.g., AniList) |
+| **Sync** | Series titles, reading progress (books read plus the highest read volume/chapter), scores, dates, reading status | Tracking service API (e.g., AniList) |
 | **Recommendations** | Library series titles (used as "seed" entries) | Recommendation service API (e.g., AniList) |
 
 Codex never sends file contents, file paths, or raw images to external services.
+
+Sync plugins always receive the relative books-read count and the highest read volume/chapter (derived from your books' detected numbers). A plugin can additionally declare the `wantsDetailedProgress` capability to receive a per-book breakdown (each book's detected volume/chapter, completion, and page position). Codex only assembles and sends that heavier per-book payload for plugins that declare the capability, so connections to plugins that don't are unaffected.
 
 ### What Data Is Stored Locally
 

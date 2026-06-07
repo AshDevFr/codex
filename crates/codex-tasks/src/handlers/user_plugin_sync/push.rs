@@ -276,7 +276,10 @@ pub(crate) async fn build_push_entries(
     let series = scoped_series(db, &candidate_series_ids, allowed_library_ids).await;
     let opts = EngagementOptions {
         include_taxonomy: flags.needs_taxonomy(),
-        include_book_detail: flags.detailed_progress,
+        // Always fetch per-book detail for the sync push: the accurate
+        // `max_volume`/`max_chapter` (Tier 1) are computed from it for every
+        // entry. The capability only gates the heavier `read_books` array.
+        include_book_detail: true,
     };
     let engagements = match build_series_engagements(db, user_id, &series, opts).await {
         Ok(map) => map,
@@ -398,7 +401,10 @@ async fn build_unmatched_entries(
     let series = scoped_series(db, &unmatched_ids_vec, allowed_library_ids).await;
     let opts = EngagementOptions {
         include_taxonomy: flags.needs_taxonomy(),
-        include_book_detail: flags.detailed_progress,
+        // Always fetch per-book detail for the sync push: the accurate
+        // `max_volume`/`max_chapter` (Tier 1) are computed from it for every
+        // entry. The capability only gates the heavier `read_books` array.
+        include_book_detail: true,
     };
     let engagements = match build_series_engagements(db, user_id, &series, opts).await {
         Ok(map) => map,

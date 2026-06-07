@@ -67,6 +67,11 @@ export function setSearchFallback(enabled: boolean): void {
   searchFallback = enabled;
 }
 
+/** Set the progressUnit (exported for testing) */
+export function setProgressUnit(unit: "volumes" | "chapters"): void {
+  progressUnit = unit;
+}
+
 /** Set the privateMode flag (exported for testing) */
 export function setPrivateMode(enabled: boolean): void {
   privateMode = enabled;
@@ -217,16 +222,25 @@ export const provider: SyncProvider = {
           hiddenFromStatusLists,
         };
 
-        // Map progress using the configured progressUnit.
-        // Server always sends books-read as `volumes`. Based on
-        // progressUnit, we map to AniList's `progress` (chapters)
-        // or `progressVolumes` (volumes) field.
-        const count = entry.progress?.volumes ?? entry.progress?.chapters;
-        if (count !== undefined) {
-          if (progressUnit === "chapters") {
-            saveParams.progress = count;
-          } else {
-            saveParams.progressVolumes = count;
+        // Map progress to the configured AniList field. Prefer the accurate
+        // highest-read number (maxVolume/maxChapter), derived from per-book
+        // detection, which stays correct for libraries that don't start at
+        // volume 1 or have gaps. Fall back to the relative books-read count
+        // (the server sends it as `volumes`) for older hosts that don't send
+        // the accurate numbers.
+        if (progressUnit === "chapters") {
+          const chapter =
+            entry.progress?.maxChapter ?? entry.progress?.volumes ?? entry.progress?.chapters;
+          if (chapter !== undefined) {
+            // AniList chapter progress is an integer; floor fractional chapters
+            // (e.g. a 47.5 side-chapter reports 47 chapters completed).
+            saveParams.progress = Math.floor(chapter);
+          }
+        } else {
+          const volume =
+            entry.progress?.maxVolume ?? entry.progress?.volumes ?? entry.progress?.chapters;
+          if (volume !== undefined) {
+            saveParams.progressVolumes = volume;
           }
         }
 

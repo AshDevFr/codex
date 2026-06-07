@@ -6,6 +6,7 @@ import {
   setClient,
   setHiddenFromStatusLists,
   setPrivateMode,
+  setProgressUnit,
   setSearchFallback,
   setViewerId,
 } from "./index.js";
@@ -450,5 +451,93 @@ describe("pushProgress visibility params", () => {
     const args = (mockClient.saveEntry as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(args.private).toBe(true);
     expect(args.hiddenFromStatusLists).toBe(true);
+  });
+});
+
+// =============================================================================
+// pushProgress accurate progress mapping
+// =============================================================================
+
+describe("pushProgress accurate progress mapping", () => {
+  function makeMockClient() {
+    return {
+      getViewer: vi.fn(),
+      getMangaList: vi.fn().mockResolvedValue({
+        pageInfo: { total: 0, currentPage: 1, lastPage: 1, hasNextPage: false },
+        entries: [],
+      }),
+      saveEntry: vi.fn().mockResolvedValue({
+        id: 1,
+        mediaId: 42,
+        status: "CURRENT",
+        score: 0,
+        progress: 0,
+        progressVolumes: 0,
+      }),
+      searchManga: vi.fn().mockResolvedValue(null),
+    } as unknown as AniListClient;
+  }
+
+  let mockClient: ReturnType<typeof makeMockClient>;
+
+  beforeEach(() => {
+    mockClient = makeMockClient();
+    setClient(mockClient);
+    setViewerId(1);
+  });
+
+  afterEach(() => {
+    setClient(null);
+    setViewerId(null);
+    setProgressUnit("volumes"); // restore default
+  });
+
+  function savedArgs() {
+    return (mockClient.saveEntry as ReturnType<typeof vi.fn>).mock.calls[0][0];
+  }
+
+  it("prefers maxVolume over the relative volumes count (volumes unit)", async () => {
+    // Gapped library: owns vol 5-8, all read. Relative count is 4, but the
+    // highest read volume is 8.
+    await provider.pushProgress({
+      entries: [
+        {
+          externalId: "42",
+          status: "reading",
+          progress: { volumes: 4, maxVolume: 8 },
+        },
+      ],
+    });
+    expect(savedArgs().progressVolumes).toBe(8);
+  });
+
+  it("falls back to the relative count when maxVolume is absent (older host)", async () => {
+    await provider.pushProgress({
+      entries: [{ externalId: "42", status: "reading", progress: { volumes: 4 } }],
+    });
+    expect(savedArgs().progressVolumes).toBe(4);
+  });
+
+  it("prefers maxChapter and floors fractional chapters (chapters unit)", async () => {
+    setProgressUnit("chapters");
+    await provider.pushProgress({
+      entries: [
+        {
+          externalId: "42",
+          status: "reading",
+          progress: { volumes: 3, maxChapter: 47.5 },
+        },
+      ],
+    });
+    // 47.5 floors to 47 completed chapters; mapped to AniList `progress`.
+    expect(savedArgs().progress).toBe(47);
+  });
+
+  it("falls back to the relative count for the chapters unit when maxChapter is absent", async () => {
+    setProgressUnit("chapters");
+    await provider.pushProgress({
+      entries: [{ externalId: "42", status: "reading", progress: { volumes: 6 } }],
+    });
+    expect(savedArgs().progress).toBe(6);
   });
 });
