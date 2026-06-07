@@ -1125,6 +1125,17 @@ pub struct InitializeParams {
     /// Plugins can use this for larger file-based storage (SQLite DBs, caches, etc.)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub data_dir: Option<String>,
+    /// Stable identifier of the Codex user this instance acts for.
+    /// Present for user-plugin spawns (sync/recommendation), absent for system
+    /// plugins. Lets credential-less or shared-key plugins scope data per user
+    /// (the credential alone may not identify the user). Opaque UUID.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user_id: Option<String>,
+    /// Stable identifier of this user-plugin connection (the per-connection
+    /// scope, matching host key-value storage scoping). Present for user-plugin
+    /// spawns, absent for system plugins. Opaque UUID.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user_plugin_id: Option<String>,
 }
 
 // =============================================================================
@@ -2471,6 +2482,8 @@ mod tests {
             user_config: Some(json!({"progressUnit": "chapters"})),
             credentials: Some(json!({"access_token": "secret"})),
             data_dir: None,
+            user_id: None,
+            user_plugin_id: None,
         };
         let json = serde_json::to_value(&params).unwrap();
         assert_eq!(json["adminConfig"]["clientId"], "abc");
@@ -2487,6 +2500,8 @@ mod tests {
             user_config: None,
             credentials: None,
             data_dir: None,
+            user_id: None,
+            user_plugin_id: None,
         };
         let json = serde_json::to_value(&params).unwrap();
         assert_eq!(json["config"]["merged"], true);
@@ -2541,6 +2556,23 @@ mod tests {
         // Other fields should be omitted when None
         assert!(!json.as_object().unwrap().contains_key("config"));
         assert!(!json.as_object().unwrap().contains_key("credentials"));
+    }
+
+    #[test]
+    fn test_initialize_params_with_user_identity() {
+        let params = InitializeParams {
+            user_id: Some("user-123".to_string()),
+            user_plugin_id: Some("conn-456".to_string()),
+            ..Default::default()
+        };
+        let json = serde_json::to_value(&params).unwrap();
+        assert_eq!(json["userId"], "user-123");
+        assert_eq!(json["userPluginId"], "conn-456");
+        // Identity is omitted entirely when absent (system plugins).
+        let empty = serde_json::to_value(InitializeParams::default()).unwrap();
+        let obj = empty.as_object().unwrap();
+        assert!(!obj.contains_key("userId"));
+        assert!(!obj.contains_key("userPluginId"));
     }
 
     #[test]

@@ -912,6 +912,11 @@ impl PluginManager {
             user_config,
             credentials,
             data_dir,
+            // Always send the per-user identity to user plugins, regardless of
+            // auth: a credential-less or shared-key plugin needs it to scope
+            // data per user (the credential alone may not identify the user).
+            user_id: Some(user_plugin.user_id.to_string()),
+            user_plugin_id: Some(user_plugin.id.to_string()),
         })
     }
 
@@ -1871,6 +1876,9 @@ impl PluginManager {
             user_config: None,
             credentials,
             data_dir,
+            // System plugins are not bound to a user.
+            user_id: None,
+            user_plugin_id: None,
         })
     }
 

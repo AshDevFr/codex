@@ -169,6 +169,22 @@ export interface InitializeParams {
    */
   dataDir?: string;
   /**
+   * Stable identifier of the Codex user this plugin instance is acting for.
+   *
+   * Sent for user-plugin spawns (sync / recommendation), absent for system
+   * plugins. Because a credential-less or shared-key plugin can't derive the
+   * user's identity from its credentials, use this (an opaque UUID) to scope
+   * data per user in the plugin's own backend.
+   */
+  userId?: string;
+  /**
+   * Stable identifier of this user-plugin connection — the same scope the host
+   * uses for {@link storage}. Sent for user-plugin spawns, absent for system
+   * plugins. Opaque UUID. Use it when "this connection" (rather than the human)
+   * is the right granularity.
+   */
+  userPluginId?: string;
+  /**
    * Per-user key-value storage client.
    *
    * Use this to persist data across plugin restarts (e.g., dismissed IDs,

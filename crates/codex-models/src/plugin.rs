@@ -80,6 +80,21 @@ pub struct PluginManifest {
     pub search_uri_template: Option<String>,
 }
 
+impl PluginManifest {
+    /// Whether this plugin requires *per-user* authentication.
+    ///
+    /// True when the plugin declares an OAuth flow or per-user required
+    /// credentials, i.e. the user must connect an account / supply a secret
+    /// before the plugin can act for them. False for credential-less plugins
+    /// and for plugins that rely solely on an admin-configured shared key
+    /// (which authenticates the plugin but does not identify the user). The
+    /// host treats a no-per-user-auth plugin as "connected" once enabled, since
+    /// there is nothing for the user to connect.
+    pub fn requires_authentication(&self) -> bool {
+        self.oauth.is_some() || !self.required_credentials.is_empty()
+    }
+}
+
 /// Content types that a metadata provider can support
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "lowercase")]
@@ -461,5 +476,47 @@ mod tests {
         }))
         .unwrap();
         assert!(caps.wants_detailed_progress);
+    }
+
+    fn manifest_from(extra: serde_json::Value) -> PluginManifest {
+        let mut base = serde_json::json!({
+            "name": "p",
+            "displayName": "P",
+            "version": "1.0.0",
+            "protocolVersion": "1.0",
+            "capabilities": { "userReadSync": true }
+        });
+        let obj = base.as_object_mut().unwrap();
+        for (k, v) in extra.as_object().unwrap() {
+            obj.insert(k.clone(), v.clone());
+        }
+        serde_json::from_value(base).unwrap()
+    }
+
+    #[test]
+    fn test_requires_authentication_false_for_credentialless_plugin() {
+        let manifest = manifest_from(serde_json::json!({}));
+        assert!(!manifest.requires_authentication());
+    }
+
+    #[test]
+    fn test_requires_authentication_true_with_required_credentials() {
+        let manifest = manifest_from(serde_json::json!({
+            "requiredCredentials": [
+                { "key": "access_token", "label": "Token" }
+            ]
+        }));
+        assert!(manifest.requires_authentication());
+    }
+
+    #[test]
+    fn test_requires_authentication_true_with_oauth() {
+        let manifest = manifest_from(serde_json::json!({
+            "oauth": {
+                "authorizationUrl": "https://example.com/auth",
+                "tokenUrl": "https://example.com/token"
+            }
+        }));
+        assert!(manifest.requires_authentication());
     }
 }

@@ -147,6 +147,11 @@ export function ConnectedPluginCard({
   const configFields =
     (plugin.userConfigSchema?.fields as { key: string }[] | undefined) ?? [];
   const hasSettings = isSyncPlugin || configFields.length > 0;
+  // A plugin that requires per-user auth and is connected has an external
+  // account to unlink ("Disconnect"). A credential-less / shared-key plugin
+  // (requiresAuth === false) is connected once enabled but has nothing to
+  // disconnect — it is managed purely via Enable/Disable.
+  const connectedViaAuth = plugin.connected && plugin.requiresAuth;
 
   return (
     <Card withBorder padding="lg">
@@ -171,7 +176,7 @@ export function ConnectedPluginCard({
           </div>
         </Group>
         <Group gap="xs">
-          {plugin.connected ? (
+          {connectedViaAuth ? (
             <Badge
               color="green"
               variant="light"
@@ -179,21 +184,21 @@ export function ConnectedPluginCard({
             >
               Connected
             </Badge>
-          ) : plugin.requiresOauth ? (
-            <Badge
-              color="yellow"
-              variant="light"
-              leftSection={<IconX size={12} />}
-            >
-              Not Connected
-            </Badge>
-          ) : (
+          ) : !plugin.requiresAuth ? (
             <Badge
               color="blue"
               variant="light"
               leftSection={<IconCheck size={12} />}
             >
               Enabled
+            </Badge>
+          ) : (
+            <Badge
+              color="yellow"
+              variant="light"
+              leftSection={<IconX size={12} />}
+            >
+              Not Connected
             </Badge>
           )}
           {plugin.connected && (
@@ -396,7 +401,7 @@ export function ConnectedPluginCard({
             Settings
           </Button>
         )}
-        {plugin.connected && (
+        {connectedViaAuth && (
           <Tooltip label="Unlink your external account and remove credentials">
             <Button
               size="xs"
@@ -410,7 +415,7 @@ export function ConnectedPluginCard({
             </Button>
           </Tooltip>
         )}
-        {!plugin.connected && plugin.enabled && (
+        {plugin.enabled && !connectedViaAuth && (
           <Tooltip label="Disable this integration">
             <Button
               size="xs"
@@ -424,7 +429,7 @@ export function ConnectedPluginCard({
             </Button>
           </Tooltip>
         )}
-        {!plugin.connected && !plugin.enabled && (
+        {!plugin.enabled && !connectedViaAuth && (
           <Tooltip label="Remove this integration">
             <Button
               size="xs"

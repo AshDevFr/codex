@@ -19,6 +19,7 @@ function makePlugin(overrides: Partial<UserPluginDto> = {}): UserPluginDto {
     connected: true,
     healthStatus: "healthy",
     requiresOauth: true,
+    requiresAuth: true,
     oauthConfigured: true,
     config: {},
     capabilities: { readSync: true, userRecommendationProvider: false },

@@ -82,6 +82,10 @@ pub struct PluginConfig {
     pub credentials: Option<SecretValue>,
     /// Scoped data directory for this plugin's file storage
     pub data_dir: Option<String>,
+    /// Codex user id this instance acts for (user plugins only; None for system plugins)
+    pub user_id: Option<String>,
+    /// User-plugin connection id (user plugins only; matches storage scope)
+    pub user_plugin_id: Option<String>,
 }
 
 impl std::fmt::Debug for PluginConfig {
@@ -95,6 +99,8 @@ impl std::fmt::Debug for PluginConfig {
             .field("user_config", &self.user_config)
             .field("credentials", &self.credentials) // SecretValue shows [REDACTED]
             .field("data_dir", &self.data_dir)
+            .field("user_id", &self.user_id)
+            .field("user_plugin_id", &self.user_plugin_id)
             .finish()
     }
 }
@@ -110,6 +116,8 @@ impl Default for PluginConfig {
             user_config: None,
             credentials: None,
             data_dir: None,
+            user_id: None,
+            user_plugin_id: None,
         }
     }
 }
@@ -298,6 +306,8 @@ impl PluginHandle {
             user_config: self.config.user_config.clone(),
             credentials: self.config.credentials.as_ref().map(|s| s.inner().clone()),
             data_dir: self.config.data_dir.clone(),
+            user_id: self.config.user_id.clone(),
+            user_plugin_id: self.config.user_plugin_id.clone(),
         };
 
         debug!(
