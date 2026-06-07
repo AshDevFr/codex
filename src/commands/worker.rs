@@ -134,11 +134,19 @@ pub async fn worker_command(config_path: PathBuf) -> anyhow::Result<()> {
     // set up by `TaskWorker::run_task`, not through a manager-held one.
     // See `codex_events::with_recording_broadcaster`.
     info!("Initializing plugin manager...");
+    // Wire plugin file storage so plugins spawned in the worker (sync cron,
+    // recommendations refresh, …) receive a real `dataDir` in their init
+    // message. Without it, `resolve_plugin_data_dir` returns None and plugins
+    // fall back to a container-local temp dir for any files they write.
+    let plugin_file_storage = Arc::new(codex_services::PluginFileStorage::new(
+        &config.files.plugins_dir,
+    ));
     let plugin_manager = Arc::new(
         codex_services::plugin::PluginManager::with_defaults(Arc::new(
             db.sea_orm_connection().clone(),
         ))
-        .with_metrics_service(plugin_metrics_service),
+        .with_metrics_service(plugin_metrics_service)
+        .with_plugin_file_storage(plugin_file_storage),
     );
     // Load enabled plugins from database
     match plugin_manager.load_all().await {

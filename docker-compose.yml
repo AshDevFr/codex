@@ -39,6 +39,9 @@ services:
       - ./docker/data/thumbnails:/app/data/thumbnails:rw
       - ./docker/data/uploads:/app/data/uploads:rw
       - ./docker/data/cache:/app/data/cache:rw
+      # Plugin file storage (dataDir) — where plugins write files, incl. the
+      # echo plugins' recorded request/response payloads under <plugin>/payloads/
+      - ./docker/data/plugins:/app/data/plugins:rw
     command: ["codex", "serve", "--config", "/app/config/config.docker.yaml"]
     environment:
       # Email configuration for Mailhog
@@ -431,6 +434,8 @@ services:
       - screenshots_uploads:/app/data/uploads:rw
       - screenshots_cache:/app/data/cache:rw
       - ./plugins/metadata-echo/dist:/opt/codex/plugins/metadata-echo/dist:ro
+      - ./plugins/sync-echo/dist:/opt/codex/plugins/sync-echo/dist:ro
+      - ./plugins/recommendations-echo/dist:/opt/codex/plugins/recommendations-echo/dist:ro
     command:
       ["codex", "serve", "--config", "/app/config/config.screenshots.yaml"]
     environment:
