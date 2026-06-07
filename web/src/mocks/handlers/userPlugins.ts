@@ -46,9 +46,15 @@ const anilistPlugin: UserPluginDto = {
   config: {},
   userConfigSchema: null,
   userSetupInstructions: null,
+  autoSync: false,
+  sendTags: false,
+  sendGenres: false,
+  sendMetadata: false,
+  sendCustomMetadata: false,
   capabilities: {
     readSync: true,
     userRecommendationProvider: true,
+    wantsFullMetadata: true,
   },
   createdAt: "2026-01-15T00:00:00Z",
 };
@@ -64,6 +70,7 @@ const mangabakaAvailable: AvailablePluginDto = {
   capabilities: {
     readSync: false,
     userRecommendationProvider: false,
+    wantsFullMetadata: false,
   },
 };
 
@@ -130,9 +137,15 @@ export const userPluginsHandlers = [
       config: {},
       userConfigSchema: null,
       userSetupInstructions: null,
+      autoSync: false,
+      sendTags: false,
+      sendGenres: false,
+      sendMetadata: false,
+      sendCustomMetadata: false,
       capabilities: {
         readSync: false,
         userRecommendationProvider: false,
+        wantsFullMetadata: false,
       },
       createdAt: new Date().toISOString(),
     };

@@ -56,6 +56,7 @@ function UserPluginSettingsContent({
   const queryClient = useQueryClient();
   const isSyncPlugin = plugin.capabilities?.readSync === true;
   const isRecPlugin = plugin.capabilities?.userRecommendationProvider === true;
+  const wantsFullMetadata = plugin.capabilities?.wantsFullMetadata === true;
   const configFields: ConfigField[] =
     (plugin.userConfigSchema?.fields as ConfigField[] | undefined) ?? [];
   const currentConfig = (plugin.config ?? {}) as Record<string, unknown>;
@@ -102,6 +103,25 @@ function UserPluginSettingsContent({
         : 0;
   }
 
+  // Metadata-enrichment opt-ins (stored in config._codex.send*), shown only when
+  // the plugin declares the wantsFullMetadata capability. All default false.
+  if (wantsFullMetadata) {
+    initialValues._codex_sendTags =
+      typeof codexConfig.sendTags === "boolean" ? codexConfig.sendTags : false;
+    initialValues._codex_sendGenres =
+      typeof codexConfig.sendGenres === "boolean"
+        ? codexConfig.sendGenres
+        : false;
+    initialValues._codex_sendMetadata =
+      typeof codexConfig.sendMetadata === "boolean"
+        ? codexConfig.sendMetadata
+        : false;
+    initialValues._codex_sendCustomMetadata =
+      typeof codexConfig.sendCustomMetadata === "boolean"
+        ? codexConfig.sendCustomMetadata
+        : false;
+  }
+
   for (const field of configFields) {
     initialValues[field.key] = currentConfig[field.key] ?? field.default ?? "";
   }
@@ -139,7 +159,22 @@ function UserPluginSettingsContent({
         Object.assign(codex, recValues);
       }
 
-      if (isSyncPlugin || isRecPlugin) {
+      if (wantsFullMetadata) {
+        // tags/genres only meaningfully apply to sync (recommendation entries
+        // always carry them); metadata/custom apply to both.
+        Object.assign(codex, {
+          sendMetadata: !!form.values._codex_sendMetadata,
+          sendCustomMetadata: !!form.values._codex_sendCustomMetadata,
+        });
+        if (isSyncPlugin) {
+          Object.assign(codex, {
+            sendTags: !!form.values._codex_sendTags,
+            sendGenres: !!form.values._codex_sendGenres,
+          });
+        }
+      }
+
+      if (isSyncPlugin || isRecPlugin || wantsFullMetadata) {
         config._codex = codex;
       }
 
@@ -170,7 +205,8 @@ function UserPluginSettingsContent({
     },
   });
 
-  const hasFields = isSyncPlugin || isRecPlugin || configFields.length > 0;
+  const hasFields =
+    isSyncPlugin || isRecPlugin || wantsFullMetadata || configFields.length > 0;
 
   return (
     <Stack gap="md">
@@ -282,9 +318,62 @@ function UserPluginSettingsContent({
         </>
       )}
 
-      {(isSyncPlugin || isRecPlugin) && configFields.length > 0 && (
-        <Divider label="Plugin Settings" labelPosition="left" mt="xs" />
+      {wantsFullMetadata && (
+        <>
+          <Divider label="Metadata Enrichment" labelPosition="left" mt="xs" />
+          <Text size="xs" c="dimmed">
+            Send extra series data to this plugin. Everything here is off by
+            default; enable only what the plugin needs.
+          </Text>
+          {isSyncPlugin && (
+            <>
+              <Switch
+                label="Send tags"
+                description="Include each series' tags so the plugin can apply tag-based rules. Small payload."
+                checked={!!form.values._codex_sendTags}
+                onChange={(e) =>
+                  form.setFieldValue("_codex_sendTags", e.currentTarget.checked)
+                }
+              />
+              <Switch
+                label="Send genres"
+                description="Include each series' genres. Small payload."
+                checked={!!form.values._codex_sendGenres}
+                onChange={(e) =>
+                  form.setFieldValue(
+                    "_codex_sendGenres",
+                    e.currentTarget.checked,
+                  )
+                }
+              />
+            </>
+          )}
+          <Switch
+            label="Send metadata"
+            description="Include summary, authors, publisher, age rating, language, and reading direction. This is the heaviest option (summaries can be large)."
+            checked={!!form.values._codex_sendMetadata}
+            onChange={(e) =>
+              form.setFieldValue("_codex_sendMetadata", e.currentTarget.checked)
+            }
+          />
+          <Switch
+            label="Send custom metadata"
+            description="Include your user-defined custom metadata fields. These can hold private notes — only enable for plugins you trust."
+            checked={!!form.values._codex_sendCustomMetadata}
+            onChange={(e) =>
+              form.setFieldValue(
+                "_codex_sendCustomMetadata",
+                e.currentTarget.checked,
+              )
+            }
+          />
+        </>
       )}
+
+      {(isSyncPlugin || isRecPlugin || wantsFullMetadata) &&
+        configFields.length > 0 && (
+          <Divider label="Plugin Settings" labelPosition="left" mt="xs" />
+        )}
 
       {configFields.map((field) => {
         const props = form.getInputProps(field.key);
