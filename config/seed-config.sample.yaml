@@ -216,6 +216,16 @@ plugins:
 #   default_reading_direction: LEFT_TO_RIGHT (default), RIGHT_TO_LEFT, VERTICAL, WEBTOON
 #   allowed_formats: list of formats, e.g. [cbz, cbr, epub, pdf]
 #   excluded_patterns: list of glob patterns, e.g. ["*.txt", "thumbs.db"]
+#
+# title_preprocessing_rules: regex transforms applied to series titles before
+#   metadata search, in order. Each rule: pattern, replacement (empty to remove),
+#   optional description, optional enabled (default true). Use single-quoted
+#   scalars so backslashes stay literal: '\s*\(Digital\)$' not "\\s*\\(Digital\\)$".
+#
+# auto_match_conditions: gate auto-matching on series properties.
+#   mode: all (AND) or any (OR); rules: [{field, operator, value}].
+#   operators: is_null, is_not_null, equals, not_equals, gt, gte, lt, lte,
+#              contains, not_contains, starts_with, ends_with, matches, in, not_in
 libraries:
   - name: Comics
     path: /libraries/comics
@@ -223,6 +233,19 @@ libraries:
     # book_strategy: filename
     # number_strategy: file_order
     # default_reading_direction: LEFT_TO_RIGHT
+    # title_preprocessing_rules:
+    #   - pattern: '\s*\(Digital\)$'
+    #     replacement: ''
+    #     description: Remove (Digital) suffix
+    #     enabled: true
+    # auto_match_conditions:
+    #   mode: all
+    #   rules:
+    #     - field: external_ids.plugin:mangabaka
+    #       operator: is_null
+    #     - field: book_count
+    #       operator: gte
+    #       value: 1
 
   - name: Manga
     path: /libraries/manga
