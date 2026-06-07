@@ -17,6 +17,24 @@ use codex_services::plugin::sync::{SyncEntry, SyncProgress, SyncReadingStatus};
 
 use super::settings::CodexSyncSettings;
 
+/// Effective per-field metadata-enrichment flags for a push (capability AND the
+/// user's `_codex.send*` toggle, computed by the caller). Each gates one piece of
+/// optional data attached to every push entry.
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct MetadataFlags {
+    pub tags: bool,
+    pub genres: bool,
+    pub metadata: bool,
+    pub custom_metadata: bool,
+}
+
+impl MetadataFlags {
+    /// Whether any taxonomy (genres/tags) must be fetched for this push.
+    fn needs_taxonomy(&self) -> bool {
+        self.tags || self.genres
+    }
+}
+
 /// Whether a series in `library_id` is in scope for a plugin allowed to act on
 /// `allowed_library_ids`. An empty allowed set means "all libraries".
 fn library_in_scope(allowed_library_ids: &[Uuid], library_id: Uuid) -> bool {
@@ -50,6 +68,7 @@ fn project_sync_entry(
     external_id: String,
     title: Option<String>,
     settings: &CodexSyncSettings,
+    flags: MetadataFlags,
 ) -> Option<SyncEntry> {
     // Skip series with no progress at all.
     if !e.has_any_progress() {
@@ -131,9 +150,27 @@ fn project_sync_entry(
         title,
         library_id: e.library_id.to_string(),
         library_name: e.library_name.clone(),
-        // Enrichment is wired in a later phase; entries carry no metadata yet.
-        metadata: None,
-        custom_metadata: None,
+        // Per-field enrichment, each gated by its effective flag.
+        genres: if flags.genres {
+            e.genres.clone()
+        } else {
+            Vec::new()
+        },
+        tags: if flags.tags {
+            e.tags.clone()
+        } else {
+            Vec::new()
+        },
+        metadata: if flags.metadata {
+            e.series_metadata_block()
+        } else {
+            None
+        },
+        custom_metadata: if flags.custom_metadata {
+            e.custom_metadata_value()
+        } else {
+            None
+        },
     })
 }
 
@@ -153,6 +190,7 @@ pub(crate) async fn build_push_entries(
     task_id: Uuid,
     settings: &CodexSyncSettings,
     allowed_library_ids: &[Uuid],
+    flags: MetadataFlags,
 ) -> Vec<SyncEntry> {
     // 1. Get all series that have external IDs for this source.
     let external_ids =
@@ -182,17 +220,19 @@ pub(crate) async fn build_push_entries(
     //    build the shared engagement aggregates in one batched pass.
     let candidate_series_ids: Vec<Uuid> = external_ids.iter().map(|e| e.series_id).collect();
     let series = scoped_series(db, &candidate_series_ids, allowed_library_ids).await;
-    let engagements =
-        match build_series_engagements(db, user_id, &series, EngagementOptions::default()).await {
-            Ok(map) => map,
-            Err(e) => {
-                warn!(
-                    "Task {}: Failed to build series engagements for push: {}",
-                    task_id, e
-                );
-                return vec![];
-            }
-        };
+    let opts = EngagementOptions {
+        include_taxonomy: flags.needs_taxonomy(),
+    };
+    let engagements = match build_series_engagements(db, user_id, &series, opts).await {
+        Ok(map) => map,
+        Err(e) => {
+            warn!(
+                "Task {}: Failed to build series engagements for push: {}",
+                task_id, e
+            );
+            return vec![];
+        }
+    };
 
     // Series we matched by external ID (and that are in scope) — used to exclude
     // them from the search-fallback pass below.
@@ -206,7 +246,9 @@ pub(crate) async fn build_push_entries(
         };
         // Matched entries carry a metadata-only title (no series-name fallback).
         let title = e.metadata.as_ref().map(|m| m.title.clone());
-        if let Some(entry) = project_sync_entry(e, ext_id.external_id.clone(), title, settings) {
+        if let Some(entry) =
+            project_sync_entry(e, ext_id.external_id.clone(), title, settings, flags)
+        {
             entries.push(entry);
         }
     }
@@ -228,6 +270,7 @@ pub(crate) async fn build_push_entries(
             settings,
             &matched_series_ids,
             allowed_library_ids,
+            flags,
         )
         .await;
 
@@ -253,6 +296,7 @@ async fn build_unmatched_entries(
     settings: &CodexSyncSettings,
     matched_series_ids: &HashSet<Uuid>,
     allowed_library_ids: &[Uuid],
+    flags: MetadataFlags,
 ) -> Vec<SyncEntry> {
     // 1. Get all reading progress for this user, then map books → series.
     let all_progress = match ReadProgressRepository::get_by_user(db, user_id).await {
@@ -297,17 +341,19 @@ async fn build_unmatched_entries(
     // 2. Resolve series rows, drop out-of-scope ones, build engagements.
     let unmatched_ids_vec: Vec<Uuid> = unmatched_series_ids.into_iter().collect();
     let series = scoped_series(db, &unmatched_ids_vec, allowed_library_ids).await;
-    let engagements =
-        match build_series_engagements(db, user_id, &series, EngagementOptions::default()).await {
-            Ok(map) => map,
-            Err(e) => {
-                warn!(
-                    "Task {}: Failed to build series engagements for unmatched series: {}",
-                    task_id, e
-                );
-                return vec![];
-            }
-        };
+    let opts = EngagementOptions {
+        include_taxonomy: flags.needs_taxonomy(),
+    };
+    let engagements = match build_series_engagements(db, user_id, &series, opts).await {
+        Ok(map) => map,
+        Err(e) => {
+            warn!(
+                "Task {}: Failed to build series engagements for unmatched series: {}",
+                task_id, e
+            );
+            return vec![];
+        }
+    };
 
     // 3. Project each unmatched, in-scope series with metadata into a SyncEntry.
     let mut entries = Vec::new();
@@ -320,7 +366,7 @@ async fn build_unmatched_entries(
             Some(m) => m.title.clone(),
             None => continue,
         };
-        if let Some(entry) = project_sync_entry(e, String::new(), Some(title), settings) {
+        if let Some(entry) = project_sync_entry(e, String::new(), Some(title), settings, flags) {
             entries.push(entry);
         }
     }

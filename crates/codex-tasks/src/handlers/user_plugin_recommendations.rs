@@ -17,11 +17,18 @@ use uuid::Uuid;
 use crate::handlers::TaskHandler;
 use crate::types::TaskResult;
 use codex_db::entities::tasks;
-use codex_db::repositories::{PluginsRepository, UserPluginDataRepository, UserPluginsRepository};
+use codex_db::entities::user_plugins::{
+    CODEX_CONFIG_NAMESPACE, SEND_CUSTOM_METADATA_KEY, SEND_METADATA_KEY,
+};
+use codex_db::repositories::{
+    PluginsRepository, SeriesRepository, UserPluginDataRepository, UserPluginsRepository,
+};
 use codex_events::EventBroadcaster;
 use codex_services::SettingsService;
 use codex_services::plugin::PluginManager;
-use codex_services::plugin::library::build_user_library;
+use codex_services::plugin::library::{
+    EngagementOptions, build_series_engagements, build_user_library,
+};
 use codex_services::plugin::protocol::{
     PluginManifest, UserLibraryEntry, UserReadingStatus, methods,
 };
@@ -36,9 +43,6 @@ const DEFAULT_TASK_TIMEOUT_SECS: u64 = 300;
 // Codex Recommendation Settings
 // =============================================================================
 
-/// JSON key for the Codex-reserved namespace in user plugin config.
-const CODEX_CONFIG_NAMESPACE: &str = "_codex";
-
 /// Codex recommendation settings — server-interpreted preferences that control
 /// seed curation and result limits. Stored in `config._codex` on the user plugin.
 /// The plugin never reads these; they control server-side behavior.
@@ -52,6 +56,12 @@ struct CodexRecommendationSettings {
     /// Stored in config as 0-10 (display scale), converted by multiplying by 10.
     /// Default: 0 (no threshold).
     drop_threshold: i32,
+    /// Attach the bibliographic `metadata` block to seed entries. Default: false.
+    /// (genres/tags are always sent on recommendation entries, so there are no
+    /// separate tag/genre toggles here.)
+    send_metadata: bool,
+    /// Attach user-defined `custom_metadata` to seed entries. Default: false.
+    send_custom_metadata: bool,
 }
 
 impl CodexRecommendationSettings {
@@ -82,10 +92,21 @@ impl CodexRecommendationSettings {
             .map(|v| v.clamp(0, 100))
             .unwrap_or(0);
 
+        let send_metadata = codex
+            .get(SEND_METADATA_KEY)
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let send_custom_metadata = codex
+            .get(SEND_CUSTOM_METADATA_KEY)
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+
         Self {
             max_recommendations,
             max_seeds,
             drop_threshold,
+            send_metadata,
+            send_custom_metadata,
         }
     }
 }
@@ -144,6 +165,50 @@ fn curate_seeds(
         .take(settings.max_seeds as usize)
         .cloned()
         .collect()
+}
+
+/// Attach opt-in enrichment to the curated seeds.
+///
+/// `send_metadata` adds the bibliographic `metadata` block; `send_custom_metadata`
+/// adds the user-defined `custom_metadata`. Only the seeds (≤ `max_seeds`) are
+/// enriched, not the whole library, so the extra fetch/parse stays bounded.
+/// genres/tags are already present on every recommendation entry, so they are not
+/// gated here.
+async fn attach_seed_metadata(
+    db: &DatabaseConnection,
+    user_id: Uuid,
+    seeds: &mut [UserLibraryEntry],
+    send_metadata: bool,
+    send_custom_metadata: bool,
+) {
+    if (!send_metadata && !send_custom_metadata) || seeds.is_empty() {
+        return;
+    }
+
+    let series_ids: Vec<Uuid> = seeds
+        .iter()
+        .filter_map(|s| Uuid::parse_str(&s.series_id).ok())
+        .collect();
+    let series = SeriesRepository::get_by_ids(db, &series_ids)
+        .await
+        .unwrap_or_default();
+    let engagements = build_series_engagements(db, user_id, &series, EngagementOptions::default())
+        .await
+        .unwrap_or_default();
+
+    for seed in seeds.iter_mut() {
+        let Ok(series_id) = Uuid::parse_str(&seed.series_id) else {
+            continue;
+        };
+        if let Some(e) = engagements.get(&series_id) {
+            if send_metadata {
+                seed.metadata = e.series_metadata_block();
+            }
+            if send_custom_metadata {
+                seed.custom_metadata = e.custom_metadata_value();
+            }
+        }
+    }
 }
 
 /// Handler for user plugin recommendation refresh tasks
@@ -374,7 +439,7 @@ impl TaskHandler for UserPluginRecommendationsHandler {
             );
 
             // Curate seeds from library: rated entries first, then recent reads
-            let seeds = curate_seeds(&library, &rec_settings);
+            let mut seeds = curate_seeds(&library, &rec_settings);
 
             debug!(
                 "Task {}: Curated {} seeds from {} library entries (threshold={}, max_seeds={})",
@@ -384,6 +449,24 @@ impl TaskHandler for UserPluginRecommendationsHandler {
                 rec_settings.drop_threshold,
                 rec_settings.max_seeds
             );
+
+            // Attach opt-in enrichment to the seeds when the plugin declares the
+            // capability and the user enabled the toggle. (genres/tags already ride
+            // on every recommendation entry, so only the two new toggles apply.)
+            let wants_full_metadata = plugin_model
+                .as_ref()
+                .and_then(|p| p.manifest.as_ref())
+                .and_then(|m| serde_json::from_value::<PluginManifest>(m.clone()).ok())
+                .map(|m| m.capabilities.wants_full_metadata)
+                .unwrap_or(false);
+            attach_seed_metadata(
+                db,
+                user_id,
+                &mut seeds,
+                wants_full_metadata && rec_settings.send_metadata,
+                wants_full_metadata && rec_settings.send_custom_metadata,
+            )
+            .await;
 
             // Call recommendations/get with curated seeds (not the full library)
             let request = RecommendationRequest {

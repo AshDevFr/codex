@@ -111,6 +111,13 @@ pub struct PluginCapabilities {
     /// Can provide personalized recommendations (v2)
     #[serde(default)]
     pub user_recommendation_provider: bool,
+    /// Whether this plugin consumes enriched series data (tags, genres,
+    /// bibliographic metadata, custom metadata) on the entries it receives.
+    /// When set, the host exposes the per-field `_codex.send*` toggles and only
+    /// then attaches the opted-in data to sync/recommendation entries. Plugins
+    /// that don't declare this never pay the assembly or payload cost.
+    #[serde(default)]
+    pub wants_full_metadata: bool,
     /// Can announce new releases (chapters/volumes) for tracked series.
     /// When present, the plugin may invoke the `releases/*` reverse-RPC
     /// methods. The capability struct declares the data the plugin needs

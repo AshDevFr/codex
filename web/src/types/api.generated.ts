@@ -5205,6 +5205,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/user/plugins/{plugin_id}/metadata-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Set a connection's metadata-enrichment opt-ins (tags/genres/metadata/custom).
+         * @description Writes the host-only `config._codex.send*` flags (the plugin never reads
+         *     them). Each is a partial update: only provided fields change, and other
+         *     `_codex` keys are preserved. Only allowed for plugins whose manifest declares
+         *     the `wantsFullMetadata` capability.
+         */
+        patch: operations["set_metadata_settings"];
+        trace?: never;
+    };
     "/api/v1/user/plugins/{plugin_id}/oauth/start": {
         parameters: {
             query?: never;
@@ -17778,6 +17801,23 @@ export interface components {
              */
             updatedAt: string;
         };
+        /**
+         * @description Request to set a connection's metadata-enrichment opt-ins.
+         *
+         *     Each field is optional; only the provided ones are updated (partial update),
+         *     and other `_codex` settings are preserved. Only meaningful for plugins that
+         *     declare the `wantsFullMetadata` capability.
+         */
+        SetMetadataSettingsRequest: {
+            /** @description Send user-defined custom metadata to the plugin. */
+            sendCustomMetadata?: boolean | null;
+            /** @description Send series genres (top-level) to the plugin. */
+            sendGenres?: boolean | null;
+            /** @description Send the bibliographic metadata block to the plugin. */
+            sendMetadata?: boolean | null;
+            /** @description Send series tags (top-level) to the plugin. */
+            sendTags?: boolean | null;
+        };
         /** @description Request to set a single preference value */
         SetPreferenceRequest: {
             /** @description The value to set */
@@ -19588,6 +19628,11 @@ export interface components {
             readSync: boolean;
             /** @description Can provide recommendations */
             userRecommendationProvider: boolean;
+            /**
+             * @description Consumes enriched series data; gates whether the `_codex.send*` metadata
+             *     toggles are shown on the connection.
+             */
+            wantsFullMetadata: boolean;
         };
         /** @description User plugin instance status */
         UserPluginDto: {
@@ -19650,6 +19695,14 @@ export interface components {
             pluginType: string;
             /** @description Whether this plugin requires OAuth authentication */
             requiresOauth: boolean;
+            sendCustomMetadata: boolean;
+            sendGenres: boolean;
+            sendMetadata: boolean;
+            /**
+             * @description Per-field metadata-enrichment opt-ins (host-side, from `config._codex.send*`).
+             *     Only meaningful when the plugin declares `wantsFullMetadata`; all default false.
+             */
+            sendTags: boolean;
             userConfigSchema?: null | components["schemas"]["ConfigSchemaDto"];
             /** @description User-facing setup instructions for the plugin */
             userSetupInstructions?: string | null;
@@ -31359,6 +31412,54 @@ export interface operations {
             };
             /** @description Plugin already enabled for this user */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    set_metadata_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Plugin ID to set metadata settings for */
+                plugin_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetMetadataSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description Metadata settings updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserPluginDto"];
+                };
+            };
+            /** @description Plugin does not consume full metadata */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plugin not enabled for this user */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

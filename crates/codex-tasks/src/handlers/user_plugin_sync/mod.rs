@@ -269,10 +269,25 @@ impl TaskHandler for UserPluginSyncHandler {
             };
 
             // Resolve the external ID source from the plugin manifest
-            let external_id_source = handle
-                .manifest()
-                .await
+            let manifest = handle.manifest().await;
+            let external_id_source = manifest
+                .as_ref()
                 .and_then(|m| m.capabilities.external_id_source.clone());
+
+            // Effective per-field metadata-enrichment flags: the plugin must
+            // declare `wantsFullMetadata` AND the user must opt in per field.
+            // Off-by-default, so connections that don't opt in push today's
+            // minimal payload unchanged.
+            let wants_full_metadata = manifest
+                .as_ref()
+                .map(|m| m.capabilities.wants_full_metadata)
+                .unwrap_or(false);
+            let metadata_flags = push::MetadataFlags {
+                tags: wants_full_metadata && codex_settings.send_tags,
+                genres: wants_full_metadata && codex_settings.send_genres,
+                metadata: wants_full_metadata && codex_settings.send_metadata,
+                custom_metadata: wants_full_metadata && codex_settings.send_custom_metadata,
+            };
 
             if let Some(ref source) = external_id_source {
                 debug!(
@@ -365,6 +380,7 @@ impl TaskHandler for UserPluginSyncHandler {
                         task.id,
                         &codex_settings,
                         &allowed_library_ids,
+                        metadata_flags,
                     )
                     .await
                 } else {

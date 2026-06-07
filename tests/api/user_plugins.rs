@@ -160,6 +160,32 @@ async fn create_sync_plugin(
     plugin.id
 }
 
+/// Create a sync plugin that also declares the `wantsFullMetadata` capability,
+/// so the metadata-enrichment toggles apply. Returns its ID.
+async fn create_metadata_plugin(
+    db: &sea_orm::DatabaseConnection,
+    name: &str,
+    display_name: &str,
+) -> uuid::Uuid {
+    let plugin_id = create_sync_plugin(db, name, display_name).await;
+    let manifest = json!({
+        "name": name,
+        "displayName": display_name,
+        "version": "1.0.0",
+        "protocolVersion": "1.0",
+        "pluginType": "user",
+        "capabilities": {
+            "userReadSync": true,
+            "wantsFullMetadata": true
+        },
+        "userDescription": "Sync with metadata enrichment"
+    });
+    PluginsRepository::update_manifest(db, plugin_id, Some(manifest))
+        .await
+        .unwrap();
+    plugin_id
+}
+
 /// Create a system-type plugin (admin operation) and return its ID
 async fn create_system_type_plugin(db: &sea_orm::DatabaseConnection, name: &str) -> uuid::Uuid {
     let plugin = PluginsRepository::create(
@@ -1688,4 +1714,98 @@ async fn test_set_sync_mode_requires_enabled_connection() {
     let (status, _): (StatusCode, Option<serde_json::Value>) =
         make_json_request(app, request).await;
     assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn test_set_metadata_settings_partial_update_and_independent() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_, token) = create_user_and_token(&db, &state, "metauser").await;
+    let plugin_id = create_metadata_plugin(&db, "meta-plugin", "Meta Plugin").await;
+    enable_sync_plugin_for_user(&state, &token, plugin_id).await;
+
+    // Enable two of the four toggles.
+    let app = create_test_router(state.clone()).await;
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/user/plugins/{}/metadata-settings", plugin_id),
+        &json!({ "sendTags": true, "sendCustomMetadata": true }),
+        &token,
+    );
+    let (status, dto): (StatusCode, Option<UserPluginDto>) = make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+    let dto = dto.expect("metadata-settings body");
+    assert!(dto.send_tags);
+    assert!(dto.send_custom_metadata);
+    assert!(!dto.send_genres);
+    assert!(!dto.send_metadata);
+    assert_eq!(dto.config["_codex"]["sendTags"], json!(true));
+
+    // Partial update: turning sendTags off must not touch sendCustomMetadata.
+    let app = create_test_router(state.clone()).await;
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/user/plugins/{}/metadata-settings", plugin_id),
+        &json!({ "sendTags": false }),
+        &token,
+    );
+    let (status, dto): (StatusCode, Option<UserPluginDto>) = make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+    let dto = dto.expect("metadata-settings body");
+    assert!(!dto.send_tags);
+    assert!(
+        dto.send_custom_metadata,
+        "untouched toggle must be preserved"
+    );
+}
+
+#[tokio::test]
+async fn test_set_metadata_settings_rejected_for_non_capable_plugin() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_, token) = create_user_and_token(&db, &state, "metauser2").await;
+    // Plain sync plugin without wantsFullMetadata.
+    let plugin_id = create_sync_plugin(&db, "plain-sync", "Plain Sync").await;
+    enable_sync_plugin_for_user(&state, &token, plugin_id).await;
+
+    let app = create_test_router(state.clone()).await;
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/user/plugins/{}/metadata-settings", plugin_id),
+        &json!({ "sendTags": true }),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn test_set_metadata_settings_preserves_other_codex_settings() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_, token) = create_user_and_token(&db, &state, "metauser3").await;
+    let plugin_id = create_metadata_plugin(&db, "meta-preserve", "Meta Preserve").await;
+    enable_sync_plugin_for_user(&state, &token, plugin_id).await;
+
+    // First opt into auto sync (writes config._codex.autoSync).
+    let app = create_test_router(state.clone()).await;
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/user/plugins/{}/sync-mode", plugin_id),
+        &json!({ "auto": true }),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<UserPluginDto>) = make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // Now set a metadata toggle; autoSync must survive.
+    let app = create_test_router(state.clone()).await;
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/user/plugins/{}/metadata-settings", plugin_id),
+        &json!({ "sendMetadata": true }),
+        &token,
+    );
+    let (status, dto): (StatusCode, Option<UserPluginDto>) = make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+    let dto = dto.expect("metadata-settings body");
+    assert!(dto.send_metadata);
+    assert!(dto.auto_sync, "autoSync sibling must be preserved");
+    assert_eq!(dto.config["_codex"]["autoSync"], json!(true));
 }

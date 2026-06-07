@@ -111,6 +111,16 @@ pub struct SyncEntry {
     /// push; empty on pulled entries.
     #[serde(default)]
     pub library_name: String,
+    /// Series genres (top-level taxonomy). Populated on push only when the user
+    /// enables `sendGenres` for a `wantsFullMetadata` plugin; empty otherwise and
+    /// on pulled entries.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub genres: Vec<String>,
+    /// Series tags (top-level taxonomy). Populated on push only when the user
+    /// enables `sendTags` for a `wantsFullMetadata` plugin; empty otherwise and
+    /// on pulled entries.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<String>,
     /// Bibliographic metadata, attached on push only when the plugin declares
     /// `wantsFullMetadata` and the user enables the `sendMetadata` toggle. Lets
     /// rule-based plugins act on summary/authors/age-rating/etc. Empty on pulled
@@ -394,6 +404,8 @@ mod tests {
             library_name: String::new(),
             metadata: None,
             custom_metadata: None,
+            genres: Vec::new(),
+            tags: Vec::new(),
         };
         let json = serde_json::to_value(&entry).unwrap();
         assert_eq!(json["externalId"], "12345");
@@ -514,6 +526,8 @@ mod tests {
                     library_name: String::new(),
                     metadata: None,
                     custom_metadata: None,
+                    genres: Vec::new(),
+                    tags: Vec::new(),
                 },
                 SyncEntry {
                     external_id: "2".to_string(),
@@ -529,6 +543,8 @@ mod tests {
                     library_name: String::new(),
                     metadata: None,
                     custom_metadata: None,
+                    genres: Vec::new(),
+                    tags: Vec::new(),
                 },
             ],
         };
@@ -659,6 +675,8 @@ mod tests {
                 library_name: String::new(),
                 metadata: None,
                 custom_metadata: None,
+                genres: Vec::new(),
+                tags: Vec::new(),
             }],
             next_cursor: Some("page2".to_string()),
             has_more: true,
@@ -756,6 +774,8 @@ mod tests {
             library_name: String::new(),
             metadata: None,
             custom_metadata: None,
+            genres: Vec::new(),
+            tags: Vec::new(),
         };
         let json = serde_json::to_value(&entry).unwrap();
         assert_eq!(json["title"], "Berserk");
@@ -778,6 +798,8 @@ mod tests {
             library_name: String::new(),
             metadata: None,
             custom_metadata: None,
+            genres: Vec::new(),
+            tags: Vec::new(),
         };
         let json = serde_json::to_value(&entry).unwrap();
         assert!(!json.as_object().unwrap().contains_key("title"));
@@ -821,6 +843,8 @@ mod tests {
             library_name: "Manga".to_string(),
             metadata: None,
             custom_metadata: None,
+            genres: Vec::new(),
+            tags: Vec::new(),
         };
         let json = serde_json::to_value(&entry).unwrap();
         assert_eq!(json["libraryId"], "11111111-1111-1111-1111-111111111111");
