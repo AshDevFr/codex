@@ -130,6 +130,8 @@ jobs:
         plugin:
           - sdk-typescript
           - metadata-echo
+          - sync-echo
+          - recommendations-echo
           - metadata-mangabaka
           - metadata-openlibrary
           - recommendations-anilist

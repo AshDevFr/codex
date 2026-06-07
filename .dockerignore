@@ -21,16 +21,10 @@ screenshots/.vite/
 screenshots/fixtures/
 screenshots/output/
 
-# Plugins build artifacts and dependencies
-plugins/sdk-typescript/node_modules/
-plugins/sdk-typescript/dist/
-plugins/sdk-typescript/.vite/
-plugins/metadata-mangabaka/node_modules/
-plugins/metadata-mangabaka/dist/
-plugins/metadata-mangabaka/.vite/
-plugins/metadata-echo/node_modules/
-plugins/metadata-echo/dist/
-plugins/metadata-echo/.vite/
+# Plugins build artifacts and dependencies (all plugins; rebuilt inside the image)
+plugins/*/node_modules/
+plugins/*/dist/
+plugins/*/.vite/
 
 # Database files
 *.db

@@ -20,12 +20,14 @@ Codex supports metadata plugins that can automatically fetch and enrich your lib
 | Plugin | Description | Source |
 |--------|-------------|--------|
 | [AniList Sync](./anilist-sync) | Sync manga reading progress between Codex and AniList | Free, requires AniList account |
+| Sync Echo (built-in) | Development/testing plugin that echoes push payloads and returns deterministic pull entries; records all request/response payloads to files | Included with Codex |
 
 ### Recommendation Plugins
 
 | Plugin | Description | Source |
 |--------|-------------|--------|
 | [AniList Recommendations](./anilist-recommendations) | Personalized manga recommendations seeded by your highest-rated library entries | Free, requires AniList account |
+| Recommendations Echo (built-in) | Development/testing plugin that echoes library seeds back as recommendations; records all request/response payloads to files | Included with Codex |
 
 ### Release Tracking Plugins
 
@@ -248,7 +250,7 @@ The external service retains any data already synced to it (e.g., your AniList r
 
 Codex provides a TypeScript SDK for building metadata plugins. Plugins implement a JSON-RPC interface with methods for searching, matching, and retrieving metadata.
 
-See the Echo plugin (`plugins/metadata-echo/`) as a reference implementation.
+See the Echo plugins as reference implementations: `plugins/metadata-echo/` (metadata), `plugins/sync-echo/` (sync), and `plugins/recommendations-echo/` (recommendations). The Echo plugins are debug-only: each records every request and its response to JSON files under its data directory (`{dataDir}/payloads/`, paired `…-request.json` / `…-response.json` with a UTC-sortable name), embedding the active config with credentials redacted, to make protocol traffic easy to inspect. This is controlled per plugin via the `recordPayloads` / `maxPayloadFiles` config options.
 
 ### Protocol Versioning
 

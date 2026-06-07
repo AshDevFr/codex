@@ -55,22 +55,10 @@ export interface OfficialPlugin {
 }
 
 export const OFFICIAL_PLUGINS: OfficialPlugin[] = [
-  {
-    name: "metadata-echo",
-    displayName: "Echo Metadata",
-    description:
-      "Development and testing plugin that echoes back sample metadata. Useful for verifying the plugin system is working correctly and for plugin development.",
-    type: "Metadata",
-    packageName: "@ashdev/codex-plugin-metadata-echo",
-    authInfo: "No authentication required",
-    author: "Codex Team",
-    scope: "system",
-    formDefaults: {
-      command: "npx",
-      args: "-y\n@ashdev/codex-plugin-metadata-echo",
-      credentialDelivery: "env",
-    },
-  },
+  // Note: the "echo" plugins (metadata-echo, sync-echo, recommendations-echo)
+  // are intentionally NOT listed here. They are debug/testing tools, not
+  // integrations end users would install from the gallery. They are provisioned
+  // via the seed config (config/seed-config.yaml) for dev/test deployments.
   {
     name: "metadata-mangabaka",
     displayName: "Mangabaka Metadata",
