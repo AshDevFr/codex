@@ -47,6 +47,7 @@ export interface PluginFormValues {
   rateLimitRequestsPerMinute: number;
   requestTimeoutOverrideEnabled: boolean;
   requestTimeoutSeconds: number;
+  syncCronSchedule: string;
 }
 
 export const defaultFormValues: PluginFormValues = {
@@ -65,6 +66,7 @@ export const defaultFormValues: PluginFormValues = {
   rateLimitRequestsPerMinute: 60,
   requestTimeoutOverrideEnabled: false,
   requestTimeoutSeconds: 30,
+  syncCronSchedule: "",
 };
 
 // Normalize plugin name to slug format (lowercase alphanumeric with hyphens)
@@ -360,6 +362,17 @@ export function PluginForm({
                   max={3600}
                   {...form.getInputProps("requestTimeoutSeconds")}
                 />
+              )}
+              {manifest?.capabilities?.userReadSync && (
+                <>
+                  <Divider label="Automatic Sync" labelPosition="center" />
+                  <TextInput
+                    label="Sync Schedule (cron)"
+                    placeholder="0 0 */6 * * *"
+                    description="Cron expression that drives automatic syncs for users who opted into auto-sync. Leave empty to disable scheduled syncs (users can still sync manually)."
+                    {...form.getInputProps("syncCronSchedule")}
+                  />
+                </>
               )}
             </Stack>
           </Tabs.Panel>

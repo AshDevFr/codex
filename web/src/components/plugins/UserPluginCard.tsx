@@ -8,6 +8,7 @@ import {
   Divider,
   Group,
   PasswordInput,
+  Switch,
   Text,
   Tooltip,
 } from "@mantine/core";
@@ -109,12 +110,14 @@ interface ConnectedPluginCardProps {
   onConnect: (pluginId: string) => void;
   onSaveToken?: (pluginId: string, token: string) => void;
   onRefreshStatus?: (pluginId: string) => void;
+  onSetSyncMode?: (pluginId: string, auto: boolean) => void;
   syncStatus?: SyncStatusDto | null;
   disconnecting?: boolean;
   disabling?: boolean;
   syncing?: boolean;
   savingToken?: boolean;
   refreshingStatus?: boolean;
+  settingSyncMode?: boolean;
 }
 
 export function ConnectedPluginCard({
@@ -126,12 +129,14 @@ export function ConnectedPluginCard({
   onConnect,
   onSaveToken,
   onRefreshStatus,
+  onSetSyncMode,
   syncStatus,
   disconnecting,
   disabling,
   syncing,
   savingToken,
   refreshingStatus,
+  settingSyncMode,
 }: ConnectedPluginCardProps) {
   const health = healthBadge(plugin.healthStatus);
   const [tokenValue, setTokenValue] = useState("");
@@ -265,6 +270,25 @@ export function ConnectedPluginCard({
               {syncStatus.pendingPush} to push
             </Text>
           )}
+        </Group>
+      )}
+
+      {plugin.connected && isSyncPlugin && onSetSyncMode && (
+        <Group justify="space-between" mb="xs" wrap="nowrap">
+          <div>
+            <Text size="sm">Automatic sync</Text>
+            <Text size="xs" c="dimmed">
+              Sync on the schedule set by your administrator
+            </Text>
+          </div>
+          <Switch
+            checked={plugin.autoSync}
+            onChange={(e) =>
+              onSetSyncMode(plugin.pluginId, e.currentTarget.checked)
+            }
+            disabled={settingSyncMode}
+            aria-label="Automatic sync"
+          />
         </Group>
       )}
 

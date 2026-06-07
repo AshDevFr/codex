@@ -15,6 +15,7 @@ export type OAuthStartResponse = components["schemas"]["OAuthStartResponse"];
 export type UpdateUserPluginConfigRequest =
   components["schemas"]["UpdateUserPluginConfigRequest"];
 export type SyncTriggerResponse = components["schemas"]["SyncTriggerResponse"];
+export type SetSyncModeRequest = components["schemas"]["SetSyncModeRequest"];
 export type SyncStatusDto = components["schemas"]["SyncStatusDto"];
 export type ConfigSchemaDto = components["schemas"]["ConfigSchemaDto"];
 export type UserPluginTaskDto = components["schemas"]["UserPluginTaskDto"];
@@ -101,6 +102,22 @@ export const userPluginsApi = {
   triggerSync: async (pluginId: string): Promise<SyncTriggerResponse> => {
     const response = await api.post<SyncTriggerResponse>(
       `/user/plugins/${pluginId}/sync`,
+    );
+    return response.data;
+  },
+
+  /**
+   * Set the automatic-sync preference (manual vs auto) for a connection.
+   * `auto: true` opts into scheduled syncs on the plugin's admin-configured
+   * cadence; `false` is manual-only. Only valid for sync-capable plugins.
+   */
+  setSyncMode: async (
+    pluginId: string,
+    auto: boolean,
+  ): Promise<UserPluginDto> => {
+    const response = await api.patch<UserPluginDto>(
+      `/user/plugins/${pluginId}/sync-mode`,
+      { auto } satisfies SetSyncModeRequest,
     );
     return response.data;
   },
