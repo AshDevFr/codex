@@ -86,7 +86,8 @@ The settings are stored in the user's plugin config under the `_codex` namespace
     "includeCompleted": true,
     "includeInProgress": true,
     "countPartialProgress": false,
-    "syncRatings": true
+    "syncRatings": true,
+    "autoSync": false
   }
 }
 ```
@@ -97,8 +98,33 @@ The settings are stored in the user's plugin config under the `_codex` namespace
 | `includeInProgress` | `true` | Include series where at least one book has been started |
 | `countPartialProgress` | `false` | Count partially-read books in the progress count |
 | `syncRatings` | `true` | Include scores and notes in push/pull operations |
+| `autoSync` | `false` | Opt this connection into scheduled (automatic) syncs — see below |
 
 These are **server-interpreted** — the server reads them to filter and build sync entries. Plugins never read `_codex` keys. Plugin-specific settings (like `progressUnit` for AniList) live in the plugin's own `userConfigSchema` and are only read by the plugin.
+
+## Scheduled (Automatic) Sync
+
+By default a sync only runs when a user clicks **Sync Now**. Codex can also run syncs automatically on a schedule, which is controlled in two places: the **admin** sets the cadence per plugin, and each **user** opts their own connection in.
+
+### Admin: set the cadence (per plugin)
+
+In **Settings → Plugins**, edit a sync-capable plugin and set the **Sync Schedule (cron)** field on the **Execution** tab. It accepts a standard cron expression (5-field Unix or 6-field with seconds); for example `0 0 */6 * * *` runs every six hours.
+
+- The field only appears for plugins whose manifest declares the `user_read_sync` capability.
+- Leave it empty to disable scheduled syncs entirely (users can still sync manually).
+- Changes take effect immediately — no server restart needed.
+
+The cadence is a property of the integration (its rate limits, what's polite to the external service), which is why it is admin-managed and shared by all users of that plugin rather than configured per user.
+
+### User: opt in (per connection)
+
+Once an admin has set a schedule, each user can flip the **Automatic sync** switch on their connection card in **Settings → Integrations**. It is **off by default** — existing and new connections are manual-only until the user opts in, so Codex never makes calls to an external service on a user's behalf without consent.
+
+### When the schedule fires
+
+On each cron tick, Codex enqueues a sync for every connection of that plugin that is **enabled**, **authenticated/connected**, and has **Automatic sync** turned on. Connections that are disabled, disconnected, or still manual are skipped. The scheduled run respects the user's chosen [sync direction](./anilist-sync.md#sync-modes) and all [Codex Sync Settings](#codex-sync-settings) — it is the same operation as **Sync Now**, just triggered by the scheduler.
+
+A connection that already has a sync in progress is skipped for that tick, so a slow plugin never stacks duplicate jobs. If a connection's credentials have expired, it is skipped for that run and the user can reconnect.
 
 ## Security Model
 

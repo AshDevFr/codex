@@ -59,6 +59,12 @@ Configure the sync direction in **Settings** > **Integrations** > **Settings**:
 | **Pull Only**             | Import from AniList without writing back    |
 | **Push Only**             | Export to AniList without importing         |
 
+### Manual vs Automatic Sync
+
+By default, sync only runs when you click **Sync Now**. If your administrator has set a sync schedule for the plugin, you'll see an **Automatic sync** switch on your connection card in **Settings → Integrations**. Turn it on to have Codex sync your AniList progress automatically on that schedule; leave it off to keep syncing manually.
+
+The switch is off by default and only appears once an admin has configured a schedule. Automatic runs use the same sync direction and settings as a manual sync. See [Scheduled (Automatic) Sync](./index.md#scheduled-automatic-sync) for the full details.
+
 ### Sync Flow
 
 When a sync runs in **Pull & Push** mode, it executes two phases in order:
