@@ -17,7 +17,9 @@ use std::collections::HashMap;
 use tracing::{debug, warn};
 use uuid::Uuid;
 
-use crate::plugin::protocol::{UserLibraryEntry, UserLibraryExternalId, UserReadingStatus};
+use crate::plugin::protocol::{
+    SeriesMetadata, UserLibraryEntry, UserLibraryExternalId, UserReadingStatus, parse_authors_json,
+};
 use codex_db::entities::{SeriesStatus, series, series_metadata};
 use codex_db::repositories::{
     AlternateTitleRepository, BookRepository, GenreRepository, LibraryRepository,
@@ -101,6 +103,46 @@ impl SeriesEngagement {
     /// this series.
     pub fn has_any_progress(&self) -> bool {
         self.books_read > 0 || self.in_progress_count > 0
+    }
+
+    /// Build the bibliographic [`SeriesMetadata`] block for this series, for
+    /// plugins that opted into `sendMetadata`. Returns `None` when there is no
+    /// metadata row or the block would carry no data.
+    ///
+    /// Drawn from the always-fetched series metadata row, so it works regardless
+    /// of [`EngagementOptions::include_taxonomy`].
+    pub fn series_metadata_block(&self) -> Option<SeriesMetadata> {
+        let m = self.metadata.as_ref()?;
+        let block = SeriesMetadata {
+            summary: m.summary.clone(),
+            publisher: m.publisher.clone(),
+            authors: m
+                .authors_json
+                .as_deref()
+                .map(parse_authors_json)
+                .unwrap_or_default(),
+            age_rating: m.age_rating,
+            language: m.language.clone(),
+            reading_direction: m.reading_direction.clone(),
+        };
+        if block.is_empty() { None } else { Some(block) }
+    }
+
+    /// Parse the user-defined `custom_metadata` JSON for this series, for plugins
+    /// that opted into `sendCustomMetadata`. Returns `None` when absent or
+    /// unparseable (logged).
+    pub fn custom_metadata_value(&self) -> Option<serde_json::Value> {
+        let raw = self.metadata.as_ref()?.custom_metadata.as_deref()?;
+        match serde_json::from_str(raw) {
+            Ok(value) => Some(value),
+            Err(e) => {
+                warn!(
+                    "Failed to parse custom_metadata for series {}: {}",
+                    self.series_id, e
+                );
+                None
+            }
+        }
     }
 }
 
@@ -334,6 +376,9 @@ pub async fn build_user_library(
             started_at: e.earliest_started.map(|dt| dt.to_rfc3339()),
             last_read_at: e.latest_read_at.map(|dt| dt.to_rfc3339()),
             completed_at: e.latest_completed_at.map(|dt| dt.to_rfc3339()),
+            // Enrichment is wired in a later phase; entries carry no metadata yet.
+            metadata: None,
+            custom_metadata: None,
         });
     }
 
@@ -352,9 +397,43 @@ mod tests {
     use codex_db::ScanningStrategy;
     use codex_db::entities::{books, users};
     use codex_db::repositories::{
-        BookRepository, LibraryRepository, ReadProgressRepository, SeriesRepository, UserRepository,
+        BookRepository, LibraryRepository, ReadProgressRepository, SeriesMetadataRepository,
+        SeriesRepository, UserRepository,
     };
     use codex_db::test_helpers::create_test_db;
+
+    /// Fetch the `series_metadata` row auto-created alongside a series.
+    async fn fetch_meta(conn: &DatabaseConnection, series_id: Uuid) -> series_metadata::Model {
+        SeriesMetadataRepository::get_by_series_ids(conn, &[series_id])
+            .await
+            .unwrap()
+            .remove(&series_id)
+            .expect("metadata row auto-created with series")
+    }
+
+    /// Build a `SeriesEngagement` carrying the given metadata row, with neutral
+    /// progress/taxonomy, for testing the projection helpers in isolation.
+    fn engagement_with_meta(metadata: Option<series_metadata::Model>) -> SeriesEngagement {
+        SeriesEngagement {
+            series_id: Uuid::new_v4(),
+            library_id: Uuid::new_v4(),
+            library_name: "L".to_string(),
+            title: "S".to_string(),
+            metadata,
+            books_owned: 0,
+            books_read: 0,
+            in_progress_count: 0,
+            earliest_started: None,
+            latest_read_at: None,
+            latest_completed_at: None,
+            genres: vec![],
+            tags: vec![],
+            alternate_titles: vec![],
+            external_ids: vec![],
+            user_rating: None,
+            user_notes: None,
+        }
+    }
 
     /// Insert a minimal user row so reading-progress FKs are satisfied.
     async fn create_user(db: &DatabaseConnection) -> Uuid {
@@ -467,7 +546,7 @@ mod tests {
         let engagements = build_series_engagements(
             conn,
             user_id,
-            &[series.clone()],
+            std::slice::from_ref(&series),
             EngagementOptions::default(),
         )
         .await
@@ -496,5 +575,99 @@ mod tests {
                 .await
                 .unwrap();
         assert!(engagements.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_series_metadata_block_projection() {
+        let (db, _temp_dir) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let lib = LibraryRepository::create(conn, "Lib", "/l", ScanningStrategy::Default)
+            .await
+            .unwrap();
+        let series = SeriesRepository::create(conn, lib.id, "Berserk", None)
+            .await
+            .unwrap();
+        // Real metadata row, then populate the fields the block projects.
+        let mut meta = fetch_meta(conn, series.id).await;
+        meta.summary = Some("A dark fantasy".to_string());
+        meta.publisher = Some("Hakusensha".to_string());
+        meta.age_rating = Some(18);
+        meta.language = Some("ja".to_string());
+        meta.reading_direction = Some("rtl".to_string());
+        meta.authors_json = Some(
+            r#"[{"name":"Kentaro Miura","role":"author"},{"name":"Studio Gaga","role":"illustrator"}]"#
+                .to_string(),
+        );
+
+        let block = engagement_with_meta(Some(meta))
+            .series_metadata_block()
+            .expect("non-empty block");
+        assert_eq!(block.summary.as_deref(), Some("A dark fantasy"));
+        assert_eq!(block.publisher.as_deref(), Some("Hakusensha"));
+        assert_eq!(block.age_rating, Some(18));
+        assert_eq!(block.language.as_deref(), Some("ja"));
+        assert_eq!(block.reading_direction.as_deref(), Some("rtl"));
+        assert_eq!(block.authors.len(), 2);
+        assert_eq!(block.authors[0].name, "Kentaro Miura");
+        // Role is preserved, so a plugin can tell artist from author.
+        assert_eq!(block.authors[1].name, "Studio Gaga");
+    }
+
+    #[tokio::test]
+    async fn test_series_metadata_block_empty_is_none() {
+        let (db, _temp_dir) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let lib = LibraryRepository::create(conn, "Lib", "/l", ScanningStrategy::Default)
+            .await
+            .unwrap();
+        let series = SeriesRepository::create(conn, lib.id, "Bare", None)
+            .await
+            .unwrap();
+        // Metadata row exists but carries no bibliographic data → block omitted.
+        let meta = fetch_meta(conn, series.id).await;
+        assert!(
+            engagement_with_meta(Some(meta))
+                .series_metadata_block()
+                .is_none()
+        );
+        // No metadata row at all → also None.
+        assert!(engagement_with_meta(None).series_metadata_block().is_none());
+    }
+
+    #[tokio::test]
+    async fn test_custom_metadata_value_parses_and_degrades() {
+        let (db, _temp_dir) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let lib = LibraryRepository::create(conn, "Lib", "/l", ScanningStrategy::Default)
+            .await
+            .unwrap();
+        let series = SeriesRepository::create(conn, lib.id, "S", None)
+            .await
+            .unwrap();
+        let mut meta = fetch_meta(conn, series.id).await;
+
+        // Valid JSON parses into a Value.
+        meta.custom_metadata = Some(r#"{"shelf":"favorites","priority":3}"#.to_string());
+        let value = engagement_with_meta(Some(meta.clone()))
+            .custom_metadata_value()
+            .expect("parsed value");
+        assert_eq!(value["shelf"], "favorites");
+        assert_eq!(value["priority"], 3);
+
+        // Malformed JSON degrades to None (logged), never panics.
+        meta.custom_metadata = Some("{not valid".to_string());
+        assert!(
+            engagement_with_meta(Some(meta.clone()))
+                .custom_metadata_value()
+                .is_none()
+        );
+
+        // Absent custom metadata → None.
+        meta.custom_metadata = None;
+        assert!(
+            engagement_with_meta(Some(meta))
+                .custom_metadata_value()
+                .is_none()
+        );
     }
 }

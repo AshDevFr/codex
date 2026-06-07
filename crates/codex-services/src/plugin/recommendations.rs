@@ -273,6 +273,8 @@ mod tests {
                 completed_at: None,
                 library_id: String::new(),
                 library_name: String::new(),
+                metadata: None,
+                custom_metadata: None,
             }],
             limit: Some(10),
             exclude_ids: vec!["99999".to_string()],
@@ -531,6 +533,8 @@ mod tests {
                 completed_at: None,
                 library_id: String::new(),
                 library_name: String::new(),
+                metadata: None,
+                custom_metadata: None,
             }],
         };
         let json = serde_json::to_value(&req).unwrap();

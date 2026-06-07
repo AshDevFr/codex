@@ -111,6 +111,18 @@ pub struct SyncEntry {
     /// push; empty on pulled entries.
     #[serde(default)]
     pub library_name: String,
+    /// Bibliographic metadata, attached on push only when the plugin declares
+    /// `wantsFullMetadata` and the user enables the `sendMetadata` toggle. Lets
+    /// rule-based plugins act on summary/authors/age-rating/etc. Empty on pulled
+    /// entries.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<crate::plugin::protocol::SeriesMetadata>,
+    /// User-defined custom metadata (parsed `series_metadata.custom_metadata`),
+    /// attached on push only when the plugin declares `wantsFullMetadata` and the
+    /// user enables the separate `sendCustomMetadata` toggle. Empty on pulled
+    /// entries.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub custom_metadata: Option<serde_json::Value>,
 }
 
 /// Reading progress details
@@ -380,6 +392,8 @@ mod tests {
             title: None,
             library_id: String::new(),
             library_name: String::new(),
+            metadata: None,
+            custom_metadata: None,
         };
         let json = serde_json::to_value(&entry).unwrap();
         assert_eq!(json["externalId"], "12345");
@@ -498,6 +512,8 @@ mod tests {
                     title: None,
                     library_id: String::new(),
                     library_name: String::new(),
+                    metadata: None,
+                    custom_metadata: None,
                 },
                 SyncEntry {
                     external_id: "2".to_string(),
@@ -511,6 +527,8 @@ mod tests {
                     title: None,
                     library_id: String::new(),
                     library_name: String::new(),
+                    metadata: None,
+                    custom_metadata: None,
                 },
             ],
         };
@@ -639,6 +657,8 @@ mod tests {
                 title: None,
                 library_id: String::new(),
                 library_name: String::new(),
+                metadata: None,
+                custom_metadata: None,
             }],
             next_cursor: Some("page2".to_string()),
             has_more: true,
@@ -734,6 +754,8 @@ mod tests {
             title: Some("Berserk".to_string()),
             library_id: String::new(),
             library_name: String::new(),
+            metadata: None,
+            custom_metadata: None,
         };
         let json = serde_json::to_value(&entry).unwrap();
         assert_eq!(json["title"], "Berserk");
@@ -754,6 +776,8 @@ mod tests {
             title: None,
             library_id: String::new(),
             library_name: String::new(),
+            metadata: None,
+            custom_metadata: None,
         };
         let json = serde_json::to_value(&entry).unwrap();
         assert!(!json.as_object().unwrap().contains_key("title"));
@@ -795,6 +819,8 @@ mod tests {
             title: None,
             library_id: "11111111-1111-1111-1111-111111111111".to_string(),
             library_name: "Manga".to_string(),
+            metadata: None,
+            custom_metadata: None,
         };
         let json = serde_json::to_value(&entry).unwrap();
         assert_eq!(json["libraryId"], "11111111-1111-1111-1111-111111111111");
