@@ -42425,7 +42425,8 @@
         "required": [
           "readSync",
           "userRecommendationProvider",
-          "wantsFullMetadata"
+          "wantsFullMetadata",
+          "wantsDetailedProgress"
         ],
         "properties": {
           "readSync": {
@@ -42435,6 +42436,10 @@
           "userRecommendationProvider": {
             "type": "boolean",
             "description": "Can provide recommendations"
+          },
+          "wantsDetailedProgress": {
+            "type": "boolean",
+            "description": "Consumes the per-book reading-progress breakdown (`readBooks`); when set,\nthe host attaches per-book volume/chapter/page detail to sync entries."
           },
           "wantsFullMetadata": {
             "type": "boolean",

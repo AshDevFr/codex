@@ -19629,6 +19629,11 @@ export interface components {
             /** @description Can provide recommendations */
             userRecommendationProvider: boolean;
             /**
+             * @description Consumes the per-book reading-progress breakdown (`readBooks`); when set,
+             *     the host attaches per-book volume/chapter/page detail to sync entries.
+             */
+            wantsDetailedProgress: boolean;
+            /**
              * @description Consumes enriched series data; gates whether the `_codex.send*` metadata
              *     toggles are shown on the connection.
              */

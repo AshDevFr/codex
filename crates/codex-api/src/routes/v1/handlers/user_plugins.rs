@@ -123,6 +123,10 @@ async fn build_user_plugin_dto(
             .as_ref()
             .map(|m| m.capabilities.wants_full_metadata)
             .unwrap_or(false),
+        wants_detailed_progress: manifest
+            .as_ref()
+            .map(|m| m.capabilities.wants_detailed_progress)
+            .unwrap_or(false),
     };
 
     let user_config_schema = manifest
@@ -259,6 +263,10 @@ pub async fn list_user_plugins(
                     wants_full_metadata: manifest
                         .as_ref()
                         .map(|m| m.capabilities.wants_full_metadata)
+                        .unwrap_or(false),
+                    wants_detailed_progress: manifest
+                        .as_ref()
+                        .map(|m| m.capabilities.wants_detailed_progress)
                         .unwrap_or(false),
                 },
             }
