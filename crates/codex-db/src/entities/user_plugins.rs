@@ -50,7 +50,12 @@ pub const AUTO_SYNC_KEY: &str = "autoSync";
 pub const SEND_TAGS_KEY: &str = "sendTags";
 pub const SEND_GENRES_KEY: &str = "sendGenres";
 pub const SEND_METADATA_KEY: &str = "sendMetadata";
+/// User opt-in (on the connection) for sharing custom metadata. Default false.
 pub const SEND_CUSTOM_METADATA_KEY: &str = "sendCustomMetadata";
+/// Admin gate (on the plugin) for whether custom metadata may be sent at all.
+/// Default true; an admin sets false to forbid it regardless of the user opt-in.
+/// Effective custom = capability && allowCustomMetadata && sendCustomMetadata.
+pub const ALLOW_CUSTOM_METADATA_KEY: &str = "allowCustomMetadata";
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
 #[sea_orm(table_name = "user_plugins")]

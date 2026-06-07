@@ -62,8 +62,8 @@ function LibraryFilter({
 
 /** Admin metadata-enrichment policy — which series data the host sends to a
  *  `wantsFullMetadata` plugin. On by default; renders nothing for plugins that
- *  don't declare the capability. tags/genres only apply to sync plugins
- *  (recommendation entries always carry them). */
+ *  don't declare the capability. Applies to both sync and recommendation
+ *  plugins. */
 function MetadataPolicy({
   plugin,
   form,
@@ -72,7 +72,6 @@ function MetadataPolicy({
   form: PluginConfigForm;
 }) {
   if (plugin.manifest?.capabilities?.wantsFullMetadata !== true) return null;
-  const showTaxonomy = isSyncProvider(plugin);
   return (
     <>
       <Divider label="Metadata Enrichment" labelPosition="center" />
@@ -80,24 +79,25 @@ function MetadataPolicy({
         Which series data the host sends to this plugin. On by default; turn off
         to reduce payload — summaries are the heaviest.
       </Text>
-      {showTaxonomy && (
-        <>
-          <Switch
-            label="Send tags"
-            description="Series tags (small). Lets the plugin apply tag-based rules."
-            {...form.getInputProps("sendTags", { type: "checkbox" })}
-          />
-          <Switch
-            label="Send genres"
-            description="Series genres (small)."
-            {...form.getInputProps("sendGenres", { type: "checkbox" })}
-          />
-        </>
-      )}
+      <Switch
+        label="Send tags"
+        description="Series tags (small). Lets the plugin apply tag-based rules."
+        {...form.getInputProps("sendTags", { type: "checkbox" })}
+      />
+      <Switch
+        label="Send genres"
+        description="Series genres (small)."
+        {...form.getInputProps("sendGenres", { type: "checkbox" })}
+      />
       <Switch
         label="Send metadata"
         description="Summary, authors, publisher, age rating, language, and reading direction. The heaviest option."
         {...form.getInputProps("sendMetadata", { type: "checkbox" })}
+      />
+      <Switch
+        label="Allow custom metadata"
+        description="Permit this plugin to receive users' custom metadata. Each user still opts in per connection; turn this off to forbid it entirely (it can hold private fields)."
+        {...form.getInputProps("allowCustomMetadata", { type: "checkbox" })}
       />
     </>
   );

@@ -16,7 +16,8 @@
 #![allow(dead_code)]
 
 use super::user_plugins::{
-    CODEX_CONFIG_NAMESPACE, SEND_GENRES_KEY, SEND_METADATA_KEY, SEND_TAGS_KEY,
+    ALLOW_CUSTOM_METADATA_KEY, CODEX_CONFIG_NAMESPACE, SEND_GENRES_KEY, SEND_METADATA_KEY,
+    SEND_TAGS_KEY,
 };
 use chrono::{DateTime, Utc};
 use sea_orm::entity::prelude::*;
@@ -881,6 +882,14 @@ impl Model {
     /// plugin (admin policy).
     pub fn send_metadata_enabled(&self) -> bool {
         self.metadata_policy_flag(SEND_METADATA_KEY)
+    }
+
+    /// Whether the admin permits this plugin to receive user-defined custom
+    /// metadata at all (admin policy, default true). This is a gate on top of the
+    /// user's own opt-out: custom metadata is sent only when the admin allows it
+    /// AND the user opts in.
+    pub fn allow_custom_metadata_enabled(&self) -> bool {
+        self.metadata_policy_flag(ALLOW_CUSTOM_METADATA_KEY)
     }
 
     /// Get the cached manifest if available
