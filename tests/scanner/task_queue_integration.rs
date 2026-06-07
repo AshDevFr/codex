@@ -80,8 +80,8 @@ async fn test_normal_scan_queues_unanalyzed_books() {
         );
         assert_eq!(task.status, "pending");
         assert_eq!(
-            task.priority, 800,
-            "AnalyzeBook default priority should be 800"
+            task.priority, 500,
+            "AnalyzeBook default priority should be 500"
         );
     }
 }
@@ -422,8 +422,8 @@ async fn test_queued_tasks_have_zero_priority() {
     let tasks = get_all_tasks(&db).await;
     assert_eq!(tasks.len(), 1);
     assert_eq!(
-        tasks[0].priority, 1000,
-        "ScanLibrary tasks should have default priority 1000"
+        tasks[0].priority, 600,
+        "ScanLibrary tasks should have default priority 600"
     );
 }
 
