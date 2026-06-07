@@ -8,6 +8,7 @@ import {
   Stack,
   Switch,
   Text,
+  Textarea,
   TextInput,
 } from "@mantine/core";
 import { useForm } from "@mantine/form";
@@ -103,19 +104,10 @@ function UserPluginSettingsContent({
         : 0;
   }
 
-  // Metadata-enrichment opt-ins (stored in config._codex.send*), shown only when
-  // the plugin declares the wantsFullMetadata capability. All default false.
+  // Custom-metadata sharing is the one user-controlled enrichment opt-out
+  // (privacy; default false). Shown only when the plugin declares
+  // wantsFullMetadata. tags/genres/bibliographic metadata are admin policy.
   if (wantsFullMetadata) {
-    initialValues._codex_sendTags =
-      typeof codexConfig.sendTags === "boolean" ? codexConfig.sendTags : false;
-    initialValues._codex_sendGenres =
-      typeof codexConfig.sendGenres === "boolean"
-        ? codexConfig.sendGenres
-        : false;
-    initialValues._codex_sendMetadata =
-      typeof codexConfig.sendMetadata === "boolean"
-        ? codexConfig.sendMetadata
-        : false;
     initialValues._codex_sendCustomMetadata =
       typeof codexConfig.sendCustomMetadata === "boolean"
         ? codexConfig.sendCustomMetadata
@@ -160,18 +152,9 @@ function UserPluginSettingsContent({
       }
 
       if (wantsFullMetadata) {
-        // tags/genres only meaningfully apply to sync (recommendation entries
-        // always carry them); metadata/custom apply to both.
-        Object.assign(codex, {
-          sendMetadata: !!form.values._codex_sendMetadata,
-          sendCustomMetadata: !!form.values._codex_sendCustomMetadata,
-        });
-        if (isSyncPlugin) {
-          Object.assign(codex, {
-            sendTags: !!form.values._codex_sendTags,
-            sendGenres: !!form.values._codex_sendGenres,
-          });
-        }
+        // Only the custom-metadata privacy opt-out is user-controlled; the rest
+        // (tags/genres/metadata) is admin policy on the plugin.
+        codex.sendCustomMetadata = !!form.values._codex_sendCustomMetadata;
       }
 
       if (isSyncPlugin || isRecPlugin || wantsFullMetadata) {
@@ -320,45 +303,10 @@ function UserPluginSettingsContent({
 
       {wantsFullMetadata && (
         <>
-          <Divider label="Metadata Enrichment" labelPosition="left" mt="xs" />
-          <Text size="xs" c="dimmed">
-            Send extra series data to this plugin. Everything here is off by
-            default; enable only what the plugin needs.
-          </Text>
-          {isSyncPlugin && (
-            <>
-              <Switch
-                label="Send tags"
-                description="Include each series' tags so the plugin can apply tag-based rules. Small payload."
-                checked={!!form.values._codex_sendTags}
-                onChange={(e) =>
-                  form.setFieldValue("_codex_sendTags", e.currentTarget.checked)
-                }
-              />
-              <Switch
-                label="Send genres"
-                description="Include each series' genres. Small payload."
-                checked={!!form.values._codex_sendGenres}
-                onChange={(e) =>
-                  form.setFieldValue(
-                    "_codex_sendGenres",
-                    e.currentTarget.checked,
-                  )
-                }
-              />
-            </>
-          )}
+          <Divider label="Metadata Sharing" labelPosition="left" mt="xs" />
           <Switch
-            label="Send metadata"
-            description="Include summary, authors, publisher, age rating, language, and reading direction. This is the heaviest option (summaries can be large)."
-            checked={!!form.values._codex_sendMetadata}
-            onChange={(e) =>
-              form.setFieldValue("_codex_sendMetadata", e.currentTarget.checked)
-            }
-          />
-          <Switch
-            label="Send custom metadata"
-            description="Include your user-defined custom metadata fields. These can hold private notes — only enable for plugins you trust."
+            label="Share custom metadata"
+            description="Include your user-defined custom metadata fields when this plugin runs. These can hold private notes, so it's off by default — only enable it for plugins you trust. (Tags, genres, and bibliographic metadata are controlled by your administrator.)"
             checked={!!form.values._codex_sendCustomMetadata}
             onChange={(e) =>
               form.setFieldValue(
@@ -396,6 +344,21 @@ function UserPluginSettingsContent({
                 key={field.key}
                 label={field.label}
                 description={field.description}
+                {...props}
+              />
+            );
+          case "json":
+          case "textarea":
+            return (
+              <Textarea
+                key={field.key}
+                label={field.label}
+                description={field.description}
+                autosize
+                minRows={4}
+                styles={{
+                  input: { fontFamily: "var(--mantine-font-family-monospace)" },
+                }}
                 {...props}
               />
             );

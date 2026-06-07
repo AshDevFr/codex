@@ -98,6 +98,17 @@ export interface PluginCapabilities {
   /** Can provide recommendations */
   userRecommendationProvider?: boolean;
   /**
+   * Request enriched series data on the entries the host sends this plugin.
+   *
+   * When `true`, the host attaches series tags/genres, a bibliographic metadata
+   * block (summary, authors, publisher, age rating, language, reading
+   * direction), and/or user-defined custom metadata, per the user's opt-in
+   * `_codex.send*` settings. The host only assembles this for plugins that
+   * declare it, so plugins that don't are unaffected. Applies to sync and
+   * recommendation plugins.
+   */
+  wantsFullMetadata?: boolean;
+  /**
    * Release-source plugin capability. Set when this plugin announces new
    * chapter/volume releases for tracked series via `releases/poll`.
    */

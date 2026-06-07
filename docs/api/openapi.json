@@ -15543,11 +15543,18 @@
         ],
         "responses": {
           "200": {
-            "description": "Latest task found",
+            "description": "Latest task, or null if the plugin has no task yet",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/UserPluginTaskDto"
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UserPluginTaskDto"
+                    }
+                  ]
                 }
               }
             }
@@ -15556,7 +15563,7 @@
             "description": "Not authenticated"
           },
           "404": {
-            "description": "No tasks found for this plugin"
+            "description": "Plugin not enabled for this user"
           }
         },
         "security": [
@@ -33954,6 +33961,14 @@
           "userRecommendationProvider": {
             "type": "boolean",
             "description": "Can provide personalized recommendations"
+          },
+          "wantsDetailedProgress": {
+            "type": "boolean",
+            "description": "Whether the plugin consumes the per-book reading-progress breakdown on the\nsync entries it receives. Only meaningful when `user_read_sync` is true."
+          },
+          "wantsFullMetadata": {
+            "type": "boolean",
+            "description": "Whether the plugin consumes enriched series data (bibliographic metadata,\ncustom metadata) on the sync/recommendation entries it receives."
           }
         }
       },
@@ -38818,7 +38833,7 @@
       },
       "SetMetadataSettingsRequest": {
         "type": "object",
-        "description": "Request to set a connection's metadata-enrichment opt-ins.\n\nEach field is optional; only the provided ones are updated (partial update),\nand other `_codex` settings are preserved. Only meaningful for plugins that\ndeclare the `wantsFullMetadata` capability.",
+        "description": "Request to set a connection's metadata-enrichment opt-ins (user-controlled).\n\nOnly `sendCustomMetadata` is a per-user choice (a privacy opt-out for the\nuser's custom fields). Whether tags/genres/the bibliographic block are sent is\nadmin policy on the plugin, not set here. Other `_codex` settings are\npreserved (partial update). Only meaningful for `wantsFullMetadata` plugins.",
         "properties": {
           "sendCustomMetadata": {
             "type": [
@@ -38826,27 +38841,6 @@
               "null"
             ],
             "description": "Send user-defined custom metadata to the plugin."
-          },
-          "sendGenres": {
-            "type": [
-              "boolean",
-              "null"
-            ],
-            "description": "Send series genres (top-level) to the plugin."
-          },
-          "sendMetadata": {
-            "type": [
-              "boolean",
-              "null"
-            ],
-            "description": "Send the bibliographic metadata block to the plugin."
-          },
-          "sendTags": {
-            "type": [
-              "boolean",
-              "null"
-            ],
-            "description": "Send series tags (top-level) to the plugin."
           }
         }
       },
@@ -42464,9 +42458,6 @@
           "oauthConfigured",
           "config",
           "autoSync",
-          "sendTags",
-          "sendGenres",
-          "sendMetadata",
           "sendCustomMetadata",
           "capabilities",
           "createdAt"
@@ -42575,17 +42566,8 @@
             "description": "Whether this plugin requires OAuth authentication"
           },
           "sendCustomMetadata": {
-            "type": "boolean"
-          },
-          "sendGenres": {
-            "type": "boolean"
-          },
-          "sendMetadata": {
-            "type": "boolean"
-          },
-          "sendTags": {
             "type": "boolean",
-            "description": "Per-field metadata-enrichment opt-ins (host-side, from `config._codex.send*`).\nOnly meaningful when the plugin declares `wantsFullMetadata`; all default false."
+            "description": "User privacy opt-out for sending user-defined custom metadata (host-side,\nfrom `config._codex.sendCustomMetadata`). Default false. tags/genres/the\nbibliographic block are admin policy on the plugin, not user-controlled."
           },
           "userConfigSchema": {
             "oneOf": [

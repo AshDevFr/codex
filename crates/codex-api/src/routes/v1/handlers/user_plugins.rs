@@ -170,9 +170,6 @@ async fn build_user_plugin_dto(
         user_setup_instructions: manifest.and_then(|m| m.user_setup_instructions),
         config: instance.config.clone(),
         auto_sync: instance.auto_sync_enabled(),
-        send_tags: instance.send_tags_enabled(),
-        send_genres: instance.send_genres_enabled(),
-        send_metadata: instance.send_metadata_enabled(),
         send_custom_metadata: instance.send_custom_metadata_enabled(),
         capabilities,
         user_config_schema,
@@ -867,10 +864,7 @@ pub async fn set_metadata_settings(
     Path(plugin_id): Path<Uuid>,
     Json(request): Json<SetMetadataSettingsRequest>,
 ) -> Result<Json<UserPluginDto>, ApiError> {
-    use codex_db::entities::user_plugins::{
-        CODEX_CONFIG_NAMESPACE, SEND_CUSTOM_METADATA_KEY, SEND_GENRES_KEY, SEND_METADATA_KEY,
-        SEND_TAGS_KEY,
-    };
+    use codex_db::entities::user_plugins::{CODEX_CONFIG_NAMESPACE, SEND_CUSTOM_METADATA_KEY};
 
     let instance =
         UserPluginsRepository::get_by_user_and_plugin(&state.db, auth.user_id, plugin_id)
@@ -906,15 +900,11 @@ pub async fn set_metadata_settings(
         *codex_ns = serde_json::Value::Object(serde_json::Map::new());
     }
     let codex_obj = codex_ns.as_object_mut().expect("ensured object above");
-    for (key, value) in [
-        (SEND_TAGS_KEY, request.send_tags),
-        (SEND_GENRES_KEY, request.send_genres),
-        (SEND_METADATA_KEY, request.send_metadata),
-        (SEND_CUSTOM_METADATA_KEY, request.send_custom_metadata),
-    ] {
-        if let Some(v) = value {
-            codex_obj.insert(key.to_string(), serde_json::Value::Bool(v));
-        }
+    if let Some(v) = request.send_custom_metadata {
+        codex_obj.insert(
+            SEND_CUSTOM_METADATA_KEY.to_string(),
+            serde_json::Value::Bool(v),
+        );
     }
 
     let updated = UserPluginsRepository::update_config(
@@ -1254,9 +1244,9 @@ pub async fn set_user_credentials(
         UserPluginTasksQuery,
     ),
     responses(
-        (status = 200, description = "Latest task found", body = UserPluginTaskDto),
+        (status = 200, description = "Latest task, or null if the plugin has no task yet", body = Option<UserPluginTaskDto>),
         (status = 401, description = "Not authenticated"),
-        (status = 404, description = "No tasks found for this plugin"),
+        (status = 404, description = "Plugin not enabled for this user"),
     ),
     security(
         ("jwt_bearer" = []),
@@ -1269,13 +1259,16 @@ pub async fn get_plugin_tasks(
     auth: AuthContext,
     Path(plugin_id): Path<Uuid>,
     Query(query): Query<UserPluginTasksQuery>,
-) -> Result<Json<UserPluginTaskDto>, ApiError> {
+) -> Result<Json<Option<UserPluginTaskDto>>, ApiError> {
     // Verify user has this plugin enabled
     UserPluginsRepository::get_by_user_and_plugin(&state.db, auth.user_id, plugin_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Plugin not enabled for this user".to_string()))?;
 
+    // "No task yet" is a normal state (e.g. a plugin that has never synced), not
+    // an error — return 200 with a null body so callers don't have to treat a
+    // missing task as a 404.
     let task = TaskRepository::find_latest_user_plugin_task(
         &state.db,
         plugin_id,
@@ -1283,8 +1276,7 @@ pub async fn get_plugin_tasks(
         query.task_type.as_deref(),
     )
     .await
-    .map_err(|e| ApiError::Internal(format!("Failed to query tasks: {}", e)))?
-    .ok_or_else(|| ApiError::NotFound("No tasks found for this plugin".to_string()))?;
+    .map_err(|e| ApiError::Internal(format!("Failed to query tasks: {}", e)))?;
 
-    Ok(Json(UserPluginTaskDto::from(task)))
+    Ok(Json(task.map(UserPluginTaskDto::from)))
 }

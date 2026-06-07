@@ -15,6 +15,9 @@
 
 #![allow(dead_code)]
 
+use super::user_plugins::{
+    CODEX_CONFIG_NAMESPACE, SEND_GENRES_KEY, SEND_METADATA_KEY, SEND_TAGS_KEY,
+};
 use chrono::{DateTime, Utc};
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -846,6 +849,38 @@ impl Model {
                 self.health_status_type(),
                 PluginHealthStatus::Healthy | PluginHealthStatus::Unknown
             )
+    }
+
+    /// Admin metadata-enrichment policy: read a host-only `config._codex.<key>`
+    /// boolean, defaulting to **true**. These control whether the host attaches
+    /// series tags/genres/bibliographic-metadata to the entries it sends a plugin
+    /// that declares `wantsFullMetadata`. Default-on so a capable plugin works out
+    /// of the box; the admin sets `false` to withhold a field (e.g. heavy
+    /// summaries). The `_codex` namespace is host-only — the plugin ignores it.
+    /// (Custom metadata is the user's call instead; see
+    /// [`super::user_plugins::Model::send_custom_metadata_enabled`].)
+    fn metadata_policy_flag(&self, key: &str) -> bool {
+        self.config
+            .get(CODEX_CONFIG_NAMESPACE)
+            .and_then(|codex| codex.get(key))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true)
+    }
+
+    /// Whether the host should send series `tags` to this plugin (admin policy).
+    pub fn send_tags_enabled(&self) -> bool {
+        self.metadata_policy_flag(SEND_TAGS_KEY)
+    }
+
+    /// Whether the host should send series `genres` to this plugin (admin policy).
+    pub fn send_genres_enabled(&self) -> bool {
+        self.metadata_policy_flag(SEND_GENRES_KEY)
+    }
+
+    /// Whether the host should send the bibliographic metadata block to this
+    /// plugin (admin policy).
+    pub fn send_metadata_enabled(&self) -> bool {
+        self.metadata_policy_flag(SEND_METADATA_KEY)
     }
 
     /// Get the cached manifest if available

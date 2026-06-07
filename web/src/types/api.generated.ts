@@ -14988,6 +14988,16 @@ export interface components {
             userReadSync?: boolean;
             /** @description Can provide personalized recommendations */
             userRecommendationProvider?: boolean;
+            /**
+             * @description Whether the plugin consumes the per-book reading-progress breakdown on the
+             *     sync entries it receives. Only meaningful when `user_read_sync` is true.
+             */
+            wantsDetailedProgress?: boolean;
+            /**
+             * @description Whether the plugin consumes enriched series data (bibliographic metadata,
+             *     custom metadata) on the sync/recommendation entries it receives.
+             */
+            wantsFullMetadata?: boolean;
         };
         /** @description Result of a plugin storage cleanup operation */
         PluginCleanupResultDto: {
@@ -17802,21 +17812,16 @@ export interface components {
             updatedAt: string;
         };
         /**
-         * @description Request to set a connection's metadata-enrichment opt-ins.
+         * @description Request to set a connection's metadata-enrichment opt-ins (user-controlled).
          *
-         *     Each field is optional; only the provided ones are updated (partial update),
-         *     and other `_codex` settings are preserved. Only meaningful for plugins that
-         *     declare the `wantsFullMetadata` capability.
+         *     Only `sendCustomMetadata` is a per-user choice (a privacy opt-out for the
+         *     user's custom fields). Whether tags/genres/the bibliographic block are sent is
+         *     admin policy on the plugin, not set here. Other `_codex` settings are
+         *     preserved (partial update). Only meaningful for `wantsFullMetadata` plugins.
          */
         SetMetadataSettingsRequest: {
             /** @description Send user-defined custom metadata to the plugin. */
             sendCustomMetadata?: boolean | null;
-            /** @description Send series genres (top-level) to the plugin. */
-            sendGenres?: boolean | null;
-            /** @description Send the bibliographic metadata block to the plugin. */
-            sendMetadata?: boolean | null;
-            /** @description Send series tags (top-level) to the plugin. */
-            sendTags?: boolean | null;
         };
         /** @description Request to set a single preference value */
         SetPreferenceRequest: {
@@ -19710,14 +19715,12 @@ export interface components {
             requiresAuth: boolean;
             /** @description Whether this plugin requires OAuth authentication */
             requiresOauth: boolean;
-            sendCustomMetadata: boolean;
-            sendGenres: boolean;
-            sendMetadata: boolean;
             /**
-             * @description Per-field metadata-enrichment opt-ins (host-side, from `config._codex.send*`).
-             *     Only meaningful when the plugin declares `wantsFullMetadata`; all default false.
+             * @description User privacy opt-out for sending user-defined custom metadata (host-side,
+             *     from `config._codex.sendCustomMetadata`). Default false. tags/genres/the
+             *     bibliographic block are admin policy on the plugin, not user-controlled.
              */
-            sendTags: boolean;
+            sendCustomMetadata: boolean;
             userConfigSchema?: null | components["schemas"]["ConfigSchemaDto"];
             /** @description User-facing setup instructions for the plugin */
             userSetupInstructions?: string | null;
@@ -31687,13 +31690,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Latest task found */
+            /** @description Latest task, or null if the plugin has no task yet */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["UserPluginTaskDto"];
+                    "application/json": null | components["schemas"]["UserPluginTaskDto"];
                 };
             };
             /** @description Not authenticated */
@@ -31703,7 +31706,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description No tasks found for this plugin */
+            /** @description Plugin not enabled for this user */
             404: {
                 headers: {
                     [name: string]: unknown;

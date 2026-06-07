@@ -198,6 +198,19 @@ export function PluginDetails({
   plugin: PluginDto;
   libraries: { id: string; name: string }[];
 }) {
+  // Permissions and scopes are metadata-provider concepts only: scopes control
+  // where a matching plugin is invoked, permissions control which fields it may
+  // write. Pure sync / recommendation / release-source plugins never populate
+  // either, so hide the noise unless the plugin is a metadata provider (or has
+  // values configured anyway, as a safety net).
+  const isMetadataProvider =
+    !!plugin.manifest?.capabilities?.metadataProvider &&
+    plugin.manifest.capabilities.metadataProvider.length > 0;
+  const showPermissionsAndScopes =
+    isMetadataProvider ||
+    plugin.permissions.length > 0 ||
+    plugin.scopes.length > 0;
+
   return (
     <Grid gutter="xl">
       {/* Left column: plugin configuration */}
@@ -271,42 +284,51 @@ export function PluginDetails({
           )}
 
           <Group gap="xl">
-            <div>
-              <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-                Permissions
-              </Text>
-              <Group gap="xs" mt={4}>
-                {plugin.permissions.length > 0 ? (
-                  plugin.permissions.map((perm) => (
-                    <Badge key={perm} variant="outline" size="sm">
-                      {perm}
-                    </Badge>
-                  ))
-                ) : (
-                  <Text size="sm" c="dimmed">
-                    None
+            {showPermissionsAndScopes && (
+              <>
+                <div>
+                  <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+                    Permissions
                   </Text>
-                )}
-              </Group>
-            </div>
-            <div>
-              <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-                Scopes
-              </Text>
-              <Group gap="xs" mt={4}>
-                {plugin.scopes.length > 0 ? (
-                  plugin.scopes.map((scope) => (
-                    <Badge key={scope} variant="outline" size="sm" color="blue">
-                      {scope}
-                    </Badge>
-                  ))
-                ) : (
-                  <Text size="sm" c="dimmed">
-                    None
+                  <Group gap="xs" mt={4}>
+                    {plugin.permissions.length > 0 ? (
+                      plugin.permissions.map((perm) => (
+                        <Badge key={perm} variant="outline" size="sm">
+                          {perm}
+                        </Badge>
+                      ))
+                    ) : (
+                      <Text size="sm" c="dimmed">
+                        None
+                      </Text>
+                    )}
+                  </Group>
+                </div>
+                <div>
+                  <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+                    Scopes
                   </Text>
-                )}
-              </Group>
-            </div>
+                  <Group gap="xs" mt={4}>
+                    {plugin.scopes.length > 0 ? (
+                      plugin.scopes.map((scope) => (
+                        <Badge
+                          key={scope}
+                          variant="outline"
+                          size="sm"
+                          color="blue"
+                        >
+                          {scope}
+                        </Badge>
+                      ))
+                    ) : (
+                      <Text size="sm" c="dimmed">
+                        None
+                      </Text>
+                    )}
+                  </Group>
+                </div>
+              </>
+            )}
             <div>
               <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
                 Libraries
@@ -398,6 +420,17 @@ export function PluginDetails({
                   Recommendation Provider
                 </Badge>
               )}
+              {plugin.manifest.capabilities.wantsFullMetadata && (
+                <Badge color="grape" variant="outline">
+                  Full Metadata
+                </Badge>
+              )}
+              {plugin.manifest.capabilities.userReadSync &&
+                plugin.manifest.capabilities.wantsDetailedProgress && (
+                  <Badge color="indigo" variant="outline">
+                    Detailed Progress
+                  </Badge>
+                )}
             </Group>
 
             <MetadataManifestDetails plugin={plugin} />

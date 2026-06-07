@@ -423,6 +423,14 @@ pub struct PluginCapabilitiesDto {
     /// new chapter / volume releases for tracked series).
     #[serde(default)]
     pub release_source: bool,
+    /// Whether the plugin consumes enriched series data (bibliographic metadata,
+    /// custom metadata) on the sync/recommendation entries it receives.
+    #[serde(default)]
+    pub wants_full_metadata: bool,
+    /// Whether the plugin consumes the per-book reading-progress breakdown on the
+    /// sync entries it receives. Only meaningful when `user_read_sync` is true.
+    #[serde(default)]
+    pub wants_detailed_progress: bool,
 }
 
 impl From<PluginCapabilities> for PluginCapabilitiesDto {
@@ -438,6 +446,8 @@ impl From<PluginCapabilities> for PluginCapabilitiesDto {
             external_id_source: c.external_id_source,
             user_recommendation_provider: c.user_recommendation_provider,
             release_source,
+            wants_full_metadata: c.wants_full_metadata,
+            wants_detailed_progress: c.wants_detailed_progress,
         }
     }
 }

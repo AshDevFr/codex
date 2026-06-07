@@ -81,11 +81,9 @@ pub struct UserPluginDto {
     /// (host-side preference, derived from `config._codex.autoSync`). When
     /// false (the default), syncs run only when manually triggered.
     pub auto_sync: bool,
-    /// Per-field metadata-enrichment opt-ins (host-side, from `config._codex.send*`).
-    /// Only meaningful when the plugin declares `wantsFullMetadata`; all default false.
-    pub send_tags: bool,
-    pub send_genres: bool,
-    pub send_metadata: bool,
+    /// User privacy opt-out for sending user-defined custom metadata (host-side,
+    /// from `config._codex.sendCustomMetadata`). Default false. tags/genres/the
+    /// bibliographic block are admin policy on the plugin, not user-controlled.
     pub send_custom_metadata: bool,
     /// Plugin capabilities (derived from manifest)
     pub capabilities: UserPluginCapabilitiesDto,
@@ -156,23 +154,15 @@ pub struct SetSyncModeRequest {
     pub auto: bool,
 }
 
-/// Request to set a connection's metadata-enrichment opt-ins.
+/// Request to set a connection's metadata-enrichment opt-ins (user-controlled).
 ///
-/// Each field is optional; only the provided ones are updated (partial update),
-/// and other `_codex` settings are preserved. Only meaningful for plugins that
-/// declare the `wantsFullMetadata` capability.
+/// Only `sendCustomMetadata` is a per-user choice (a privacy opt-out for the
+/// user's custom fields). Whether tags/genres/the bibliographic block are sent is
+/// admin policy on the plugin, not set here. Other `_codex` settings are
+/// preserved (partial update). Only meaningful for `wantsFullMetadata` plugins.
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SetMetadataSettingsRequest {
-    /// Send series tags (top-level) to the plugin.
-    #[serde(default)]
-    pub send_tags: Option<bool>,
-    /// Send series genres (top-level) to the plugin.
-    #[serde(default)]
-    pub send_genres: Option<bool>,
-    /// Send the bibliographic metadata block to the plugin.
-    #[serde(default)]
-    pub send_metadata: Option<bool>,
     /// Send user-defined custom metadata to the plugin.
     #[serde(default)]
     pub send_custom_metadata: Option<bool>,
@@ -433,9 +423,6 @@ mod tests {
             user_setup_instructions: None,
             config: serde_json::json!({}),
             auto_sync: false,
-            send_tags: false,
-            send_genres: false,
-            send_metadata: false,
             send_custom_metadata: false,
             capabilities: UserPluginCapabilitiesDto {
                 read_sync: true,
@@ -490,9 +477,6 @@ mod tests {
             user_setup_instructions: None,
             config: serde_json::json!({}),
             auto_sync: false,
-            send_tags: false,
-            send_genres: false,
-            send_metadata: false,
             send_custom_metadata: false,
             capabilities: UserPluginCapabilitiesDto {
                 read_sync: true,
@@ -541,9 +525,6 @@ mod tests {
             user_setup_instructions: None,
             config: serde_json::json!({}),
             auto_sync: false,
-            send_tags: false,
-            send_genres: false,
-            send_metadata: false,
             send_custom_metadata: false,
             capabilities: UserPluginCapabilitiesDto {
                 read_sync: true,

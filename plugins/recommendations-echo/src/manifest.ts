@@ -17,6 +17,9 @@ export const manifest = {
   protocolVersion: "1.1",
   capabilities: {
     userRecommendationProvider: true,
+    // Opt in to enriched series data (metadata/custom metadata) so the
+    // enrichment toggles appear and the payloads can be inspected.
+    wantsFullMetadata: true,
   },
   configSchema: {
     description: "Configuration options for the Echo recommendations test plugin",
@@ -39,6 +42,20 @@ export const manifest = {
         required: false,
         default: DEFAULT_MAX_PAYLOAD_FILES,
         example: 500,
+      },
+    ],
+  },
+  userConfigSchema: {
+    description:
+      "Per-user settings for the Echo recommendations plugin. These are sent to the plugin as user config on each run.",
+    fields: [
+      {
+        key: "recommendationRules",
+        label: "Recommendation Rules (JSON)",
+        description:
+          'Optional per-user JSON rules the plugin applies (e.g. {"excludeGenres":["Ecchi"]}). Echoed back in the recorded payloads so you can confirm it reaches the plugin.',
+        type: "json" as const,
+        required: false,
       },
     ],
   },

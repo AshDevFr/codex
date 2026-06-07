@@ -9,8 +9,7 @@
 /// server behavior. Defined once in `codex-db` so the entity accessor
 /// (`user_plugins::Model::auto_sync_enabled`) and this parser stay in sync.
 pub(crate) use codex_db::entities::user_plugins::{
-    CODEX_CONFIG_NAMESPACE, SEND_CUSTOM_METADATA_KEY, SEND_GENRES_KEY, SEND_METADATA_KEY,
-    SEND_TAGS_KEY,
+    CODEX_CONFIG_NAMESPACE, SEND_CUSTOM_METADATA_KEY,
 };
 
 /// Codex generic sync settings — server-interpreted preferences that control
@@ -33,13 +32,9 @@ pub(crate) struct CodexSyncSettings {
     /// When enabled, entries with `external_id: ""` and `title` populated are
     /// sent so the plugin can search the external service by title. Default: false.
     pub search_fallback: bool,
-    /// Attach series `tags` to push entries (top-level). Default: false.
-    pub send_tags: bool,
-    /// Attach series `genres` to push entries (top-level). Default: false.
-    pub send_genres: bool,
-    /// Attach the bibliographic `metadata` block to push entries. Default: false.
-    pub send_metadata: bool,
-    /// Attach user-defined `custom_metadata` to push entries. Default: false.
+    /// User privacy opt-out for sending user-defined `custom_metadata`. Default:
+    /// false. The other enrichment fields (tags/genres/metadata) are admin
+    /// policy on the plugin, not user-controlled.
     pub send_custom_metadata: bool,
 }
 
@@ -82,18 +77,6 @@ impl CodexSyncSettings {
                 .unwrap_or(true),
             search_fallback: codex
                 .get("searchFallback")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false),
-            send_tags: codex
-                .get(SEND_TAGS_KEY)
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false),
-            send_genres: codex
-                .get(SEND_GENRES_KEY)
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false),
-            send_metadata: codex
-                .get(SEND_METADATA_KEY)
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false),
             send_custom_metadata: codex

@@ -232,22 +232,13 @@ impl Model {
             .unwrap_or(false)
     }
 
-    /// Whether the user opted into sending series `tags` to this plugin.
-    pub fn send_tags_enabled(&self) -> bool {
-        self.codex_flag(SEND_TAGS_KEY)
-    }
-
-    /// Whether the user opted into sending series `genres` to this plugin.
-    pub fn send_genres_enabled(&self) -> bool {
-        self.codex_flag(SEND_GENRES_KEY)
-    }
-
-    /// Whether the user opted into sending the bibliographic metadata block.
-    pub fn send_metadata_enabled(&self) -> bool {
-        self.codex_flag(SEND_METADATA_KEY)
-    }
-
     /// Whether the user opted into sending user-defined custom metadata.
+    ///
+    /// This is the one enrichment field under per-user control (a privacy
+    /// opt-out, default false): custom metadata can hold private annotations, so
+    /// even when the plugin/admin wants it, the user may withhold it. Tags,
+    /// genres, and the bibliographic block are admin-controlled instead (see
+    /// [`super::plugins::Model::send_tags_enabled`] etc.).
     pub fn send_custom_metadata_enabled(&self) -> bool {
         self.codex_flag(SEND_CUSTOM_METADATA_KEY)
     }
@@ -451,24 +442,15 @@ mod tests {
     }
 
     #[test]
-    fn test_metadata_flags_default_false() {
-        let model = test_model();
-        assert!(!model.send_tags_enabled());
-        assert!(!model.send_genres_enabled());
-        assert!(!model.send_metadata_enabled());
-        assert!(!model.send_custom_metadata_enabled());
+    fn test_send_custom_metadata_default_false() {
+        // Privacy opt-out: off unless the user explicitly enables it.
+        assert!(!test_model().send_custom_metadata_enabled());
     }
 
     #[test]
-    fn test_metadata_flags_independent() {
+    fn test_send_custom_metadata_enabled() {
         let mut model = test_model();
-        model.config = serde_json::json!({
-            "_codex": { "sendTags": true, "sendCustomMetadata": true }
-        });
-        // Each flag is read independently; only the enabled ones are true.
-        assert!(model.send_tags_enabled());
+        model.config = serde_json::json!({ "_codex": { "sendCustomMetadata": true } });
         assert!(model.send_custom_metadata_enabled());
-        assert!(!model.send_genres_enabled());
-        assert!(!model.send_metadata_enabled());
     }
 }
