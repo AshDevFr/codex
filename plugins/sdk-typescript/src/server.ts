@@ -158,6 +158,17 @@ export interface InitializeParams {
   /** Plugin credentials (API keys, tokens, etc.) */
   credentials?: Record<string, string>;
   /**
+   * Scoped, writable data directory for this plugin's file storage.
+   *
+   * The host creates it at `{plugins_dir}/{plugin_name}/` and passes the
+   * absolute path here. Unlike {@link storage} (a small DB-backed key-value
+   * store with per-connection quotas), this is a real filesystem directory
+   * with no quotas — use it for larger file-based storage (SQLite databases,
+   * caches, debug dumps). Absent if the host has no plugin file storage
+   * configured.
+   */
+  dataDir?: string;
+  /**
    * Per-user key-value storage client.
    *
    * Use this to persist data across plugin restarts (e.g., dismissed IDs,

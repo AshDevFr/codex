@@ -77,6 +77,16 @@ export interface PluginCapabilities {
   /** Can sync reading progress with external service (per-user) */
   userReadSync?: boolean;
   /**
+   * Request the per-book detailed progress payload on sync push.
+   *
+   * When `true`, the host populates `SyncProgress.maxVolume` / `maxChapter`
+   * and the per-book `SyncProgress.readBooks` breakdown on pushed entries.
+   * The host only assembles this heavier payload for plugins that opt in, so
+   * plugins that don't declare it are unaffected. Only meaningful when
+   * `userReadSync` is true.
+   */
+  wantsDetailedProgress?: boolean;
+  /**
    * External ID source used to match sync entries to Codex series.
    * When set, pulled sync entries are matched to series via the
    * `series_external_ids` table using this source string.

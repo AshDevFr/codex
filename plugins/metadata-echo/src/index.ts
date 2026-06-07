@@ -24,7 +24,8 @@ import {
   type PluginBookMetadata,
   type PluginSeriesMetadata,
 } from "@ashdev/codex-plugin-sdk";
-import { DEFAULT_MAX_RESULTS, manifest } from "./manifest.js";
+import { DEFAULT_MAX_PAYLOAD_FILES, DEFAULT_MAX_RESULTS, manifest } from "./manifest.js";
+import { PayloadRecorder, redactConfig } from "./recorder.js";
 
 const logger = createLogger({ name: "echo", level: "debug" });
 
@@ -32,6 +33,15 @@ const logger = createLogger({ name: "echo", level: "debug" });
 const config = {
   maxResults: DEFAULT_MAX_RESULTS,
 };
+
+// Payload recorder (set during initialization)
+let recorder: PayloadRecorder | null = null;
+
+/** Record a request/response pair (best-effort) and return the response. */
+async function rec<T>(method: string, params: unknown, response: T): Promise<T> {
+  await recorder?.record(method, params, response);
+  return response;
+}
 
 // Encode the original query into the externalId so that get() can recover it
 // later. The protocol only passes externalId to get(), so this is how the
@@ -81,9 +91,9 @@ function generateEchoResults(query: string, maxResults: number) {
 const provider: MetadataProvider = {
   async search(params: MetadataSearchParams): Promise<MetadataSearchResponse> {
     // Echo back the query as search results, respecting maxResults config
-    return {
+    return rec<MetadataSearchResponse>("metadata/series/search", params, {
       results: generateEchoResults(params.query, config.maxResults),
-    };
+    });
   },
 
   async get(params: MetadataGetParams): Promise<PluginSeriesMetadata> {
@@ -93,7 +103,7 @@ const provider: MetadataProvider = {
     const title = query ?? `Echo Series: ${baseId}`;
 
     // Return metadata based on the external ID with all fields populated for testing
-    return {
+    return rec<PluginSeriesMetadata>("metadata/series/get", params, {
       externalId: params.externalId,
       externalUrl: `https://echo.example.com/series/${baseId}`,
       title,
@@ -177,13 +187,13 @@ const provider: MetadataProvider = {
           linkType: "purchase",
         },
       ],
-    };
+    });
   },
 
   async match(params: MetadataMatchParams): Promise<MetadataMatchResponse> {
     // Return a match based on the title
     const normalizedTitle = params.title.toLowerCase().replace(/\s+/g, "-");
-    return {
+    return rec<MetadataMatchResponse>("metadata/series/match", params, {
       match: {
         externalId: `match-${normalizedTitle}`,
         title: params.title,
@@ -205,7 +215,7 @@ const provider: MetadataProvider = {
           relevanceScore: 0.6,
         },
       ],
-    };
+    });
   },
 };
 
@@ -245,9 +255,9 @@ function generateBookEchoResults(params: BookSearchParams, maxResults: number) {
 const bookProvider: BookMetadataProvider = {
   async search(params: BookSearchParams): Promise<MetadataSearchResponse> {
     // Echo back the ISBN or query as search results
-    return {
+    return rec<MetadataSearchResponse>("metadata/book/search", params, {
       results: generateBookEchoResults(params, config.maxResults),
-    };
+    });
   },
 
   async get(params: MetadataGetParams): Promise<PluginBookMetadata> {
@@ -257,7 +267,7 @@ const bookProvider: BookMetadataProvider = {
     const title = query ?? `Echo Book: ${baseId}`;
 
     // Return book metadata based on the external ID with all fields populated for testing
-    return {
+    return rec<PluginBookMetadata>("metadata/book/get", params, {
       externalId: params.externalId,
       externalUrl: `https://echo.example.com/book/${baseId}`,
       title,
@@ -347,7 +357,7 @@ const bookProvider: BookMetadataProvider = {
           linkType: "purchase",
         },
       ],
-    };
+    });
   },
 
   async match(params: BookMatchParams): Promise<MetadataMatchResponse> {
@@ -356,7 +366,7 @@ const bookProvider: BookMetadataProvider = {
     const normalizedId = identifier.toLowerCase().replace(/[\s-]/g, "");
     const isIsbnMatch = !!params.isbn;
 
-    return {
+    return rec<MetadataMatchResponse>("metadata/book/match", params, {
       match: {
         externalId: `match-book-${normalizedId}`,
         title: params.title,
@@ -382,7 +392,7 @@ const bookProvider: BookMetadataProvider = {
               relevanceScore: 0.5,
             },
           ],
-    };
+    });
   },
 };
 
@@ -401,7 +411,28 @@ createMetadataPlugin({
     if (maxResults !== undefined) {
       config.maxResults = Math.min(Math.max(1, maxResults), 20); // Clamp 1-20
     }
-    logger.info(`Echo plugin initialized (maxResults: ${config.maxResults})`);
+
+    // Set up payload recording (on by default for this debug plugin)
+    const recordPayloads = params.adminConfig?.recordPayloads !== false;
+    const maxPayloadFiles =
+      typeof params.adminConfig?.maxPayloadFiles === "number"
+        ? params.adminConfig.maxPayloadFiles
+        : DEFAULT_MAX_PAYLOAD_FILES;
+    recorder = new PayloadRecorder({
+      pluginName: manifest.name,
+      dataDir: params.dataDir,
+      enabled: recordPayloads,
+      maxFiles: maxPayloadFiles,
+      configSnapshot: redactConfig({
+        adminConfig: params.adminConfig,
+        userConfig: params.userConfig,
+      }),
+      logger,
+    });
+
+    logger.info(
+      `Echo plugin initialized (maxResults: ${config.maxResults}, recordPayloads: ${recordPayloads})`,
+    );
   },
 });
 

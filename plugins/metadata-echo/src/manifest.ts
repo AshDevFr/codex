@@ -3,6 +3,7 @@ import packageJson from "../package.json" with { type: "json" };
 
 // Default config values
 export const DEFAULT_MAX_RESULTS = 5;
+export const DEFAULT_MAX_PAYLOAD_FILES = 500;
 
 export const manifest = {
   name: "metadata-echo",
@@ -28,6 +29,25 @@ export const manifest = {
         required: false,
         default: DEFAULT_MAX_RESULTS,
         example: 10,
+      },
+      {
+        key: "recordPayloads",
+        label: "Record Payloads",
+        description:
+          "Write each request and its response to JSON files under the plugin's data directory for debugging.",
+        type: "boolean" as const,
+        required: false,
+        default: true,
+      },
+      {
+        key: "maxPayloadFiles",
+        label: "Max Payload Files",
+        description:
+          "Maximum number of recorded payload files to keep; oldest are pruned. Only used when payload recording is enabled.",
+        type: "number" as const,
+        required: false,
+        default: DEFAULT_MAX_PAYLOAD_FILES,
+        example: 500,
       },
     ],
   },
