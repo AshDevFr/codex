@@ -8,6 +8,7 @@ import {
 } from "@mantine/core";
 import { IconInfoCircle } from "@tabler/icons-react";
 import type { PluginDto } from "@/api/plugins";
+import { CronInput } from "@/components/forms/CronInput";
 import {
   getPermissionData,
   getScopeData,
@@ -55,6 +56,72 @@ function LibraryFilter({
           {...form.getInputProps("libraryIds")}
         />
       )}
+    </>
+  );
+}
+
+/** Admin metadata-enrichment policy — which series data the host sends to a
+ *  `wantsFullMetadata` plugin. On by default; renders nothing for plugins that
+ *  don't declare the capability. tags/genres only apply to sync plugins
+ *  (recommendation entries always carry them). */
+function MetadataPolicy({
+  plugin,
+  form,
+}: {
+  plugin: PluginDto;
+  form: PluginConfigForm;
+}) {
+  if (plugin.manifest?.capabilities?.wantsFullMetadata !== true) return null;
+  const showTaxonomy = isSyncProvider(plugin);
+  return (
+    <>
+      <Divider label="Metadata Enrichment" labelPosition="center" />
+      <Text size="xs" c="dimmed">
+        Which series data the host sends to this plugin. On by default; turn off
+        to reduce payload — summaries are the heaviest.
+      </Text>
+      {showTaxonomy && (
+        <>
+          <Switch
+            label="Send tags"
+            description="Series tags (small). Lets the plugin apply tag-based rules."
+            {...form.getInputProps("sendTags", { type: "checkbox" })}
+          />
+          <Switch
+            label="Send genres"
+            description="Series genres (small)."
+            {...form.getInputProps("sendGenres", { type: "checkbox" })}
+          />
+        </>
+      )}
+      <Switch
+        label="Send metadata"
+        description="Summary, authors, publisher, age rating, language, and reading direction. The heaviest option."
+        {...form.getInputProps("sendMetadata", { type: "checkbox" })}
+      />
+    </>
+  );
+}
+
+/** Admin automatic-sync cadence — renders for sync plugins only. Empty disables
+ *  scheduled syncs; users can still sync manually. */
+function SyncSchedule({
+  plugin,
+  form,
+}: {
+  plugin: PluginDto;
+  form: PluginConfigForm;
+}) {
+  if (!isSyncProvider(plugin)) return null;
+  return (
+    <>
+      <Divider label="Automatic Sync" labelPosition="center" />
+      <CronInput
+        label="Sync Schedule (cron)"
+        placeholder="0 */6 * * *"
+        description="Cron expression that drives automatic syncs for users who opted into auto-sync. Leave empty to disable scheduled syncs (users can still sync manually)."
+        {...form.getInputProps("syncCronSchedule")}
+      />
     </>
   );
 }
@@ -113,6 +180,8 @@ export function PermissionsTab({
         </Alert>
 
         <LibraryFilter form={form} libraries={libraries} />
+        <SyncSchedule plugin={plugin} form={form} />
+        <MetadataPolicy plugin={plugin} form={form} />
       </Stack>
     );
   }
@@ -154,6 +223,8 @@ export function PermissionsTab({
       />
 
       <LibraryFilter form={form} libraries={libraries} />
+      <SyncSchedule plugin={plugin} form={form} />
+      <MetadataPolicy plugin={plugin} form={form} />
     </Stack>
   );
 }

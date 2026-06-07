@@ -141,7 +141,9 @@ async fn create_sync_plugin(
     .await
     .unwrap();
 
-    // Set manifest with sync provider capability
+    // Set manifest with sync provider capability. Declares OAuth so the plugin
+    // requires per-user auth (a sync plugin like AniList does) — connections are
+    // "not connected" until tokens are set, which the sync/status tests rely on.
     let manifest = json!({
         "name": name,
         "displayName": display_name,
@@ -150,6 +152,11 @@ async fn create_sync_plugin(
         "pluginType": "user",
         "capabilities": {
             "userReadSync": true
+        },
+        "oauth": {
+            "authorizationUrl": "https://example.com/oauth/authorize",
+            "tokenUrl": "https://example.com/oauth/token",
+            "scopes": []
         },
         "userDescription": "Sync reading progress"
     });
@@ -1349,7 +1356,7 @@ async fn test_get_plugin_tasks_no_tasks() {
     let (status, _): (StatusCode, Option<UserPluginDto>) = make_json_request(app, request).await;
     assert_eq!(status, StatusCode::OK);
 
-    // No sync tasks exist yet — should return 404
+    // No sync tasks exist yet — should return 200 with a null body (not 404).
     let app = create_test_router(state.clone()).await;
     let request = get_request_with_auth(
         &format!(
@@ -1358,10 +1365,14 @@ async fn test_get_plugin_tasks_no_tasks() {
         ),
         &token,
     );
-    let (status, _): (StatusCode, Option<serde_json::Value>) =
+    let (status, body): (StatusCode, Option<serde_json::Value>) =
         make_json_request(app, request).await;
 
-    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        body.is_none() || body == Some(serde_json::Value::Null),
+        "expected null/absent task body, got {body:?}"
+    );
 }
 
 #[tokio::test]
@@ -1483,7 +1494,8 @@ async fn test_get_plugin_tasks_user_isolation() {
         make_json_request(app, request).await;
     assert_eq!(status, StatusCode::OK);
 
-    // User B enables plugin but has no task — should get 404 (not User A's task)
+    // User B enables plugin but has no task — should get 200 with a null body
+    // (User B must not see User A's task).
     let app = create_test_router(state.clone()).await;
     let request = post_request_with_auth(
         &format!("/api/v1/user/plugins/{}/enable", plugin_id),
@@ -1500,9 +1512,13 @@ async fn test_get_plugin_tasks_user_isolation() {
         ),
         &token_b,
     );
-    let (status, _): (StatusCode, Option<serde_json::Value>) =
+    let (status, body): (StatusCode, Option<serde_json::Value>) =
         make_json_request(app, request).await;
-    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        body.is_none() || body == Some(serde_json::Value::Null),
+        "User B must not see User A's task; got {body:?}"
+    );
 }
 
 #[tokio::test]
@@ -1717,44 +1733,36 @@ async fn test_set_sync_mode_requires_enabled_connection() {
 }
 
 #[tokio::test]
-async fn test_set_metadata_settings_partial_update_and_independent() {
+async fn test_set_metadata_settings_custom_opt_out_round_trips() {
     let (db, _temp_dir) = setup_test_db().await;
     let state = create_test_auth_state(db.clone()).await;
     let (_, token) = create_user_and_token(&db, &state, "metauser").await;
     let plugin_id = create_metadata_plugin(&db, "meta-plugin", "Meta Plugin").await;
     enable_sync_plugin_for_user(&state, &token, plugin_id).await;
 
-    // Enable two of the four toggles.
+    // Opt into sharing custom metadata.
     let app = create_test_router(state.clone()).await;
     let request = patch_json_request_with_auth(
         &format!("/api/v1/user/plugins/{}/metadata-settings", plugin_id),
-        &json!({ "sendTags": true, "sendCustomMetadata": true }),
+        &json!({ "sendCustomMetadata": true }),
         &token,
     );
     let (status, dto): (StatusCode, Option<UserPluginDto>) = make_json_request(app, request).await;
     assert_eq!(status, StatusCode::OK);
     let dto = dto.expect("metadata-settings body");
-    assert!(dto.send_tags);
     assert!(dto.send_custom_metadata);
-    assert!(!dto.send_genres);
-    assert!(!dto.send_metadata);
-    assert_eq!(dto.config["_codex"]["sendTags"], json!(true));
+    assert_eq!(dto.config["_codex"]["sendCustomMetadata"], json!(true));
 
-    // Partial update: turning sendTags off must not touch sendCustomMetadata.
+    // Opt back out.
     let app = create_test_router(state.clone()).await;
     let request = patch_json_request_with_auth(
         &format!("/api/v1/user/plugins/{}/metadata-settings", plugin_id),
-        &json!({ "sendTags": false }),
+        &json!({ "sendCustomMetadata": false }),
         &token,
     );
     let (status, dto): (StatusCode, Option<UserPluginDto>) = make_json_request(app, request).await;
     assert_eq!(status, StatusCode::OK);
-    let dto = dto.expect("metadata-settings body");
-    assert!(!dto.send_tags);
-    assert!(
-        dto.send_custom_metadata,
-        "untouched toggle must be preserved"
-    );
+    assert!(!dto.expect("metadata-settings body").send_custom_metadata);
 }
 
 #[tokio::test]
@@ -1769,7 +1777,7 @@ async fn test_set_metadata_settings_rejected_for_non_capable_plugin() {
     let app = create_test_router(state.clone()).await;
     let request = patch_json_request_with_auth(
         &format!("/api/v1/user/plugins/{}/metadata-settings", plugin_id),
-        &json!({ "sendTags": true }),
+        &json!({ "sendCustomMetadata": true }),
         &token,
     );
     let (status, _): (StatusCode, Option<serde_json::Value>) =
@@ -1795,17 +1803,17 @@ async fn test_set_metadata_settings_preserves_other_codex_settings() {
     let (status, _): (StatusCode, Option<UserPluginDto>) = make_json_request(app, request).await;
     assert_eq!(status, StatusCode::OK);
 
-    // Now set a metadata toggle; autoSync must survive.
+    // Now set the custom-metadata opt-out; autoSync must survive.
     let app = create_test_router(state.clone()).await;
     let request = patch_json_request_with_auth(
         &format!("/api/v1/user/plugins/{}/metadata-settings", plugin_id),
-        &json!({ "sendMetadata": true }),
+        &json!({ "sendCustomMetadata": true }),
         &token,
     );
     let (status, dto): (StatusCode, Option<UserPluginDto>) = make_json_request(app, request).await;
     assert_eq!(status, StatusCode::OK);
     let dto = dto.expect("metadata-settings body");
-    assert!(dto.send_metadata);
+    assert!(dto.send_custom_metadata);
     assert!(dto.auto_sync, "autoSync sibling must be preserved");
     assert_eq!(dto.config["_codex"]["autoSync"], json!(true));
 }

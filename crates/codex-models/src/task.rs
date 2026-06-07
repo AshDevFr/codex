@@ -269,49 +269,56 @@ fn default_mode() -> String {
 impl TaskType {
     /// Returns the default priority for this task type.
     ///
-    /// Higher values = more urgent. Uses large gaps for future insertions.
+    /// Higher values = more urgent; the worker claims tasks in descending
+    /// priority order (`ORDER BY priority DESC, scheduled_for ASC`). Uses large
+    /// gaps for future insertions.
+    ///
+    /// User-facing and integration work (plugin sync / recommendations, metadata
+    /// fetch, release tracking) is prioritized *above* bulk background work
+    /// (scanning, analysis, thumbnails) so an interactive action is never stuck
+    /// behind a long scan or analysis backlog. Note priority only affects claim
+    /// order, not preemption — an already-running task is not interrupted.
     /// Categories:
-    ///   1000-900: Scanning (library discovery, post-scan cleanup)
-    ///    800-750: Analysis (book/series analysis, title reprocessing)
-    ///    600-570: Thumbnails (single and batch generation)
-    ///    400-380: Metadata (deduplication, external lookups, plugin matching)
-    ///    200-180: Plugins (user-facing plugin operations)
+    ///   1000-960: User plugin operations (interactive, user-facing)
+    ///    900-860: Metadata fetch (external lookups, matching, dedup)
+    ///    850-820: Release tracking (polling, bulk track, backfill)
+    ///        800: Export (user-initiated)
+    ///    600-550: Scanning (library discovery, post-scan cleanup)
+    ///    500-450: Analysis (book/series analysis, title reprocessing, renumber)
+    ///    400-370: Thumbnails (single and batch generation)
     ///        100: Cleanup (low-priority maintenance)
     pub fn default_priority(&self) -> i32 {
         match self {
+            // User plugin operations (interactive, user-facing)
+            TaskType::UserPluginRecommendationDismiss { .. } => 1000,
+            TaskType::UserPluginSync { .. } => 980,
+            TaskType::UserPluginRecommendations { .. } => 960,
+            // Metadata fetch
+            TaskType::RefreshMetadata { .. } => 900,
+            TaskType::RefreshLibraryMetadata { .. } => 890,
+            TaskType::PluginAutoMatch { .. } => 880,
+            TaskType::FindDuplicates => 860,
+            // Release tracking
+            TaskType::PollReleaseSource { .. } => 850,
+            TaskType::BulkTrackForReleases { .. } => 840,
+            TaskType::BackfillTrackingFromMetadata { .. } => 820,
+            // Export (user-initiated)
+            TaskType::ExportSeries { .. } => 800,
             // Scanning
-            TaskType::ScanLibrary { .. } => 1000,
-            TaskType::PurgeDeleted { .. } => 900,
+            TaskType::ScanLibrary { .. } => 600,
+            TaskType::PurgeDeleted { .. } => 550,
             // Analysis
-            TaskType::AnalyzeBook { .. } => 800,
-            TaskType::AnalyzeSeries { .. } => 790,
-            TaskType::ReprocessSeriesTitle { .. } => 780,
-            TaskType::ReprocessSeriesTitles { .. } => 770,
-            TaskType::RenumberSeries { .. } => 760,
-            TaskType::RenumberSeriesBatch { .. } => 750,
+            TaskType::AnalyzeBook { .. } => 500,
+            TaskType::AnalyzeSeries { .. } => 490,
+            TaskType::ReprocessSeriesTitle { .. } => 480,
+            TaskType::ReprocessSeriesTitles { .. } => 470,
+            TaskType::RenumberSeries { .. } => 460,
+            TaskType::RenumberSeriesBatch { .. } => 450,
             // Thumbnails
-            TaskType::GenerateThumbnail { .. } => 600,
-            TaskType::GenerateSeriesThumbnail { .. } => 590,
-            TaskType::GenerateThumbnails { .. } => 580,
-            TaskType::GenerateSeriesThumbnails { .. } => 570,
-            // Metadata
-            TaskType::FindDuplicates => 400,
-            TaskType::RefreshMetadata { .. } => 390,
-            TaskType::RefreshLibraryMetadata { .. } => 385,
-            TaskType::PluginAutoMatch { .. } => 380,
-            // Export
-            TaskType::ExportSeries { .. } => 450,
-            // Plugins
-            TaskType::UserPluginRecommendationDismiss { .. } => 200,
-            TaskType::UserPluginSync { .. } => 190,
-            TaskType::UserPluginRecommendations { .. } => 180,
-            // Release tracking maintenance
-            TaskType::BackfillTrackingFromMetadata { .. } => 150,
-            // User-initiated bulk track/untrack: above the maintenance
-            // backfill but below scheduled release polling.
-            TaskType::BulkTrackForReleases { .. } => 155,
-            // Release polling: scheduled background discovery
-            TaskType::PollReleaseSource { .. } => 170,
+            TaskType::GenerateThumbnail { .. } => 400,
+            TaskType::GenerateSeriesThumbnail { .. } => 390,
+            TaskType::GenerateThumbnails { .. } => 380,
+            TaskType::GenerateSeriesThumbnails { .. } => 370,
             // Cleanup
             TaskType::CleanupBookFiles { .. }
             | TaskType::CleanupSeriesFiles { .. }
@@ -1292,18 +1299,18 @@ mod tests {
         let plugin_id = Uuid::new_v4();
         let user_id = Uuid::new_v4();
 
-        // Scanning: highest priority
+        // Scanning
         assert_eq!(
             TaskType::ScanLibrary {
                 library_id,
                 mode: "normal".to_string()
             }
             .default_priority(),
-            1000
+            600
         );
         assert_eq!(
             TaskType::PurgeDeleted { library_id }.default_priority(),
-            900
+            550
         );
 
         // Analysis
@@ -1313,15 +1320,15 @@ mod tests {
                 force: false
             }
             .default_priority(),
-            800
+            500
         );
         assert_eq!(
             TaskType::AnalyzeSeries { series_id }.default_priority(),
-            790
+            490
         );
         assert_eq!(
             TaskType::ReprocessSeriesTitle { series_id }.default_priority(),
-            780
+            480
         );
         assert_eq!(
             TaskType::ReprocessSeriesTitles {
@@ -1329,18 +1336,18 @@ mod tests {
                 series_ids: None
             }
             .default_priority(),
-            770
+            470
         );
         assert_eq!(
             TaskType::RenumberSeries { series_id }.default_priority(),
-            760
+            460
         );
         assert_eq!(
             TaskType::RenumberSeriesBatch {
                 series_ids: Some(vec![series_id])
             }
             .default_priority(),
-            750
+            450
         );
 
         // Thumbnails
@@ -1350,7 +1357,7 @@ mod tests {
                 force: false
             }
             .default_priority(),
-            600
+            400
         );
         assert_eq!(
             TaskType::GenerateSeriesThumbnail {
@@ -1358,7 +1365,7 @@ mod tests {
                 force: false
             }
             .default_priority(),
-            590
+            390
         );
         assert_eq!(
             TaskType::GenerateThumbnails {
@@ -1369,7 +1376,7 @@ mod tests {
                 force: false
             }
             .default_priority(),
-            580
+            380
         );
         assert_eq!(
             TaskType::GenerateSeriesThumbnails {
@@ -1378,18 +1385,18 @@ mod tests {
                 force: false
             }
             .default_priority(),
-            570
+            370
         );
 
-        // Metadata
-        assert_eq!(TaskType::FindDuplicates.default_priority(), 400);
+        // Metadata fetch
+        assert_eq!(TaskType::FindDuplicates.default_priority(), 860);
         assert_eq!(
             TaskType::RefreshMetadata {
                 book_id,
                 source: "test".to_string()
             }
             .default_priority(),
-            390
+            900
         );
         assert_eq!(
             TaskType::PluginAutoMatch {
@@ -1398,10 +1405,10 @@ mod tests {
                 source_scope: None
             }
             .default_priority(),
-            380
+            880
         );
 
-        // Plugins
+        // User plugin operations: highest priority
         assert_eq!(
             TaskType::UserPluginRecommendationDismiss {
                 plugin_id,
@@ -1410,15 +1417,15 @@ mod tests {
                 reason: None
             }
             .default_priority(),
-            200
+            1000
         );
         assert_eq!(
             TaskType::UserPluginSync { plugin_id, user_id }.default_priority(),
-            190
+            980
         );
         assert_eq!(
             TaskType::UserPluginRecommendations { plugin_id, user_id }.default_priority(),
-            180
+            960
         );
 
         // Cleanup: lowest priority
@@ -1443,10 +1450,31 @@ mod tests {
     #[test]
     fn test_default_priority_ordering_invariants() {
         let library_id = Uuid::new_v4();
-        let _series_id = Uuid::new_v4();
+        let series_id = Uuid::new_v4();
         let book_id = Uuid::new_v4();
 
-        // Scanning > Analysis > Thumbnails > Metadata > Plugins > Cleanup
+        // Policy: user plugin > metadata fetch > release > export > scanning >
+        // analysis > thumbnails > cleanup. The headline invariant is that
+        // user-facing/integration work outranks bulk scan/analysis work.
+        let plugin = TaskType::UserPluginSync {
+            plugin_id: Uuid::new_v4(),
+            user_id: Uuid::new_v4(),
+        }
+        .default_priority();
+        let metadata = TaskType::RefreshMetadata {
+            book_id,
+            source: "test".to_string(),
+        }
+        .default_priority();
+        let release = TaskType::PollReleaseSource {
+            source_id: Uuid::new_v4(),
+        }
+        .default_priority();
+        let export = TaskType::ExportSeries {
+            export_id: Uuid::new_v4(),
+            user_id: Uuid::new_v4(),
+        }
+        .default_priority();
         let scan = TaskType::ScanLibrary {
             library_id,
             mode: "normal".to_string(),
@@ -1462,34 +1490,32 @@ mod tests {
             force: false,
         }
         .default_priority();
-        let metadata = TaskType::FindDuplicates.default_priority();
-        let plugin = TaskType::UserPluginSync {
-            plugin_id: Uuid::new_v4(),
-            user_id: Uuid::new_v4(),
-        }
-        .default_priority();
-        let cleanup = TaskType::CleanupOrphanedFiles.default_priority();
+        let cleanup = TaskType::CleanupSeriesFiles { series_id }.default_priority();
 
+        // Headline: user-facing / integration work outranks bulk scan + analysis.
+        assert!(plugin > scan, "User plugin sync should outrank scanning");
+        assert!(plugin > analyze, "User plugin sync should outrank analysis");
+        assert!(metadata > scan, "Metadata fetch should outrank scanning");
+        assert!(metadata > analyze, "Metadata fetch should outrank analysis");
+        assert!(release > scan, "Release tracking should outrank scanning");
         assert!(
-            scan > analyze,
-            "Scanning should have higher priority than analysis"
+            release > analyze,
+            "Release tracking should outrank analysis"
         );
+
+        // Top-band internal order: plugin > metadata > release > export.
         assert!(
-            analyze > thumbnail,
-            "Analysis should have higher priority than thumbnails"
+            plugin > metadata,
+            "User plugin sync should outrank metadata"
         );
-        assert!(
-            thumbnail > metadata,
-            "Thumbnails should have higher priority than metadata"
-        );
-        assert!(
-            metadata > plugin,
-            "Metadata should have higher priority than plugins"
-        );
-        assert!(
-            plugin > cleanup,
-            "Plugins should have higher priority than cleanup"
-        );
+        assert!(metadata > release, "Metadata fetch should outrank release");
+        assert!(release > export, "Release should outrank export");
+        assert!(export > scan, "Export should outrank scanning");
+
+        // Bulk-band internal order preserved: scan > analyze > thumbnail > cleanup.
+        assert!(scan > analyze, "Scanning should outrank analysis");
+        assert!(analyze > thumbnail, "Analysis should outrank thumbnails");
+        assert!(thumbnail > cleanup, "Thumbnails should outrank cleanup");
     }
 
     #[test]

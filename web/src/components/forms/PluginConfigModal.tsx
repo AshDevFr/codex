@@ -44,6 +44,9 @@ function PluginConfigContent({
   const queryClient = useQueryClient();
   const isMeta = isMetadataProvider(plugin);
   const isOAuth = isOAuthPlugin(plugin);
+  const wantsFullMetadata =
+    plugin.manifest?.capabilities?.wantsFullMetadata === true;
+  const isSync = plugin.manifest?.capabilities?.userReadSync === true;
   const [activeTab, setActiveTab] = useState<string | null>(
     isMeta ? "general" : "permissions",
   );
@@ -86,6 +89,12 @@ function PluginConfigContent({
 
   // Extract OAuth config from plugin.config JSON
   const pluginConfig = plugin.config as Record<string, unknown> | null;
+  // Admin metadata policy lives in config._codex.send* (host-only). Default on.
+  const codexConfig = (pluginConfig?._codex ?? {}) as Record<string, unknown>;
+  const codexBool = (key: string) =>
+    typeof codexConfig[key] === "boolean"
+      ? (codexConfig[key] as boolean)
+      : true;
   const initialOAuthClientId =
     typeof pluginConfig?.oauth_client_id === "string"
       ? pluginConfig.oauth_client_id
@@ -108,6 +117,10 @@ function PluginConfigContent({
       metadataTargets: initialMetadataTargets,
       oauthClientId: initialOAuthClientId,
       oauthClientSecret: initialOAuthClientSecret,
+      sendTags: codexBool("sendTags"),
+      sendGenres: codexBool("sendGenres"),
+      sendMetadata: codexBool("sendMetadata"),
+      syncCronSchedule: plugin.syncCronSchedule ?? "",
     },
   });
 
@@ -118,6 +131,12 @@ function PluginConfigContent({
         scopes: form.values.scopes,
         libraryIds: form.values.allLibraries ? [] : form.values.libraryIds,
       };
+
+      // Admin automatic-sync cadence (sync plugins only). Empty clears it; the
+      // backend rejects a cron on non-sync plugins.
+      if (isSync) {
+        payload.syncCronSchedule = form.values.syncCronSchedule.trim() || null;
+      }
 
       if (isMeta) {
         payload.searchQueryTemplate =
@@ -131,19 +150,36 @@ function PluginConfigContent({
         };
       }
 
-      if (isOAuth) {
+      // OAuth secrets and the admin metadata policy both live in plugin.config;
+      // read-modify-write a single object so neither clobbers the other.
+      if (isOAuth || wantsFullMetadata) {
         const existingConfig = (plugin.config as Record<string, unknown>) ?? {};
         const config: Record<string, unknown> = { ...existingConfig };
-        if (form.values.oauthClientId.trim()) {
-          config.oauth_client_id = form.values.oauthClientId.trim();
-        } else {
-          delete config.oauth_client_id;
+
+        if (isOAuth) {
+          if (form.values.oauthClientId.trim()) {
+            config.oauth_client_id = form.values.oauthClientId.trim();
+          } else {
+            delete config.oauth_client_id;
+          }
+          if (form.values.oauthClientSecret.trim()) {
+            config.oauth_client_secret = form.values.oauthClientSecret.trim();
+          } else {
+            delete config.oauth_client_secret;
+          }
         }
-        if (form.values.oauthClientSecret.trim()) {
-          config.oauth_client_secret = form.values.oauthClientSecret.trim();
-        } else {
-          delete config.oauth_client_secret;
+
+        if (wantsFullMetadata) {
+          // Host-only _codex namespace: what the host sends to this plugin.
+          const codex = {
+            ...((existingConfig._codex as Record<string, unknown>) ?? {}),
+            sendTags: form.values.sendTags,
+            sendGenres: form.values.sendGenres,
+            sendMetadata: form.values.sendMetadata,
+          };
+          config._codex = codex;
         }
+
         payload.config = config;
       }
 

@@ -189,6 +189,135 @@ describe("PluginConfigModal", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("shows admin metadata-enrichment toggles for a wantsFullMetadata sync plugin", () => {
+    const plugin = createMockPlugin({
+      manifest: {
+        name: "sync-plugin",
+        displayName: "Sync Plugin",
+        version: "1.0.0",
+        protocolVersion: "1.0",
+        description: "A sync plugin",
+        capabilities: {
+          metadataProvider: [],
+          userReadSync: true,
+          wantsFullMetadata: true,
+        },
+        contentTypes: [],
+        requiredCredentials: [],
+        scopes: [],
+      },
+    });
+
+    renderWithProviders(
+      <PluginConfigModal
+        plugin={plugin}
+        opened={true}
+        onClose={vi.fn()}
+        libraries={mockLibraries}
+      />,
+    );
+
+    // Permissions tab is the default for sync plugins; the admin metadata policy
+    // lives there (default on).
+    expect(screen.getByText("Metadata Enrichment")).toBeInTheDocument();
+    expect(screen.getByText("Send tags")).toBeInTheDocument();
+    expect(screen.getByText("Send genres")).toBeInTheDocument();
+    expect(screen.getByText("Send metadata")).toBeInTheDocument();
+  });
+
+  it("shows the automatic-sync cron field for a sync plugin", () => {
+    const plugin = createMockPlugin({
+      manifest: {
+        name: "sync-plugin",
+        displayName: "Sync Plugin",
+        version: "1.0.0",
+        protocolVersion: "1.0",
+        description: "A sync plugin",
+        capabilities: {
+          metadataProvider: [],
+          userReadSync: true,
+        },
+        contentTypes: [],
+        requiredCredentials: [],
+        scopes: [],
+      },
+      syncCronSchedule: "0 */6 * * *",
+    });
+
+    renderWithProviders(
+      <PluginConfigModal
+        plugin={plugin}
+        opened={true}
+        onClose={vi.fn()}
+        libraries={mockLibraries}
+      />,
+    );
+
+    // Relocated from the Edit modal into the Configure dialog's Permissions tab.
+    expect(screen.getByText("Automatic Sync")).toBeInTheDocument();
+    expect(screen.getByText("Sync Schedule (cron)")).toBeInTheDocument();
+  });
+
+  it("hides the automatic-sync cron field for a non-sync plugin", () => {
+    const plugin = createMockPlugin({
+      manifest: {
+        name: "metadata-plugin",
+        displayName: "Metadata Plugin",
+        version: "1.0.0",
+        protocolVersion: "1.0",
+        description: "A metadata plugin",
+        capabilities: {
+          metadataProvider: ["series"],
+          userReadSync: false,
+        },
+        contentTypes: ["series"],
+        requiredCredentials: [],
+        scopes: ["series:detail"],
+      },
+    });
+
+    renderWithProviders(
+      <PluginConfigModal
+        plugin={plugin}
+        opened={true}
+        onClose={vi.fn()}
+        libraries={mockLibraries}
+      />,
+    );
+
+    expect(screen.queryByText("Automatic Sync")).not.toBeInTheDocument();
+  });
+
+  it("hides admin metadata-enrichment toggles when the plugin lacks wantsFullMetadata", () => {
+    const plugin = createMockPlugin({
+      manifest: {
+        name: "sync-plugin",
+        displayName: "Sync Plugin",
+        version: "1.0.0",
+        protocolVersion: "1.0",
+        description: "A sync plugin",
+        capabilities: {
+          metadataProvider: [],
+          userReadSync: true,
+        },
+        contentTypes: [],
+        requiredCredentials: [],
+        scopes: [],
+      },
+    });
+
+    renderWithProviders(
+      <PluginConfigModal
+        plugin={plugin}
+        opened={true}
+        onClose={vi.fn()}
+        libraries={mockLibraries}
+      />,
+    );
+
+    expect(screen.queryByText("Metadata Enrichment")).not.toBeInTheDocument();
+  });
+
   it("hides search tabs for plugins with no manifest", () => {
     const plugin = createMockPlugin({ manifest: null });
 

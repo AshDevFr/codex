@@ -229,7 +229,7 @@ describe("UserPluginSettingsModal", () => {
     expect(switches[3]).not.toBeChecked(); // syncRatings = false
   });
 
-  it("shows all four metadata-enrichment toggles for a sync plugin with wantsFullMetadata", () => {
+  it("shows only the custom-metadata opt-out for a wantsFullMetadata plugin (tags/genres/metadata are admin-controlled)", () => {
     const plugin = makePlugin({
       capabilities: {
         readSync: true,
@@ -246,14 +246,15 @@ describe("UserPluginSettingsModal", () => {
       />,
     );
 
-    expect(screen.getByText("Metadata Enrichment")).toBeInTheDocument();
-    expect(screen.getByText("Send tags")).toBeInTheDocument();
-    expect(screen.getByText("Send genres")).toBeInTheDocument();
-    expect(screen.getByText("Send metadata")).toBeInTheDocument();
-    expect(screen.getByText("Send custom metadata")).toBeInTheDocument();
+    expect(screen.getByText("Metadata Sharing")).toBeInTheDocument();
+    expect(screen.getByText("Share custom metadata")).toBeInTheDocument();
+    // tags/genres/metadata are admin policy now — not shown on the user side.
+    expect(screen.queryByText("Send tags")).not.toBeInTheDocument();
+    expect(screen.queryByText("Send genres")).not.toBeInTheDocument();
+    expect(screen.queryByText("Send metadata")).not.toBeInTheDocument();
   });
 
-  it("hides metadata-enrichment toggles when the plugin lacks wantsFullMetadata", () => {
+  it("hides the metadata-sharing section when the plugin lacks wantsFullMetadata", () => {
     const plugin = makePlugin({
       capabilities: {
         readSync: true,
@@ -270,43 +271,14 @@ describe("UserPluginSettingsModal", () => {
       />,
     );
 
-    expect(screen.queryByText("Metadata Enrichment")).not.toBeInTheDocument();
-    expect(screen.queryByText("Send tags")).not.toBeInTheDocument();
+    expect(screen.queryByText("Metadata Sharing")).not.toBeInTheDocument();
+    expect(screen.queryByText("Share custom metadata")).not.toBeInTheDocument();
   });
 
-  it("hides tags/genres for a recommendation-only metadata plugin (they only apply to sync)", () => {
-    const plugin = makePlugin({
-      capabilities: {
-        readSync: false,
-        userRecommendationProvider: true,
-        wantsFullMetadata: true,
-      },
-    });
-
-    renderWithProviders(
-      <UserPluginSettingsModal
-        plugin={plugin}
-        opened={true}
-        onClose={vi.fn()}
-      />,
-    );
-
-    expect(screen.getByText("Metadata Enrichment")).toBeInTheDocument();
-    expect(screen.getByText("Send metadata")).toBeInTheDocument();
-    expect(screen.getByText("Send custom metadata")).toBeInTheDocument();
-    expect(screen.queryByText("Send tags")).not.toBeInTheDocument();
-    expect(screen.queryByText("Send genres")).not.toBeInTheDocument();
-  });
-
-  it("initialises metadata toggles from the _codex namespace", () => {
+  it("initialises the custom-metadata opt-out from the _codex namespace", () => {
     const plugin = makePlugin({
       config: {
-        _codex: {
-          sendTags: true,
-          sendGenres: false,
-          sendMetadata: true,
-          sendCustomMetadata: false,
-        },
+        _codex: { sendCustomMetadata: true },
       },
       capabilities: {
         readSync: true,
@@ -323,13 +295,9 @@ describe("UserPluginSettingsModal", () => {
       />,
     );
 
-    // Switch order: the four sync settings (0-3) then the four metadata
-    // enrichment toggles (sendTags, sendGenres, sendMetadata, sendCustomMetadata).
+    // Order: the four sync settings (0-3), then the custom-metadata opt-out (4).
     const switches = screen.getAllByRole("switch");
-    expect(switches[4]).toBeChecked(); // sendTags = true
-    expect(switches[5]).not.toBeChecked(); // sendGenres = false
-    expect(switches[6]).toBeChecked(); // sendMetadata = true
-    expect(switches[7]).not.toBeChecked(); // sendCustomMetadata = false
+    expect(switches[4]).toBeChecked();
   });
 
   it("shows Plugin Settings divider when plugin has config fields", () => {

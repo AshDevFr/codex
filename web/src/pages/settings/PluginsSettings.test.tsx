@@ -997,6 +997,49 @@ describe("PluginsSettings - permissions and scopes in expanded details", () => {
       expect(screen.getByText("All Libraries")).toBeInTheDocument();
     });
   });
+
+  it("hides Permissions and Scopes for non-metadata plugins (sync/recommendation)", async () => {
+    // Permissions and scopes are metadata-provider concepts; a pure
+    // recommendation/sync plugin never populates them, so the labels are hidden.
+    const plugin = createMockPlugin({
+      permissions: [],
+      scopes: [],
+      libraryIds: [],
+      manifest: {
+        name: "reco-plugin",
+        displayName: "Test Plugin",
+        version: "1.0.0",
+        protocolVersion: "1.1",
+        description: "A recommendation plugin",
+        capabilities: {
+          metadataProvider: [],
+          userReadSync: false,
+          userRecommendationProvider: true,
+        },
+        contentTypes: [],
+        requiredCredentials: [],
+        scopes: [],
+      },
+    });
+    mockGetAll.mockResolvedValue({ plugins: [plugin], total: 1 });
+
+    const user = userEvent.setup();
+    const { container } = renderWithProviders(<PluginsSettings />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Test Plugin")).toBeInTheDocument();
+    });
+
+    await clickExpandButton(container, user);
+
+    // Libraries (relevant to all plugins) still renders...
+    await waitFor(() => {
+      expect(screen.getByText("Libraries")).toBeInTheDocument();
+    });
+    // ...but the metadata-only Permissions/Scopes labels are gone.
+    expect(screen.queryByText("Permissions")).not.toBeInTheDocument();
+    expect(screen.queryByText("Scopes")).not.toBeInTheDocument();
+  });
 });
 
 // ===========================================================================
@@ -1102,6 +1145,77 @@ describe("PluginsSettings - manifest section in expanded details", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Reading Sync")).toBeInTheDocument();
+    });
+  });
+
+  it("shows Full Metadata badge when the plugin opts into wantsFullMetadata", async () => {
+    const plugin = createMockPlugin({
+      manifest: {
+        name: "reco-plugin",
+        displayName: "Test Plugin",
+        version: "1.0.0",
+        protocolVersion: "1.1",
+        description: "A recommendation plugin",
+        capabilities: {
+          metadataProvider: [],
+          userReadSync: false,
+          userRecommendationProvider: true,
+          wantsFullMetadata: true,
+        },
+        contentTypes: [],
+        requiredCredentials: [],
+        scopes: [],
+      },
+    });
+    mockGetAll.mockResolvedValue({ plugins: [plugin], total: 1 });
+
+    const user = userEvent.setup();
+    const { container } = renderWithProviders(<PluginsSettings />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Test Plugin")).toBeInTheDocument();
+    });
+
+    await clickExpandButton(container, user);
+
+    await waitFor(() => {
+      expect(screen.getByText("Full Metadata")).toBeInTheDocument();
+    });
+    // Detailed Progress is sync-only and must not show for a reco-only plugin.
+    expect(screen.queryByText("Detailed Progress")).not.toBeInTheDocument();
+  });
+
+  it("shows Detailed Progress badge only for sync plugins that opt in", async () => {
+    const plugin = createMockPlugin({
+      manifest: {
+        name: "sync-plugin",
+        displayName: "Test Plugin",
+        version: "1.0.0",
+        protocolVersion: "1.0",
+        description: "A sync plugin",
+        capabilities: {
+          metadataProvider: [],
+          userReadSync: true,
+          wantsDetailedProgress: true,
+        },
+        contentTypes: [],
+        requiredCredentials: [],
+        scopes: [],
+      },
+    });
+    mockGetAll.mockResolvedValue({ plugins: [plugin], total: 1 });
+
+    const user = userEvent.setup();
+    const { container } = renderWithProviders(<PluginsSettings />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Test Plugin")).toBeInTheDocument();
+    });
+
+    await clickExpandButton(container, user);
+
+    await waitFor(() => {
+      expect(screen.getByText("Detailed Progress")).toBeInTheDocument();
     });
   });
 

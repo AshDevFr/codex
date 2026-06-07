@@ -8,7 +8,8 @@ import { useMemo } from "react";
 
 export interface CronInputProps
   extends Omit<TextInputProps, "value" | "onChange"> {
-  value: string;
+  /** Current cron string. Optional so it composes with `form.getInputProps`. */
+  value?: string;
   onChange: (value: string) => void;
   showNextRun?: boolean;
 }
@@ -76,7 +77,7 @@ function getNextRunTime(expression: string): Date | null {
 }
 
 export function CronInput({
-  value,
+  value = "",
   onChange,
   showNextRun = true,
   error,

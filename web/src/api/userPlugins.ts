@@ -154,16 +154,17 @@ export const userPluginsApi = {
 
   /**
    * Get the latest task for a plugin (user-scoped, no TasksRead permission needed)
-   * Pass taskType to filter by type (e.g., "user_plugin_sync")
+   * Pass taskType to filter by type (e.g., "user_plugin_sync").
+   * Returns null when the plugin has no matching task yet (a normal state).
    */
   getPluginTask: async (
     pluginId: string,
     taskType?: string,
-  ): Promise<UserPluginTaskDto> => {
-    const response = await api.get<UserPluginTaskDto>(
+  ): Promise<UserPluginTaskDto | null> => {
+    const response = await api.get<UserPluginTaskDto | null>(
       `/user/plugins/${pluginId}/tasks`,
       { params: taskType ? { type: taskType } : undefined },
     );
-    return response.data;
+    return response.data ?? null;
   },
 };

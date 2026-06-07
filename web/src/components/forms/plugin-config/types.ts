@@ -99,6 +99,14 @@ export interface PluginConfigFormValues {
   // OAuth config (OAuth plugins only)
   oauthClientId: string;
   oauthClientSecret: string;
+  // Admin metadata-enrichment policy (wantsFullMetadata plugins only).
+  // Whether the host sends each field to the plugin; default on. Stored in
+  // config._codex.send*.
+  sendTags: boolean;
+  sendGenres: boolean;
+  sendMetadata: boolean;
+  // Admin automatic-sync cadence (sync plugins only). Cron string; empty = off.
+  syncCronSchedule: string;
 }
 
 export type PluginConfigForm = UseFormReturnType<PluginConfigFormValues>;

@@ -18,6 +18,9 @@ export const manifest = {
     userReadSync: true,
     // Opt in to the per-book detailed progress payload so it can be inspected.
     wantsDetailedProgress: true,
+    // Opt in to enriched series data (tags/genres/metadata/custom metadata) so
+    // the enrichment toggles appear and the payloads can be inspected.
+    wantsFullMetadata: true,
   },
   configSchema: {
     description: "Configuration options for the Echo sync test plugin",
@@ -49,6 +52,20 @@ export const manifest = {
         required: false,
         default: DEFAULT_MAX_PAYLOAD_FILES,
         example: 500,
+      },
+    ],
+  },
+  userConfigSchema: {
+    description:
+      "Per-user settings for the Echo sync plugin. These are sent to the plugin as user config on each sync.",
+    fields: [
+      {
+        key: "syncRules",
+        label: "Sync Rules (JSON)",
+        description:
+          'Optional per-user JSON rules the plugin applies (e.g. {"skipTags":["Ecchi"]}). Echoed back in the recorded payloads so you can confirm it reaches the plugin.',
+        type: "json" as const,
+        required: false,
       },
     ],
   },

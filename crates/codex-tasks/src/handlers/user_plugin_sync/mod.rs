@@ -184,12 +184,16 @@ impl TaskHandler for UserPluginSyncHandler {
             let do_push = sync_mode == "both" || sync_mode == "push";
             let codex_settings = CodexSyncSettings::from_user_config(&user_config);
 
-            // Admin-configured library scope for this plugin (empty = all libraries).
-            let allowed_library_ids: Vec<Uuid> =
-                match PluginsRepository::get_by_id(db, plugin_id).await {
-                    Ok(Some(plugin)) => plugin.library_ids_vec(),
-                    _ => Vec::new(),
-                };
+            // Admin-configured plugin row: drives library scope and the
+            // admin-side metadata-enrichment policy (tags/genres/metadata).
+            let plugin = PluginsRepository::get_by_id(db, plugin_id)
+                .await
+                .ok()
+                .flatten();
+            let allowed_library_ids: Vec<Uuid> = plugin
+                .as_ref()
+                .map(|p| p.library_ids_vec())
+                .unwrap_or_default();
             if !allowed_library_ids.is_empty() {
                 debug!(
                     "Task {}: Plugin scoped to {} libraries",
@@ -288,10 +292,15 @@ impl TaskHandler for UserPluginSyncHandler {
                 .as_ref()
                 .map(|m| m.capabilities.wants_detailed_progress)
                 .unwrap_or(false);
+            // tags/genres/metadata are admin policy on the plugin (default on when
+            // the plugin declares the capability); custom_metadata is the user's
+            // privacy opt-out (default off). All gated by the capability.
             let metadata_flags = push::MetadataFlags {
-                tags: wants_full_metadata && codex_settings.send_tags,
-                genres: wants_full_metadata && codex_settings.send_genres,
-                metadata: wants_full_metadata && codex_settings.send_metadata,
+                tags: wants_full_metadata && plugin.as_ref().is_some_and(|p| p.send_tags_enabled()),
+                genres: wants_full_metadata
+                    && plugin.as_ref().is_some_and(|p| p.send_genres_enabled()),
+                metadata: wants_full_metadata
+                    && plugin.as_ref().is_some_and(|p| p.send_metadata_enabled()),
                 custom_metadata: wants_full_metadata && codex_settings.send_custom_metadata,
                 detailed_progress: wants_detailed_progress,
             };

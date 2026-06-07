@@ -857,9 +857,6 @@ fn default_codex_settings() -> CodexSyncSettings {
         count_partial_progress: false,
         sync_ratings: true,
         search_fallback: false,
-        send_tags: false,
-        send_genres: false,
-        send_metadata: false,
         send_custom_metadata: false,
     }
 }

@@ -24,7 +24,7 @@ import { CardListSkeleton } from "@/components/skeletons";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useShowSkeleton } from "@/lib/motion/useShowSkeleton";
 
-function isTaskActive(task: UserPluginTaskDto | undefined): boolean {
+function isTaskActive(task: UserPluginTaskDto | null | undefined): boolean {
   return task?.status === "pending" || task?.status === "processing";
 }
 
@@ -64,7 +64,11 @@ export function IntegrationsSettings() {
       userPluginsApi.getPluginTask(syncingPluginId ?? "", "user_plugin_sync"),
     enabled: syncingPluginId !== null,
     refetchInterval: (query) => {
-      const status = query.state.data?.status;
+      const data = query.state.data;
+      // No task found (never created, or already pruned) — stop polling so the
+      // spinner can't hang forever.
+      if (data === null) return false;
+      const status = data?.status;
       if (status === "completed" || status === "failed") return false;
       return 3000;
     },
@@ -72,7 +76,14 @@ export function IntegrationsSettings() {
 
   // Handle sync task completion
   useEffect(() => {
-    if (!syncTask || !syncingPluginId) return;
+    if (!syncingPluginId) return;
+    if (syncTask === undefined) return; // first poll still in flight
+    if (syncTask === null) {
+      // No task is tracked for this plugin (never created, or already pruned).
+      // Stop the spinner rather than poll forever.
+      setSyncingPluginId(null);
+      return;
+    }
     // Use taskId to deduplicate notifications (same task won't notify twice)
     if (syncTaskNotifiedRef.current === syncTask.taskId) return;
 
@@ -291,13 +302,13 @@ export function IntegrationsSettings() {
             plugin.pluginId,
             "user_plugin_sync",
           );
-          if (isTaskActive(task)) {
+          if (task && isTaskActive(task)) {
             syncTaskNotifiedRef.current = null;
             setSyncingPluginId(plugin.pluginId);
             break;
           }
         } catch {
-          // 404 = no task found, which is fine
+          // Network / unexpected error — ignore; "no task" now returns null, not an error.
         }
       }
     };
