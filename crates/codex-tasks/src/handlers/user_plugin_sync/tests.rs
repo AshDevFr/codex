@@ -3,9 +3,9 @@ use chrono::Utc;
 use codex_db::ScanningStrategy;
 use codex_db::entities::{books, users};
 use codex_db::repositories::{
-    BookRepository, GenreRepository, LibraryRepository, ReadProgressRepository,
-    SeriesExternalIdRepository, SeriesMetadataRepository, SeriesRepository, TagRepository,
-    UserRepository, UserSeriesRatingRepository,
+    BookMetadataRepository, BookRepository, GenreRepository, LibraryRepository,
+    ReadProgressRepository, SeriesExternalIdRepository, SeriesMetadataRepository, SeriesRepository,
+    TagRepository, UserRepository, UserSeriesRatingRepository,
 };
 use codex_db::test_helpers::create_test_db;
 use codex_services::plugin::sync::{SyncEntry, SyncProgress, SyncReadingStatus};
@@ -809,6 +809,7 @@ async fn test_build_push_entries_metadata_flags() {
         genres: true,
         metadata: true,
         custom_metadata: true,
+        ..Default::default()
     };
     let on = push::build_push_entries(
         conn,
@@ -1384,6 +1385,257 @@ async fn test_build_push_entries_count_in_progress_volumes() {
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].progress.as_ref().unwrap().volumes, Some(2));
     assert!(entries[0].progress.as_ref().unwrap().chapters.is_none());
+}
+
+/// Set the detected volume on a book (creating its metadata row first).
+async fn set_book_volume(db: &sea_orm::DatabaseConnection, book_id: Uuid, volume: i32) {
+    BookMetadataRepository::create_with_title_and_number(db, book_id, None, None)
+        .await
+        .unwrap();
+    BookMetadataRepository::update_volume(db, book_id, Some(volume))
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn test_build_push_entries_detailed_progress_gating_and_max() {
+    let (db, _temp_dir) = create_test_db().await;
+    let conn = db.sea_orm_connection();
+
+    let library = LibraryRepository::create(conn, "Lib", "/p", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(conn, library.id, "Gapped", None)
+        .await
+        .unwrap();
+    let user = create_test_user(conn).await;
+
+    // Library holds volumes 5-8 (a gap from 1), all read. The relative count is
+    // 4, but the highest read volume is 8.
+    for (i, vol) in (5..=8).enumerate() {
+        let book = create_test_book(conn, series.id, library.id, i, 100).await;
+        set_book_volume(conn, book.id, vol).await;
+        ReadProgressRepository::mark_as_read(conn, user.id, book.id, 100)
+            .await
+            .unwrap();
+    }
+
+    SeriesExternalIdRepository::create(conn, series.id, "api:anilist", "808", None, None)
+        .await
+        .unwrap();
+
+    let settings = default_codex_settings();
+
+    // Without the capability: relative count only, no detail.
+    let plain = push::build_push_entries(
+        conn,
+        user.id,
+        "api:anilist",
+        Uuid::new_v4(),
+        &settings,
+        &[],
+        push::MetadataFlags::default(),
+    )
+    .await;
+    assert_eq!(plain.len(), 1);
+    let p = plain[0].progress.as_ref().unwrap();
+    assert_eq!(p.volumes, Some(4));
+    assert!(p.max_volume.is_none());
+    assert!(p.read_books.is_none());
+
+    // With the capability: accurate max plus the per-book breakdown.
+    let detailed = push::build_push_entries(
+        conn,
+        user.id,
+        "api:anilist",
+        Uuid::new_v4(),
+        &settings,
+        &[],
+        push::MetadataFlags {
+            detailed_progress: true,
+            ..Default::default()
+        },
+    )
+    .await;
+    assert_eq!(detailed.len(), 1);
+    let p = detailed[0].progress.as_ref().unwrap();
+    assert_eq!(p.volumes, Some(4));
+    assert_eq!(p.max_volume, Some(8));
+    assert!(p.max_chapter.is_none());
+    let books = p.read_books.as_ref().expect("readBooks attached");
+    assert_eq!(books.len(), 4);
+    assert!(books.iter().all(|b| b.completed));
+}
+
+#[tokio::test]
+async fn test_build_push_entries_max_volume_respects_count_partial_progress() {
+    let (db, _temp_dir) = create_test_db().await;
+    let conn = db.sea_orm_connection();
+
+    let library = LibraryRepository::create(conn, "Lib", "/p", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(conn, library.id, "Partial", None)
+        .await
+        .unwrap();
+    let user = create_test_user(conn).await;
+
+    // Volume 1 completed, volume 2 in-progress.
+    let b1 = create_test_book(conn, series.id, library.id, 1, 100).await;
+    set_book_volume(conn, b1.id, 1).await;
+    ReadProgressRepository::mark_as_read(conn, user.id, b1.id, 100)
+        .await
+        .unwrap();
+    let b2 = create_test_book(conn, series.id, library.id, 2, 100).await;
+    set_book_volume(conn, b2.id, 2).await;
+    ReadProgressRepository::upsert(conn, user.id, b2.id, 50, false)
+        .await
+        .unwrap();
+
+    SeriesExternalIdRepository::create(conn, series.id, "api:anilist", "12", None, None)
+        .await
+        .unwrap();
+
+    let detailed = push::MetadataFlags {
+        detailed_progress: true,
+        ..Default::default()
+    };
+
+    // Default settings: in-progress excluded from the count and the max.
+    let entries = push::build_push_entries(
+        conn,
+        user.id,
+        "api:anilist",
+        Uuid::new_v4(),
+        &default_codex_settings(),
+        &[],
+        detailed,
+    )
+    .await;
+    let p = entries[0].progress.as_ref().unwrap();
+    assert_eq!(p.max_volume, Some(1));
+    // The raw breakdown still lists both books regardless of the count setting.
+    assert_eq!(p.read_books.as_ref().unwrap().len(), 2);
+
+    // count_partial_progress on: in-progress volume 2 now counts → max is 2.
+    let with_partial = CodexSyncSettings {
+        count_partial_progress: true,
+        ..default_codex_settings()
+    };
+    let entries = push::build_push_entries(
+        conn,
+        user.id,
+        "api:anilist",
+        Uuid::new_v4(),
+        &with_partial,
+        &[],
+        detailed,
+    )
+    .await;
+    assert_eq!(entries[0].progress.as_ref().unwrap().max_volume, Some(2));
+}
+
+#[tokio::test]
+async fn test_build_push_entries_max_chapter() {
+    let (db, _temp_dir) = create_test_db().await;
+    let conn = db.sea_orm_connection();
+
+    let library = LibraryRepository::create(conn, "Lib", "/p", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(conn, library.id, "Chapters", None)
+        .await
+        .unwrap();
+    let user = create_test_user(conn).await;
+
+    // Two completed chapter-based books: 10 and a fractional 47.5.
+    let c1 = create_test_book(conn, series.id, library.id, 1, 30).await;
+    BookMetadataRepository::create_with_title_and_number(conn, c1.id, None, None)
+        .await
+        .unwrap();
+    BookMetadataRepository::update_chapter(conn, c1.id, Some(10.0))
+        .await
+        .unwrap();
+    ReadProgressRepository::mark_as_read(conn, user.id, c1.id, 30)
+        .await
+        .unwrap();
+    let c2 = create_test_book(conn, series.id, library.id, 2, 30).await;
+    BookMetadataRepository::create_with_title_and_number(conn, c2.id, None, None)
+        .await
+        .unwrap();
+    BookMetadataRepository::update_chapter(conn, c2.id, Some(47.5))
+        .await
+        .unwrap();
+    ReadProgressRepository::mark_as_read(conn, user.id, c2.id, 30)
+        .await
+        .unwrap();
+
+    SeriesExternalIdRepository::create(conn, series.id, "api:anilist", "475", None, None)
+        .await
+        .unwrap();
+
+    let entries = push::build_push_entries(
+        conn,
+        user.id,
+        "api:anilist",
+        Uuid::new_v4(),
+        &default_codex_settings(),
+        &[],
+        push::MetadataFlags {
+            detailed_progress: true,
+            ..Default::default()
+        },
+    )
+    .await;
+    let p = entries[0].progress.as_ref().unwrap();
+    assert_eq!(p.max_chapter, Some(47.5));
+    assert!(p.max_volume.is_none());
+}
+
+#[tokio::test]
+async fn test_build_push_entries_unmatched_includes_detail() {
+    let (db, _temp_dir) = create_test_db().await;
+    let conn = db.sea_orm_connection();
+
+    let library = LibraryRepository::create(conn, "Lib", "/p", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    // Series has progress + a detected volume but NO external ID for the source,
+    // so it goes through the search-fallback (unmatched) path.
+    let series = SeriesRepository::create(conn, library.id, "Unmatched Series", None)
+        .await
+        .unwrap();
+    let user = create_test_user(conn).await;
+
+    let book = create_test_book(conn, series.id, library.id, 1, 100).await;
+    set_book_volume(conn, book.id, 3).await;
+    ReadProgressRepository::mark_as_read(conn, user.id, book.id, 100)
+        .await
+        .unwrap();
+
+    let settings = CodexSyncSettings {
+        search_fallback: true,
+        ..default_codex_settings()
+    };
+    let entries = push::build_push_entries(
+        conn,
+        user.id,
+        "api:anilist",
+        Uuid::new_v4(),
+        &settings,
+        &[],
+        push::MetadataFlags {
+            detailed_progress: true,
+            ..Default::default()
+        },
+    )
+    .await;
+    // The unmatched entry carries an empty external ID and a title to search by.
+    assert_eq!(entries.len(), 1);
+    assert!(entries[0].external_id.is_empty());
+    let p = entries[0].progress.as_ref().unwrap();
+    assert_eq!(p.max_volume, Some(3));
+    assert_eq!(p.read_books.as_ref().unwrap().len(), 1);
 }
 
 #[tokio::test]

@@ -282,11 +282,18 @@ impl TaskHandler for UserPluginSyncHandler {
                 .as_ref()
                 .map(|m| m.capabilities.wants_full_metadata)
                 .unwrap_or(false);
+            // Detailed per-book progress is gated by capability only (no user
+            // toggle): volume/chapter/page numbers are benign reading-position data.
+            let wants_detailed_progress = manifest
+                .as_ref()
+                .map(|m| m.capabilities.wants_detailed_progress)
+                .unwrap_or(false);
             let metadata_flags = push::MetadataFlags {
                 tags: wants_full_metadata && codex_settings.send_tags,
                 genres: wants_full_metadata && codex_settings.send_genres,
                 metadata: wants_full_metadata && codex_settings.send_metadata,
                 custom_metadata: wants_full_metadata && codex_settings.send_custom_metadata,
+                detailed_progress: wants_detailed_progress,
             };
 
             if let Some(ref source) = external_id_source {
