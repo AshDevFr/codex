@@ -223,6 +223,44 @@ describe("PluginConfigModal", () => {
     expect(screen.getByText("Send tags")).toBeInTheDocument();
     expect(screen.getByText("Send genres")).toBeInTheDocument();
     expect(screen.getByText("Send metadata")).toBeInTheDocument();
+    expect(screen.getByText("Allow custom metadata")).toBeInTheDocument();
+  });
+
+  it("shows the full metadata policy for a recommendation plugin with wantsFullMetadata", () => {
+    const plugin = createMockPlugin({
+      manifest: {
+        name: "rec-plugin",
+        displayName: "Rec Plugin",
+        version: "1.0.0",
+        protocolVersion: "1.0",
+        description: "A recommendation plugin",
+        capabilities: {
+          metadataProvider: [],
+          userRecommendationProvider: true,
+          wantsFullMetadata: true,
+        },
+        contentTypes: [],
+        requiredCredentials: [],
+        scopes: [],
+      },
+    });
+
+    renderWithProviders(
+      <PluginConfigModal
+        plugin={plugin}
+        opened={true}
+        onClose={vi.fn()}
+        libraries={mockLibraries}
+      />,
+    );
+
+    // Recommendation plugins get the full policy too (tags/genres default on,
+    // so an admin can turn them off to trim payload).
+    expect(screen.getByText("Metadata Enrichment")).toBeInTheDocument();
+    expect(screen.getByText("Send tags")).toBeInTheDocument();
+    expect(screen.getByText("Send genres")).toBeInTheDocument();
+    expect(screen.getByText("Send metadata")).toBeInTheDocument();
+    expect(screen.getByText("Allow custom metadata")).toBeInTheDocument();
   });
 
   it("shows the automatic-sync cron field for a sync plugin", () => {

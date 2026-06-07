@@ -456,14 +456,34 @@ impl TaskHandler for UserPluginRecommendationsHandler {
                 && plugin_model
                     .as_ref()
                     .is_some_and(|p| p.send_metadata_enabled());
-            attach_seed_metadata(
-                db,
-                user_id,
-                &mut seeds,
-                send_metadata,
-                wants_full_metadata && rec_settings.send_custom_metadata,
-            )
-            .await;
+            // Custom metadata: capability + admin allow-gate + user opt-in.
+            let send_custom_metadata = wants_full_metadata
+                && plugin_model
+                    .as_ref()
+                    .is_some_and(|p| p.allow_custom_metadata_enabled())
+                && rec_settings.send_custom_metadata;
+            attach_seed_metadata(db, user_id, &mut seeds, send_metadata, send_custom_metadata)
+                .await;
+
+            // genres/tags are baseline taste signal on recommendation entries, so
+            // they default on; strip them only when a `wantsFullMetadata` plugin's
+            // admin policy explicitly turns them off (parity with sync).
+            let strip_genres = wants_full_metadata
+                && !plugin_model
+                    .as_ref()
+                    .is_some_and(|p| p.send_genres_enabled());
+            let strip_tags = wants_full_metadata
+                && !plugin_model.as_ref().is_some_and(|p| p.send_tags_enabled());
+            if strip_genres || strip_tags {
+                for seed in &mut seeds {
+                    if strip_genres {
+                        seed.genres.clear();
+                    }
+                    if strip_tags {
+                        seed.tags.clear();
+                    }
+                }
+            }
 
             // Call recommendations/get with curated seeds (not the full library)
             let request = RecommendationRequest {

@@ -146,11 +146,12 @@ Some plugins act on richer series data than reading progress alone — for examp
 
 **Admin (the plugin's _Configure_ dialog → _Metadata Enrichment_).** Whether each field is sent is the administrator's decision, because the plugin needs the data to function. These are **on by default** for a capable plugin (so it works out of the box); an admin can turn one off — typically to reduce payload:
 
-| Option            | Default | Sent data                                                                                   |
-| ----------------- | ------- | ------------------------------------------------------------------------------------------- |
-| **Send tags**     | On      | Each series' tags (small). Lets the plugin apply tag-based rules. (Sync plugins only.)       |
-| **Send genres**   | On      | Each series' genres (small). (Sync plugins only.)                                            |
-| **Send metadata** | On      | Summary, authors, publisher, age rating, language, reading direction. The **heaviest** one.  |
+| Option                    | Default | Sent data                                                                                   |
+| ------------------------- | ------- | ------------------------------------------------------------------------------------------- |
+| **Send tags**             | On      | Each series' tags (small). Lets the plugin apply tag-based rules.                            |
+| **Send genres**           | On      | Each series' genres (small).                                                                 |
+| **Send metadata**         | On      | Summary, authors, publisher, age rating, language, reading direction. The **heaviest** one.  |
+| **Allow custom metadata** | On      | Whether the plugin may receive users' custom metadata at all. A gate on top of the user opt-in — turn it off to forbid custom metadata entirely. |
 
 On a large library, **Send metadata** can add a lot (summaries are the big field), so an admin may turn it off for plugins that only need tags/genres.
 
@@ -160,9 +161,9 @@ On a large library, **Send metadata** can add a lot (summaries are the big field
 | ------------------------- | ------- | ------------------------------------------ |
 | **Share custom metadata** | Off     | Your user-defined custom metadata fields.  |
 
-Custom metadata is a free-form field that may hold private annotations, so it is **off by default** and only you can enable it — even if the plugin wants it. Only turn it on for plugins you trust.
+Custom metadata is a free-form field that may hold private annotations, so it is **off by default** and only you can enable it — even if the plugin wants it. Only turn it on for plugins you trust. (Your administrator can also forbid custom metadata for a plugin entirely via the **Allow custom metadata** policy above; when they do, your opt-in has no effect.)
 
-All of these are stored under the host-only `_codex` namespace (admin policy on the plugin's config; the user opt-out on your connection) and are read only by the server when building entries — the plugin never reads `_codex` directly. The tags/genres policy only affects sync; recommendation plugins always receive genres and tags as part of their taste signal.
+All of these are stored under the host-only `_codex` namespace (admin policy on the plugin's config; the user opt-out on your connection) and are read only by the server when building entries — the plugin never reads `_codex` directly. The policy applies to both sync and recommendation plugins; for recommendations, genres and tags are sent by default (they're useful taste signal), and an admin can turn them off to trim payload.
 
 ### Plugin-Specific Settings
 

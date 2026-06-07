@@ -120,6 +120,7 @@ function PluginConfigContent({
       sendTags: codexBool("sendTags"),
       sendGenres: codexBool("sendGenres"),
       sendMetadata: codexBool("sendMetadata"),
+      allowCustomMetadata: codexBool("allowCustomMetadata"),
       syncCronSchedule: plugin.syncCronSchedule ?? "",
     },
   });
@@ -176,6 +177,7 @@ function PluginConfigContent({
             sendTags: form.values.sendTags,
             sendGenres: form.values.sendGenres,
             sendMetadata: form.values.sendMetadata,
+            allowCustomMetadata: form.values.allowCustomMetadata,
           };
           config._codex = codex;
         }

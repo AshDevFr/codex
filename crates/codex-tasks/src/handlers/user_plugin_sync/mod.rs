@@ -301,7 +301,12 @@ impl TaskHandler for UserPluginSyncHandler {
                     && plugin.as_ref().is_some_and(|p| p.send_genres_enabled()),
                 metadata: wants_full_metadata
                     && plugin.as_ref().is_some_and(|p| p.send_metadata_enabled()),
-                custom_metadata: wants_full_metadata && codex_settings.send_custom_metadata,
+                // Custom metadata: capability + admin allow-gate + user opt-in.
+                custom_metadata: wants_full_metadata
+                    && plugin
+                        .as_ref()
+                        .is_some_and(|p| p.allow_custom_metadata_enabled())
+                    && codex_settings.send_custom_metadata,
                 detailed_progress: wants_detailed_progress,
             };
 
