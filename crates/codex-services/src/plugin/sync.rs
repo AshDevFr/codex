@@ -136,13 +136,18 @@ pub struct SyncEntry {
 }
 
 /// Reading progress details
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncProgress {
     /// Number of chapters read
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub chapters: Option<i32>,
-    /// Number of volumes read
+    /// Number of volumes read.
+    ///
+    /// This is the **relative** count of books the user has read in the series
+    /// (each file = 1 book), not an absolute volume number. Retained for
+    /// backward compatibility; consumers that want accurate progress for
+    /// libraries with gaps should prefer `max_volume`/`max_chapter`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub volumes: Option<i32>,
     /// Number of pages read (for single-volume works)
@@ -154,6 +159,53 @@ pub struct SyncProgress {
     /// Total number of volumes in the series (if known)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub total_volumes: Option<i32>,
+
+    /// Highest **read** volume number, derived from Codex's per-book volume
+    /// detection. Unlike `volumes` (a count), this is the absolute highest
+    /// volume the user has reached, so it stays correct for libraries that do
+    /// not start at volume 1 or have gaps. Computed over the same set of books
+    /// that feeds `volumes` (completed always; in-progress when the user's
+    /// `countPartialProgress` setting is on). `None` when no counted book has a
+    /// detected volume number.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_volume: Option<i32>,
+    /// Highest **read** chapter number, derived from per-book chapter detection.
+    /// `f32` because chapters can be fractional (e.g. 47.5 for side chapters).
+    /// Same set/semantics as `max_volume`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_chapter: Option<f32>,
+    /// Per-book reading-progress breakdown, one entry per book that has reading
+    /// progress (completed or in-progress). Attached on push only when the
+    /// plugin declares the `wantsDetailedProgress` capability, so authors of
+    /// custom sync targets can map progress however their service expects.
+    /// `None` (and the key omitted) otherwise.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub read_books: Option<Vec<SyncBookProgress>>,
+}
+
+/// Per-book reading progress, the unit of `SyncProgress::read_books`.
+///
+/// Carries reading *position* (detected volume/chapter plus page progress), not
+/// bibliographic metadata. All fields except `completed` are optional because
+/// detection and page tracking may be absent for a given book.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncBookProgress {
+    /// Detected volume number for this book, if known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub volume: Option<i32>,
+    /// Detected chapter number for this book, if known (fractional allowed).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chapter: Option<f32>,
+    /// Whether the user has finished this book.
+    pub completed: bool,
+    /// Current page within the book, if tracked.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub current_page: Option<i32>,
+    /// Fractional progress within the book (0.0-1.0 or a percentage, as stored
+    /// in `read_progress.progress_percentage`), if tracked.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub progress_percentage: Option<f64>,
 }
 
 // =============================================================================
@@ -393,6 +445,7 @@ mod tests {
                 pages: None,
                 total_chapters: None,
                 total_volumes: None,
+                ..Default::default()
             }),
             score: Some(8.5),
             started_at: Some("2026-01-15T00:00:00Z".to_string()),
@@ -444,6 +497,7 @@ mod tests {
             pages: Some(3200),
             total_chapters: None,
             total_volumes: None,
+            ..Default::default()
         };
         let json = serde_json::to_value(&progress).unwrap();
         assert_eq!(json["chapters"], 100);
@@ -459,6 +513,7 @@ mod tests {
             pages: None,
             total_chapters: None,
             total_volumes: None,
+            ..Default::default()
         };
         let json = serde_json::to_value(&progress).unwrap();
         assert_eq!(json["chapters"], 50);
@@ -474,6 +529,7 @@ mod tests {
             pages: None,
             total_chapters: Some(200),
             total_volumes: Some(20),
+            ..Default::default()
         };
         let json = serde_json::to_value(&progress).unwrap();
         assert_eq!(json["chapters"], 42);
@@ -498,6 +554,107 @@ mod tests {
         assert!(progress.pages.is_none());
     }
 
+    #[test]
+    fn test_sync_progress_detailed_fields_omitted_when_none() {
+        // Backward compatibility: progress without the detailed fields must not
+        // emit the new keys, so existing plugins see byte-identical output.
+        let progress = SyncProgress {
+            volumes: Some(4),
+            ..Default::default()
+        };
+        let json = serde_json::to_value(&progress).unwrap();
+        let obj = json.as_object().unwrap();
+        assert_eq!(json["volumes"], 4);
+        assert!(!obj.contains_key("maxVolume"));
+        assert!(!obj.contains_key("maxChapter"));
+        assert!(!obj.contains_key("readBooks"));
+    }
+
+    #[test]
+    fn test_sync_progress_detailed_fields_serialization() {
+        let progress = SyncProgress {
+            volumes: Some(4),
+            max_volume: Some(8),
+            max_chapter: Some(123.5),
+            read_books: Some(vec![
+                SyncBookProgress {
+                    volume: Some(1),
+                    chapter: None,
+                    completed: true,
+                    current_page: Some(200),
+                    progress_percentage: Some(1.0),
+                },
+                SyncBookProgress {
+                    volume: None,
+                    chapter: Some(47.5),
+                    completed: false,
+                    current_page: Some(10),
+                    progress_percentage: Some(0.25),
+                },
+            ]),
+            ..Default::default()
+        };
+        let json = serde_json::to_value(&progress).unwrap();
+        assert_eq!(json["volumes"], 4);
+        assert_eq!(json["maxVolume"], 8);
+        assert_eq!(json["maxChapter"], 123.5);
+
+        let books = json["readBooks"].as_array().unwrap();
+        assert_eq!(books.len(), 2);
+        assert_eq!(books[0]["volume"], 1);
+        assert_eq!(books[0]["completed"], true);
+        assert_eq!(books[0]["currentPage"], 200);
+        assert_eq!(books[0]["progressPercentage"], 1.0);
+        // Fractional chapter survives; absent volume key is omitted.
+        assert_eq!(books[1]["chapter"], 47.5);
+        assert_eq!(books[1]["completed"], false);
+        assert!(!books[1].as_object().unwrap().contains_key("volume"));
+    }
+
+    #[test]
+    fn test_sync_progress_detailed_round_trip() {
+        let json = json!({
+            "volumes": 4,
+            "maxVolume": 8,
+            "maxChapter": 123.5,
+            "readBooks": [
+                {"volume": 1, "completed": true, "currentPage": 200},
+                {"chapter": 47.5, "completed": false}
+            ]
+        });
+        let progress: SyncProgress = serde_json::from_value(json).unwrap();
+        assert_eq!(progress.volumes, Some(4));
+        assert_eq!(progress.max_volume, Some(8));
+        assert_eq!(progress.max_chapter, Some(123.5));
+
+        let books = progress.read_books.unwrap();
+        assert_eq!(books.len(), 2);
+        assert_eq!(books[0].volume, Some(1));
+        assert!(books[0].completed);
+        assert_eq!(books[0].current_page, Some(200));
+        assert_eq!(books[1].chapter, Some(47.5));
+        assert!(!books[1].completed);
+        assert!(books[1].volume.is_none());
+    }
+
+    #[test]
+    fn test_sync_book_progress_omits_none_fields() {
+        let book = SyncBookProgress {
+            volume: Some(2),
+            chapter: None,
+            completed: true,
+            current_page: None,
+            progress_percentage: None,
+        };
+        let json = serde_json::to_value(&book).unwrap();
+        let obj = json.as_object().unwrap();
+        assert_eq!(json["volume"], 2);
+        assert_eq!(json["completed"], true);
+        assert!(!obj.contains_key("chapter"));
+        assert!(!obj.contains_key("currentPage"));
+        assert!(!obj.contains_key("progressPercentage"));
+    }
+
     // =========================================================================
     // Push Progress Tests
     // =========================================================================
@@ -515,6 +672,7 @@ mod tests {
                         pages: None,
                         total_chapters: None,
                         total_volumes: None,
+                        ..Default::default()
                     }),
                     score: None,
                     started_at: None,
@@ -664,6 +822,7 @@ mod tests {
                     pages: None,
                     total_chapters: None,
                     total_volumes: None,
+                    ..Default::default()
                 }),
                 score: Some(7.0),
                 started_at: None,
@@ -763,6 +922,7 @@ mod tests {
                 pages: None,
                 total_chapters: None,
                 total_volumes: None,
+                ..Default::default()
             }),
             score: None,
             started_at: None,

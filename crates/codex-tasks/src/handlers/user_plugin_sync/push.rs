@@ -126,6 +126,9 @@ fn project_sync_entry(
         pages: None,
         total_chapters: total_chapter_count.map(|c| c as i32),
         total_volumes: total_volume_count,
+        // Detailed progress (max_volume/max_chapter/read_books) is wired in a
+        // later phase; left at defaults here.
+        ..Default::default()
     };
 
     let (score, notes) = if settings.sync_ratings {
