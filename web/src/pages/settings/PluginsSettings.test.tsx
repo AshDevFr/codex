@@ -1751,7 +1751,8 @@ describe("PluginsSettings - Official Plugins section", () => {
     expect(screen.getByText("Mangabaka Metadata")).toBeInTheDocument();
     expect(screen.getByText("AniList Sync")).toBeInTheDocument();
     expect(screen.getByText("AniList Recommendations")).toBeInTheDocument();
-    expect(screen.getByText("Echo Metadata")).toBeInTheDocument();
+    // The echo plugins are debug-only and intentionally excluded from the gallery.
+    expect(screen.queryByText("Echo Metadata")).not.toBeInTheDocument();
   });
 
   it("shows type badges for each official plugin", async () => {
@@ -1764,8 +1765,8 @@ describe("PluginsSettings - Official Plugins section", () => {
       // Each plugin type should appear as a badge
       expect(screen.getByText("Sync")).toBeInTheDocument();
       expect(screen.getByText("Recommendations")).toBeInTheDocument();
-      // "Metadata" appears for Echo, Mangabaka, and Open Library plugins
-      expect(screen.getAllByText("Metadata").length).toBeGreaterThanOrEqual(3);
+      // "Metadata" appears for the Mangabaka and Open Library plugins
+      expect(screen.getAllByText("Metadata").length).toBeGreaterThanOrEqual(2);
       // "Releases" appears for MangaUpdates and Nyaa plugins
       expect(screen.getAllByText("Releases").length).toBeGreaterThanOrEqual(2);
     });
@@ -1784,12 +1785,12 @@ describe("PluginsSettings - Official Plugins section", () => {
     await user.click(screen.getByText("Official Plugins"));
 
     await waitFor(() => {
-      // All 5 official plugins should show their names
+      // All official plugins should show their names (echo plugins are excluded)
       expect(screen.getByText("Open Library Metadata")).toBeInTheDocument();
       expect(screen.getByText("Mangabaka Metadata")).toBeInTheDocument();
       expect(screen.getByText("AniList Sync")).toBeInTheDocument();
       expect(screen.getByText("AniList Recommendations")).toBeInTheDocument();
-      expect(screen.getByText("Echo Metadata")).toBeInTheDocument();
+      expect(screen.queryByText("Echo Metadata")).not.toBeInTheDocument();
     });
 
     // No "Installed" badges since nothing is installed

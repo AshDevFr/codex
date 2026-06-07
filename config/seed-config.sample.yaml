@@ -78,6 +78,28 @@ plugins:
       - "library:scan"
     credential_delivery: env
 
+  # Echo Sync - test/debug sync plugin (no credentials needed)
+  - name: sync-echo
+    display_name: Echo Sync Plugin
+    description: Test sync plugin that echoes push payloads and returns deterministic pull entries
+    plugin_type: user
+    command: node
+    args: ["/opt/codex/plugins/sync-echo/dist/index.js"]
+    permissions: []
+    scopes: []
+    credential_delivery: env
+
+  # Echo Recommendations - test/debug recommendations plugin (no credentials needed)
+  - name: recommendations-echo
+    display_name: Echo Recommendations Plugin
+    description: Test recommendations plugin that echoes library seeds back as recommendations
+    plugin_type: user
+    command: node
+    args: ["/opt/codex/plugins/recommendations-echo/dist/index.js"]
+    permissions: []
+    scopes: []
+    credential_delivery: env
+
   # Open Library - Book metadata provider (no credentials needed)
   - name: metadata-openlibrary
     display_name: Open Library
