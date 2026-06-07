@@ -81,6 +81,13 @@ pub struct UserPluginDto {
     /// (host-side preference, derived from `config._codex.autoSync`). When
     /// false (the default), syncs run only when manually triggered.
     pub auto_sync: bool,
+    /// The admin-configured cron schedule that drives automatic syncs for this
+    /// plugin (the normalized 6-field form), or `None` when the admin has not
+    /// set one. Surfaced read-only so the UI can show the cadence to users and
+    /// indicate when auto sync isn't set up yet. The cadence is plugin-wide, not
+    /// per-user.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sync_cron_schedule: Option<String>,
     /// User privacy opt-out for sending user-defined custom metadata (host-side,
     /// from `config._codex.sendCustomMetadata`). Default false. tags/genres/the
     /// bibliographic block are admin policy on the plugin, not user-controlled.
@@ -423,6 +430,7 @@ mod tests {
             user_setup_instructions: None,
             config: serde_json::json!({}),
             auto_sync: false,
+            sync_cron_schedule: None,
             send_custom_metadata: false,
             capabilities: UserPluginCapabilitiesDto {
                 read_sync: true,
@@ -440,6 +448,46 @@ mod tests {
         assert_eq!(json["capabilities"]["wantsDetailedProgress"], false);
         assert!(!json.as_object().unwrap().contains_key("userConfigSchema"));
         assert!(!json.as_object().unwrap().contains_key("lastSyncResult"));
+        // Absent when the admin hasn't set a schedule.
+        assert!(!json.as_object().unwrap().contains_key("syncCronSchedule"));
+    }
+
+    #[test]
+    fn test_user_plugin_dto_exposes_sync_cron_schedule() {
+        let dto = UserPluginDto {
+            id: Uuid::new_v4(),
+            plugin_id: Uuid::new_v4(),
+            plugin_name: "sync-anilist".to_string(),
+            plugin_display_name: "AniList Sync".to_string(),
+            plugin_type: "user".to_string(),
+            enabled: true,
+            connected: true,
+            requires_auth: true,
+            health_status: "healthy".to_string(),
+            external_username: None,
+            external_avatar_url: None,
+            last_sync_at: None,
+            last_success_at: None,
+            requires_oauth: true,
+            oauth_configured: true,
+            description: None,
+            user_setup_instructions: None,
+            config: serde_json::json!({}),
+            auto_sync: true,
+            sync_cron_schedule: Some("0 */5 * * * *".to_string()),
+            send_custom_metadata: false,
+            capabilities: UserPluginCapabilitiesDto {
+                read_sync: true,
+                user_recommendation_provider: false,
+                wants_full_metadata: false,
+                wants_detailed_progress: false,
+            },
+            user_config_schema: None,
+            last_sync_result: None,
+            created_at: chrono::Utc::now(),
+        };
+        let json = serde_json::to_value(&dto).unwrap();
+        assert_eq!(json["syncCronSchedule"], "0 */5 * * * *");
     }
 
     #[test]
@@ -477,6 +525,7 @@ mod tests {
             user_setup_instructions: None,
             config: serde_json::json!({}),
             auto_sync: false,
+            sync_cron_schedule: None,
             send_custom_metadata: false,
             capabilities: UserPluginCapabilitiesDto {
                 read_sync: true,
@@ -525,6 +574,7 @@ mod tests {
             user_setup_instructions: None,
             config: serde_json::json!({}),
             auto_sync: false,
+            sync_cron_schedule: None,
             send_custom_metadata: false,
             capabilities: UserPluginCapabilitiesDto {
                 read_sync: true,

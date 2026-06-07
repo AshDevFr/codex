@@ -76,6 +76,24 @@ function getNextRunTime(expression: string): Date | null {
   }
 }
 
+// Concise human-readable description of a cron expression for read-only display
+// (e.g. showing users the admin-set sync cadence). Tolerant of the 6-field
+// (seconds-precision) form the backend stores, and of empty/invalid input,
+// returning `null` so callers can fall back to a "not set up" message.
+export function describeCron(
+  expression: string | null | undefined,
+): string | null {
+  if (!expression?.trim()) return null;
+  try {
+    return cronToString(expression.trim(), {
+      throwExceptionOnParseError: true,
+      verbose: false,
+    });
+  } catch {
+    return null;
+  }
+}
+
 export function CronInput({
   value = "",
   onChange,

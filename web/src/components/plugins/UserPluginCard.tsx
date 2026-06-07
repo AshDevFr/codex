@@ -32,6 +32,7 @@ import type {
   SyncStatusDto,
   UserPluginDto,
 } from "@/api/userPlugins";
+import { describeCron } from "@/components/forms/CronInput";
 
 // =============================================================================
 // Helpers
@@ -142,6 +143,9 @@ export function ConnectedPluginCard({
   const [tokenValue, setTokenValue] = useState("");
   const showTokenInput = !plugin.connected && plugin.requiresOauth;
   const isSyncPlugin = plugin.capabilities?.readSync === true;
+  // Human-readable cadence of the admin-set sync cron, or null when no schedule
+  // is configured (in which case auto sync can't run and the toggle is disabled).
+  const autoSyncCadence = describeCron(plugin.syncCronSchedule);
   const isRecommendationPlugin =
     plugin.capabilities?.userRecommendationProvider === true;
   const configFields =
@@ -282,16 +286,22 @@ export function ConnectedPluginCard({
         <Group justify="space-between" mb="xs" wrap="nowrap">
           <div>
             <Text size="sm">Automatic sync</Text>
-            <Text size="xs" c="dimmed">
-              Sync on the schedule set by your administrator
-            </Text>
+            {autoSyncCadence ? (
+              <Text size="xs" c="dimmed">
+                {autoSyncCadence} · schedule set by your administrator
+              </Text>
+            ) : (
+              <Text size="xs" c="dimmed">
+                Not set up by your administrator yet
+              </Text>
+            )}
           </div>
           <Switch
             checked={plugin.autoSync}
             onChange={(e) =>
               onSetSyncMode(plugin.pluginId, e.currentTarget.checked)
             }
-            disabled={settingSyncMode}
+            disabled={settingSyncMode || !autoSyncCadence}
             aria-label="Automatic sync"
           />
         </Group>

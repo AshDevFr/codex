@@ -42569,6 +42569,13 @@
             "type": "boolean",
             "description": "User privacy opt-out for sending user-defined custom metadata (host-side,\nfrom `config._codex.sendCustomMetadata`). Default false. tags/genres/the\nbibliographic block are admin policy on the plugin, not user-controlled."
           },
+          "syncCronSchedule": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The admin-configured cron schedule that drives automatic syncs for this\nplugin (the normalized 6-field form), or `None` when the admin has not\nset one. Surfaced read-only so the UI can show the cadence to users and\nindicate when auto sync isn't set up yet. The cadence is plugin-wide, not\nper-user."
+          },
           "userConfigSchema": {
             "oneOf": [
               {

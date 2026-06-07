@@ -2,7 +2,25 @@ import { screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderWithProviders, userEvent } from "@/test/utils";
-import { CronInput } from "./CronInput";
+import { CronInput, describeCron } from "./CronInput";
+
+describe("describeCron", () => {
+  it("describes a 6-field (seconds-precision) expression", () => {
+    expect(describeCron("0 */5 * * * *")).toMatch(/every 5 minutes/i);
+  });
+
+  it("describes a standard 5-field expression", () => {
+    expect(describeCron("0 0 * * *")).toMatch(/12:00 am/i);
+  });
+
+  it("returns null for empty, nullish, or invalid input", () => {
+    expect(describeCron("")).toBeNull();
+    expect(describeCron("   ")).toBeNull();
+    expect(describeCron(null)).toBeNull();
+    expect(describeCron(undefined)).toBeNull();
+    expect(describeCron("not a cron")).toBeNull();
+  });
+});
 
 describe("CronInput", () => {
   const mockOnChange = vi.fn();

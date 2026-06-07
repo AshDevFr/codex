@@ -31,6 +31,7 @@ const connectedPlugin: UserPluginDto = {
   description: "Sync your reading progress with AniList",
   config: {},
   autoSync: false,
+  syncCronSchedule: "0 0 */6 * * *",
   capabilities: { readSync: true, userRecommendationProvider: false },
   createdAt: new Date().toISOString(),
 } as UserPluginDto;
@@ -91,6 +92,7 @@ const noAuthSyncPlugin: UserPluginDto = {
   description: "A debug sync plugin",
   config: {},
   autoSync: false,
+  syncCronSchedule: "0 */5 * * * *",
   capabilities: { readSync: true, userRecommendationProvider: false },
   createdAt: new Date().toISOString(),
 } as UserPluginDto;
@@ -245,6 +247,33 @@ describe("ConnectedPluginCard", () => {
 
     await user.click(screen.getByRole("switch", { name: /automatic sync/i }));
     expect(onSetSyncMode).toHaveBeenCalledWith("plugin-1", true);
+  });
+
+  it("shows the admin-set cadence when a sync schedule is configured", () => {
+    renderWithProviders(
+      <ConnectedPluginCard {...defaultProps} onSetSyncMode={vi.fn()} />,
+    );
+    // "0 0 */6 * * *" → cronstrue: "Every 6 hours"
+    expect(screen.getByText(/every 6 hours/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole("switch", { name: /automatic sync/i }),
+    ).toBeEnabled();
+  });
+
+  it("shows a not-set-up message and disables the switch when no cron is set", () => {
+    renderWithProviders(
+      <ConnectedPluginCard
+        {...defaultProps}
+        plugin={{ ...connectedPlugin, syncCronSchedule: null }}
+        onSetSyncMode={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByText(/not set up by your administrator yet/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("switch", { name: /automatic sync/i }),
+    ).toBeDisabled();
   });
 
   it("shows Sync Now button when connected with onSync handler", () => {
