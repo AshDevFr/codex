@@ -42,6 +42,16 @@ pub const CODEX_CONFIG_NAMESPACE: &str = "_codex";
 /// (the default). Distinct from `syncMode`, which selects sync *direction*.
 pub const AUTO_SYNC_KEY: &str = "autoSync";
 
+/// JSON keys (inside `_codex`) for the per-field metadata-enrichment opt-ins.
+///
+/// Each gates whether the host attaches that data to the entries it sends a
+/// plugin that declares the `wantsFullMetadata` capability. Absent/false means
+/// the data is not sent (the default), so payloads stay minimal unless opted in.
+pub const SEND_TAGS_KEY: &str = "sendTags";
+pub const SEND_GENRES_KEY: &str = "sendGenres";
+pub const SEND_METADATA_KEY: &str = "sendMetadata";
+pub const SEND_CUSTOM_METADATA_KEY: &str = "sendCustomMetadata";
+
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
 #[sea_orm(table_name = "user_plugins")]
 pub struct Model {
@@ -197,11 +207,37 @@ impl Model {
     /// combines this with `enabled` and [`Self::is_authenticated`] to decide
     /// whether to enqueue a sync when the plugin's cron fires.
     pub fn auto_sync_enabled(&self) -> bool {
+        self.codex_flag(AUTO_SYNC_KEY)
+    }
+
+    /// Read a host-only `config._codex.<key>` boolean, defaulting to false when
+    /// the namespace, key, or boolean type is absent.
+    fn codex_flag(&self, key: &str) -> bool {
         self.config
             .get(CODEX_CONFIG_NAMESPACE)
-            .and_then(|codex| codex.get(AUTO_SYNC_KEY))
+            .and_then(|codex| codex.get(key))
             .and_then(|v| v.as_bool())
             .unwrap_or(false)
+    }
+
+    /// Whether the user opted into sending series `tags` to this plugin.
+    pub fn send_tags_enabled(&self) -> bool {
+        self.codex_flag(SEND_TAGS_KEY)
+    }
+
+    /// Whether the user opted into sending series `genres` to this plugin.
+    pub fn send_genres_enabled(&self) -> bool {
+        self.codex_flag(SEND_GENRES_KEY)
+    }
+
+    /// Whether the user opted into sending the bibliographic metadata block.
+    pub fn send_metadata_enabled(&self) -> bool {
+        self.codex_flag(SEND_METADATA_KEY)
+    }
+
+    /// Whether the user opted into sending user-defined custom metadata.
+    pub fn send_custom_metadata_enabled(&self) -> bool {
+        self.codex_flag(SEND_CUSTOM_METADATA_KEY)
     }
 
     /// Parse health status
@@ -385,5 +421,27 @@ mod tests {
         let mut model = test_model();
         model.config = serde_json::json!({ "_codex": { "autoSync": false } });
         assert!(!model.auto_sync_enabled());
+    }
+
+    #[test]
+    fn test_metadata_flags_default_false() {
+        let model = test_model();
+        assert!(!model.send_tags_enabled());
+        assert!(!model.send_genres_enabled());
+        assert!(!model.send_metadata_enabled());
+        assert!(!model.send_custom_metadata_enabled());
+    }
+
+    #[test]
+    fn test_metadata_flags_independent() {
+        let mut model = test_model();
+        model.config = serde_json::json!({
+            "_codex": { "sendTags": true, "sendCustomMetadata": true }
+        });
+        // Each flag is read independently; only the enabled ones are true.
+        assert!(model.send_tags_enabled());
+        assert!(model.send_custom_metadata_enabled());
+        assert!(!model.send_genres_enabled());
+        assert!(!model.send_metadata_enabled());
     }
 }

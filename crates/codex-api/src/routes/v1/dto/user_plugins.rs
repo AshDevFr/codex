@@ -75,6 +75,12 @@ pub struct UserPluginDto {
     /// (host-side preference, derived from `config._codex.autoSync`). When
     /// false (the default), syncs run only when manually triggered.
     pub auto_sync: bool,
+    /// Per-field metadata-enrichment opt-ins (host-side, from `config._codex.send*`).
+    /// Only meaningful when the plugin declares `wantsFullMetadata`; all default false.
+    pub send_tags: bool,
+    pub send_genres: bool,
+    pub send_metadata: bool,
+    pub send_custom_metadata: bool,
     /// Plugin capabilities (derived from manifest)
     pub capabilities: UserPluginCapabilitiesDto,
     /// User-facing configuration schema (from plugin manifest)
@@ -119,6 +125,9 @@ pub struct UserPluginCapabilitiesDto {
     pub read_sync: bool,
     /// Can provide recommendations
     pub user_recommendation_provider: bool,
+    /// Consumes enriched series data; gates whether the `_codex.send*` metadata
+    /// toggles are shown on the connection.
+    pub wants_full_metadata: bool,
 }
 
 /// Request to update user plugin configuration
@@ -136,6 +145,28 @@ pub struct SetSyncModeRequest {
     /// `true` opts the connection into scheduled syncs on the plugin's
     /// admin-configured cadence; `false` is manual-only (the default).
     pub auto: bool,
+}
+
+/// Request to set a connection's metadata-enrichment opt-ins.
+///
+/// Each field is optional; only the provided ones are updated (partial update),
+/// and other `_codex` settings are preserved. Only meaningful for plugins that
+/// declare the `wantsFullMetadata` capability.
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SetMetadataSettingsRequest {
+    /// Send series tags (top-level) to the plugin.
+    #[serde(default)]
+    pub send_tags: Option<bool>,
+    /// Send series genres (top-level) to the plugin.
+    #[serde(default)]
+    pub send_genres: Option<bool>,
+    /// Send the bibliographic metadata block to the plugin.
+    #[serde(default)]
+    pub send_metadata: Option<bool>,
+    /// Send user-defined custom metadata to the plugin.
+    #[serde(default)]
+    pub send_custom_metadata: Option<bool>,
 }
 
 /// Request to set user credentials (e.g., personal access token)
@@ -392,9 +423,14 @@ mod tests {
             user_setup_instructions: None,
             config: serde_json::json!({}),
             auto_sync: false,
+            send_tags: false,
+            send_genres: false,
+            send_metadata: false,
+            send_custom_metadata: false,
             capabilities: UserPluginCapabilitiesDto {
                 read_sync: true,
                 user_recommendation_provider: false,
+                wants_full_metadata: false,
             },
             user_config_schema: None,
             last_sync_result: None,
@@ -441,9 +477,14 @@ mod tests {
             user_setup_instructions: None,
             config: serde_json::json!({}),
             auto_sync: false,
+            send_tags: false,
+            send_genres: false,
+            send_metadata: false,
+            send_custom_metadata: false,
             capabilities: UserPluginCapabilitiesDto {
                 read_sync: true,
                 user_recommendation_provider: false,
+                wants_full_metadata: false,
             },
             user_config_schema: Some(schema),
             last_sync_result: None,
@@ -485,9 +526,14 @@ mod tests {
             user_setup_instructions: None,
             config: serde_json::json!({}),
             auto_sync: false,
+            send_tags: false,
+            send_genres: false,
+            send_metadata: false,
+            send_custom_metadata: false,
             capabilities: UserPluginCapabilitiesDto {
                 read_sync: true,
                 user_recommendation_provider: false,
+                wants_full_metadata: false,
             },
             user_config_schema: None,
             last_sync_result: Some(sync_result.clone()),

@@ -3,8 +3,9 @@ use chrono::Utc;
 use codex_db::ScanningStrategy;
 use codex_db::entities::{books, users};
 use codex_db::repositories::{
-    BookRepository, LibraryRepository, ReadProgressRepository, SeriesExternalIdRepository,
-    SeriesMetadataRepository, SeriesRepository, UserRepository, UserSeriesRatingRepository,
+    BookRepository, GenreRepository, LibraryRepository, ReadProgressRepository,
+    SeriesExternalIdRepository, SeriesMetadataRepository, SeriesRepository, TagRepository,
+    UserRepository, UserSeriesRatingRepository,
 };
 use codex_db::test_helpers::create_test_db;
 use codex_services::plugin::sync::{SyncEntry, SyncProgress, SyncReadingStatus};
@@ -270,6 +271,8 @@ async fn test_match_and_apply_no_source() {
         library_name: String::new(),
         metadata: None,
         custom_metadata: None,
+        genres: Vec::new(),
+        tags: Vec::new(),
     }];
 
     let (matched, applied) = pull::match_and_apply_pulled_entries(
@@ -332,6 +335,8 @@ async fn test_match_and_apply_with_matches() {
             library_name: String::new(),
             metadata: None,
             custom_metadata: None,
+            genres: Vec::new(),
+            tags: Vec::new(),
         },
         SyncEntry {
             external_id: "99999".to_string(), // no match
@@ -347,6 +352,8 @@ async fn test_match_and_apply_with_matches() {
             library_name: String::new(),
             metadata: None,
             custom_metadata: None,
+            genres: Vec::new(),
+            tags: Vec::new(),
         },
     ];
 
@@ -420,6 +427,8 @@ async fn test_match_and_apply_pulled_entries_applies_progress() {
         library_name: String::new(),
         metadata: None,
         custom_metadata: None,
+        genres: Vec::new(),
+        tags: Vec::new(),
     }];
 
     let (matched, applied) = pull::match_and_apply_pulled_entries(
@@ -521,6 +530,8 @@ async fn test_match_and_apply_skips_already_read() {
         library_name: String::new(),
         metadata: None,
         custom_metadata: None,
+        genres: Vec::new(),
+        tags: Vec::new(),
     }];
 
     let (matched, applied) = pull::match_and_apply_pulled_entries(
@@ -554,6 +565,8 @@ fn pulled_completed_entry(external_id: &str) -> SyncEntry {
         library_name: String::new(),
         metadata: None,
         custom_metadata: None,
+        genres: Vec::new(),
+        tags: Vec::new(),
     }
 }
 
@@ -606,6 +619,7 @@ async fn test_build_push_entries_respects_library_scope() {
         Uuid::new_v4(),
         &default_codex_settings(),
         &[allowed],
+        push::MetadataFlags::default(),
     )
     .await;
 
@@ -621,6 +635,7 @@ async fn test_build_push_entries_respects_library_scope() {
         Uuid::new_v4(),
         &default_codex_settings(),
         &[],
+        push::MetadataFlags::default(),
     )
     .await;
     assert_eq!(entries_all.len(), 2);
@@ -733,6 +748,104 @@ async fn test_pull_skips_out_of_scope_library() {
     );
 }
 
+#[tokio::test]
+async fn test_build_push_entries_metadata_flags() {
+    let (db, _temp_dir) = create_test_db().await;
+    let conn = db.sea_orm_connection();
+
+    let library = LibraryRepository::create(conn, "Lib", "/p", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(conn, library.id, "Flagged Manga", None)
+        .await
+        .unwrap();
+    let book = create_test_book(conn, series.id, library.id, 1, 100).await;
+    let user = create_test_user(conn).await;
+    ReadProgressRepository::mark_as_read(conn, user.id, book.id, 100)
+        .await
+        .unwrap();
+    SeriesExternalIdRepository::create(conn, series.id, "api:anilist", "555", None, None)
+        .await
+        .unwrap();
+
+    // Enrichment source data on the series.
+    GenreRepository::set_genres_for_series(
+        conn,
+        series.id,
+        vec!["Action".to_string(), "Dark Fantasy".to_string()],
+    )
+    .await
+    .unwrap();
+    TagRepository::set_tags_for_series(conn, series.id, vec!["Gore".to_string()])
+        .await
+        .unwrap();
+    SeriesMetadataRepository::update_summary(conn, series.id, Some("A grim tale".to_string()))
+        .await
+        .unwrap();
+
+    let source = "api:anilist";
+
+    // All flags off → today's minimal payload (no enrichment).
+    let off = push::build_push_entries(
+        conn,
+        user.id,
+        source,
+        Uuid::new_v4(),
+        &default_codex_settings(),
+        &[],
+        push::MetadataFlags::default(),
+    )
+    .await;
+    assert_eq!(off.len(), 1);
+    assert!(off[0].genres.is_empty());
+    assert!(off[0].tags.is_empty());
+    assert!(off[0].metadata.is_none());
+
+    // All flags on → each enrichment field is attached.
+    let flags = push::MetadataFlags {
+        tags: true,
+        genres: true,
+        metadata: true,
+        custom_metadata: true,
+    };
+    let on = push::build_push_entries(
+        conn,
+        user.id,
+        source,
+        Uuid::new_v4(),
+        &default_codex_settings(),
+        &[],
+        flags,
+    )
+    .await;
+    assert_eq!(on.len(), 1);
+    assert_eq!(on[0].genres.len(), 2);
+    assert!(on[0].genres.iter().any(|g| g == "Action"));
+    assert!(on[0].genres.iter().any(|g| g == "Dark Fantasy"));
+    assert_eq!(on[0].tags, vec!["Gore".to_string()]);
+    let meta = on[0].metadata.as_ref().expect("metadata block attached");
+    assert_eq!(meta.summary.as_deref(), Some("A grim tale"));
+
+    // Only one flag on → only that field attaches.
+    let genres_only = push::MetadataFlags {
+        genres: true,
+        ..Default::default()
+    };
+    let entries = push::build_push_entries(
+        conn,
+        user.id,
+        source,
+        Uuid::new_v4(),
+        &default_codex_settings(),
+        &[],
+        genres_only,
+    )
+    .await;
+    assert_eq!(entries[0].genres.len(), 2);
+    assert!(entries[0].tags.is_empty());
+    assert!(entries[0].metadata.is_none());
+}
+
 /// Default Codex sync settings for tests (matches production defaults)
 fn default_codex_settings() -> CodexSyncSettings {
     CodexSyncSettings {
@@ -741,6 +854,10 @@ fn default_codex_settings() -> CodexSyncSettings {
         count_partial_progress: false,
         sync_ratings: true,
         search_fallback: false,
+        send_tags: false,
+        send_genres: false,
+        send_metadata: false,
+        send_custom_metadata: false,
     }
 }
 
@@ -797,6 +914,7 @@ async fn test_build_push_entries_with_progress() {
         Uuid::new_v4(),
         &default_codex_settings(),
         &[],
+        push::MetadataFlags::default(),
     )
     .await;
 
@@ -863,6 +981,7 @@ async fn test_build_push_entries_all_completed() {
         Uuid::new_v4(),
         &default_codex_settings(),
         &[],
+        push::MetadataFlags::default(),
     )
     .await;
 
@@ -916,6 +1035,7 @@ async fn test_build_push_entries_skips_no_progress() {
         Uuid::new_v4(),
         &default_codex_settings(),
         &[],
+        push::MetadataFlags::default(),
     )
     .await;
 
@@ -1107,6 +1227,7 @@ async fn test_build_push_entries_skip_completed_series() {
         Uuid::new_v4(),
         &settings,
         &[],
+        push::MetadataFlags::default(),
     )
     .await;
 
@@ -1166,6 +1287,7 @@ async fn test_build_push_entries_skip_in_progress_series() {
         Uuid::new_v4(),
         &settings,
         &[],
+        push::MetadataFlags::default(),
     )
     .await;
 
@@ -1234,6 +1356,7 @@ async fn test_build_push_entries_count_in_progress_volumes() {
         Uuid::new_v4(),
         &settings,
         &[],
+        push::MetadataFlags::default(),
     )
     .await;
     assert_eq!(entries.len(), 1);
@@ -1253,6 +1376,7 @@ async fn test_build_push_entries_count_in_progress_volumes() {
         Uuid::new_v4(),
         &settings_with_partial,
         &[],
+        push::MetadataFlags::default(),
     )
     .await;
     assert_eq!(entries.len(), 1);
@@ -1305,6 +1429,8 @@ async fn test_apply_pulled_entry_uses_volumes() {
         library_name: String::new(),
         metadata: None,
         custom_metadata: None,
+        genres: Vec::new(),
+        tags: Vec::new(),
     };
 
     // Build pre-fetched maps for apply_pulled_entry (via match_and_apply which calls it)
@@ -1429,6 +1555,7 @@ async fn test_build_push_entries_includes_rating() {
         Uuid::new_v4(),
         &settings,
         &[],
+        push::MetadataFlags::default(),
     )
     .await;
 
@@ -1491,6 +1618,7 @@ async fn test_build_push_entries_no_rating_when_disabled() {
         Uuid::new_v4(),
         &settings,
         &[],
+        push::MetadataFlags::default(),
     )
     .await;
 
@@ -1547,6 +1675,7 @@ async fn test_build_push_entries_no_rating_for_unrated() {
         Uuid::new_v4(),
         &settings,
         &[],
+        push::MetadataFlags::default(),
     )
     .await;
 
@@ -1607,6 +1736,8 @@ async fn test_apply_pulled_rating_no_existing() {
         library_name: String::new(),
         metadata: None,
         custom_metadata: None,
+        genres: Vec::new(),
+        tags: Vec::new(),
     }];
 
     let (matched, _applied) = pull::match_and_apply_pulled_entries(
@@ -1701,6 +1832,8 @@ async fn test_apply_pulled_rating_existing_not_overwritten() {
         library_name: String::new(),
         metadata: None,
         custom_metadata: None,
+        genres: Vec::new(),
+        tags: Vec::new(),
     }];
 
     let (_matched, _applied) = pull::match_and_apply_pulled_entries(
@@ -1780,6 +1913,8 @@ async fn test_apply_pulled_rating_disabled() {
         library_name: String::new(),
         metadata: None,
         custom_metadata: None,
+        genres: Vec::new(),
+        tags: Vec::new(),
     }];
 
     let (_matched, _applied) = pull::match_and_apply_pulled_entries(
@@ -1852,6 +1987,7 @@ async fn test_build_push_entries_populates_latest_updated_at() {
         Uuid::new_v4(),
         &default_codex_settings(),
         &[],
+        push::MetadataFlags::default(),
     )
     .await;
 
@@ -1920,6 +2056,7 @@ async fn test_build_push_entries_populates_total_volumes() {
         Uuid::new_v4(),
         &default_codex_settings(),
         &[],
+        push::MetadataFlags::default(),
     )
     .await;
 
@@ -1982,6 +2119,7 @@ async fn test_build_push_entries_always_sends_volumes() {
         Uuid::new_v4(),
         &default_codex_settings(),
         &[],
+        push::MetadataFlags::default(),
     )
     .await;
 
@@ -2085,6 +2223,7 @@ async fn test_build_push_entries_includes_unmatched_with_search_fallback() {
         Uuid::new_v4(),
         &settings_no_fallback,
         &[],
+        push::MetadataFlags::default(),
     )
     .await;
     assert_eq!(
@@ -2106,6 +2245,7 @@ async fn test_build_push_entries_includes_unmatched_with_search_fallback() {
         Uuid::new_v4(),
         &settings_with_fallback,
         &[],
+        push::MetadataFlags::default(),
     )
     .await;
     assert_eq!(
@@ -2169,6 +2309,7 @@ async fn test_build_push_entries_unmatched_skips_no_metadata() {
         Uuid::new_v4(),
         &settings,
         &[],
+        push::MetadataFlags::default(),
     )
     .await;
 
@@ -2225,6 +2366,7 @@ async fn test_build_push_entries_populates_title_for_matched() {
         Uuid::new_v4(),
         &default_codex_settings(),
         &[],
+        push::MetadataFlags::default(),
     )
     .await;
 
