@@ -131,6 +131,9 @@ fn project_sync_entry(
         title,
         library_id: e.library_id.to_string(),
         library_name: e.library_name.clone(),
+        // Enrichment is wired in a later phase; entries carry no metadata yet.
+        metadata: None,
+        custom_metadata: None,
     })
 }
 

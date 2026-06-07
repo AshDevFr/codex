@@ -268,6 +268,8 @@ async fn test_match_and_apply_no_source() {
         title: None,
         library_id: String::new(),
         library_name: String::new(),
+        metadata: None,
+        custom_metadata: None,
     }];
 
     let (matched, applied) = pull::match_and_apply_pulled_entries(
@@ -328,6 +330,8 @@ async fn test_match_and_apply_with_matches() {
             title: None,
             library_id: String::new(),
             library_name: String::new(),
+            metadata: None,
+            custom_metadata: None,
         },
         SyncEntry {
             external_id: "99999".to_string(), // no match
@@ -341,6 +345,8 @@ async fn test_match_and_apply_with_matches() {
             title: None,
             library_id: String::new(),
             library_name: String::new(),
+            metadata: None,
+            custom_metadata: None,
         },
     ];
 
@@ -412,6 +418,8 @@ async fn test_match_and_apply_pulled_entries_applies_progress() {
         title: None,
         library_id: String::new(),
         library_name: String::new(),
+        metadata: None,
+        custom_metadata: None,
     }];
 
     let (matched, applied) = pull::match_and_apply_pulled_entries(
@@ -511,6 +519,8 @@ async fn test_match_and_apply_skips_already_read() {
         title: None,
         library_id: String::new(),
         library_name: String::new(),
+        metadata: None,
+        custom_metadata: None,
     }];
 
     let (matched, applied) = pull::match_and_apply_pulled_entries(
@@ -542,6 +552,8 @@ fn pulled_completed_entry(external_id: &str) -> SyncEntry {
         title: None,
         library_id: String::new(),
         library_name: String::new(),
+        metadata: None,
+        custom_metadata: None,
     }
 }
 
@@ -1291,6 +1303,8 @@ async fn test_apply_pulled_entry_uses_volumes() {
         title: None,
         library_id: String::new(),
         library_name: String::new(),
+        metadata: None,
+        custom_metadata: None,
     };
 
     // Build pre-fetched maps for apply_pulled_entry (via match_and_apply which calls it)
@@ -1591,6 +1605,8 @@ async fn test_apply_pulled_rating_no_existing() {
         title: None,
         library_id: String::new(),
         library_name: String::new(),
+        metadata: None,
+        custom_metadata: None,
     }];
 
     let (matched, _applied) = pull::match_and_apply_pulled_entries(
@@ -1683,6 +1699,8 @@ async fn test_apply_pulled_rating_existing_not_overwritten() {
         title: None,
         library_id: String::new(),
         library_name: String::new(),
+        metadata: None,
+        custom_metadata: None,
     }];
 
     let (_matched, _applied) = pull::match_and_apply_pulled_entries(
@@ -1760,6 +1778,8 @@ async fn test_apply_pulled_rating_disabled() {
         title: None,
         library_id: String::new(),
         library_name: String::new(),
+        metadata: None,
+        custom_metadata: None,
     }];
 
     let (_matched, _applied) = pull::match_and_apply_pulled_entries(

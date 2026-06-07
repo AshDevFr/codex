@@ -715,7 +715,7 @@ pub struct PluginBookMetadata {
 }
 
 /// Structured author with role information
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BookAuthor {
     /// Author's display name
@@ -748,24 +748,19 @@ pub enum BookAuthorRole {
     CoverArtist,
 }
 
-/// Custom deserializer for series authors that accepts both:
-/// - Legacy format: `["Author Name", "Another Author"]` (Vec<String>)
-/// - New format: `[{"name": "Author Name", "role": "author"}]` (Vec<BookAuthor>)
-fn deserialize_series_authors<'de, D>(deserializer: D) -> Result<Vec<BookAuthor>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    #[derive(Deserialize)]
-    #[serde(untagged)]
-    enum AuthorItem {
-        Structured(BookAuthor),
-        Plain(String),
-    }
+/// One entry of an `authors_json` array: either a structured `{name, role, …}`
+/// object or a bare name string. Shared by the serde deserializer and the
+/// standalone string parser so both tolerate either shape.
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum AuthorItem {
+    Structured(BookAuthor),
+    Plain(String),
+}
 
-    let items: Vec<AuthorItem> = Vec::deserialize(deserializer)?;
-    Ok(items
-        .into_iter()
-        .filter_map(|item| match item {
+impl AuthorItem {
+    fn into_author(self) -> Option<BookAuthor> {
+        match self {
             AuthorItem::Structured(author) => Some(author),
             AuthorItem::Plain(name) => {
                 let name = name.trim().to_string();
@@ -779,8 +774,55 @@ where
                     })
                 }
             }
-        })
+        }
+    }
+}
+
+/// Custom deserializer for series authors that accepts both the legacy
+/// `["Author Name", …]` (`Vec<String>`) and the structured
+/// `[{"name": "…", "role": "…"}]` (`Vec<BookAuthor>`) shapes.
+fn deserialize_series_authors<'de, D>(deserializer: D) -> Result<Vec<BookAuthor>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let items: Vec<AuthorItem> = Vec::deserialize(deserializer)?;
+    Ok(items
+        .into_iter()
+        .filter_map(AuthorItem::into_author)
         .collect())
+}
+
+/// Parse a `series_metadata.authors_json` string into [`BookAuthor`]s, tolerating
+/// both structured `{name, role}` entries and bare name strings.
+///
+/// Parsing is per-element so one bad entry doesn't drop the whole list: an entry
+/// whose `role` isn't a known [`BookAuthorRole`] still keeps its name (with the
+/// default role) rather than being discarded. Returns an empty vec only when the
+/// top-level JSON isn't an array.
+pub fn parse_authors_json(raw: &str) -> Vec<BookAuthor> {
+    let Ok(items) = serde_json::from_str::<Vec<serde_json::Value>>(raw) else {
+        return Vec::new();
+    };
+    items
+        .into_iter()
+        .filter_map(|value| {
+            match serde_json::from_value::<AuthorItem>(value.clone()) {
+                Ok(item) => item.into_author(),
+                // Structured entry with an unrecognized role (or other mismatch):
+                // salvage the name instead of dropping the credit entirely.
+                Err(_) => value
+                    .get("name")
+                    .and_then(|n| n.as_str())
+                    .map(str::trim)
+                    .filter(|name| !name.is_empty())
+                    .map(|name| BookAuthor {
+                        name: name.to_string(),
+                        role: BookAuthorRole::default(),
+                        sort_name: None,
+                    }),
+            }
+        })
+        .collect()
 }
 
 /// Book cover with size and source information
@@ -897,6 +939,57 @@ pub enum ExternalLinkType {
 }
 
 // =============================================================================
+// Series Metadata Enrichment (opt-in, shared by sync + recommendations)
+// =============================================================================
+
+/// Optional bibliographic metadata block attached to library/sync entries when
+/// a plugin declares `wantsFullMetadata` and the user opts in via the
+/// `sendMetadata` toggle.
+///
+/// Public-ish bibliographic fields only — external services already have most of
+/// this. The user-defined `custom_metadata` escape hatch is deliberately NOT
+/// here: it carries private data and is gated by a separate `sendCustomMetadata`
+/// toggle, so it rides on the parent entry as its own field. Genres, tags, year,
+/// status, and total counts also live on the parent entry and are not duplicated.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SeriesMetadata {
+    /// Series summary / description.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
+    /// Publisher name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub publisher: Option<String>,
+    /// Credits (name + role), parsed from `series_metadata.authors_json`. Role
+    /// distinguishes author / artist / editor / etc., so there is no separate
+    /// `artists` field.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub authors: Vec<BookAuthor>,
+    /// Age rating (e.g. 0, 13, 16, 18).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub age_rating: Option<i32>,
+    /// BCP47 language code (e.g. "en", "ja", "ko").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
+    /// Reading direction: "ltr", "rtl", or "ttb".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reading_direction: Option<String>,
+}
+
+impl SeriesMetadata {
+    /// Whether the block carries no data (so callers can omit it entirely rather
+    /// than emit an empty object).
+    pub fn is_empty(&self) -> bool {
+        self.summary.is_none()
+            && self.publisher.is_none()
+            && self.authors.is_empty()
+            && self.age_rating.is_none()
+            && self.language.is_none()
+            && self.reading_direction.is_none()
+    }
+}
+
+// =============================================================================
 // User Library Data Contract (Sync Providers)
 // =============================================================================
 
@@ -970,6 +1063,16 @@ pub struct UserLibraryEntry {
     /// When the user completed the series (ISO 8601)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub completed_at: Option<String>,
+
+    /// Bibliographic metadata, attached only when the plugin declares
+    /// `wantsFullMetadata` and the user enables the `sendMetadata` toggle.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<SeriesMetadata>,
+    /// User-defined custom metadata (parsed `series_metadata.custom_metadata`),
+    /// attached only when the plugin declares `wantsFullMetadata` and the user
+    /// enables the separate `sendCustomMetadata` toggle.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub custom_metadata: Option<serde_json::Value>,
 }
 
 /// External ID mapping for a library entry
@@ -2147,6 +2250,8 @@ mod tests {
             series_id: "550e8400-e29b-41d4-a716-446655440000".to_string(),
             library_id: "11111111-1111-1111-1111-111111111111".to_string(),
             library_name: "Manga".to_string(),
+            metadata: None,
+            custom_metadata: None,
             title: "One Piece".to_string(),
             alternate_titles: vec!["ワンピース".to_string()],
             year: Some(1997),
@@ -2224,6 +2329,8 @@ mod tests {
             completed_at: None,
             library_id: String::new(),
             library_name: String::new(),
+            metadata: None,
+            custom_metadata: None,
         };
         let json = serde_json::to_value(&entry).unwrap();
         assert_eq!(json["seriesId"], "abc");
@@ -2342,6 +2449,8 @@ mod tests {
             completed_at: None,
             library_id: String::new(),
             library_name: String::new(),
+            metadata: None,
+            custom_metadata: None,
         };
         let json = serde_json::to_value(&entry).unwrap();
         let ids = json["externalIds"].as_array().unwrap();
@@ -2521,5 +2630,115 @@ mod tests {
                 .unwrap()
                 .contains_key("searchURITemplate")
         );
+    }
+
+    // =========================================================================
+    // Series Metadata Enrichment Tests
+    // =========================================================================
+
+    #[test]
+    fn test_series_metadata_serializes_camel_case_and_skips_empty() {
+        let block = SeriesMetadata {
+            summary: Some("A dark fantasy".to_string()),
+            publisher: None,
+            authors: vec![BookAuthor {
+                name: "Kentaro Miura".to_string(),
+                role: BookAuthorRole::Author,
+                sort_name: None,
+            }],
+            age_rating: Some(18),
+            language: None,
+            reading_direction: Some("rtl".to_string()),
+        };
+        let json = serde_json::to_value(&block).unwrap();
+        assert_eq!(json["summary"], "A dark fantasy");
+        assert_eq!(json["ageRating"], 18);
+        assert_eq!(json["readingDirection"], "rtl");
+        assert_eq!(json["authors"][0]["name"], "Kentaro Miura");
+        let obj = json.as_object().unwrap();
+        // None / empty fields are omitted.
+        assert!(!obj.contains_key("publisher"));
+        assert!(!obj.contains_key("language"));
+    }
+
+    #[test]
+    fn test_series_metadata_is_empty() {
+        assert!(SeriesMetadata::default().is_empty());
+        let with_summary = SeriesMetadata {
+            summary: Some("x".to_string()),
+            ..Default::default()
+        };
+        assert!(!with_summary.is_empty());
+        let with_authors = SeriesMetadata {
+            authors: vec![BookAuthor {
+                name: "A".to_string(),
+                role: BookAuthorRole::Author,
+                sort_name: None,
+            }],
+            ..Default::default()
+        };
+        assert!(!with_authors.is_empty());
+    }
+
+    #[test]
+    fn test_parse_authors_json() {
+        // Structured entries keep their role.
+        let authors =
+            parse_authors_json(r#"[{"name":"Miura","role":"illustrator"},{"name":"Gaga"}]"#);
+        assert_eq!(authors.len(), 2);
+        assert_eq!(authors[0].name, "Miura");
+        assert_eq!(authors[0].role, BookAuthorRole::Illustrator);
+        // Bare-name entry defaults to Author.
+        assert_eq!(authors[1].name, "Gaga");
+        assert_eq!(authors[1].role, BookAuthorRole::Author);
+
+        // Plain string array is tolerated; blanks dropped.
+        let plain = parse_authors_json(r#"["Solo", "  "]"#);
+        assert_eq!(plain.len(), 1);
+        assert_eq!(plain[0].name, "Solo");
+
+        // Unknown role: keep the name (default role) rather than dropping it, and
+        // don't let it nuke sibling entries.
+        let mixed = parse_authors_json(r#"[{"name":"Odd","role":"mascot"},{"name":"Keep"}]"#);
+        assert_eq!(mixed.len(), 2);
+        assert_eq!(mixed[0].name, "Odd");
+        assert_eq!(mixed[0].role, BookAuthorRole::Author);
+        assert_eq!(mixed[1].name, "Keep");
+
+        // Malformed JSON yields an empty vec, never panics.
+        assert!(parse_authors_json("{not json").is_empty());
+    }
+
+    #[test]
+    fn test_user_library_entry_omits_enrichment_when_none() {
+        let entry = UserLibraryEntry {
+            series_id: "s1".to_string(),
+            library_id: String::new(),
+            library_name: String::new(),
+            title: "T".to_string(),
+            alternate_titles: vec![],
+            year: None,
+            status: None,
+            genres: vec![],
+            tags: vec![],
+            total_volume_count: None,
+            total_chapter_count: None,
+            external_ids: vec![],
+            reading_status: None,
+            books_read: 0,
+            books_owned: 0,
+            user_rating: None,
+            user_notes: None,
+            started_at: None,
+            last_read_at: None,
+            completed_at: None,
+            metadata: None,
+            custom_metadata: None,
+        };
+        let obj = serde_json::to_value(&entry).unwrap();
+        let obj = obj.as_object().unwrap();
+        // Backward compatible: enrichment keys absent unless populated.
+        assert!(!obj.contains_key("metadata"));
+        assert!(!obj.contains_key("customMetadata"));
     }
 }
