@@ -10,6 +10,7 @@ use codex_db::repositories::{
     api_key::ApiKeyRepository, library::CreateLibraryParams, library::LibraryRepository,
     plugins::PluginsRepository, user::UserRepository,
 };
+use codex_models::preprocessing::{AutoMatchConditions, PreprocessingRule};
 use codex_models::{BookStrategy, NumberStrategy, SeriesStrategy};
 use codex_services::plugin::protocol::PluginScope;
 use codex_utils::password::hash_password;
@@ -117,10 +118,14 @@ pub struct SeedLibraryConfig {
     pub allowed_formats: Option<Vec<String>>,
     #[serde(default)]
     pub excluded_patterns: Option<Vec<String>>,
+    /// Title preprocessing rules, written as native YAML. Serialized to the JSON
+    /// string the `libraries` table stores at seed time.
     #[serde(default)]
-    pub title_preprocessing_rules: Option<String>,
+    pub title_preprocessing_rules: Option<Vec<PreprocessingRule>>,
+    /// Auto-match conditions, written as native YAML. Serialized to the JSON
+    /// string the `libraries` table stores at seed time.
     #[serde(default)]
-    pub auto_match_conditions: Option<String>,
+    pub auto_match_conditions: Option<AutoMatchConditions>,
 }
 
 impl SeedConfig {
@@ -448,8 +453,24 @@ async fn seed_libraries(
             .as_ref()
             .map(|v| serde_json::to_string(v).unwrap_or_default());
         params.excluded_patterns = lib_cfg.excluded_patterns.as_ref().map(|v| v.join("\n"));
-        params.title_preprocessing_rules = lib_cfg.title_preprocessing_rules.clone();
-        params.auto_match_conditions = lib_cfg.auto_match_conditions.clone();
+        params.title_preprocessing_rules = lib_cfg
+            .title_preprocessing_rules
+            .as_ref()
+            .map(serde_json::to_string)
+            .transpose()
+            .context(format!(
+                "Failed to serialize title_preprocessing_rules for library '{}'",
+                lib_cfg.name
+            ))?;
+        params.auto_match_conditions = lib_cfg
+            .auto_match_conditions
+            .as_ref()
+            .map(serde_json::to_string)
+            .transpose()
+            .context(format!(
+                "Failed to serialize auto_match_conditions for library '{}'",
+                lib_cfg.name
+            ))?;
 
         LibraryRepository::create_with_params(db_conn, params)
             .await
@@ -716,6 +737,64 @@ libraries:
         let series_cfg = config.libraries[2].series_config.as_ref().unwrap();
         assert_eq!(series_cfg["strip_id_suffix"], true);
         assert_eq!(series_cfg["series_mode"], "from_metadata");
+    }
+
+    #[test]
+    fn test_seed_library_preprocessing_and_conditions_parsing() {
+        use codex_models::preprocessing::{ConditionMode, ConditionOperator};
+
+        // Single-quoted YAML scalars keep regex backslashes literal — no
+        // JSON-style double-escaping required.
+        let yaml = r#"
+libraries:
+  - name: Comics
+    path: /libraries/comics
+    title_preprocessing_rules:
+      - pattern: '\s*\(Digital\)$'
+        replacement: ''
+        description: Remove (Digital) suffix
+        enabled: true
+      - pattern: '_'
+        replacement: ' '
+    auto_match_conditions:
+      mode: any
+      rules:
+        - field: external_ids.plugin:mangabaka
+          operator: is_null
+        - field: book_count
+          operator: gte
+          value: 1
+"#;
+        let config: SeedConfig = serde_yaml::from_str(yaml).unwrap();
+        let lib = &config.libraries[0];
+
+        // Preprocessing rules deserialize as native structs.
+        let rules = lib.title_preprocessing_rules.as_ref().unwrap();
+        assert_eq!(rules.len(), 2);
+        assert_eq!(rules[0].pattern, r"\s*\(Digital\)$");
+        assert_eq!(rules[0].replacement, "");
+        assert_eq!(
+            rules[0].description.as_deref(),
+            Some("Remove (Digital) suffix")
+        );
+        assert!(rules[0].enabled);
+        // `enabled` defaults to true when omitted.
+        assert!(rules[1].enabled);
+
+        // Auto-match conditions deserialize as native structs.
+        let conditions = lib.auto_match_conditions.as_ref().unwrap();
+        assert_eq!(conditions.mode, ConditionMode::Any);
+        assert_eq!(conditions.rules.len(), 2);
+        assert_eq!(conditions.rules[0].operator, ConditionOperator::IsNull);
+        assert_eq!(conditions.rules[1].operator, ConditionOperator::Gte);
+
+        // The seed loop serializes these to the JSON strings the libraries table
+        // stores; the regex round-trips through JSON unchanged.
+        let rules_json = serde_json::to_string(rules).unwrap();
+        assert!(rules_json.contains(r"\\s*\\(Digital\\)$"));
+        let parsed =
+            codex_models::preprocessing::parse_preprocessing_rules(Some(&rules_json)).unwrap();
+        assert_eq!(parsed, *rules);
     }
 
     #[test]
