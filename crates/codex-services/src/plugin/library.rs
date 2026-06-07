@@ -22,9 +22,9 @@ use crate::plugin::protocol::{
 };
 use codex_db::entities::{SeriesStatus, series, series_metadata};
 use codex_db::repositories::{
-    AlternateTitleRepository, BookRepository, GenreRepository, LibraryRepository,
-    ReadProgressRepository, SeriesExternalIdRepository, SeriesMetadataRepository, SeriesRepository,
-    TagRepository, UserSeriesRatingRepository,
+    AlternateTitleRepository, BookMetadataRepository, BookRepository, GenreRepository,
+    LibraryRepository, ReadProgressRepository, SeriesExternalIdRepository,
+    SeriesMetadataRepository, SeriesRepository, TagRepository, UserSeriesRatingRepository,
 };
 
 /// Resolve a set of library IDs to a `library_id -> library_name` map in a
@@ -51,6 +51,29 @@ pub async fn library_names(db: &DatabaseConnection, library_ids: &[Uuid]) -> Has
 pub struct EngagementOptions {
     /// Also fetch genres, tags, alternate titles, and external IDs.
     pub include_taxonomy: bool,
+    /// Also fetch per-book metadata (volume/chapter) and populate
+    /// [`SeriesEngagement::read_books`] with one entry per book that has reading
+    /// progress. Costs one extra batched query, so only the sync push path
+    /// enables it, and only for plugins that consume the detail.
+    pub include_book_detail: bool,
+}
+
+/// Per-book reading progress for one book in a series, the unit of
+/// [`SeriesEngagement::read_books`]. Carries reading *position* (detected
+/// volume/chapter plus page progress), not bibliographic metadata. Populated
+/// only when [`EngagementOptions::include_book_detail`] is set.
+#[derive(Debug, Clone, Default)]
+pub struct SeriesBookProgress {
+    /// Detected volume number for this book, if known.
+    pub volume: Option<i32>,
+    /// Detected chapter number for this book, if known (fractional allowed).
+    pub chapter: Option<f32>,
+    /// Whether the user has finished this book.
+    pub completed: bool,
+    /// Current page within the book, if tracked.
+    pub current_page: Option<i32>,
+    /// Fractional progress within the book, if tracked.
+    pub progress_percentage: Option<f64>,
 }
 
 /// Per-series aggregate of a user's engagement, plus the library data needed to
@@ -96,6 +119,11 @@ pub struct SeriesEngagement {
     pub user_rating: Option<i32>,
     /// User's personal notes, when set.
     pub user_notes: Option<String>,
+
+    /// Per-book reading-progress breakdown — populated only when
+    /// [`EngagementOptions::include_book_detail`]. One entry per book that has
+    /// reading progress (completed or in-progress).
+    pub read_books: Vec<SeriesBookProgress>,
 }
 
 impl SeriesEngagement {
@@ -190,6 +218,21 @@ pub async fn build_series_engagements(
             }
         };
 
+    // Optional per-book metadata (volume/chapter) — only fetched when the caller
+    // wants the per-book progress breakdown. Degrade to empty on error so detail
+    // is simply absent rather than failing the whole build.
+    let book_metadata_map = if opts.include_book_detail {
+        match BookMetadataRepository::get_by_book_ids(db, &all_book_ids).await {
+            Ok(map) => map,
+            Err(e) => {
+                warn!("Failed to fetch book metadata for progress detail: {}", e);
+                HashMap::new()
+            }
+        }
+    } else {
+        HashMap::new()
+    };
+
     // Optional taxonomy — only fetched when the caller will use it.
     let (genres_map, tags_map, alt_titles_map, ext_ids_map) = if opts.include_taxonomy {
         (
@@ -217,6 +260,7 @@ pub async fn build_series_engagements(
         let mut earliest_started: Option<DateTime<Utc>> = None;
         let mut latest_read_at: Option<DateTime<Utc>> = None;
         let mut latest_completed_at: Option<DateTime<Utc>> = None;
+        let mut read_books: Vec<SeriesBookProgress> = Vec::new();
 
         if let Some(books) = books {
             for book in books {
@@ -243,6 +287,17 @@ pub async fn build_series_engagements(
                         Some(existing) => existing,
                         None => progress.updated_at,
                     });
+
+                    if opts.include_book_detail {
+                        let bm = book_metadata_map.get(&book.id);
+                        read_books.push(SeriesBookProgress {
+                            volume: bm.and_then(|m| m.volume),
+                            chapter: bm.and_then(|m| m.chapter),
+                            completed: progress.completed,
+                            current_page: Some(progress.current_page),
+                            progress_percentage: progress.progress_percentage,
+                        });
+                    }
                 }
             }
         }
@@ -297,6 +352,7 @@ pub async fn build_series_engagements(
                 external_ids,
                 user_rating,
                 user_notes,
+                read_books,
             },
         );
     }
@@ -331,6 +387,8 @@ pub async fn build_user_library(
         &all_series,
         EngagementOptions {
             include_taxonomy: true,
+            // Recommendations don't use per-book progress detail.
+            include_book_detail: false,
         },
     )
     .await?;
@@ -397,8 +455,8 @@ mod tests {
     use codex_db::ScanningStrategy;
     use codex_db::entities::{books, users};
     use codex_db::repositories::{
-        BookRepository, LibraryRepository, ReadProgressRepository, SeriesMetadataRepository,
-        SeriesRepository, UserRepository,
+        BookMetadataRepository, BookRepository, LibraryRepository, ReadProgressRepository,
+        SeriesMetadataRepository, SeriesRepository, UserRepository,
     };
     use codex_db::test_helpers::create_test_db;
 
@@ -432,6 +490,7 @@ mod tests {
             external_ids: vec![],
             user_rating: None,
             user_notes: None,
+            read_books: vec![],
         }
     }
 
@@ -564,6 +623,101 @@ mod tests {
         // Taxonomy not requested → empty.
         assert!(e.genres.is_empty());
         assert!(e.external_ids.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_build_series_engagements_book_detail() {
+        let (db, _temp_dir) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let user_id = create_user(conn).await;
+
+        let lib = LibraryRepository::create(conn, "Lib", "/l", ScanningStrategy::Default)
+            .await
+            .unwrap();
+        let series = SeriesRepository::create(conn, lib.id, "Detailed Series", None)
+            .await
+            .unwrap();
+
+        // done: completed, volume 1. reading: in-progress, chapter 47.5, no
+        // volume. nometa: completed but no metadata row. untouched: no progress.
+        let done = create_book(conn, series.id, lib.id).await;
+        let reading = create_book(conn, series.id, lib.id).await;
+        let nometa = create_book(conn, series.id, lib.id).await;
+        let _untouched = create_book(conn, series.id, lib.id).await;
+
+        BookMetadataRepository::create_with_title_and_number(conn, done.id, None, None)
+            .await
+            .unwrap();
+        BookMetadataRepository::update_volume(conn, done.id, Some(1))
+            .await
+            .unwrap();
+        BookMetadataRepository::create_with_title_and_number(conn, reading.id, None, None)
+            .await
+            .unwrap();
+        BookMetadataRepository::update_chapter(conn, reading.id, Some(47.5))
+            .await
+            .unwrap();
+        // nometa intentionally has no book_metadata row.
+
+        ReadProgressRepository::upsert(conn, user_id, done.id, 50, true)
+            .await
+            .unwrap();
+        ReadProgressRepository::upsert(conn, user_id, reading.id, 10, false)
+            .await
+            .unwrap();
+        ReadProgressRepository::upsert(conn, user_id, nometa.id, 50, true)
+            .await
+            .unwrap();
+
+        // Without the flag, no per-book detail is fetched or populated.
+        let without = build_series_engagements(
+            conn,
+            user_id,
+            std::slice::from_ref(&series),
+            EngagementOptions::default(),
+        )
+        .await
+        .unwrap();
+        assert!(without.get(&series.id).unwrap().read_books.is_empty());
+
+        // With the flag: one entry per progress-bearing book (untouched excluded).
+        let with = build_series_engagements(
+            conn,
+            user_id,
+            std::slice::from_ref(&series),
+            EngagementOptions {
+                include_book_detail: true,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        let e = with.get(&series.id).unwrap();
+        assert_eq!(e.read_books.len(), 3);
+
+        let done_bp = e
+            .read_books
+            .iter()
+            .find(|b| b.volume == Some(1))
+            .expect("volume-1 book present");
+        assert!(done_bp.completed);
+        assert_eq!(done_bp.current_page, Some(50));
+
+        let reading_bp = e
+            .read_books
+            .iter()
+            .find(|b| b.chapter == Some(47.5))
+            .expect("chapter-47.5 book present");
+        assert!(!reading_bp.completed);
+        assert!(reading_bp.volume.is_none());
+
+        // The book with no metadata row still appears, with no detected numbers.
+        let no_numbers = e
+            .read_books
+            .iter()
+            .filter(|b| b.volume.is_none() && b.chapter.is_none())
+            .count();
+        assert_eq!(no_numbers, 1);
     }
 
     #[tokio::test]

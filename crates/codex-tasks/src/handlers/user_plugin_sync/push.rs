@@ -11,21 +11,26 @@ use codex_db::repositories::{
     BookRepository, ReadProgressRepository, SeriesExternalIdRepository, SeriesRepository,
 };
 use codex_services::plugin::library::{
-    EngagementOptions, SeriesEngagement, build_series_engagements,
+    EngagementOptions, SeriesBookProgress, SeriesEngagement, build_series_engagements,
 };
-use codex_services::plugin::sync::{SyncEntry, SyncProgress, SyncReadingStatus};
+use codex_services::plugin::sync::{SyncBookProgress, SyncEntry, SyncProgress, SyncReadingStatus};
 
 use super::settings::CodexSyncSettings;
 
-/// Effective per-field metadata-enrichment flags for a push (capability AND the
-/// user's `_codex.send*` toggle, computed by the caller). Each gates one piece of
-/// optional data attached to every push entry.
+/// Effective per-field enrichment flags for a push, computed by the caller from
+/// plugin capabilities (and, for the metadata fields, the user's `_codex.send*`
+/// toggles). Each gates one piece of optional data attached to push entries.
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct MetadataFlags {
     pub tags: bool,
     pub genres: bool,
     pub metadata: bool,
     pub custom_metadata: bool,
+    /// Attach the per-book reading-progress breakdown (`readBooks`). Gated by the
+    /// plugin's `wantsDetailedProgress` capability only (no user toggle). Also
+    /// drives fetching per-book detail, which the accurate `maxVolume`/`maxChapter`
+    /// fields ride along on.
+    pub detailed_progress: bool,
 }
 
 impl MetadataFlags {
@@ -117,6 +122,52 @@ fn project_sync_entry(
         SyncReadingStatus::Reading
     };
 
+    // Detailed progress, derived from per-book volume/chapter detection. Present
+    // only when the engagement was built with per-book detail (i.e. the plugin
+    // declares `wantsDetailedProgress`); otherwise `read_books` is empty and these
+    // stay `None`.
+    //
+    // `max_volume`/`max_chapter` are the highest *read* numbers, folded over the
+    // same set of books that feeds `volumes`: completed always, plus in-progress
+    // when `count_partial_progress` is on. Unlike the `volumes` count, they stay
+    // accurate for libraries that don't start at volume 1 or have gaps.
+    let counted = |b: &SeriesBookProgress| b.completed || settings.count_partial_progress;
+    let max_volume = e
+        .read_books
+        .iter()
+        .filter(|b| counted(b))
+        .filter_map(|b| b.volume)
+        .max();
+    let max_chapter = e
+        .read_books
+        .iter()
+        .filter(|b| counted(b))
+        .filter_map(|b| b.chapter)
+        .fold(None::<f32>, |acc, c| match acc {
+            Some(m) if m >= c => Some(m),
+            _ => Some(c),
+        });
+
+    // The full per-book breakdown is attached only for plugins that declare the
+    // capability. It reflects every book with progress (completed or in-progress),
+    // independent of `count_partial_progress` (a raw breakdown the plugin filters).
+    let read_books = if flags.detailed_progress {
+        Some(
+            e.read_books
+                .iter()
+                .map(|b| SyncBookProgress {
+                    volume: b.volume,
+                    chapter: b.chapter,
+                    completed: b.completed,
+                    current_page: b.current_page,
+                    progress_percentage: b.progress_percentage,
+                })
+                .collect(),
+        )
+    } else {
+        None
+    };
+
     // Server always sends books-read as `volumes`. Codex tracks books (each file
     // = 1 volume), not chapters. `chapters` is left `None`; the plugin decides how
     // to map this to service-specific fields.
@@ -126,9 +177,9 @@ fn project_sync_entry(
         pages: None,
         total_chapters: total_chapter_count.map(|c| c as i32),
         total_volumes: total_volume_count,
-        // Detailed progress (max_volume/max_chapter/read_books) is wired in a
-        // later phase; left at defaults here.
-        ..Default::default()
+        max_volume,
+        max_chapter,
+        read_books,
     };
 
     let (score, notes) = if settings.sync_ratings {
@@ -225,6 +276,7 @@ pub(crate) async fn build_push_entries(
     let series = scoped_series(db, &candidate_series_ids, allowed_library_ids).await;
     let opts = EngagementOptions {
         include_taxonomy: flags.needs_taxonomy(),
+        include_book_detail: flags.detailed_progress,
     };
     let engagements = match build_series_engagements(db, user_id, &series, opts).await {
         Ok(map) => map,
@@ -346,6 +398,7 @@ async fn build_unmatched_entries(
     let series = scoped_series(db, &unmatched_ids_vec, allowed_library_ids).await;
     let opts = EngagementOptions {
         include_taxonomy: flags.needs_taxonomy(),
+        include_book_detail: flags.detailed_progress,
     };
     let engagements = match build_series_engagements(db, user_id, &series, opts).await {
         Ok(map) => map,
