@@ -222,6 +222,29 @@ export function IntegrationsSettings() {
     },
   });
 
+  // Auto/manual sync-mode mutation
+  const setSyncModeMutation = useMutation({
+    mutationFn: ({ pluginId, auto }: { pluginId: string; auto: boolean }) =>
+      userPluginsApi.setSyncMode(pluginId, auto),
+    onSuccess: (_data, { auto }) => {
+      queryClient.invalidateQueries({ queryKey: ["user-plugins"] });
+      notifications.show({
+        title: auto ? "Automatic sync enabled" : "Automatic sync disabled",
+        message: auto
+          ? "This integration will sync on your administrator's schedule."
+          : "This integration will only sync when you trigger it manually.",
+        color: "green",
+      });
+    },
+    onError: (error: Error) => {
+      notifications.show({
+        title: "Error",
+        message: error.message || "Failed to update sync mode",
+        color: "red",
+      });
+    },
+  });
+
   // Sync mutation
   const syncMutation = useMutation({
     mutationFn: (pluginId: string) => userPluginsApi.triggerSync(pluginId),
@@ -315,6 +338,10 @@ export function IntegrationsSettings() {
     setSettingsTarget(pluginId);
   };
 
+  const handleSetSyncMode = (pluginId: string, auto: boolean) => {
+    setSyncModeMutation.mutate({ pluginId, auto });
+  };
+
   const handleRefreshStatus = (pluginId: string) => {
     setLiveStatusPluginId(pluginId);
     queryClient.invalidateQueries({ queryKey: ["sync-status", pluginId] });
@@ -380,6 +407,7 @@ export function IntegrationsSettings() {
                 onSync={handleSync}
                 onSettings={handleSettings}
                 onRefreshStatus={handleRefreshStatus}
+                onSetSyncMode={handleSetSyncMode}
                 syncStatus={
                   liveStatusPluginId === plugin.pluginId
                     ? (liveStatus ?? null)
@@ -405,6 +433,10 @@ export function IntegrationsSettings() {
                 }
                 refreshingStatus={
                   fetchingLiveStatus && liveStatusPluginId === plugin.pluginId
+                }
+                settingSyncMode={
+                  setSyncModeMutation.isPending &&
+                  setSyncModeMutation.variables?.pluginId === plugin.pluginId
                 }
               />
             ))}

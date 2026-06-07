@@ -185,6 +185,11 @@ export function PluginsSettings() {
       id: string;
       values: PluginFormValues;
     }) => {
+      // Only send the sync schedule for sync-capable plugins; the field is
+      // hidden otherwise, and the backend rejects a cron on plugins without
+      // the user_read_sync capability. Empty string clears any existing cron.
+      const isSyncCapable =
+        selectedPlugin?.manifest?.capabilities?.userReadSync === true;
       return pluginsApi.update(id, {
         displayName: values.displayName.trim(),
         description: values.description.trim() || null,
@@ -208,6 +213,9 @@ export function PluginsSettings() {
         requestTimeoutSeconds: values.requestTimeoutOverrideEnabled
           ? values.requestTimeoutSeconds
           : null,
+        ...(isSyncCapable
+          ? { syncCronSchedule: values.syncCronSchedule.trim() || null }
+          : {}),
       });
     },
     onSuccess: () => {
@@ -393,6 +401,7 @@ export function PluginsSettings() {
       rateLimitRequestsPerMinute: plugin.rateLimitRequestsPerMinute ?? 60,
       requestTimeoutOverrideEnabled: plugin.requestTimeoutSeconds != null,
       requestTimeoutSeconds: plugin.requestTimeoutSeconds ?? 30,
+      syncCronSchedule: plugin.syncCronSchedule ?? "",
     });
     openEditModal();
   };

@@ -29,6 +29,7 @@ const connectedPlugin: UserPluginDto = {
   oauthConfigured: true,
   description: "Sync your reading progress with AniList",
   config: {},
+  autoSync: false,
   capabilities: { readSync: true, userRecommendationProvider: false },
   createdAt: new Date().toISOString(),
 } as UserPluginDto;
@@ -167,6 +168,59 @@ describe("ConnectedPluginCard", () => {
 
     await user.click(screen.getByRole("button", { name: /disconnect/i }));
     expect(onDisconnect).toHaveBeenCalledWith("plugin-1");
+  });
+
+  it("shows the automatic-sync switch for a connected sync plugin", () => {
+    renderWithProviders(
+      <ConnectedPluginCard {...defaultProps} onSetSyncMode={vi.fn()} />,
+    );
+    expect(
+      screen.getByRole("switch", { name: /automatic sync/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("does not show the automatic-sync switch for a non-sync plugin", () => {
+    renderWithProviders(
+      <ConnectedPluginCard
+        {...defaultProps}
+        plugin={connectedRecommendationPlugin}
+        onSetSyncMode={vi.fn()}
+      />,
+    );
+    expect(
+      screen.queryByRole("switch", { name: /automatic sync/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("does not show the automatic-sync switch without an onSetSyncMode handler", () => {
+    renderWithProviders(<ConnectedPluginCard {...defaultProps} />);
+    expect(
+      screen.queryByRole("switch", { name: /automatic sync/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("reflects the autoSync state on the switch", () => {
+    renderWithProviders(
+      <ConnectedPluginCard
+        {...defaultProps}
+        plugin={{ ...connectedPlugin, autoSync: true }}
+        onSetSyncMode={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByRole("switch", { name: /automatic sync/i }),
+    ).toBeChecked();
+  });
+
+  it("calls onSetSyncMode when the switch is toggled on", async () => {
+    const user = userEvent.setup();
+    const onSetSyncMode = vi.fn();
+    renderWithProviders(
+      <ConnectedPluginCard {...defaultProps} onSetSyncMode={onSetSyncMode} />,
+    );
+
+    await user.click(screen.getByRole("switch", { name: /automatic sync/i }));
+    expect(onSetSyncMode).toHaveBeenCalledWith("plugin-1", true);
   });
 
   it("shows Sync Now button when connected with onSync handler", () => {
