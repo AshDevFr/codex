@@ -416,6 +416,7 @@ async fn test_match_and_apply_pulled_entries_applies_progress() {
             pages: None,
             total_chapters: None,
             total_volumes: None,
+            ..Default::default()
         }),
         score: None,
         started_at: None,
@@ -519,6 +520,7 @@ async fn test_match_and_apply_skips_already_read() {
             pages: None,
             total_chapters: None,
             total_volumes: None,
+            ..Default::default()
         }),
         score: None,
         started_at: None,
@@ -1418,6 +1420,7 @@ async fn test_apply_pulled_entry_uses_volumes() {
             pages: None,
             total_chapters: None,
             total_volumes: None,
+            ..Default::default()
         }),
         score: None,
         started_at: None,
@@ -1725,6 +1728,7 @@ async fn test_apply_pulled_rating_no_existing() {
             pages: None,
             total_chapters: None,
             total_volumes: None,
+            ..Default::default()
         }),
         score: Some(75.0),
         started_at: None,
@@ -1821,6 +1825,7 @@ async fn test_apply_pulled_rating_existing_not_overwritten() {
             pages: None,
             total_chapters: None,
             total_volumes: None,
+            ..Default::default()
         }),
         score: Some(60.0),
         started_at: None,
@@ -1902,6 +1907,7 @@ async fn test_apply_pulled_rating_disabled() {
             pages: None,
             total_chapters: None,
             total_volumes: None,
+            ..Default::default()
         }),
         score: Some(80.0),
         started_at: None,
