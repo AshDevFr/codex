@@ -170,6 +170,7 @@ async fn build_user_plugin_dto(
         user_setup_instructions: manifest.and_then(|m| m.user_setup_instructions),
         config: instance.config.clone(),
         auto_sync: instance.auto_sync_enabled(),
+        sync_cron_schedule: plugin.sync_cron_schedule.clone(),
         send_custom_metadata: instance.send_custom_metadata_enabled(),
         capabilities,
         user_config_schema,

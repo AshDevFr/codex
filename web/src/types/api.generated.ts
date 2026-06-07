@@ -19721,6 +19721,14 @@ export interface components {
              *     bibliographic block are admin policy on the plugin, not user-controlled.
              */
             sendCustomMetadata: boolean;
+            /**
+             * @description The admin-configured cron schedule that drives automatic syncs for this
+             *     plugin (the normalized 6-field form), or `None` when the admin has not
+             *     set one. Surfaced read-only so the UI can show the cadence to users and
+             *     indicate when auto sync isn't set up yet. The cadence is plugin-wide, not
+             *     per-user.
+             */
+            syncCronSchedule?: string | null;
             userConfigSchema?: null | components["schemas"]["ConfigSchemaDto"];
             /** @description User-facing setup instructions for the plugin */
             userSetupInstructions?: string | null;

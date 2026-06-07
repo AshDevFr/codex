@@ -515,11 +515,15 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         thumbnail_service,
         file_cleanup_service,
         task_metrics_service: Some(task_metrics_service),
-        scheduler: if disable_workers {
-            None
-        } else {
-            Some(scheduler.clone())
-        },
+        // The scheduler runs in every `serve` process (started unconditionally
+        // above), independent of whether task workers run here. The API needs a
+        // handle to it so schedule edits (plugin sync cron, library scans,
+        // release sources) take effect live via `reload_schedules()`. Gating
+        // this on `disable_workers` previously made those reloads silent no-ops
+        // in the standard split deployment (web pod with CODEX_DISABLE_WORKERS),
+        // so an admin-set cron was written to the DB but never registered until
+        // the pod restarted.
+        scheduler: Some(scheduler.clone()),
         read_progress_service,
         auth_tracking_service,
         pdf_page_cache,
