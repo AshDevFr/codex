@@ -339,7 +339,7 @@ async fn test_worker_default_priority_ordering() {
         .await
         .expect("Failed to enqueue cleanup task");
 
-    // Enqueue a find_duplicates task (priority 400) second
+    // Enqueue a find_duplicates task (priority 860) second
     let dup_id = TaskRepository::enqueue(&db, TaskType::FindDuplicates, None)
         .await
         .expect("Failed to enqueue find_duplicates task");
@@ -350,13 +350,13 @@ async fn test_worker_default_priority_ordering() {
         .expect("Failed to claim")
         .expect("No task available");
 
-    // FindDuplicates should be claimed first (priority 400 > 100)
+    // FindDuplicates should be claimed first (priority 860 > 100)
     assert_eq!(
         claimed.id, dup_id,
         "Higher priority task should be claimed first"
     );
     assert_eq!(claimed.task_type, "find_duplicates");
-    assert_eq!(claimed.priority, 400);
+    assert_eq!(claimed.priority, 860);
 
     // Verify cleanup task is still pending
     let cleanup_task = TaskRepository::get_by_id(&db, cleanup_id)
