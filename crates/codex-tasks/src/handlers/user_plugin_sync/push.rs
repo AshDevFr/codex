@@ -2,52 +2,136 @@
 //! external services.
 
 use sea_orm::DatabaseConnection;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use tracing::{debug, warn};
 use uuid::Uuid;
 
+use codex_db::entities::series;
 use codex_db::repositories::{
-    BookRepository, ReadProgressRepository, SeriesExternalIdRepository, SeriesMetadataRepository,
-    SeriesRepository, UserSeriesRatingRepository,
+    BookRepository, ReadProgressRepository, SeriesExternalIdRepository, SeriesRepository,
 };
-use codex_services::plugin::library::library_names;
+use codex_services::plugin::library::{
+    EngagementOptions, SeriesEngagement, build_series_engagements,
+};
 use codex_services::plugin::sync::{SyncEntry, SyncProgress, SyncReadingStatus};
 
 use super::settings::CodexSyncSettings;
-
-/// Resolve `series_id -> (library_id, library_name)` for the given series so
-/// push entries can carry their library context and be filtered by library
-/// scope. Degrades to an empty map on failure; entries then fall back to empty
-/// library fields.
-async fn series_library_info(
-    db: &DatabaseConnection,
-    series_ids: &[Uuid],
-) -> HashMap<Uuid, (Uuid, String)> {
-    let series = SeriesRepository::get_by_ids(db, series_ids)
-        .await
-        .unwrap_or_default();
-
-    let library_ids: Vec<Uuid> = {
-        let mut ids: Vec<Uuid> = series.iter().map(|s| s.library_id).collect();
-        ids.sort_unstable();
-        ids.dedup();
-        ids
-    };
-    let names = library_names(db, &library_ids).await;
-
-    series
-        .into_iter()
-        .map(|s| {
-            let name = names.get(&s.library_id).cloned().unwrap_or_default();
-            (s.id, (s.library_id, name))
-        })
-        .collect()
-}
 
 /// Whether a series in `library_id` is in scope for a plugin allowed to act on
 /// `allowed_library_ids`. An empty allowed set means "all libraries".
 fn library_in_scope(allowed_library_ids: &[Uuid], library_id: Uuid) -> bool {
     allowed_library_ids.is_empty() || allowed_library_ids.contains(&library_id)
+}
+
+/// Fetch the series rows for `series_ids` and drop any outside the plugin's
+/// library scope. Degrades to an empty Vec on lookup failure.
+async fn scoped_series(
+    db: &DatabaseConnection,
+    series_ids: &[Uuid],
+    allowed_library_ids: &[Uuid],
+) -> Vec<series::Model> {
+    SeriesRepository::get_by_ids(db, series_ids)
+        .await
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|s| library_in_scope(allowed_library_ids, s.library_id))
+        .collect()
+}
+
+/// Project a [`SeriesEngagement`] into a `SyncEntry`, applying `CodexSyncSettings`.
+///
+/// Returns `None` when the series should be skipped: no reading progress, or
+/// filtered out by `include_completed` / `include_in_progress`. `external_id` and
+/// `title` are supplied by the caller (matched entries use the source external ID
+/// and a metadata-only title; search-fallback entries use `""` and a required
+/// title).
+fn project_sync_entry(
+    e: &SeriesEngagement,
+    external_id: String,
+    title: Option<String>,
+    settings: &CodexSyncSettings,
+) -> Option<SyncEntry> {
+    // Skip series with no progress at all.
+    if !e.has_any_progress() {
+        return None;
+    }
+
+    let completed_count = e.books_read;
+    // `has_any_progress` guarantees at least one owned book.
+    let all_completed = completed_count == e.books_owned;
+    let is_in_progress = !all_completed;
+
+    // Apply Codex sync settings filters.
+    if all_completed && !settings.include_completed {
+        return None;
+    }
+    if is_in_progress && !settings.include_in_progress {
+        return None;
+    }
+
+    let progress_count = if settings.count_partial_progress {
+        completed_count + e.in_progress_count
+    } else {
+        completed_count
+    };
+
+    // Completion / progress totals from series metadata.
+    let meta = e.metadata.as_ref();
+    let total_volume_count = meta
+        .and_then(|m| m.total_volume_count)
+        .filter(|&total| total > 0);
+    let total_chapter_count = meta
+        .and_then(|m| m.total_chapter_count)
+        .filter(|c| c.is_finite() && *c > 0.0);
+
+    // Mark as Completed only when all local books are read AND the series has a
+    // known total_volume_count that we've reached. Otherwise default to Reading —
+    // we can't be sure the local library is complete.
+    let status = if all_completed {
+        let is_truly_complete = total_volume_count.is_some_and(|total| completed_count >= total);
+        if is_truly_complete {
+            SyncReadingStatus::Completed
+        } else {
+            SyncReadingStatus::Reading
+        }
+    } else {
+        SyncReadingStatus::Reading
+    };
+
+    // Server always sends books-read as `volumes`. Codex tracks books (each file
+    // = 1 volume), not chapters. `chapters` is left `None`; the plugin decides how
+    // to map this to service-specific fields.
+    let progress = SyncProgress {
+        chapters: None,
+        volumes: Some(progress_count),
+        pages: None,
+        total_chapters: total_chapter_count.map(|c| c as i32),
+        total_volumes: total_volume_count,
+    };
+
+    let (score, notes) = if settings.sync_ratings {
+        (e.user_rating.map(|r| r as f64), e.user_notes.clone())
+    } else {
+        (None, None)
+    };
+
+    Some(SyncEntry {
+        external_id,
+        completed_at: if status == SyncReadingStatus::Completed {
+            e.latest_completed_at.map(|dt| dt.to_rfc3339())
+        } else {
+            None
+        },
+        status,
+        progress: Some(progress),
+        score,
+        started_at: e.earliest_started.map(|dt| dt.to_rfc3339()),
+        notes,
+        latest_updated_at: e.latest_read_at.map(|dt| dt.to_rfc3339()),
+        title,
+        library_id: e.library_id.to_string(),
+        library_name: e.library_name.clone(),
+    })
 }
 
 /// Build push entries from a user's Codex reading progress.
@@ -67,7 +151,7 @@ pub(crate) async fn build_push_entries(
     settings: &CodexSyncSettings,
     allowed_library_ids: &[Uuid],
 ) -> Vec<SyncEntry> {
-    // 1. Get all series that have external IDs for this source (1 query)
+    // 1. Get all series that have external IDs for this source.
     let external_ids =
         match SeriesExternalIdRepository::find_by_source(db, external_id_source).await {
             Ok(ids) => ids,
@@ -91,258 +175,48 @@ pub(crate) async fn build_push_entries(
         return vec![];
     }
 
-    // Resolve library context (id + name) for every candidate series, then drop
-    // series whose library is out of scope for this plugin.
+    // 2. Resolve series rows for the candidates and drop out-of-scope ones, then
+    //    build the shared engagement aggregates in one batched pass.
     let candidate_series_ids: Vec<Uuid> = external_ids.iter().map(|e| e.series_id).collect();
-    let lib_info = series_library_info(db, &candidate_series_ids).await;
-    let external_ids: Vec<_> = external_ids
-        .into_iter()
-        .filter(|e| match lib_info.get(&e.series_id) {
-            Some((lib, _)) => library_in_scope(allowed_library_ids, *lib),
-            // Unknown library (lookup failed): keep only when unscoped.
-            None => allowed_library_ids.is_empty(),
-        })
-        .collect();
-
-    let external_ids_count = external_ids.len();
-    let matched_series_ids: HashSet<Uuid> = external_ids.iter().map(|e| e.series_id).collect();
-
-    // Collect all series IDs for batch queries
-    let series_ids: Vec<Uuid> = external_ids.iter().map(|e| e.series_id).collect();
-
-    // 2. Batch-fetch all books grouped by series (1 query instead of N)
-    let books_map = match BookRepository::get_by_series_ids(db, &series_ids).await {
-        Ok(map) => map,
-        Err(e) => {
-            warn!(
-                "Task {}: Failed to batch-fetch books for {} series: {}",
-                task_id,
-                series_ids.len(),
-                e
-            );
-            return vec![];
-        }
-    };
-
-    // Collect all book IDs for batch progress lookup
-    let all_book_ids: Vec<Uuid> = books_map.values().flatten().map(|b| b.id).collect();
-
-    // 3. Batch-fetch all reading progress for these books (1 query instead of N*M)
-    let progress_map =
-        match ReadProgressRepository::get_for_user_books(db, user_id, &all_book_ids).await {
+    let series = scoped_series(db, &candidate_series_ids, allowed_library_ids).await;
+    let engagements =
+        match build_series_engagements(db, user_id, &series, EngagementOptions::default()).await {
             Ok(map) => map,
             Err(e) => {
                 warn!(
-                    "Task {}: Failed to batch-fetch reading progress: {}",
+                    "Task {}: Failed to build series engagements for push: {}",
                     task_id, e
                 );
-                HashMap::new()
+                return vec![];
             }
         };
 
-    // 4. Batch-fetch all series metadata (1 query instead of N)
-    let metadata_map = match SeriesMetadataRepository::get_by_series_ids(db, &series_ids).await {
-        Ok(map) => map,
-        Err(e) => {
-            warn!(
-                "Task {}: Failed to batch-fetch series metadata: {}",
-                task_id, e
-            );
-            HashMap::new()
-        }
-    };
+    // Series we matched by external ID (and that are in scope) — used to exclude
+    // them from the search-fallback pass below.
+    let matched_series_ids: HashSet<Uuid> = engagements.keys().copied().collect();
 
-    // 5. Batch-fetch all user ratings (1 query — already batched)
-    let ratings_map: HashMap<Uuid, codex_db::entities::user_series_ratings::Model> =
-        if settings.sync_ratings {
-            match UserSeriesRatingRepository::get_all_for_user(db, user_id).await {
-                Ok(ratings) => ratings.into_iter().map(|r| (r.series_id, r)).collect(),
-                Err(e) => {
-                    warn!(
-                        "Task {}: Failed to fetch user ratings for push: {}",
-                        task_id, e
-                    );
-                    HashMap::new()
-                }
-            }
-        } else {
-            HashMap::new()
-        };
-
-    // Now iterate using in-memory lookups only — zero additional queries
+    // 3. Project each external-ID-bearing, in-scope series into a SyncEntry.
     let mut entries = Vec::new();
-
     for ext_id in &external_ids {
-        let books = match books_map.get(&ext_id.series_id) {
-            Some(b) if !b.is_empty() => b,
-            _ => continue,
-        };
-
-        // Check reading progress for each book using the pre-fetched map
-        let mut completed_count: i32 = 0;
-        let mut in_progress_count: i32 = 0;
-        let mut has_any_progress = false;
-        let mut earliest_started: Option<chrono::DateTime<chrono::Utc>> = None;
-        let mut latest_completed_at: Option<chrono::DateTime<chrono::Utc>> = None;
-        let mut latest_updated_at: Option<chrono::DateTime<chrono::Utc>> = None;
-
-        for book in books {
-            if let Some(progress) = progress_map.get(&book.id) {
-                has_any_progress = true;
-                if progress.completed {
-                    completed_count += 1;
-                    if let Some(cat) = progress.completed_at {
-                        latest_completed_at = Some(match latest_completed_at {
-                            Some(existing) if cat > existing => cat,
-                            Some(existing) => existing,
-                            None => cat,
-                        });
-                    }
-                } else {
-                    in_progress_count += 1;
-                }
-                earliest_started = Some(match earliest_started {
-                    Some(existing) if progress.started_at < existing => progress.started_at,
-                    Some(existing) => existing,
-                    None => progress.started_at,
-                });
-                latest_updated_at = Some(match latest_updated_at {
-                    Some(existing) if progress.updated_at > existing => progress.updated_at,
-                    Some(existing) => existing,
-                    None => progress.updated_at,
-                });
-            }
-        }
-
-        // Skip series with no progress at all
-        if !has_any_progress {
-            debug!(
-                "Task {}: Skipping series {} (ext_id={}) — no reading progress",
-                task_id, ext_id.series_id, ext_id.external_id
-            );
+        let Some(e) = engagements.get(&ext_id.series_id) else {
             continue;
+        };
+        // Matched entries carry a metadata-only title (no series-name fallback).
+        let title = e.metadata.as_ref().map(|m| m.title.clone());
+        if let Some(entry) = project_sync_entry(e, ext_id.external_id.clone(), title, settings) {
+            entries.push(entry);
         }
-
-        let all_completed = completed_count == books.len() as i32;
-        let is_in_progress = !all_completed;
-
-        // Apply Codex sync settings filters
-        if all_completed && !settings.include_completed {
-            debug!(
-                "Task {}: Skipping series {} (ext_id={}) — completed but includeCompleted=false",
-                task_id, ext_id.series_id, ext_id.external_id
-            );
-            continue;
-        }
-        if is_in_progress && !settings.include_in_progress {
-            debug!(
-                "Task {}: Skipping series {} (ext_id={}) — in-progress but includeInProgress=false",
-                task_id, ext_id.series_id, ext_id.external_id
-            );
-            continue;
-        }
-
-        // Calculate progress count based on settings
-        let progress_count = if settings.count_partial_progress {
-            completed_count + in_progress_count
-        } else {
-            completed_count
-        };
-
-        debug!(
-            "Task {}: Series {} (ext_id={}): {}/{} books completed, {} in-progress, progress_count={}",
-            task_id,
-            ext_id.series_id,
-            ext_id.external_id,
-            completed_count,
-            books.len(),
-            in_progress_count,
-            progress_count,
-        );
-
-        // Use pre-fetched series metadata for completion / progress totals.
-        let series_meta = metadata_map.get(&ext_id.series_id);
-        let total_volume_count = series_meta
-            .and_then(|m| m.total_volume_count)
-            .filter(|&total| total > 0);
-        let total_chapter_count = series_meta
-            .and_then(|m| m.total_chapter_count)
-            .filter(|c| c.is_finite() && *c > 0.0);
-
-        // Mark as Completed only when:
-        // 1. All local books are read, AND
-        // 2. The series has a known total_volume_count in metadata, AND
-        // 3. completed_count >= total_volume_count
-        // Otherwise default to Reading — we can't be sure the library is complete.
-        let status = if all_completed {
-            let is_truly_complete =
-                total_volume_count.is_some_and(|total| completed_count >= total);
-            if is_truly_complete {
-                SyncReadingStatus::Completed
-            } else {
-                SyncReadingStatus::Reading
-            }
-        } else {
-            SyncReadingStatus::Reading
-        };
-
-        // Server always sends books-read as `volumes`. Codex tracks books
-        // (each file = 1 volume), not chapters. `chapters` is left `None`.
-        // The plugin decides how to map this to service-specific fields
-        // (e.g. AniList's `progress` vs `progressVolumes` based on its own
-        // `progressUnit` config).
-        let progress = SyncProgress {
-            chapters: None,
-            volumes: Some(progress_count),
-            pages: None,
-            total_chapters: total_chapter_count.map(|c| c as i32),
-            total_volumes: total_volume_count,
-        };
-
-        // Look up rating/notes if sync_ratings is enabled
-        let (score, notes) = if settings.sync_ratings {
-            match ratings_map.get(&ext_id.series_id) {
-                Some(r) => (Some(r.rating as f64), r.notes.clone()),
-                None => (None, None),
-            }
-        } else {
-            (None, None)
-        };
-
-        entries.push(SyncEntry {
-            external_id: ext_id.external_id.clone(),
-            status: status.clone(),
-            progress: Some(progress),
-            score,
-            started_at: earliest_started.map(|dt| dt.to_rfc3339()),
-            completed_at: if status == SyncReadingStatus::Completed {
-                latest_completed_at.map(|dt| dt.to_rfc3339())
-            } else {
-                None
-            },
-            notes,
-            latest_updated_at: latest_updated_at.map(|dt| dt.to_rfc3339()),
-            title: metadata_map.get(&ext_id.series_id).map(|m| m.title.clone()),
-            library_id: lib_info
-                .get(&ext_id.series_id)
-                .map(|(id, _)| id.to_string())
-                .unwrap_or_default(),
-            library_name: lib_info
-                .get(&ext_id.series_id)
-                .map(|(_, name)| name.clone())
-                .unwrap_or_default(),
-        });
     }
 
-    let matched_count = entries.len();
-
     debug!(
-        "Task {}: Built {} push entries from {} series with external IDs",
-        task_id, matched_count, external_ids_count
+        "Task {}: Built {} push entries from {} in-scope series with external IDs",
+        task_id,
+        entries.len(),
+        matched_series_ids.len()
     );
 
-    // When search_fallback is enabled, also include series that have reading
-    // progress but no external ID for this source. The plugin will search by title.
+    // 4. When search_fallback is enabled, also include series that have reading
+    //    progress but no external ID for this source. The plugin searches by title.
     if settings.search_fallback {
         let unmatched = build_unmatched_entries(
             db,
@@ -377,7 +251,7 @@ async fn build_unmatched_entries(
     matched_series_ids: &HashSet<Uuid>,
     allowed_library_ids: &[Uuid],
 ) -> Vec<SyncEntry> {
-    // 1. Get all reading progress for this user
+    // 1. Get all reading progress for this user, then map books → series.
     let all_progress = match ReadProgressRepository::get_by_user(db, user_id).await {
         Ok(p) => p,
         Err(e) => {
@@ -393,7 +267,6 @@ async fn build_unmatched_entries(
         return vec![];
     }
 
-    // 2. Get book IDs → look up books → get series IDs
     let book_ids: Vec<Uuid> = all_progress.iter().map(|p| p.book_id).collect();
     let books = match BookRepository::get_by_ids(db, &book_ids).await {
         Ok(b) => b,
@@ -406,16 +279,11 @@ async fn build_unmatched_entries(
         }
     };
 
-    // Map book_id → series_id
-    let book_to_series: HashMap<Uuid, Uuid> = books.iter().map(|b| (b.id, b.series_id)).collect();
-
-    // Collect unmatched series IDs (have progress but no external ID for this source)
+    // Collect unmatched series IDs (have progress but no external ID for this source).
     let mut unmatched_series_ids: HashSet<Uuid> = HashSet::new();
-    for progress in &all_progress {
-        if let Some(&series_id) = book_to_series.get(&progress.book_id)
-            && !matched_series_ids.contains(&series_id)
-        {
-            unmatched_series_ids.insert(series_id);
+    for book in &books {
+        if !matched_series_ids.contains(&book.series_id) {
+            unmatched_series_ids.insert(book.series_id);
         }
     }
 
@@ -423,202 +291,35 @@ async fn build_unmatched_entries(
         return vec![];
     }
 
-    let unmatched_ids_vec: Vec<Uuid> = unmatched_series_ids.iter().copied().collect();
-
-    // Resolve library context (id + name) for each unmatched series.
-    let lib_info = series_library_info(db, &unmatched_ids_vec).await;
-
-    // 3. Batch-fetch books, progress, and metadata for unmatched series
-    let books_map = match BookRepository::get_by_series_ids(db, &unmatched_ids_vec).await {
-        Ok(m) => m,
-        Err(e) => {
-            warn!(
-                "Task {}: Failed to fetch books for unmatched series: {}",
-                task_id, e
-            );
-            return vec![];
-        }
-    };
-
-    let all_book_ids: Vec<Uuid> = books_map.values().flatten().map(|b| b.id).collect();
-    let progress_map =
-        match ReadProgressRepository::get_for_user_books(db, user_id, &all_book_ids).await {
-            Ok(m) => m,
+    // 2. Resolve series rows, drop out-of-scope ones, build engagements.
+    let unmatched_ids_vec: Vec<Uuid> = unmatched_series_ids.into_iter().collect();
+    let series = scoped_series(db, &unmatched_ids_vec, allowed_library_ids).await;
+    let engagements =
+        match build_series_engagements(db, user_id, &series, EngagementOptions::default()).await {
+            Ok(map) => map,
             Err(e) => {
                 warn!(
-                    "Task {}: Failed to fetch progress for unmatched series: {}",
+                    "Task {}: Failed to build series engagements for unmatched series: {}",
                     task_id, e
                 );
-                HashMap::new()
+                return vec![];
             }
         };
 
-    let metadata_map =
-        match SeriesMetadataRepository::get_by_series_ids(db, &unmatched_ids_vec).await {
-            Ok(m) => m,
-            Err(e) => {
-                warn!(
-                    "Task {}: Failed to fetch metadata for unmatched series: {}",
-                    task_id, e
-                );
-                HashMap::new()
-            }
-        };
-
-    let ratings_map: HashMap<Uuid, codex_db::entities::user_series_ratings::Model> =
-        if settings.sync_ratings {
-            match UserSeriesRatingRepository::get_all_for_user(db, user_id).await {
-                Ok(ratings) => ratings.into_iter().map(|r| (r.series_id, r)).collect(),
-                Err(e) => {
-                    warn!(
-                        "Task {}: Failed to fetch ratings for unmatched series: {}",
-                        task_id, e
-                    );
-                    HashMap::new()
-                }
-            }
-        } else {
-            HashMap::new()
-        };
-
-    // 4. Build entries — same logic as matched entries, but with external_id: ""
+    // 3. Project each unmatched, in-scope series with metadata into a SyncEntry.
     let mut entries = Vec::new();
-
-    for &series_id in &unmatched_series_ids {
-        // Skip series outside the plugin's library scope.
-        let in_scope = match lib_info.get(&series_id) {
-            Some((lib, _)) => library_in_scope(allowed_library_ids, *lib),
-            None => allowed_library_ids.is_empty(),
-        };
-        if !in_scope {
+    for s in &series {
+        let Some(e) = engagements.get(&s.id) else {
             continue;
-        }
-
-        let title = match metadata_map.get(&series_id) {
+        };
+        // Need a title to search the external service by; skip series without metadata.
+        let title = match e.metadata.as_ref() {
             Some(m) => m.title.clone(),
-            None => continue, // Skip series without metadata — we need a title for search
+            None => continue,
         };
-
-        let books = match books_map.get(&series_id) {
-            Some(b) if !b.is_empty() => b,
-            _ => continue,
-        };
-
-        let mut completed_count: i32 = 0;
-        let mut in_progress_count: i32 = 0;
-        let mut has_any_progress = false;
-        let mut earliest_started: Option<chrono::DateTime<chrono::Utc>> = None;
-        let mut latest_completed_at: Option<chrono::DateTime<chrono::Utc>> = None;
-        let mut latest_updated_at: Option<chrono::DateTime<chrono::Utc>> = None;
-
-        for book in books {
-            if let Some(progress) = progress_map.get(&book.id) {
-                has_any_progress = true;
-                if progress.completed {
-                    completed_count += 1;
-                    if let Some(cat) = progress.completed_at {
-                        latest_completed_at = Some(match latest_completed_at {
-                            Some(existing) if cat > existing => cat,
-                            Some(existing) => existing,
-                            None => cat,
-                        });
-                    }
-                } else {
-                    in_progress_count += 1;
-                }
-                earliest_started = Some(match earliest_started {
-                    Some(existing) if progress.started_at < existing => progress.started_at,
-                    Some(existing) => existing,
-                    None => progress.started_at,
-                });
-                latest_updated_at = Some(match latest_updated_at {
-                    Some(existing) if progress.updated_at > existing => progress.updated_at,
-                    Some(existing) => existing,
-                    None => progress.updated_at,
-                });
-            }
+        if let Some(entry) = project_sync_entry(e, String::new(), Some(title), settings) {
+            entries.push(entry);
         }
-
-        if !has_any_progress {
-            continue;
-        }
-
-        let all_completed = completed_count == books.len() as i32;
-        let is_in_progress = !all_completed;
-
-        if all_completed && !settings.include_completed {
-            continue;
-        }
-        if is_in_progress && !settings.include_in_progress {
-            continue;
-        }
-
-        let progress_count = if settings.count_partial_progress {
-            completed_count + in_progress_count
-        } else {
-            completed_count
-        };
-
-        let series_meta = metadata_map.get(&series_id);
-        let total_volume_count = series_meta
-            .and_then(|m| m.total_volume_count)
-            .filter(|&total| total > 0);
-        let total_chapter_count = series_meta
-            .and_then(|m| m.total_chapter_count)
-            .filter(|c| c.is_finite() && *c > 0.0);
-
-        let status = if all_completed {
-            let is_truly_complete =
-                total_volume_count.is_some_and(|total| completed_count >= total);
-            if is_truly_complete {
-                SyncReadingStatus::Completed
-            } else {
-                SyncReadingStatus::Reading
-            }
-        } else {
-            SyncReadingStatus::Reading
-        };
-
-        let progress = SyncProgress {
-            chapters: None,
-            volumes: Some(progress_count),
-            pages: None,
-            total_chapters: total_chapter_count.map(|c| c as i32),
-            total_volumes: total_volume_count,
-        };
-
-        let (score, notes) = if settings.sync_ratings {
-            match ratings_map.get(&series_id) {
-                Some(r) => (Some(r.rating as f64), r.notes.clone()),
-                None => (None, None),
-            }
-        } else {
-            (None, None)
-        };
-
-        entries.push(SyncEntry {
-            external_id: String::new(),
-            status: status.clone(),
-            progress: Some(progress),
-            score,
-            started_at: earliest_started.map(|dt| dt.to_rfc3339()),
-            completed_at: if status == SyncReadingStatus::Completed {
-                latest_completed_at.map(|dt| dt.to_rfc3339())
-            } else {
-                None
-            },
-            notes,
-            latest_updated_at: latest_updated_at.map(|dt| dt.to_rfc3339()),
-            title: Some(title),
-            library_id: lib_info
-                .get(&series_id)
-                .map(|(id, _)| id.to_string())
-                .unwrap_or_default(),
-            library_name: lib_info
-                .get(&series_id)
-                .map(|(_, name)| name.clone())
-                .unwrap_or_default(),
-        });
     }
 
     entries
