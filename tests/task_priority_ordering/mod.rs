@@ -229,29 +229,29 @@ async fn test_task_type_priority_ordering() {
 
     // Now claim tasks one by one and verify the order
     let expected_order = vec![
-        // Scanning (priority 1000-900)
+        // User plugin operations (priority 1000-960)
+        "user_plugin_recommendation_dismiss",
+        "user_plugin_sync",
+        "user_plugin_recommendations",
+        // Metadata fetch (priority 900-860)
+        "refresh_metadata",
+        "plugin_auto_match",
+        "find_duplicates",
+        // Scanning (priority 600-550)
         "scan_library",
         "purge_deleted",
-        // Analysis (priority 800-750)
+        // Analysis (priority 500-450)
         "analyze_book",
         "analyze_series",
         "reprocess_series_title",
         "reprocess_series_titles",
         "renumber_series",
         "renumber_series_batch",
-        // Thumbnails (priority 600-570)
+        // Thumbnails (priority 400-370)
         "generate_thumbnail",
         "generate_series_thumbnail",
         "generate_thumbnails",
         "generate_series_thumbnails",
-        // Metadata (priority 400-380)
-        "find_duplicates",
-        "refresh_metadata",
-        "plugin_auto_match",
-        // Plugins (priority 200-180)
-        "user_plugin_recommendation_dismiss",
-        "user_plugin_sync",
-        "user_plugin_recommendations",
         // Cleanup (priority 100, FIFO by scheduled_for)
         "cleanup_plugin_data",
         "cleanup_pdf_cache",
@@ -444,34 +444,34 @@ async fn test_default_priority_ordering_across_types() {
     .await
     .unwrap();
 
-    // Scan should come first (1000), then analyze (800), then thumbnail (600),
-    // then find_duplicates (400), then cleanup (100)
+    // find_duplicates comes first (860), then scan (600), then analyze (500),
+    // then thumbnail (400), then cleanup (100)
     let task1 = TaskRepository::claim_next(&db, "test-worker", 300)
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(task1.task_type, "scan_library");
-    assert_eq!(task1.priority, 1000);
+    assert_eq!(task1.task_type, "find_duplicates");
+    assert_eq!(task1.priority, 860);
 
     let task2 = TaskRepository::claim_next(&db, "test-worker", 300)
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(task2.task_type, "analyze_book");
-    assert_eq!(task2.priority, 800);
+    assert_eq!(task2.task_type, "scan_library");
+    assert_eq!(task2.priority, 600);
 
     let task3 = TaskRepository::claim_next(&db, "test-worker", 300)
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(task3.task_type, "generate_thumbnail");
-    assert_eq!(task3.priority, 600);
+    assert_eq!(task3.task_type, "analyze_book");
+    assert_eq!(task3.priority, 500);
 
     let task4 = TaskRepository::claim_next(&db, "test-worker", 300)
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(task4.task_type, "find_duplicates");
+    assert_eq!(task4.task_type, "generate_thumbnail");
     assert_eq!(task4.priority, 400);
 
     let task5 = TaskRepository::claim_next(&db, "test-worker", 300)

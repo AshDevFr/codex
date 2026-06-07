@@ -112,7 +112,7 @@ async fn test_enqueue_task() {
 
     assert_eq!(task.task_type, "scan_library");
     assert_eq!(task.status, "pending");
-    assert_eq!(task.priority, 1000);
+    assert_eq!(task.priority, 600);
     assert_eq!(task.attempts, 0);
 }
 
@@ -936,7 +936,7 @@ async fn test_default_priority_scan_over_analysis() {
     .await
     .expect("Failed to enqueue scan task");
 
-    // Should get scan task first (priority 1000 > 800)
+    // Should get scan task first (priority 600 > 500)
     let claimed1 = TaskRepository::claim_next(&db, "worker-1", 300)
         .await
         .expect("Failed to claim task")
@@ -946,7 +946,7 @@ async fn test_default_priority_scan_over_analysis() {
         claimed1.task_type, "scan_library",
         "Scan task should be claimed first due to higher default priority"
     );
-    assert_eq!(claimed1.priority, 1000);
+    assert_eq!(claimed1.priority, 600);
 
     TaskRepository::mark_completed(&db, claimed1.id, None)
         .await
@@ -958,7 +958,7 @@ async fn test_default_priority_scan_over_analysis() {
         .expect("No task available");
 
     assert_eq!(claimed2.task_type, "analyze_book");
-    assert_eq!(claimed2.priority, 800);
+    assert_eq!(claimed2.priority, 500);
 }
 
 /// Test that enqueue_with_priority overrides default_priority
@@ -1136,7 +1136,7 @@ async fn test_postgres_default_priority_ordering() {
     .await
     .expect("Failed to enqueue scan task");
 
-    // Scan should come first (priority 1000 > 800)
+    // Scan should come first (priority 600 > 500)
     let claimed1 = TaskRepository::claim_next(&db, "worker-1", 300)
         .await
         .expect("Failed to claim task")
@@ -1318,7 +1318,7 @@ async fn test_enqueue_find_duplicates_task() {
 
     assert_eq!(task.task_type, "find_duplicates");
     assert_eq!(task.status, "pending");
-    assert_eq!(task.priority, 400);
+    assert_eq!(task.priority, 860);
     assert_eq!(task.attempts, 0);
     assert!(
         task.library_id.is_none(),
