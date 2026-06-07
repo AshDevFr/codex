@@ -1171,7 +1171,7 @@ mod tests {
         assert_eq!(task.job_id(), Some(job_id));
         assert_eq!(task.series_id(), None);
         assert_eq!(task.book_id(), None);
-        assert_eq!(task.default_priority(), 385);
+        assert_eq!(task.default_priority(), 890);
 
         let (type_str, lib_id, series_id, book_id, params) = task.extract_fields();
         assert_eq!(type_str, "refresh_library_metadata");
@@ -1208,7 +1208,7 @@ mod tests {
         assert_eq!(task.library_id(), None);
         assert_eq!(task.series_id(), None);
         assert_eq!(task.book_id(), None);
-        assert_eq!(task.default_priority(), 170);
+        assert_eq!(task.default_priority(), 850);
 
         let (type_str, lib_id, series_id, book_id, params) = task.extract_fields();
         assert_eq!(type_str, "poll_release_source");
@@ -1231,7 +1231,7 @@ mod tests {
         assert_eq!(task.library_id(), None);
         assert_eq!(task.series_id(), None);
         assert_eq!(task.book_id(), None);
-        assert_eq!(task.default_priority(), 155);
+        assert_eq!(task.default_priority(), 840);
 
         let (type_str, lib_id, series_id, book_id, params) = task.extract_fields();
         assert_eq!(type_str, "bulk_track_for_releases");
