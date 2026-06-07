@@ -54,6 +54,7 @@ const anilistPlugin: UserPluginDto = {
   capabilities: {
     readSync: true,
     userRecommendationProvider: true,
+    wantsDetailedProgress: true,
     wantsFullMetadata: true,
   },
   createdAt: "2026-01-15T00:00:00Z",
@@ -70,6 +71,7 @@ const mangabakaAvailable: AvailablePluginDto = {
   capabilities: {
     readSync: false,
     userRecommendationProvider: false,
+    wantsDetailedProgress: false,
     wantsFullMetadata: false,
   },
 };
@@ -145,6 +147,7 @@ export const userPluginsHandlers = [
       capabilities: {
         readSync: false,
         userRecommendationProvider: false,
+        wantsDetailedProgress: false,
         wantsFullMetadata: false,
       },
       createdAt: new Date().toISOString(),
