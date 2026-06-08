@@ -93,6 +93,42 @@ export function normalizeBaseUrl(raw: string): string {
 }
 
 // =============================================================================
+// Cursor persistence (plugin KV store)
+// =============================================================================
+
+/**
+ * Load the feed cursor bookmark from the KV store. Returns `null` when no
+ * cursor has been stored yet (first run) or when the read fails — a missing
+ * cursor simply restarts the walk from the beginning, which is safe given
+ * at-least-once delivery + host-side dedup.
+ */
+export async function loadCursor(storage: PluginStorage): Promise<string | null> {
+  try {
+    const res = await storage.get(CURSOR_STORAGE_KEY);
+    const data = res?.data;
+    return typeof data === "string" && data.length > 0 ? data : null;
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    logger.warn(`failed to load cursor; restarting from the beginning: ${reason}`);
+    return null;
+  }
+}
+
+/**
+ * Persist the feed cursor bookmark. Best-effort: a failed write is logged but
+ * never aborts a poll — the worst case is re-walking already-seen pages on
+ * the next poll, which dedups host-side.
+ */
+export async function saveCursor(storage: PluginStorage, cursor: string): Promise<void> {
+  try {
+    await storage.set(CURSOR_STORAGE_KEY, cursor);
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    logger.warn(`failed to persist cursor "${cursor}": ${reason}`);
+  }
+}
+
+// =============================================================================
 // Source registration
 // =============================================================================
 
