@@ -156,6 +156,22 @@ export const OFFICIAL_PLUGINS: OfficialPlugin[] = [
       credentialDelivery: "env",
     },
   },
+  {
+    name: "release-tsundoku",
+    displayName: "Tsundoku Releases",
+    description:
+      "Announces new volume and chapter coverage for tracked series via a Tsundoku instance's incremental series feed. Matches series by exact external IDs (MangaBaka, AniList, MAL, and more) — no fuzzy matching. Notify-only — Codex does not download anything.",
+    type: "Releases",
+    packageName: "@ashdev/codex-plugin-release-tsundoku",
+    authInfo: "Tsundoku instance URL required for setup",
+    author: "Codex Team",
+    scope: "system",
+    formDefaults: {
+      command: "npx",
+      args: "-y\n@ashdev/codex-plugin-release-tsundoku",
+      credentialDelivery: "env",
+    },
+  },
 ];
 
 // ---------------------------------------------------------------------------
