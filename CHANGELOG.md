@@ -2,6 +2,50 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.36.0] - 2026-06-08
+
+### 🚀 Features
+
+- *(plugins)* Add data layer for scheduled user-plugin sync
+- *(plugins)* Fan out scheduled user syncs on a plugin's cron
+- *(plugins)* API for admin sync cron and per-user auto/manual sync
+- *(plugins)* UI for admin sync cron and per-user auto/manual sync
+- *(plugins)* Add opt-in series metadata to library and sync entries
+- *(plugins)* Gate metadata enrichment behind per-field opt-in toggles
+- *(plugins)* Add metadata-enrichment toggles to the connection settings UI
+- *(plugins)* Add detailed sync progress fields to the protocol
+- *(plugins)* Add wantsDetailedProgress capability flag
+- *(plugins)* Compute and attach detailed sync progress on push
+- *(plugins)* Consume accurate sync progress and add detailed-progress SDK types
+- *(plugins)* Record echo plugin payloads to files for debugging
+- *(plugins)* Add sync-echo debug plugin
+- *(plugins)* Add recommendations-echo and wire up the echo plugins
+- *(plugins)* Support credential-less plugins and send per-user identity
+- *(plugins)* Add custom-metadata admin gate and extend tags/genres policy to recommendations
+- *(seed)* Accept preprocessing rules and match conditions as native YAML
+- *(scheduler)* Make scheduled plugin sync safe across replicas
+
+### 🐛 Bug Fixes
+
+- *(plugins)* Add wantsDetailedProgress to mock plugin capabilities
+- *(plugins)* Give worker-spawned plugins a real dataDir
+- *(plugins)* Apply live schedule reloads when workers are disabled
+
+### 🚜 Refactor
+
+- *(plugins)* Extract shared per-series engagement builder
+- *(plugins)* Make metadata enrichment admin-gated and relocate the sync cron
+
+### 📚 Documentation
+
+- *(plugins)* Document scheduled automatic sync
+
+### 🧪 Testing
+
+- *(scanner)* Align task priority assertions with reworked scheme
+- *(tasks)* Align priority assertions with reworked scheme
+- *(models)* Fix stale default_priority assertions in extraction tests
+
 ## [1.35.0] - 2026-06-06
 
 ### 🚀 Features
