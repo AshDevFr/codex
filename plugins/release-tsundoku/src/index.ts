@@ -31,10 +31,15 @@ import {
   type InitializeParams,
   type PluginStorage,
   RELEASES_METHODS,
+  type ReleaseCandidate,
   type ReleasePollRequest,
   type ReleasePollResponse,
+  type TrackedSeriesEntry,
 } from "@ashdev/codex-plugin-sdk";
+import { feedItemToCandidate } from "./candidate.js";
+import { fetchFeedPage } from "./fetcher.js";
 import { manifest } from "./manifest.js";
+import { buildIndex, matchItem } from "./matcher.js";
 
 const logger = createLogger({ name: manifest.name, level: "info" });
 
@@ -171,25 +176,205 @@ export async function registerSources(
 }
 
 // =============================================================================
+// Reverse-RPC wrappers
+// =============================================================================
+
+interface ListTrackedResponse {
+  tracked: TrackedSeriesEntry[];
+  nextOffset?: number;
+}
+
+interface RecordResponse {
+  ledgerId: string;
+  deduped: boolean;
+}
+
+/** Page size for the tracked-series sweep that builds the match index. */
+const TRACKED_PAGE_SIZE = 200;
+
+/**
+ * Lazily walk all tracked-series pages from the host. Yields one entry at a
+ * time so the caller can build the reverse index without materializing every
+ * page at once.
+ */
+async function* iterateTrackedSeries(
+  rpc: HostRpcClient,
+  sourceId: string,
+): AsyncGenerator<TrackedSeriesEntry> {
+  let offset = 0;
+  while (true) {
+    const page = await rpc.call<ListTrackedResponse>(RELEASES_METHODS.LIST_TRACKED, {
+      sourceId,
+      offset,
+      limit: TRACKED_PAGE_SIZE,
+    });
+    for (const entry of page.tracked) {
+      yield entry;
+    }
+    if (page.nextOffset === undefined || page.tracked.length === 0) return;
+    offset = page.nextOffset;
+  }
+}
+
+/**
+ * Submit one candidate to the host ledger. Per-candidate failures (threshold
+ * rejection, validation, transient host error) are logged and swallowed so a
+ * single bad item never aborts the walk; the next poll retries it.
+ */
+async function recordCandidate(
+  rpc: HostRpcClient,
+  sourceId: string,
+  candidate: ReleaseCandidate,
+): Promise<RecordResponse | null> {
+  try {
+    return await rpc.call<RecordResponse>(RELEASES_METHODS.RECORD, { sourceId, candidate });
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    const code = err instanceof HostRpcError ? ` (code ${err.code})` : "";
+    logger.warn(`record failed for ${candidate.externalReleaseId}: ${reason}${code}`);
+    return null;
+  }
+}
+
+/**
+ * Best-effort progress emit. Failures (including older hosts without the
+ * method) are swallowed — progress is a UX nicety, never a reason to abort.
+ */
+async function reportProgress(
+  rpc: HostRpcClient,
+  current: number,
+  total: number,
+  message: string,
+): Promise<void> {
+  try {
+    await rpc.call(RELEASES_METHODS.REPORT_PROGRESS, { current, total, message });
+  } catch (err) {
+    if (err instanceof HostRpcError && err.code === -32601) return;
+    const reason = err instanceof Error ? err.message : String(err);
+    logger.debug(`report_progress dropped: ${reason}`);
+  }
+}
+
+// =============================================================================
 // Poll
 // =============================================================================
 
+/** Dependencies a poll needs, defaulted from plugin state at the call site. */
+export interface PollDeps {
+  storage: PluginStorage;
+  /** Tsundoku base URL (no trailing slash). */
+  baseUrl: string;
+  /** Language stamped on every candidate. */
+  language: string;
+  /** Feed page size. */
+  pageLimit: number;
+  /** Per-page fetch timeout. */
+  timeoutMs: number;
+  /** Custom `fetch` impl (tests). */
+  fetchImpl?: typeof fetch;
+}
+
 /**
- * Top-level poll handler. The feed walk + matching are added in dedicated
- * modules; until they land, the source registers and polls cleanly while
- * recording no candidates. Exported for tests.
+ * Top-level poll handler.
+ *
+ * Builds the exact-match index from the host's tracked series, then walks the
+ * Tsundoku feed from the stored cursor: each item is matched by external ID
+ * and, on a hit, recorded as a candidate. The cursor is persisted after every
+ * processed page so an interrupted walk resumes from the last completed page
+ * (keyset pagination is gap-free, and host-side dedup makes re-processing
+ * safe). Exported for tests.
  */
 export async function poll(
-  _params: ReleasePollRequest,
-  _rpc: HostRpcClient,
+  params: ReleasePollRequest,
+  rpc: HostRpcClient,
+  deps: PollDeps,
 ): Promise<ReleasePollResponse> {
+  const sourceId = params.sourceId;
+
+  // 1. Build the reverse index from the user's tracked series. The feed spans
+  //    the whole Tsundoku catalog, so this is what scopes it to the user.
+  const trackedEntries: TrackedSeriesEntry[] = [];
+  for await (const entry of iterateTrackedSeries(rpc, sourceId)) {
+    trackedEntries.push(entry);
+  }
+  const index = buildIndex(trackedEntries);
+  if (index.size === 0) {
+    logger.info(
+      `poll: no tracked series carry a Tsundoku-known external ID (source=${sourceId}); nothing to match`,
+    );
+  }
+
+  // 2. Walk the feed from the stored cursor.
+  let cursor = await loadCursor(deps.storage);
+  let parsed = 0;
+  let matched = 0;
+  let recorded = 0;
+  let deduped = 0;
+  let worstStatus = 200;
+
+  while (true) {
+    const result = await fetchFeedPage(deps.baseUrl, cursor, deps.pageLimit, {
+      timeoutMs: deps.timeoutMs,
+      fetchImpl: deps.fetchImpl,
+    });
+
+    if (result.kind === "error") {
+      worstStatus = Math.max(worstStatus, result.status);
+      logger.warn(
+        `feed fetch failed (status ${result.status}): ${result.message}; stopping walk, cursor preserved`,
+      );
+      break;
+    }
+
+    const page = result.data;
+    for (const item of page.items) {
+      parsed++;
+      const match = matchItem(item, index);
+      if (!match) continue;
+      matched++;
+      const candidate = feedItemToCandidate(item, match, {
+        baseUrl: deps.baseUrl,
+        language: deps.language,
+      });
+      const outcome = await recordCandidate(rpc, sourceId, candidate);
+      if (!outcome) continue;
+      if (outcome.deduped) {
+        deduped++;
+      } else {
+        recorded++;
+      }
+    }
+
+    // Advance + persist the cursor before deciding whether to continue, so an
+    // error or crash on the next page resumes from this point.
+    const next = page.nextCursor ?? null;
+    if (next) {
+      cursor = next;
+      await saveCursor(deps.storage, next);
+    }
+
+    await reportProgress(rpc, parsed, parsed, `Processed ${parsed} feed items`);
+
+    if (!page.hasMore) break;
+    if (!next) {
+      // hasMore with no advancing cursor would loop forever; stop defensively.
+      logger.warn("feed reported hasMore but no nextCursor; stopping walk");
+      break;
+    }
+    if (page.items.length === 0) break;
+  }
+
+  logger.info(
+    `poll complete: source=${sourceId} tracked=${trackedEntries.length} parsed=${parsed} matched=${matched} recorded=${recorded} deduped=${deduped} worst_status=${worstStatus}`,
+  );
+
   return {
     notModified: false,
-    upstreamStatus: 200,
-    parsed: 0,
-    matched: 0,
-    recorded: 0,
-    deduped: 0,
+    upstreamStatus: worstStatus,
+    parsed,
+    matched,
+    recorded,
+    deduped,
   };
 }
 
@@ -201,13 +386,19 @@ createReleaseSourcePlugin({
   manifest,
   provider: {
     async poll(params: ReleasePollRequest): Promise<ReleasePollResponse> {
-      if (!state.hostRpc) {
-        throw new Error("Plugin not initialized: hostRpc client missing");
+      if (!state.hostRpc || !state.storage) {
+        throw new Error("Plugin not initialized: host RPC / storage client missing");
       }
       if (!state.baseUrl) {
         throw new Error("Plugin not configured: baseUrl is required");
       }
-      return poll(params, state.hostRpc);
+      return poll(params, state.hostRpc, {
+        storage: state.storage,
+        baseUrl: state.baseUrl,
+        language: state.defaultLanguage,
+        pageLimit: state.pageLimit,
+        timeoutMs: state.requestTimeoutMs,
+      });
     },
   },
   logLevel: "info",
