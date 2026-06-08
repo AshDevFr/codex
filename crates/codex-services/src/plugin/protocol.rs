@@ -947,10 +947,11 @@ pub enum ExternalLinkType {
 /// `sendMetadata` toggle.
 ///
 /// Public-ish bibliographic fields only — external services already have most of
-/// this. The user-defined `custom_metadata` escape hatch is deliberately NOT
-/// here: it carries private data and is gated by a separate `sendCustomMetadata`
-/// toggle, so it rides on the parent entry as its own field. Genres, tags, year,
-/// status, and total counts also live on the parent entry and are not duplicated.
+/// this. The library's `custom_metadata` escape hatch is deliberately NOT
+/// here: it is an opaque free-form blob gated by a separate `allowCustomMetadata`
+/// admin policy (default off), so it rides on the parent entry as its own field.
+/// Genres, tags, year, status, and total counts also live on the parent entry
+/// and are not duplicated.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SeriesMetadata {
@@ -1068,9 +1069,9 @@ pub struct UserLibraryEntry {
     /// `wantsFullMetadata` and the user enables the `sendMetadata` toggle.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metadata: Option<SeriesMetadata>,
-    /// User-defined custom metadata (parsed `series_metadata.custom_metadata`),
-    /// attached only when the plugin declares `wantsFullMetadata` and the user
-    /// enables the separate `sendCustomMetadata` toggle.
+    /// Library custom metadata (parsed `series_metadata.custom_metadata`),
+    /// attached only when the plugin declares `wantsFullMetadata` and the admin
+    /// opts the plugin in via the `allowCustomMetadata` policy (default off).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub custom_metadata: Option<serde_json::Value>,
 }

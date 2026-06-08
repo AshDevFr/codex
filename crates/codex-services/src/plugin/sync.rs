@@ -127,10 +127,10 @@ pub struct SyncEntry {
     /// entries.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metadata: Option<crate::plugin::protocol::SeriesMetadata>,
-    /// User-defined custom metadata (parsed `series_metadata.custom_metadata`),
+    /// Library custom metadata (parsed `series_metadata.custom_metadata`),
     /// attached on push only when the plugin declares `wantsFullMetadata` and the
-    /// user enables the separate `sendCustomMetadata` toggle. Empty on pulled
-    /// entries.
+    /// admin opts the plugin in via the `allowCustomMetadata` policy (default
+    /// off). Empty on pulled entries.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub custom_metadata: Option<serde_json::Value>,
 }

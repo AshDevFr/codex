@@ -17,7 +17,7 @@ use uuid::Uuid;
 use crate::handlers::TaskHandler;
 use crate::types::TaskResult;
 use codex_db::entities::tasks;
-use codex_db::entities::user_plugins::{CODEX_CONFIG_NAMESPACE, SEND_CUSTOM_METADATA_KEY};
+use codex_db::entities::user_plugins::CODEX_CONFIG_NAMESPACE;
 use codex_db::repositories::{
     PluginsRepository, SeriesRepository, UserPluginDataRepository, UserPluginsRepository,
 };
@@ -54,11 +54,6 @@ struct CodexRecommendationSettings {
     /// Stored in config as 0-10 (display scale), converted by multiplying by 10.
     /// Default: 0 (no threshold).
     drop_threshold: i32,
-    /// User privacy opt-out for sending user-defined `custom_metadata` on seeds.
-    /// Default: false. The bibliographic metadata block is admin policy on the
-    /// plugin, not user-controlled; genres/tags are always sent to recommendation
-    /// plugins as baseline taste signal.
-    send_custom_metadata: bool,
 }
 
 impl CodexRecommendationSettings {
@@ -89,16 +84,10 @@ impl CodexRecommendationSettings {
             .map(|v| v.clamp(0, 100))
             .unwrap_or(0);
 
-        let send_custom_metadata = codex
-            .get(SEND_CUSTOM_METADATA_KEY)
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
-
         Self {
             max_recommendations,
             max_seeds,
             drop_threshold,
-            send_custom_metadata,
         }
     }
 }
@@ -162,7 +151,7 @@ fn curate_seeds(
 /// Attach opt-in enrichment to the curated seeds.
 ///
 /// `send_metadata` adds the bibliographic `metadata` block; `send_custom_metadata`
-/// adds the user-defined `custom_metadata`. Only the seeds (≤ `max_seeds`) are
+/// adds the library's `custom_metadata`. Only the seeds (≤ `max_seeds`) are
 /// enriched, not the whole library, so the extra fetch/parse stays bounded.
 /// genres/tags are already present on every recommendation entry, so they are not
 /// gated here.
@@ -443,8 +432,8 @@ impl TaskHandler for UserPluginRecommendationsHandler {
             );
 
             // Attach opt-in enrichment to the seeds when the plugin declares the
-            // capability. The bibliographic block is admin policy on the plugin
-            // (default on); custom_metadata is the user's privacy opt-out.
+            // capability. The bibliographic block and custom_metadata are both
+            // admin policy on the plugin (custom_metadata defaults off).
             // (genres/tags already ride on every recommendation entry.)
             let wants_full_metadata = plugin_model
                 .as_ref()
@@ -456,12 +445,11 @@ impl TaskHandler for UserPluginRecommendationsHandler {
                 && plugin_model
                     .as_ref()
                     .is_some_and(|p| p.send_metadata_enabled());
-            // Custom metadata: capability + admin allow-gate + user opt-in.
+            // Custom metadata: capability + admin allow-gate (default off).
             let send_custom_metadata = wants_full_metadata
                 && plugin_model
                     .as_ref()
-                    .is_some_and(|p| p.allow_custom_metadata_enabled())
-                && rec_settings.send_custom_metadata;
+                    .is_some_and(|p| p.allow_custom_metadata_enabled());
             attach_seed_metadata(db, user_id, &mut seeds, send_metadata, send_custom_metadata)
                 .await;
 

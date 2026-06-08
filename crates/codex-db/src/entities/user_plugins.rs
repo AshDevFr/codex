@@ -50,11 +50,10 @@ pub const AUTO_SYNC_KEY: &str = "autoSync";
 pub const SEND_TAGS_KEY: &str = "sendTags";
 pub const SEND_GENRES_KEY: &str = "sendGenres";
 pub const SEND_METADATA_KEY: &str = "sendMetadata";
-/// User opt-in (on the connection) for sharing custom metadata. Default false.
-pub const SEND_CUSTOM_METADATA_KEY: &str = "sendCustomMetadata";
 /// Admin gate (on the plugin) for whether custom metadata may be sent at all.
-/// Default true; an admin sets false to forbid it regardless of the user opt-in.
-/// Effective custom = capability && allowCustomMetadata && sendCustomMetadata.
+/// Default false: custom metadata is a free-form JSON blob the host can't
+/// inspect, so it is never sent to an external service unless an admin
+/// explicitly opts the plugin in. Effective custom = capability && allowCustomMetadata.
 pub const ALLOW_CUSTOM_METADATA_KEY: &str = "allowCustomMetadata";
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
@@ -235,17 +234,6 @@ impl Model {
             .and_then(|codex| codex.get(key))
             .and_then(|v| v.as_bool())
             .unwrap_or(false)
-    }
-
-    /// Whether the user opted into sending user-defined custom metadata.
-    ///
-    /// This is the one enrichment field under per-user control (a privacy
-    /// opt-out, default false): custom metadata can hold private annotations, so
-    /// even when the plugin/admin wants it, the user may withhold it. Tags,
-    /// genres, and the bibliographic block are admin-controlled instead (see
-    /// [`super::plugins::Model::send_tags_enabled`] etc.).
-    pub fn send_custom_metadata_enabled(&self) -> bool {
-        self.codex_flag(SEND_CUSTOM_METADATA_KEY)
     }
 
     /// Parse health status
@@ -444,18 +432,5 @@ mod tests {
         let mut model = test_model();
         model.config = serde_json::json!({ "_codex": { "autoSync": false } });
         assert!(!model.auto_sync_enabled());
-    }
-
-    #[test]
-    fn test_send_custom_metadata_default_false() {
-        // Privacy opt-out: off unless the user explicitly enables it.
-        assert!(!test_model().send_custom_metadata_enabled());
-    }
-
-    #[test]
-    fn test_send_custom_metadata_enabled() {
-        let mut model = test_model();
-        model.config = serde_json::json!({ "_codex": { "sendCustomMetadata": true } });
-        assert!(model.send_custom_metadata_enabled());
     }
 }

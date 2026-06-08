@@ -57,7 +57,6 @@ function UserPluginSettingsContent({
   const queryClient = useQueryClient();
   const isSyncPlugin = plugin.capabilities?.readSync === true;
   const isRecPlugin = plugin.capabilities?.userRecommendationProvider === true;
-  const wantsFullMetadata = plugin.capabilities?.wantsFullMetadata === true;
   const configFields: ConfigField[] =
     (plugin.userConfigSchema?.fields as ConfigField[] | undefined) ?? [];
   const currentConfig = (plugin.config ?? {}) as Record<string, unknown>;
@@ -104,16 +103,6 @@ function UserPluginSettingsContent({
         : 0;
   }
 
-  // Custom-metadata sharing is the one user-controlled enrichment opt-out
-  // (privacy; default false). Shown only when the plugin declares
-  // wantsFullMetadata. tags/genres/bibliographic metadata are admin policy.
-  if (wantsFullMetadata) {
-    initialValues._codex_sendCustomMetadata =
-      typeof codexConfig.sendCustomMetadata === "boolean"
-        ? codexConfig.sendCustomMetadata
-        : false;
-  }
-
   for (const field of configFields) {
     initialValues[field.key] = currentConfig[field.key] ?? field.default ?? "";
   }
@@ -151,13 +140,7 @@ function UserPluginSettingsContent({
         Object.assign(codex, recValues);
       }
 
-      if (wantsFullMetadata) {
-        // Only the custom-metadata privacy opt-out is user-controlled; the rest
-        // (tags/genres/metadata) is admin policy on the plugin.
-        codex.sendCustomMetadata = !!form.values._codex_sendCustomMetadata;
-      }
-
-      if (isSyncPlugin || isRecPlugin || wantsFullMetadata) {
+      if (isSyncPlugin || isRecPlugin) {
         config._codex = codex;
       }
 
@@ -188,8 +171,7 @@ function UserPluginSettingsContent({
     },
   });
 
-  const hasFields =
-    isSyncPlugin || isRecPlugin || wantsFullMetadata || configFields.length > 0;
+  const hasFields = isSyncPlugin || isRecPlugin || configFields.length > 0;
 
   return (
     <Stack gap="md">
@@ -301,27 +283,9 @@ function UserPluginSettingsContent({
         </>
       )}
 
-      {wantsFullMetadata && (
-        <>
-          <Divider label="Metadata Sharing" labelPosition="left" mt="xs" />
-          <Switch
-            label="Share custom metadata"
-            description="Include your user-defined custom metadata fields when this plugin runs. These can hold private notes, so it's off by default — only enable it for plugins you trust. (Tags, genres, and bibliographic metadata are controlled by your administrator.)"
-            checked={!!form.values._codex_sendCustomMetadata}
-            onChange={(e) =>
-              form.setFieldValue(
-                "_codex_sendCustomMetadata",
-                e.currentTarget.checked,
-              )
-            }
-          />
-        </>
+      {(isSyncPlugin || isRecPlugin) && configFields.length > 0 && (
+        <Divider label="Plugin Settings" labelPosition="left" mt="xs" />
       )}
-
-      {(isSyncPlugin || isRecPlugin || wantsFullMetadata) &&
-        configFields.length > 0 && (
-          <Divider label="Plugin Settings" labelPosition="left" mt="xs" />
-        )}
 
       {configFields.map((field) => {
         const props = form.getInputProps(field.key);

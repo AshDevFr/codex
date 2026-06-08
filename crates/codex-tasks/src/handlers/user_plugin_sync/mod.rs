@@ -293,20 +293,20 @@ impl TaskHandler for UserPluginSyncHandler {
                 .map(|m| m.capabilities.wants_detailed_progress)
                 .unwrap_or(false);
             // tags/genres/metadata are admin policy on the plugin (default on when
-            // the plugin declares the capability); custom_metadata is the user's
-            // privacy opt-out (default off). All gated by the capability.
+            // the plugin declares the capability); custom_metadata is also admin
+            // policy but defaults off (opaque free-form blob). All gated by the
+            // capability.
             let metadata_flags = push::MetadataFlags {
                 tags: wants_full_metadata && plugin.as_ref().is_some_and(|p| p.send_tags_enabled()),
                 genres: wants_full_metadata
                     && plugin.as_ref().is_some_and(|p| p.send_genres_enabled()),
                 metadata: wants_full_metadata
                     && plugin.as_ref().is_some_and(|p| p.send_metadata_enabled()),
-                // Custom metadata: capability + admin allow-gate + user opt-in.
+                // Custom metadata: capability + admin allow-gate (default off).
                 custom_metadata: wants_full_metadata
                     && plugin
                         .as_ref()
-                        .is_some_and(|p| p.allow_custom_metadata_enabled())
-                    && codex_settings.send_custom_metadata,
+                        .is_some_and(|p| p.allow_custom_metadata_enabled()),
                 detailed_progress: wants_detailed_progress,
             };
 

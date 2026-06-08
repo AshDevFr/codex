@@ -96,7 +96,7 @@ function MetadataPolicy({
       />
       <Switch
         label="Allow custom metadata"
-        description="Permit this plugin to receive users' custom metadata. Each user still opts in per connection; turn this off to forbid it entirely (it can hold private fields)."
+        description="Permit this plugin to receive the library's custom metadata. Off by default — it's a free-form field that can hold private notes, so only enable it for plugins you trust."
         {...form.getInputProps("allowCustomMetadata", { type: "checkbox" })}
       />
     </>

@@ -6,10 +6,10 @@
 
 use super::super::dto::plugins::ConfigSchemaDto;
 use super::super::dto::user_plugins::{
-    AvailablePluginDto, OAuthCallbackQuery, OAuthStartResponse, SetMetadataSettingsRequest,
-    SetSyncModeRequest, SetUserCredentialsRequest, SyncStatusDto, SyncStatusQuery,
-    SyncTriggerResponse, UpdateUserPluginConfigRequest, UserPluginCapabilitiesDto, UserPluginDto,
-    UserPluginTaskDto, UserPluginTasksQuery, UserPluginsListResponse,
+    AvailablePluginDto, OAuthCallbackQuery, OAuthStartResponse, SetSyncModeRequest,
+    SetUserCredentialsRequest, SyncStatusDto, SyncStatusQuery, SyncTriggerResponse,
+    UpdateUserPluginConfigRequest, UserPluginCapabilitiesDto, UserPluginDto, UserPluginTaskDto,
+    UserPluginTasksQuery, UserPluginsListResponse,
 };
 use crate::extractors::auth::AuthContext;
 use crate::{error::ApiError, extractors::AppState};
@@ -171,7 +171,6 @@ async fn build_user_plugin_dto(
         config: instance.config.clone(),
         auto_sync: instance.auto_sync_enabled(),
         sync_cron_schedule: plugin.sync_cron_schedule.clone(),
-        send_custom_metadata: instance.send_custom_metadata_enabled(),
         capabilities,
         user_config_schema,
         last_sync_result,
@@ -831,95 +830,6 @@ pub async fn set_sync_mode(
         plugin_id = %plugin_id,
         auto = request.auto,
         "User updated plugin sync mode"
-    );
-
-    Ok(Json(
-        build_user_plugin_dto(&state.db, &updated, &plugin, None).await,
-    ))
-}
-
-/// Set a connection's metadata-enrichment opt-ins (tags/genres/metadata/custom).
-///
-/// Writes the host-only `config._codex.send*` flags (the plugin never reads
-/// them). Each is a partial update: only provided fields change, and other
-/// `_codex` keys are preserved. Only allowed for plugins whose manifest declares
-/// the `wantsFullMetadata` capability.
-#[utoipa::path(
-    patch,
-    path = "/api/v1/user/plugins/{plugin_id}/metadata-settings",
-    params(
-        ("plugin_id" = Uuid, Path, description = "Plugin ID to set metadata settings for")
-    ),
-    request_body = SetMetadataSettingsRequest,
-    responses(
-        (status = 200, description = "Metadata settings updated", body = UserPluginDto),
-        (status = 400, description = "Plugin does not consume full metadata"),
-        (status = 401, description = "Not authenticated"),
-        (status = 404, description = "Plugin not enabled for this user"),
-    ),
-    tag = "User Plugins"
-)]
-pub async fn set_metadata_settings(
-    State(state): State<Arc<AppState>>,
-    auth: AuthContext,
-    Path(plugin_id): Path<Uuid>,
-    Json(request): Json<SetMetadataSettingsRequest>,
-) -> Result<Json<UserPluginDto>, ApiError> {
-    use codex_db::entities::user_plugins::{CODEX_CONFIG_NAMESPACE, SEND_CUSTOM_METADATA_KEY};
-
-    let instance =
-        UserPluginsRepository::get_by_user_and_plugin(&state.db, auth.user_id, plugin_id)
-            .await
-            .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?
-            .ok_or_else(|| ApiError::NotFound("Plugin not enabled for this user".to_string()))?;
-
-    let plugin = PluginsRepository::get_by_id(&state.db, plugin_id)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to get plugin: {}", e)))?
-        .ok_or_else(|| ApiError::Internal("Plugin definition not found".to_string()))?;
-
-    // Only plugins that consume enriched data expose these toggles.
-    let wants_full_metadata = parse_manifest(&plugin)
-        .map(|m| m.capabilities.wants_full_metadata)
-        .unwrap_or(false);
-    if !wants_full_metadata {
-        return Err(ApiError::BadRequest(
-            "Plugin does not consume full metadata".to_string(),
-        ));
-    }
-
-    // Read-modify-write the host-only `_codex` object, touching only provided keys
-    // and preserving every sibling (top-level config and other `_codex` settings).
-    let mut config = match instance.config.clone() {
-        serde_json::Value::Object(map) => map,
-        _ => serde_json::Map::new(),
-    };
-    let codex_ns = config
-        .entry(CODEX_CONFIG_NAMESPACE)
-        .or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()));
-    if !codex_ns.is_object() {
-        *codex_ns = serde_json::Value::Object(serde_json::Map::new());
-    }
-    let codex_obj = codex_ns.as_object_mut().expect("ensured object above");
-    if let Some(v) = request.send_custom_metadata {
-        codex_obj.insert(
-            SEND_CUSTOM_METADATA_KEY.to_string(),
-            serde_json::Value::Bool(v),
-        );
-    }
-
-    let updated = UserPluginsRepository::update_config(
-        &state.db,
-        instance.id,
-        serde_json::Value::Object(config),
-    )
-    .await
-    .map_err(|e| ApiError::Internal(format!("Failed to update metadata settings: {}", e)))?;
-
-    debug!(
-        user_id = %auth.user_id,
-        plugin_id = %plugin_id,
-        "User updated plugin metadata settings"
     );
 
     Ok(Json(

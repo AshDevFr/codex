@@ -5205,29 +5205,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/user/plugins/{plugin_id}/metadata-settings": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /**
-         * Set a connection's metadata-enrichment opt-ins (tags/genres/metadata/custom).
-         * @description Writes the host-only `config._codex.send*` flags (the plugin never reads
-         *     them). Each is a partial update: only provided fields change, and other
-         *     `_codex` keys are preserved. Only allowed for plugins whose manifest declares
-         *     the `wantsFullMetadata` capability.
-         */
-        patch: operations["set_metadata_settings"];
-        trace?: never;
-    };
     "/api/v1/user/plugins/{plugin_id}/oauth/start": {
         parameters: {
             query?: never;
@@ -17811,18 +17788,6 @@ export interface components {
              */
             updatedAt: string;
         };
-        /**
-         * @description Request to set a connection's metadata-enrichment opt-ins (user-controlled).
-         *
-         *     Only `sendCustomMetadata` is a per-user choice (a privacy opt-out for the
-         *     user's custom fields). Whether tags/genres/the bibliographic block are sent is
-         *     admin policy on the plugin, not set here. Other `_codex` settings are
-         *     preserved (partial update). Only meaningful for `wantsFullMetadata` plugins.
-         */
-        SetMetadataSettingsRequest: {
-            /** @description Send user-defined custom metadata to the plugin. */
-            sendCustomMetadata?: boolean | null;
-        };
         /** @description Request to set a single preference value */
         SetPreferenceRequest: {
             /** @description The value to set */
@@ -19639,8 +19604,8 @@ export interface components {
              */
             wantsDetailedProgress: boolean;
             /**
-             * @description Consumes enriched series data; gates whether the `_codex.send*` metadata
-             *     toggles are shown on the connection.
+             * @description Consumes enriched series data (tags/genres/bibliographic block, and
+             *     admin-permitted custom metadata) on the entries the host sends.
              */
             wantsFullMetadata: boolean;
         };
@@ -19715,12 +19680,6 @@ export interface components {
             requiresAuth: boolean;
             /** @description Whether this plugin requires OAuth authentication */
             requiresOauth: boolean;
-            /**
-             * @description User privacy opt-out for sending user-defined custom metadata (host-side,
-             *     from `config._codex.sendCustomMetadata`). Default false. tags/genres/the
-             *     bibliographic block are admin policy on the plugin, not user-controlled.
-             */
-            sendCustomMetadata: boolean;
             /**
              * @description The admin-configured cron schedule that drives automatic syncs for this
              *     plugin (the normalized 6-field form), or `None` when the admin has not
@@ -31438,54 +31397,6 @@ export interface operations {
             };
             /** @description Plugin already enabled for this user */
             409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    set_metadata_settings: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Plugin ID to set metadata settings for */
-                plugin_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SetMetadataSettingsRequest"];
-            };
-        };
-        responses: {
-            /** @description Metadata settings updated */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["UserPluginDto"];
-                };
-            };
-            /** @description Plugin does not consume full metadata */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Plugin not enabled for this user */
-            404: {
                 headers: {
                     [name: string]: unknown;
                 };

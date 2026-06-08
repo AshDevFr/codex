@@ -52,11 +52,6 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/user/plugins/{plugin_id}/sync-mode",
             patch(handlers::user_plugins::set_sync_mode),
         )
-        // Per-field metadata-enrichment opt-ins (tags/genres/metadata/custom)
-        .route(
-            "/user/plugins/{plugin_id}/metadata-settings",
-            patch(handlers::user_plugins::set_metadata_settings),
-        )
         // User credentials (personal access token)
         .route(
             "/user/plugins/{plugin_id}/credentials",

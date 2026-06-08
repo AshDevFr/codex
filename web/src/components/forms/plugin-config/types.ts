@@ -105,8 +105,8 @@ export interface PluginConfigFormValues {
   sendTags: boolean;
   sendGenres: boolean;
   sendMetadata: boolean;
-  // Admin gate for custom metadata (default on). Users still opt in per
-  // connection; this lets an admin forbid it entirely. config._codex.allowCustomMetadata.
+  // Admin gate for custom metadata (default off). The opaque free-form blob is
+  // sent only when an admin enables this. config._codex.allowCustomMetadata.
   allowCustomMetadata: boolean;
   // Admin automatic-sync cadence (sync plugins only). Cron string; empty = off.
   syncCronSchedule: string;

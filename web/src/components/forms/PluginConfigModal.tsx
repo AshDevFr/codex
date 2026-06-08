@@ -120,7 +120,13 @@ function PluginConfigContent({
       sendTags: codexBool("sendTags"),
       sendGenres: codexBool("sendGenres"),
       sendMetadata: codexBool("sendMetadata"),
-      allowCustomMetadata: codexBool("allowCustomMetadata"),
+      // Custom metadata is the exception: default OFF (opaque free-form blob),
+      // matching the host's `allowCustomMetadata` default. Don't use codexBool
+      // (which defaults absent keys on) or saving would silently enable it.
+      allowCustomMetadata:
+        typeof codexConfig.allowCustomMetadata === "boolean"
+          ? (codexConfig.allowCustomMetadata as boolean)
+          : false,
       syncCronSchedule: plugin.syncCronSchedule ?? "",
     },
   });

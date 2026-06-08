@@ -8,9 +8,7 @@
 /// `autoSync`). The plugin itself never reads this namespace — it controls
 /// server behavior. Defined once in `codex-db` so the entity accessor
 /// (`user_plugins::Model::auto_sync_enabled`) and this parser stay in sync.
-pub(crate) use codex_db::entities::user_plugins::{
-    CODEX_CONFIG_NAMESPACE, SEND_CUSTOM_METADATA_KEY,
-};
+pub(crate) use codex_db::entities::user_plugins::CODEX_CONFIG_NAMESPACE;
 
 /// Codex generic sync settings — server-interpreted preferences that control
 /// which entries to build and send to the plugin. Stored in the user plugin
@@ -32,10 +30,6 @@ pub(crate) struct CodexSyncSettings {
     /// When enabled, entries with `external_id: ""` and `title` populated are
     /// sent so the plugin can search the external service by title. Default: false.
     pub search_fallback: bool,
-    /// User privacy opt-out for sending user-defined `custom_metadata`. Default:
-    /// false. The other enrichment fields (tags/genres/metadata) are admin
-    /// policy on the plugin, not user-controlled.
-    pub send_custom_metadata: bool,
 }
 
 impl CodexSyncSettings {
@@ -77,10 +71,6 @@ impl CodexSyncSettings {
                 .unwrap_or(true),
             search_fallback: codex
                 .get("searchFallback")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false),
-            send_custom_metadata: codex
-                .get(SEND_CUSTOM_METADATA_KEY)
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false),
         }

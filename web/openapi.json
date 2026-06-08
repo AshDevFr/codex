@@ -15265,59 +15265,6 @@
         }
       }
     },
-    "/api/v1/user/plugins/{plugin_id}/metadata-settings": {
-      "patch": {
-        "tags": [
-          "User Plugins"
-        ],
-        "summary": "Set a connection's metadata-enrichment opt-ins (tags/genres/metadata/custom).",
-        "description": "Writes the host-only `config._codex.send*` flags (the plugin never reads\nthem). Each is a partial update: only provided fields change, and other\n`_codex` keys are preserved. Only allowed for plugins whose manifest declares\nthe `wantsFullMetadata` capability.",
-        "operationId": "set_metadata_settings",
-        "parameters": [
-          {
-            "name": "plugin_id",
-            "in": "path",
-            "description": "Plugin ID to set metadata settings for",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SetMetadataSettingsRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Metadata settings updated",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UserPluginDto"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Plugin does not consume full metadata"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Plugin not enabled for this user"
-          }
-        }
-      }
-    },
     "/api/v1/user/plugins/{plugin_id}/oauth/start": {
       "post": {
         "tags": [
@@ -38831,19 +38778,6 @@
           }
         }
       },
-      "SetMetadataSettingsRequest": {
-        "type": "object",
-        "description": "Request to set a connection's metadata-enrichment opt-ins (user-controlled).\n\nOnly `sendCustomMetadata` is a per-user choice (a privacy opt-out for the\nuser's custom fields). Whether tags/genres/the bibliographic block are sent is\nadmin policy on the plugin, not set here. Other `_codex` settings are\npreserved (partial update). Only meaningful for `wantsFullMetadata` plugins.",
-        "properties": {
-          "sendCustomMetadata": {
-            "type": [
-              "boolean",
-              "null"
-            ],
-            "description": "Send user-defined custom metadata to the plugin."
-          }
-        }
-      },
       "SetPreferenceRequest": {
         "type": "object",
         "description": "Request to set a single preference value",
@@ -42437,7 +42371,7 @@
           },
           "wantsFullMetadata": {
             "type": "boolean",
-            "description": "Consumes enriched series data; gates whether the `_codex.send*` metadata\ntoggles are shown on the connection."
+            "description": "Consumes enriched series data (tags/genres/bibliographic block, and\nadmin-permitted custom metadata) on the entries the host sends."
           }
         }
       },
@@ -42458,7 +42392,6 @@
           "oauthConfigured",
           "config",
           "autoSync",
-          "sendCustomMetadata",
           "capabilities",
           "createdAt"
         ],
@@ -42564,10 +42497,6 @@
           "requiresOauth": {
             "type": "boolean",
             "description": "Whether this plugin requires OAuth authentication"
-          },
-          "sendCustomMetadata": {
-            "type": "boolean",
-            "description": "User privacy opt-out for sending user-defined custom metadata (host-side,\nfrom `config._codex.sendCustomMetadata`). Default false. tags/genres/the\nbibliographic block are admin policy on the plugin, not user-controlled."
           },
           "syncCronSchedule": {
             "type": [

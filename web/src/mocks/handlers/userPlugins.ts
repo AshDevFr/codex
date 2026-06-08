@@ -48,7 +48,6 @@ const anilistPlugin: UserPluginDto = {
   userConfigSchema: null,
   userSetupInstructions: null,
   autoSync: false,
-  sendCustomMetadata: false,
   capabilities: {
     readSync: true,
     userRecommendationProvider: true,
@@ -139,7 +138,6 @@ export const userPluginsHandlers = [
       userConfigSchema: null,
       userSetupInstructions: null,
       autoSync: false,
-      sendCustomMetadata: false,
       capabilities: {
         readSync: false,
         userRecommendationProvider: false,

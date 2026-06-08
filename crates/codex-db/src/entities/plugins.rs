@@ -858,8 +858,8 @@ impl Model {
     /// that declares `wantsFullMetadata`. Default-on so a capable plugin works out
     /// of the box; the admin sets `false` to withhold a field (e.g. heavy
     /// summaries). The `_codex` namespace is host-only — the plugin ignores it.
-    /// (Custom metadata is the user's call instead; see
-    /// [`super::user_plugins::Model::send_custom_metadata_enabled`].)
+    /// (Custom metadata is the exception — it defaults *off*; see
+    /// [`Self::allow_custom_metadata_enabled`].)
     fn metadata_policy_flag(&self, key: &str) -> bool {
         self.config
             .get(CODEX_CONFIG_NAMESPACE)
@@ -884,12 +884,18 @@ impl Model {
         self.metadata_policy_flag(SEND_METADATA_KEY)
     }
 
-    /// Whether the admin permits this plugin to receive user-defined custom
-    /// metadata at all (admin policy, default true). This is a gate on top of the
-    /// user's own opt-out: custom metadata is sent only when the admin allows it
-    /// AND the user opts in.
+    /// Whether the admin permits this plugin to receive the library's custom
+    /// metadata (admin policy, default **false**). Unlike tags/genres/the
+    /// bibliographic block, custom metadata is a free-form JSON blob the host
+    /// can't inspect, so it is never sent to an external service unless an admin
+    /// explicitly opts this plugin in. Gated additionally by the
+    /// `wantsFullMetadata` capability.
     pub fn allow_custom_metadata_enabled(&self) -> bool {
-        self.metadata_policy_flag(ALLOW_CUSTOM_METADATA_KEY)
+        self.config
+            .get(CODEX_CONFIG_NAMESPACE)
+            .and_then(|codex| codex.get(ALLOW_CUSTOM_METADATA_KEY))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
     }
 
     /// Get the cached manifest if available
@@ -916,6 +922,72 @@ impl Model {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Minimal plugin model with the given `config`, for exercising the
+    /// host-only `_codex` policy accessors.
+    fn plugin_with_config(config: serde_json::Value) -> Model {
+        use chrono::Utc;
+        Model {
+            id: Uuid::new_v4(),
+            name: "test".to_string(),
+            display_name: "Test".to_string(),
+            description: None,
+            plugin_type: "user".to_string(),
+            command: "node".to_string(),
+            args: serde_json::json!([]),
+            env: serde_json::json!({}),
+            working_directory: None,
+            permissions: serde_json::json!([]),
+            scopes: serde_json::json!([]),
+            library_ids: serde_json::json!([]),
+            credentials: None,
+            credential_delivery: "env".to_string(),
+            config,
+            manifest: None,
+            enabled: true,
+            health_status: "healthy".to_string(),
+            failure_count: 0,
+            last_failure_at: None,
+            last_success_at: None,
+            disabled_reason: None,
+            rate_limit_requests_per_minute: Some(60),
+            request_timeout_seconds: None,
+            search_query_template: None,
+            search_preprocessing_rules: None,
+            auto_match_conditions: None,
+            use_existing_external_id: true,
+            metadata_targets: None,
+            internal_config: None,
+            sync_cron_schedule: None,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            created_by: None,
+            updated_by: None,
+        }
+    }
+
+    #[test]
+    fn test_allow_custom_metadata_defaults_false() {
+        // Unlike tags/genres/metadata (default on), the opaque custom-metadata
+        // blob is never sent unless an admin explicitly opts the plugin in.
+        assert!(!plugin_with_config(serde_json::json!({})).allow_custom_metadata_enabled());
+        assert!(
+            plugin_with_config(serde_json::json!({ "_codex": { "allowCustomMetadata": true } }))
+                .allow_custom_metadata_enabled()
+        );
+        assert!(
+            !plugin_with_config(serde_json::json!({ "_codex": { "allowCustomMetadata": false } }))
+                .allow_custom_metadata_enabled()
+        );
+    }
+
+    #[test]
+    fn test_send_tags_genres_metadata_default_true() {
+        let model = plugin_with_config(serde_json::json!({}));
+        assert!(model.send_tags_enabled());
+        assert!(model.send_genres_enabled());
+        assert!(model.send_metadata_enabled());
+    }
 
     #[test]
     fn test_plugin_health_status_as_str() {

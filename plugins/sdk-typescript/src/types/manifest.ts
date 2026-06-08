@@ -102,10 +102,10 @@ export interface PluginCapabilities {
    *
    * When `true`, the host attaches series tags/genres, a bibliographic metadata
    * block (summary, authors, publisher, age rating, language, reading
-   * direction), and/or user-defined custom metadata, per the user's opt-in
-   * `_codex.send*` settings. The host only assembles this for plugins that
-   * declare it, so plugins that don't are unaffected. Applies to sync and
-   * recommendation plugins.
+   * direction), and/or the library's custom metadata, per the admin's
+   * `_codex.send*` / `_codex.allowCustomMetadata` policy. The host only
+   * assembles this for plugins that declare it, so plugins that don't are
+   * unaffected. Applies to sync and recommendation plugins.
    */
   wantsFullMetadata?: boolean;
   /**

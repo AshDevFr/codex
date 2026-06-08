@@ -156,8 +156,8 @@ impl SeriesEngagement {
         if block.is_empty() { None } else { Some(block) }
     }
 
-    /// Parse the user-defined `custom_metadata` JSON for this series, for plugins
-    /// that opted into `sendCustomMetadata`. Returns `None` when absent or
+    /// Parse the library's `custom_metadata` JSON for this series, for plugins
+    /// the admin opted into `allowCustomMetadata`. Returns `None` when absent or
     /// unparseable (logged).
     pub fn custom_metadata_value(&self) -> Option<serde_json::Value> {
         let raw = self.metadata.as_ref()?.custom_metadata.as_deref()?;
