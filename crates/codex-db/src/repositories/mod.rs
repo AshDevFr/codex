@@ -21,6 +21,7 @@ pub mod read_progress;
 pub mod refresh_token;
 pub mod release_ledger;
 pub mod release_sources;
+pub mod scheduled_firing;
 pub mod series;
 pub mod series_aliases;
 pub mod series_covers;
@@ -85,6 +86,7 @@ pub use release_ledger::{
 };
 #[allow(unused_imports)]
 pub use release_sources::{NewReleaseSource, ReleaseSourceRepository, ReleaseSourceUpdate};
+pub use scheduled_firing::ScheduledFiringRepository;
 pub use series::{SeriesQueryOptions, SeriesQuerySort, SeriesRepository, SeriesSortFieldRepo};
 #[allow(unused_imports)]
 pub use series_aliases::SeriesAliasRepository;
