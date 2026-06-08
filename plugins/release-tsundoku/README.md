@@ -11,8 +11,8 @@ incremental series feed. **Notification-only** — Codex does not download anyth
   Shikimori, Anime-Planet, Anime News Network), so announcements always land on
   the right series with full confidence.
 - **Incremental, cursor-based.** Walks Tsundoku's keyset-paginated
-  `/api/v1/series/feed`, persisting its position in the plugin KV store so each
-  poll only processes activity since the last run.
+  `/api/v1/series/feed`, persisting its position in the source's state (etag
+  slot) so each poll only processes activity since the last run.
 - **Volume- and chapter-aware.** The feed's merged, gap-preserving coverage
   spans map directly onto Codex's release model.
 
@@ -63,7 +63,8 @@ providers, in match-priority order:
 
 On each poll the plugin:
 
-1. Loads its stored feed cursor from the plugin KV store.
+1. Loads its stored feed cursor (the host hands it back as the source's
+   persisted `etag`).
 2. Builds a reverse index (`provider:id → Codex series`) from your tracked
    series via the host's `releases/list_tracked`.
 3. Walks the feed from the cursor. Each item is matched against the index by
@@ -77,6 +78,13 @@ The candidate's dedup key is the coverage high-water mark
 (`tsundoku:{seriesId}:v{highestVolume}:c{highestChapter}`), so a new
 announcement fires only when the frontier advances; re-delivery of the same
 coverage dedups host-side.
+
+If the very first feed page can't be fetched (e.g. `baseUrl` is wrong or the
+instance is unreachable), the poll fails and the source shows `last_error` in
+**Settings → Release tracking** rather than silently reporting "0 items". In
+Docker, remember the plugin runs inside the worker container: use a URL the
+container can resolve (e.g. `http://host.docker.internal:<port>`), not
+`http://localhost:<port>`.
 
 ### Limitations
 

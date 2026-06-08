@@ -29,7 +29,6 @@ import {
   type HostRpcClient,
   HostRpcError,
   type InitializeParams,
-  type PluginStorage,
   RELEASES_METHODS,
   type ReleaseCandidate,
   type ReleasePollRequest,
@@ -42,9 +41,6 @@ import { manifest } from "./manifest.js";
 import { buildIndex, matchItem } from "./matcher.js";
 
 const logger = createLogger({ name: manifest.name, level: "info" });
-
-/** KV-store key under which the feed cursor bookmark is persisted. */
-export const CURSOR_STORAGE_KEY = "feed_cursor";
 
 /** Default feed page size when config omits / mis-types `pageLimit`. */
 const DEFAULT_PAGE_LIMIT = 100;
@@ -62,7 +58,6 @@ const DEFAULT_LANGUAGE = "en";
 
 interface PluginState {
   hostRpc: HostRpcClient | null;
-  storage: PluginStorage | null;
   /** Tsundoku instance base URL (no trailing slash), e.g. `https://t.example.com`. */
   baseUrl: string;
   /** ISO 639-1 tag stamped on every candidate (the feed carries none). */
@@ -75,7 +70,6 @@ interface PluginState {
 
 const state: PluginState = {
   hostRpc: null,
-  storage: null,
   baseUrl: "",
   defaultLanguage: DEFAULT_LANGUAGE,
   pageLimit: DEFAULT_PAGE_LIMIT,
@@ -85,7 +79,6 @@ const state: PluginState = {
 /** Reset state. Exported for tests; not part of the plugin contract. */
 export function _resetState(): void {
   state.hostRpc = null;
-  state.storage = null;
   state.baseUrl = "";
   state.defaultLanguage = DEFAULT_LANGUAGE;
   state.pageLimit = DEFAULT_PAGE_LIMIT;
@@ -98,35 +91,40 @@ export function normalizeBaseUrl(raw: string): string {
 }
 
 // =============================================================================
-// Cursor persistence (plugin KV store)
+// Cursor persistence (per-source state)
 // =============================================================================
+//
+// The feed cursor is persisted in the source's `etag` slot via
+// `releases/source_state`, NOT the plugin KV store: the KV store is scoped
+// per *user*, and a release source is a *system* plugin with no user context
+// (the host rejects `storage/*` with "Storage is not available"). The host
+// passes the saved etag back on every poll as `params.etag` and persists the
+// `etag` we return on the poll response, so the source-state slot is the
+// natural single-row bookmark for this single-feed source.
 
 /**
- * Load the feed cursor bookmark from the KV store. Returns `null` when no
- * cursor has been stored yet (first run) or when the read fails — a missing
- * cursor simply restarts the walk from the beginning, which is safe given
- * at-least-once delivery + host-side dedup.
+ * The cursor the host persisted from the previous poll. The host hands it
+ * back as `ReleasePollRequest.etag`; an empty/absent value restarts the walk
+ * from the beginning (safe — keyset pagination is gap-free and the host
+ * dedups re-delivered items).
  */
-export async function loadCursor(storage: PluginStorage): Promise<string | null> {
-  try {
-    const res = await storage.get(CURSOR_STORAGE_KEY);
-    const data = res?.data;
-    return typeof data === "string" && data.length > 0 ? data : null;
-  } catch (err) {
-    const reason = err instanceof Error ? err.message : String(err);
-    logger.warn(`failed to load cursor; restarting from the beginning: ${reason}`);
-    return null;
-  }
+export function loadCursor(params: ReleasePollRequest): string | null {
+  return params.etag && params.etag.length > 0 ? params.etag : null;
 }
 
 /**
- * Persist the feed cursor bookmark. Best-effort: a failed write is logged but
- * never aborts a poll — the worst case is re-walking already-seen pages on
- * the next poll, which dedups host-side.
+ * Persist the feed cursor into the source's `etag` slot. Best-effort: a failed
+ * write is logged but never aborts a poll. The cursor is also returned on the
+ * poll response, which the host persists at the end of the poll — the per-page
+ * write here is what lets a long or interrupted walk resume mid-feed.
  */
-export async function saveCursor(storage: PluginStorage, cursor: string): Promise<void> {
+export async function saveCursor(
+  rpc: HostRpcClient,
+  sourceId: string,
+  cursor: string,
+): Promise<void> {
   try {
-    await storage.set(CURSOR_STORAGE_KEY, cursor);
+    await rpc.call(RELEASES_METHODS.SOURCE_STATE_SET, { sourceId, etag: cursor });
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
     logger.warn(`failed to persist cursor "${cursor}": ${reason}`);
@@ -261,7 +259,6 @@ async function reportProgress(
 
 /** Dependencies a poll needs, defaulted from plugin state at the call site. */
 export interface PollDeps {
-  storage: PluginStorage;
   /** Tsundoku base URL (no trailing slash). */
   baseUrl: string;
   /** Language stamped on every candidate. */
@@ -305,12 +302,13 @@ export async function poll(
   }
 
   // 2. Walk the feed from the stored cursor.
-  let cursor = await loadCursor(deps.storage);
+  let cursor = loadCursor(params);
   let parsed = 0;
   let matched = 0;
   let recorded = 0;
   let deduped = 0;
   let worstStatus = 200;
+  let pagesFetched = 0;
 
   while (true) {
     const result = await fetchFeedPage(deps.baseUrl, cursor, deps.pageLimit, {
@@ -320,12 +318,20 @@ export async function poll(
 
     if (result.kind === "error") {
       worstStatus = Math.max(worstStatus, result.status);
+      // Couldn't fetch even the first page: surface a hard failure so the host
+      // records `last_error` and the source shows it (e.g. an unreachable or
+      // misconfigured `baseUrl`). A mid-walk failure, by contrast, keeps the
+      // pages already processed and just stops — the cursor is preserved.
+      if (pagesFetched === 0) {
+        throw new Error(`feed fetch failed (status ${result.status}): ${result.message}`);
+      }
       logger.warn(
         `feed fetch failed (status ${result.status}): ${result.message}; stopping walk, cursor preserved`,
       );
       break;
     }
 
+    pagesFetched++;
     const page = result.data;
     for (const item of page.items) {
       parsed++;
@@ -350,7 +356,7 @@ export async function poll(
     const next = page.nextCursor ?? null;
     if (next) {
       cursor = next;
-      await saveCursor(deps.storage, next);
+      await saveCursor(rpc, sourceId, next);
     }
 
     await reportProgress(rpc, parsed, parsed, `Processed ${parsed} feed items`);
@@ -375,6 +381,9 @@ export async function poll(
     matched,
     recorded,
     deduped,
+    // Return the final cursor so the host persists it on the source row even
+    // if the per-page `source_state/set` writes were dropped.
+    ...(cursor !== null ? { etag: cursor } : {}),
   };
 }
 
@@ -386,14 +395,13 @@ createReleaseSourcePlugin({
   manifest,
   provider: {
     async poll(params: ReleasePollRequest): Promise<ReleasePollResponse> {
-      if (!state.hostRpc || !state.storage) {
-        throw new Error("Plugin not initialized: host RPC / storage client missing");
+      if (!state.hostRpc) {
+        throw new Error("Plugin not initialized: host RPC client missing");
       }
       if (!state.baseUrl) {
         throw new Error("Plugin not configured: baseUrl is required");
       }
       return poll(params, state.hostRpc, {
-        storage: state.storage,
         baseUrl: state.baseUrl,
         language: state.defaultLanguage,
         pageLimit: state.pageLimit,
@@ -404,7 +412,6 @@ createReleaseSourcePlugin({
   logLevel: "info",
   async onInitialize(params: InitializeParams) {
     state.hostRpc = params.hostRpc;
-    state.storage = params.storage;
 
     const ac = params.adminConfig ?? {};
     if (typeof ac.baseUrl === "string") {
