@@ -82,10 +82,13 @@ async function pluginStoreScreenshots(page: Page): Promise<void> {
   // === ADD ECHO PLUGINS (manual create) ===
   // metadata-echo drives the series-detail/library metadata flows; sync-echo
   // and recommendations-echo drive the integrations, sync, and recommendation
-  // flows. All three run from the local dist mounted at /opt/codex/plugins.
+  // flows. The screenshots show the published npx command; the plugins are then
+  // saved to run from the local dist mounted at /opt/codex/plugins so capture
+  // works offline against the local build.
   await createEchoPlugin(page, {
     displayName: "Echo Metadata",
     description: "Test metadata plugin that echoes back search queries",
+    packageName: "@ashdev/codex-plugin-metadata-echo",
     distPath: "/opt/codex/plugins/metadata-echo/dist/index.js",
     screenshotPrefix: "plugins/create-echo-metadata",
   });
@@ -93,6 +96,7 @@ async function pluginStoreScreenshots(page: Page): Promise<void> {
     displayName: "Echo Sync",
     description:
       "Test sync plugin that echoes push payloads and returns deterministic pull entries",
+    packageName: "@ashdev/codex-plugin-sync-echo",
     distPath: "/opt/codex/plugins/sync-echo/dist/index.js",
     screenshotPrefix: "plugins/create-echo-sync",
   });
@@ -100,6 +104,7 @@ async function pluginStoreScreenshots(page: Page): Promise<void> {
     displayName: "Echo Recommendations",
     description:
       "Test recommendations plugin that echoes library seeds back as recommendations",
+    packageName: "@ashdev/codex-plugin-recommendations-echo",
     distPath: "/opt/codex/plugins/recommendations-echo/dist/index.js",
     screenshotPrefix: "plugins/create-echo-recommendations",
   });
@@ -342,14 +347,17 @@ async function addPluginFromStore(page: Page, displayName: string, screenshotPre
  * Create an echo plugin via the manual "Add Plugin" form.
  *
  * Echo plugins are not in the Official Plugin Store gallery (they are debug
- * tools), so they are installed by hand: command `node` plus the path to the
- * local build mounted into the container at /opt/codex/plugins/<name>/dist.
- * The plugin name is auto-derived from the display name by the form.
+ * tools), so they are installed by hand. For the screenshot we show the
+ * user-facing `npx -y <package>` form, then revert the command to the local
+ * dist mounted into the container (`node /opt/codex/plugins/<name>/dist`)
+ * before saving so the plugin runs offline against the local build. The plugin
+ * name is auto-derived from the display name by the form.
  *
  * @param page - Playwright page
  * @param opts.displayName - Display name shown in the UI (e.g. "Echo Sync")
  * @param opts.description - Optional description for the General tab
- * @param opts.distPath - Absolute path to the plugin's dist entrypoint
+ * @param opts.packageName - npm package name shown in the screenshot
+ * @param opts.distPath - Local dist entrypoint the plugin actually runs from
  * @param opts.screenshotPrefix - Screenshot name prefix for the create modal
  */
 async function createEchoPlugin(
@@ -357,11 +365,13 @@ async function createEchoPlugin(
   opts: {
     displayName: string;
     description: string;
+    packageName: string;
     distPath: string;
     screenshotPrefix: string;
   },
 ): Promise<void> {
-  const { displayName, description, distPath, screenshotPrefix } = opts;
+  const { displayName, description, packageName, distPath, screenshotPrefix } =
+    opts;
   console.log(`      🧩 Creating "${displayName}" via manual form...`);
 
   // Navigate to plugins page for clean state
@@ -424,22 +434,34 @@ async function createEchoPlugin(
       .locator("..")
       .locator("input")
       .first();
-    if ((await commandInput.count()) > 0) {
-      await commandInput.fill("node");
-      await page.waitForTimeout(150);
-    }
-
     const argsInput = page
       .locator('label:has-text("Arguments")')
       .locator("..")
       .locator("textarea")
       .first();
+
+    // Show the user-facing npx form in the screenshot.
+    if ((await commandInput.count()) > 0) {
+      await commandInput.fill("npx");
+      await page.waitForTimeout(150);
+    }
     if ((await argsInput.count()) > 0) {
-      await argsInput.fill(distPath);
+      await argsInput.fill(`-y\n${packageName}`);
       await page.waitForTimeout(150);
     }
 
     await captureScreenshot(page, `${screenshotPrefix}-execution`);
+
+    // Revert to the local dist so the plugin runs offline against the build
+    // mounted into the container, not a live npm download.
+    if ((await commandInput.count()) > 0) {
+      await commandInput.fill("node");
+      await page.waitForTimeout(150);
+    }
+    if ((await argsInput.count()) > 0) {
+      await argsInput.fill(distPath);
+      await page.waitForTimeout(150);
+    }
   }
 
   // Submit the form
@@ -908,8 +930,9 @@ async function userIntegrationsScreenshots(page: Page): Promise<void> {
       .first();
 
     // Flip the "Automatic sync" switch (enabled now that an admin set a cron).
+    // The switch has no inner text — its accessible name is an aria-label.
     const autoSyncSwitch = echoSyncCard
-      .locator('.mantine-Switch-root:has-text("Automatic sync") input')
+      .locator('input[aria-label="Automatic sync"]')
       .first();
     if ((await autoSyncSwitch.count()) > 0) {
       await autoSyncSwitch.check({ force: true }).catch(() => {});
@@ -950,7 +973,12 @@ async function userIntegrationsScreenshots(page: Page): Promise<void> {
   // === ENABLE ECHO RECOMMENDATIONS ===
   // Drives the recommendations page captured in the next part.
   if (await enableIntegration(page, "Echo Recommendations")) {
-    await captureScreenshot(page, "plugins/user-integrations-all-enabled");
+    // Scroll to the top so the capture frames the "Enabled" section header
+    // and the first connected card, rather than landing mid-scroll between
+    // cards (which looks cluttered now that several integrations exist).
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.waitForTimeout(400);
+    await captureScreenshot(page, "plugins/user-integrations-enabled");
   }
 
   console.log("      ✓ User integrations screenshots captured");
@@ -966,24 +994,12 @@ async function recommendationsScreenshots(page: Page): Promise<void> {
 
   await page.goto("/recommendations");
   await waitForPageReady(page);
-  await page.waitForTimeout(800);
 
-  // Capture the initial state (cached results or empty prompt).
-  await captureScreenshot(page, "plugins/recommendations-initial");
-
-  // Trigger a fresh generation via the header Refresh action.
-  const refreshButton = page.locator('button:has-text("Refresh")').first();
-  if ((await refreshButton.count()) === 0) {
-    console.log("      ⚠️  Refresh button not found on recommendations page");
-    return;
-  }
-  await refreshButton.click();
-
-  // Generation runs as a background task; wait for cards to appear (or the
-  // "Generating..." indicator to clear), polling up to ~30s.
-  const recCard = page.locator(
-    '[data-testid="recommendation-card"], .mantine-Card-root:has(img)',
-  );
+  // First visit auto-generates if nothing is cached; generation runs as a
+  // background task, so wait for the cards to appear (polling up to ~30s).
+  // A separate "before refresh" shot would be identical to this one, so we
+  // capture a single populated view.
+  const recCard = page.locator('[data-testid="recommendation-card"]');
   for (let attempt = 0; attempt < 15; attempt++) {
     await page.waitForTimeout(2000);
     if ((await recCard.count()) > 0) {
@@ -994,7 +1010,18 @@ async function recommendationsScreenshots(page: Page): Promise<void> {
   await waitForPageReady(page);
   await page.waitForTimeout(500);
 
-  await captureScreenshot(page, "plugins/recommendations-results");
+  await captureScreenshot(page, "plugins/recommendations");
+
+  // Expand the filter panel (score slider + genre/tag/status chips derived
+  // from the current recommendations) and capture it.
+  const filterToggle = page.locator('[data-testid="filter-toggle"]').first();
+  if ((await filterToggle.count()) > 0) {
+    await filterToggle.click();
+    await page.waitForTimeout(500); // Collapse animation
+    await captureScreenshot(page, "plugins/recommendations-filters");
+  } else {
+    console.log("      ⚠️  Filter toggle not found on recommendations page");
+  }
 
   console.log("      ✓ Recommendations screenshots captured");
 }

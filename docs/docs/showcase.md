@@ -470,15 +470,19 @@ The connection's settings control which entries are sent during a sync.
 
 ![User Integrations - Sync Settings](../screenshots/plugins/user-integrations-sync-settings.png)
 
-![User Integrations - All Enabled](../screenshots/plugins/user-integrations-all-enabled.png)
+Enabled integrations appear at the top of the page.
+
+![User Integrations - Enabled](../screenshots/plugins/user-integrations-enabled.png)
 
 ### Recommendations
 
 When a recommendations plugin is connected, users get personalized suggestions based on their library and reading history.
 
-![Recommendations - Initial](../screenshots/plugins/recommendations-initial.png)
+![Recommendations](../screenshots/plugins/recommendations.png)
 
-![Recommendations - Results](../screenshots/plugins/recommendations-results.png)
+Recommendations can be narrowed with the filter panel (match score, origin, format, status, genres, and tags).
+
+![Recommendations - Filters](../screenshots/plugins/recommendations-filters.png)
 
 ## Authentication
 
