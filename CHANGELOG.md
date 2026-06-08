@@ -2,6 +2,17 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.36.1] - 2026-06-08
+
+### 🚜 Refactor
+
+- *(plugins)* Drop per-user custom-metadata opt-out, gate on admin policy alone
+
+### 📚 Documentation
+
+- *(plugins)* Fix v1.36 plugin docs and add echo plugins to screenshots
+- *(plugins)* Refine echo plugin screenshot flow and add captures
+
 ## [1.36.0] - 2026-06-08
 
 ### 🚀 Features
