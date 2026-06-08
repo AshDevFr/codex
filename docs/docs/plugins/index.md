@@ -110,7 +110,7 @@ By default a sync only runs when a user clicks **Sync Now**. Codex can also run 
 
 ### Admin: set the cadence (per plugin)
 
-In **Settings → Plugins**, edit a sync-capable plugin and set the **Sync Schedule (cron)** field on the **Execution** tab. It accepts a standard cron expression (5-field Unix or 6-field with seconds); for example `0 0 */6 * * *` runs every six hours.
+In **Settings → Plugins**, open a sync-capable plugin's **Configure** dialog (the gear icon), go to the **Permissions** tab, and set the **Sync Schedule (cron)** field under **Automatic Sync**. It accepts a standard cron expression (5-field Unix or 6-field with seconds); for example `0 0 */6 * * *` runs every six hours.
 
 - The field only appears for plugins whose manifest declares the `user_read_sync` capability.
 - Leave it empty to disable scheduled syncs entirely (users can still sync manually).

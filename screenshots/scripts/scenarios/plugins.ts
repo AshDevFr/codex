@@ -4,13 +4,16 @@ import { waitForPageReady } from "../utils/wait.js";
 
 /**
  * Plugins scenario
- * Captures plugin store, plugin installation, series detail plugin actions,
- * library auto-match, user integrations, and plugin metrics.
+ * Captures plugin store, plugin installation (store + manual echo plugins),
+ * series detail plugin actions, library auto-match, user integrations
+ * (including the echo sync/recommendation plugins), recommendations, and
+ * plugin metrics.
  */
 export async function run(page: Page, _context: BrowserContext): Promise<void> {
   console.log("  🔌 Capturing plugins screenshots...");
 
-  // Part 1: Install plugins from the Official Plugin Store
+  // Part 1: Install plugins — gallery plugins from the store, echo plugins
+  // (metadata/sync/recommendations) via the manual "Add Plugin" form.
   await pluginStoreScreenshots(page);
 
   // Part 2: Series detail page - plugin dropdown and metadata flow
@@ -19,16 +22,23 @@ export async function run(page: Page, _context: BrowserContext): Promise<void> {
   // Part 3: Library sidebar - auto-match
   await libraryAutoMatchScreenshots(page);
 
-  // Part 4: User Integrations page
+  // Part 4: User Integrations page (enables the echo sync + recommendation
+  // plugins, toggles automatic sync, and runs a manual sync).
   await userIntegrationsScreenshots(page);
 
-  // Part 5: Plugin Metrics
+  // Part 5: Recommendations page (driven by the echo recommendations plugin).
+  await recommendationsScreenshots(page);
+
+  // Part 6: Plugin Metrics
   await pluginMetricsScreenshots(page);
 }
 
 /**
- * Install plugins from the Official Plugin Store.
- * Adds echo, sync-anilist, and recommendations-anilist plugins via the store carousel.
+ * Install plugins. Gallery integrations (AniList sync/recommendations,
+ * MangaUpdates releases) come from the Official Plugin Store carousel; the
+ * echo debug plugins (metadata/sync/recommendations) are created via the
+ * manual "Add Plugin" form since they are intentionally excluded from the
+ * store gallery and ship as local builds mounted into the container.
  */
 async function pluginStoreScreenshots(page: Page): Promise<void> {
   console.log("    📷 Plugin Store - Install Plugins");
@@ -52,11 +62,12 @@ async function pluginStoreScreenshots(page: Page): Promise<void> {
   await officialPluginsHeader.click();
   await page.waitForTimeout(500);
 
-  // Capture the plugin store carousel (all 5 cards visible)
+  // Capture the plugin store carousel (all gallery cards visible)
   await captureScreenshot(page, "plugins/store-carousel");
 
-  // === ADD ECHO METADATA PLUGIN ===
-  await addPluginFromStore(page, "Echo Metadata", "plugins/store-add-echo");
+  // === ADD GALLERY PLUGINS ===
+  // The echo plugins are intentionally absent from the gallery, so only the
+  // real integrations are installed from the store.
 
   // === ADD ANILIST SYNC PLUGIN ===
   await addPluginFromStore(page, "AniList Sync", "plugins/store-add-sync");
@@ -67,6 +78,31 @@ async function pluginStoreScreenshots(page: Page): Promise<void> {
   // === ADD MANGAUPDATES RELEASES PLUGIN ===
   // Drives the Release tracking screenshots later in the run.
   await addPluginFromStore(page, "MangaUpdates Releases", "plugins/store-add-mangaupdates");
+
+  // === ADD ECHO PLUGINS (manual create) ===
+  // metadata-echo drives the series-detail/library metadata flows; sync-echo
+  // and recommendations-echo drive the integrations, sync, and recommendation
+  // flows. All three run from the local dist mounted at /opt/codex/plugins.
+  await createEchoPlugin(page, {
+    displayName: "Echo Metadata",
+    description: "Test metadata plugin that echoes back search queries",
+    distPath: "/opt/codex/plugins/metadata-echo/dist/index.js",
+    screenshotPrefix: "plugins/create-echo-metadata",
+  });
+  await createEchoPlugin(page, {
+    displayName: "Echo Sync",
+    description:
+      "Test sync plugin that echoes push payloads and returns deterministic pull entries",
+    distPath: "/opt/codex/plugins/sync-echo/dist/index.js",
+    screenshotPrefix: "plugins/create-echo-sync",
+  });
+  await createEchoPlugin(page, {
+    displayName: "Echo Recommendations",
+    description:
+      "Test recommendations plugin that echoes library seeds back as recommendations",
+    distPath: "/opt/codex/plugins/recommendations-echo/dist/index.js",
+    screenshotPrefix: "plugins/create-echo-recommendations",
+  });
 
   // Navigate back to plugins page to see all installed plugins
   await page.goto("/settings/plugins");
@@ -92,6 +128,11 @@ async function pluginStoreScreenshots(page: Page): Promise<void> {
   // After testing, the plugin has a manifest. Open the Config Modal (gear icon)
   // to set permissions and scopes so it appears in series detail and library menus.
   await configureEchoPlugin(page);
+
+  // === CONFIGURE ECHO SYNC AUTOMATIC-SYNC CADENCE (ADMIN) ===
+  // Set the per-plugin cron on Echo Sync so the user-facing "Automatic sync"
+  // switch becomes available on the integrations connection card.
+  await configureSyncEchoCron(page);
 
   // === EXPANDED PLUGIN DETAILS ===
   // Navigate back to plugins page (config modal may have changed state)
@@ -298,6 +339,137 @@ async function addPluginFromStore(page: Page, displayName: string, screenshotPre
 }
 
 /**
+ * Create an echo plugin via the manual "Add Plugin" form.
+ *
+ * Echo plugins are not in the Official Plugin Store gallery (they are debug
+ * tools), so they are installed by hand: command `node` plus the path to the
+ * local build mounted into the container at /opt/codex/plugins/<name>/dist.
+ * The plugin name is auto-derived from the display name by the form.
+ *
+ * @param page - Playwright page
+ * @param opts.displayName - Display name shown in the UI (e.g. "Echo Sync")
+ * @param opts.description - Optional description for the General tab
+ * @param opts.distPath - Absolute path to the plugin's dist entrypoint
+ * @param opts.screenshotPrefix - Screenshot name prefix for the create modal
+ */
+async function createEchoPlugin(
+  page: Page,
+  opts: {
+    displayName: string;
+    description: string;
+    distPath: string;
+    screenshotPrefix: string;
+  },
+): Promise<void> {
+  const { displayName, description, distPath, screenshotPrefix } = opts;
+  console.log(`      🧩 Creating "${displayName}" via manual form...`);
+
+  // Navigate to plugins page for clean state
+  await page.goto("/settings/plugins");
+  await waitForPageReady(page);
+  await page.waitForTimeout(500);
+
+  // Open the manual "Add Plugin" modal (distinct from the store carousel)
+  const addPluginButton = page.locator('button:has-text("Add Plugin")').first();
+  if ((await addPluginButton.count()) === 0) {
+    console.log('      ⚠️  "Add Plugin" button not found');
+    return;
+  }
+  await addPluginButton.click();
+  await page.waitForSelector('[role="dialog"], .mantine-Modal-content', {
+    state: "visible",
+    timeout: 5000,
+  });
+  await page.waitForTimeout(500);
+
+  // === GENERAL TAB ===
+  // Fill the display name (the Name slug auto-derives from it).
+  const displayNameInput = page
+    .locator('label:has-text("Display Name")')
+    .locator("..")
+    .locator("input")
+    .first();
+  if ((await displayNameInput.count()) > 0) {
+    await displayNameInput.fill(displayName);
+    await page.waitForTimeout(200);
+  }
+
+  const descriptionInput = page
+    .locator('label:has-text("Description")')
+    .locator("..")
+    .locator("textarea")
+    .first();
+  if ((await descriptionInput.count()) > 0) {
+    await descriptionInput.fill(description);
+    await page.waitForTimeout(200);
+  }
+
+  // Enable the plugin on creation so it can be tested and surfaced to users.
+  const enableSwitch = page.locator('label:has-text("Enable immediately")').first();
+  if ((await enableSwitch.count()) > 0) {
+    await enableSwitch.click();
+    await page.waitForTimeout(200);
+  }
+
+  await captureScreenshot(page, `${screenshotPrefix}-general`);
+
+  // === EXECUTION TAB ===
+  const executionTab = await page.$('button[role="tab"]:has-text("Execution")');
+  if (executionTab) {
+    await executionTab.click();
+    await page.waitForTimeout(300);
+
+    const commandInput = page
+      .locator('label:has-text("Command")')
+      .locator("..")
+      .locator("input")
+      .first();
+    if ((await commandInput.count()) > 0) {
+      await commandInput.fill("node");
+      await page.waitForTimeout(150);
+    }
+
+    const argsInput = page
+      .locator('label:has-text("Arguments")')
+      .locator("..")
+      .locator("textarea")
+      .first();
+    if ((await argsInput.count()) > 0) {
+      await argsInput.fill(distPath);
+      await page.waitForTimeout(150);
+    }
+
+    await captureScreenshot(page, `${screenshotPrefix}-execution`);
+  }
+
+  // Submit the form
+  const createButton = page.locator('button:has-text("Create Plugin")').first();
+  if ((await createButton.count()) > 0) {
+    await createButton.click();
+    await page.waitForTimeout(2000);
+
+    const modalStillOpen = await page.$('[role="dialog"], .mantine-Modal-content');
+    if (modalStillOpen) {
+      console.log(`      ⚠️  Modal still open - "${displayName}" creation may have failed`);
+      await captureScreenshot(page, `${screenshotPrefix}-error`);
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(500);
+    }
+
+    await page
+      .waitForSelector('[role="dialog"], .mantine-Modal-content', {
+        state: "hidden",
+        timeout: 15000,
+      })
+      .catch(() => {});
+    await page.waitForTimeout(1000);
+    await waitForPageReady(page);
+  }
+
+  console.log(`      ✓ "${displayName}" created`);
+}
+
+/**
  * Configure the Echo Metadata plugin's permissions and scopes via the Config Modal.
  * This must be done after testing (so the manifest is populated) for the plugin
  * to appear in series detail and library context menus.
@@ -305,12 +477,15 @@ async function addPluginFromStore(page: Page, displayName: string, screenshotPre
 async function configureEchoPlugin(page: Page): Promise<void> {
   console.log("      ⚙️  Configuring Echo plugin permissions & scopes...");
 
-  // We should be on the plugins settings page already
-  // Find the gear icon (Configure Plugin) for the Echo plugin row
-  // The table rows contain plugin display names; find the row with "Echo" and click its gear icon
-  const echoRow = page.locator('.mantine-Table-tbody .mantine-Table-tr:has-text("Echo")').first();
+  // We should be on the plugins settings page already.
+  // Find the gear icon (Configure Plugin) for the Echo Metadata plugin row.
+  // Scope to "Echo Metadata" so we don't match the Echo Sync / Echo
+  // Recommendations rows that also contain "Echo".
+  const echoRow = page
+    .locator('.mantine-Table-tbody .mantine-Table-tr:has-text("Echo Metadata")')
+    .first();
   if ((await echoRow.count()) === 0) {
-    console.log("      ⚠️  Echo plugin row not found");
+    console.log("      ⚠️  Echo Metadata plugin row not found");
     return;
   }
 
@@ -428,6 +603,84 @@ async function configureEchoPlugin(page: Page): Promise<void> {
   }
 
   console.log("      ✓ Echo plugin configured with permissions & scopes");
+}
+
+/**
+ * Set the admin-managed automatic-sync cadence for the Echo Sync plugin.
+ *
+ * The "Sync Schedule (cron)" field lives on the Permissions tab of the
+ * Configure dialog and only renders for plugins whose manifest declares the
+ * sync capability (so the plugin must have been tested first). Setting it is
+ * what enables the user-facing "Automatic sync" switch on the connection card.
+ */
+async function configureSyncEchoCron(page: Page): Promise<void> {
+  console.log("      ⚙️  Setting Echo Sync automatic-sync cadence...");
+
+  await page.goto("/settings/plugins");
+  await waitForPageReady(page);
+  await page.waitForTimeout(500);
+
+  const syncRow = page
+    .locator('.mantine-Table-tbody .mantine-Table-tr:has-text("Echo Sync")')
+    .first();
+  if ((await syncRow.count()) === 0) {
+    console.log("      ⚠️  Echo Sync plugin row not found");
+    return;
+  }
+
+  const configButton = syncRow.locator('button:has(svg.tabler-icon-settings)');
+  if ((await configButton.count()) === 0) {
+    console.log("      ⚠️  Config button not found on Echo Sync row");
+    return;
+  }
+
+  await configButton.click();
+  await page.waitForSelector('[role="dialog"], .mantine-Modal-content', {
+    state: "visible",
+    timeout: 5000,
+  });
+  await page.waitForTimeout(500);
+
+  // Navigate to the Permissions tab (where the cron field lives).
+  const permissionsTab = page.locator('button[role="tab"]:has-text("Permissions")');
+  if ((await permissionsTab.count()) > 0) {
+    await permissionsTab.click();
+    await page.waitForTimeout(300);
+  }
+
+  // Fill the Sync Schedule (cron) field. The CronInput renders a live
+  // human-readable description below the field once the expression is valid.
+  const cronInput = page
+    .locator('label:has-text("Sync Schedule")')
+    .locator("..")
+    .locator("input")
+    .first();
+  if ((await cronInput.count()) === 0) {
+    console.log("      ⚠️  Sync Schedule field not found (manifest may lack sync capability)");
+    await page.keyboard.press("Escape");
+    return;
+  }
+
+  await cronInput.fill("0 */6 * * *");
+  await page.waitForTimeout(500); // let the description render
+
+  await captureScreenshot(page, "plugins/config-modal-sync-cron");
+
+  // Save changes
+  const saveButton = page.locator('button:has-text("Save Changes")').first();
+  if ((await saveButton.count()) > 0) {
+    await saveButton.click();
+    await page.waitForTimeout(1500);
+    await page
+      .waitForSelector('[role="dialog"], .mantine-Modal-content', {
+        state: "hidden",
+        timeout: 10000,
+      })
+      .catch(() => {});
+    await waitForPageReady(page);
+  }
+
+  console.log("      ✓ Echo Sync cadence configured");
 }
 
 /**
@@ -604,9 +857,35 @@ async function libraryAutoMatchScreenshots(page: Page): Promise<void> {
 }
 
 /**
- * User Integrations page - shows available and enabled plugin integrations
+ * Enable an integration by its display name from the "Available" section.
+ * The cards are credential-less echo plugins, so enabling connects them
+ * immediately (no OAuth step). Returns true if an Enable button was clicked.
+ */
+async function enableIntegration(page: Page, displayName: string): Promise<boolean> {
+  const card = page.locator(`.mantine-Card-root:has-text("${displayName}")`).first();
+  if ((await card.count()) === 0) {
+    console.log(`      ⚠️  "${displayName}" integration card not found`);
+    return false;
+  }
+  const enableButton = card.locator('button:has-text("Enable")').first();
+  if ((await enableButton.count()) === 0) {
+    // Already enabled (no Enable button on the connected card).
+    return false;
+  }
+  await enableButton.click();
+  await page.waitForTimeout(1500);
+  await waitForPageReady(page);
+  return true;
+}
+
+/**
+ * User Integrations page - shows available and enabled plugin integrations.
  * This is the user-facing view at /settings/integrations where users can
  * enable/disable sync and recommendation plugins for their account.
+ *
+ * Drives the credential-less echo plugins end to end: enable Echo Sync,
+ * flip the admin-gated "Automatic sync" switch, run a manual sync, and
+ * enable Echo Recommendations (which feeds the recommendations page).
  */
 async function userIntegrationsScreenshots(page: Page): Promise<void> {
   console.log("    📷 User Integrations Page");
@@ -616,38 +895,108 @@ async function userIntegrationsScreenshots(page: Page): Promise<void> {
   await waitForPageReady(page);
   await page.waitForTimeout(500);
 
-  // Capture the integrations page showing available plugins
-  // Since sync and recommendations plugins were added, they should appear here
+  // Capture the integrations page showing available plugins (echo sync,
+  // echo recommendations, AniList sync/recommendations).
   await captureScreenshot(page, "plugins/user-integrations");
 
-  // Try to enable the sync plugin if it appears in "Available" section
-  const enableButtons = page.locator('button:has-text("Enable")');
-  const enableCount = await enableButtons.count();
-
-  if (enableCount > 0) {
-    // Enable the first available integration (likely AniList Sync)
-    await enableButtons.first().click();
-    await page.waitForTimeout(1500);
-    await waitForPageReady(page);
-
-    // Capture after enabling first integration
+  // === ENABLE ECHO SYNC ===
+  if (await enableIntegration(page, "Echo Sync")) {
     await captureScreenshot(page, "plugins/user-integrations-enabled-sync");
 
-    // Enable the second available integration if present (likely AniList Recommendations)
-    const remainingEnableButtons = page.locator('button:has-text("Enable")');
-    if ((await remainingEnableButtons.count()) > 0) {
-      await remainingEnableButtons.first().click();
-      await page.waitForTimeout(1500);
-      await waitForPageReady(page);
+    const echoSyncCard = page
+      .locator('.mantine-Card-root:has-text("Echo Sync")')
+      .first();
 
-      // Capture after enabling second integration
-      await captureScreenshot(page, "plugins/user-integrations-all-enabled");
+    // Flip the "Automatic sync" switch (enabled now that an admin set a cron).
+    const autoSyncSwitch = echoSyncCard
+      .locator('.mantine-Switch-root:has-text("Automatic sync") input')
+      .first();
+    if ((await autoSyncSwitch.count()) > 0) {
+      await autoSyncSwitch.check({ force: true }).catch(() => {});
+      await page.waitForTimeout(1000);
+      await captureScreenshot(page, "plugins/user-integrations-auto-sync-on");
+    } else {
+      console.log("      ⚠️  Automatic sync switch not found on Echo Sync card");
     }
-  } else {
-    console.log("      ⚠️  No available integrations found to enable");
+
+    // Run a manual sync to populate last-sync stats / detailed progress.
+    const syncNowButton = echoSyncCard.locator('button:has-text("Sync Now")').first();
+    if ((await syncNowButton.count()) > 0) {
+      await syncNowButton.click();
+      await page.waitForTimeout(4000); // let the sync task run
+      await waitForPageReady(page);
+      await captureScreenshot(page, "plugins/user-integrations-sync-complete");
+    } else {
+      console.log("      ⚠️  Sync Now button not found on Echo Sync card");
+    }
+
+    // Open the connection settings (Codex sync settings) modal.
+    const settingsButton = echoSyncCard.locator('button:has-text("Settings")').first();
+    if ((await settingsButton.count()) > 0) {
+      await settingsButton.click();
+      await page
+        .waitForSelector('[role="dialog"], .mantine-Modal-content', {
+          state: "visible",
+          timeout: 5000,
+        })
+        .catch(() => {});
+      await page.waitForTimeout(500);
+      await captureScreenshot(page, "plugins/user-integrations-sync-settings");
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(400);
+    }
+  }
+
+  // === ENABLE ECHO RECOMMENDATIONS ===
+  // Drives the recommendations page captured in the next part.
+  if (await enableIntegration(page, "Echo Recommendations")) {
+    await captureScreenshot(page, "plugins/user-integrations-all-enabled");
   }
 
   console.log("      ✓ User integrations screenshots captured");
+}
+
+/**
+ * Recommendations page - driven by the Echo Recommendations plugin, which
+ * echoes the library's series back as recommendations. Captures the initial
+ * state, triggers a refresh, and captures the generated results.
+ */
+async function recommendationsScreenshots(page: Page): Promise<void> {
+  console.log("    📷 Recommendations Page");
+
+  await page.goto("/recommendations");
+  await waitForPageReady(page);
+  await page.waitForTimeout(800);
+
+  // Capture the initial state (cached results or empty prompt).
+  await captureScreenshot(page, "plugins/recommendations-initial");
+
+  // Trigger a fresh generation via the header Refresh action.
+  const refreshButton = page.locator('button:has-text("Refresh")').first();
+  if ((await refreshButton.count()) === 0) {
+    console.log("      ⚠️  Refresh button not found on recommendations page");
+    return;
+  }
+  await refreshButton.click();
+
+  // Generation runs as a background task; wait for cards to appear (or the
+  // "Generating..." indicator to clear), polling up to ~30s.
+  const recCard = page.locator(
+    '[data-testid="recommendation-card"], .mantine-Card-root:has(img)',
+  );
+  for (let attempt = 0; attempt < 15; attempt++) {
+    await page.waitForTimeout(2000);
+    if ((await recCard.count()) > 0) {
+      console.log(`      ✓ Recommendations rendered after ~${(attempt + 1) * 2}s`);
+      break;
+    }
+  }
+  await waitForPageReady(page);
+  await page.waitForTimeout(500);
+
+  await captureScreenshot(page, "plugins/recommendations-results");
+
+  console.log("      ✓ Recommendations screenshots captured");
 }
 
 /**

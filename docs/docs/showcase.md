@@ -352,12 +352,6 @@ Install plugins from the built-in store with pre-configured settings.
 
 Clicking "Add" on a plugin opens a pre-filled creation form with the plugin's recommended settings.
 
-**Echo Metadata Plugin:**
-
-![Add Echo Plugin - General](../screenshots/plugins/store-add-echo-general.png)
-
-![Add Echo Plugin - Execution](../screenshots/plugins/store-add-echo-execution.png)
-
 **AniList Sync Plugin:**
 
 ![Add Sync Plugin - General](../screenshots/plugins/store-add-sync-general.png)
@@ -375,6 +369,28 @@ Clicking "Add" on a plugin opens a pre-filled creation form with the plugin's re
 ![Add MangaUpdates Plugin - General](../screenshots/plugins/store-add-mangaupdates-general.png)
 
 ![Add MangaUpdates Plugin - Execution](../screenshots/plugins/store-add-mangaupdates-execution.png)
+
+### Adding a Plugin Manually
+
+Plugins outside the store can be added by hand via the "Add Plugin" form, filling in the command and arguments. The echo plugins (used for development and testing) are installed this way.
+
+**Echo Metadata Plugin:**
+
+![Add Echo Metadata - General](../screenshots/plugins/create-echo-metadata-general.png)
+
+![Add Echo Metadata - Execution](../screenshots/plugins/create-echo-metadata-execution.png)
+
+**Echo Sync Plugin:**
+
+![Add Echo Sync - General](../screenshots/plugins/create-echo-sync-general.png)
+
+![Add Echo Sync - Execution](../screenshots/plugins/create-echo-sync-execution.png)
+
+**Echo Recommendations Plugin:**
+
+![Add Echo Recommendations - General](../screenshots/plugins/create-echo-recommendations-general.png)
+
+![Add Echo Recommendations - Execution](../screenshots/plugins/create-echo-recommendations-execution.png)
 
 ### Installed Plugins
 
@@ -403,6 +419,10 @@ After installing a plugin, open its configuration modal to set permissions, scop
 ![Config Modal - Preprocessing](../screenshots/plugins/config-modal-preprocessing.png)
 
 ![Config Modal - Conditions](../screenshots/plugins/config-modal-conditions.png)
+
+For sync-capable plugins, the Permissions tab also exposes a **Sync Schedule (cron)** field that sets the automatic-sync cadence shared by all users of that plugin.
+
+![Config Modal - Sync Schedule](../screenshots/plugins/config-modal-sync-cron.png)
 
 ### Using Plugins
 
@@ -438,13 +458,27 @@ Users can enable or disable plugin integrations from their account settings, suc
 
 ![User Integrations - Enabled Sync](../screenshots/plugins/user-integrations-enabled-sync.png)
 
+Once an admin has set a sync schedule, each user can opt their connection into automatic sync.
+
+![User Integrations - Automatic Sync On](../screenshots/plugins/user-integrations-auto-sync-on.png)
+
+Running a manual sync updates the connection's last-sync status and stats.
+
+![User Integrations - Sync Complete](../screenshots/plugins/user-integrations-sync-complete.png)
+
+The connection's settings control which entries are sent during a sync.
+
+![User Integrations - Sync Settings](../screenshots/plugins/user-integrations-sync-settings.png)
+
 ![User Integrations - All Enabled](../screenshots/plugins/user-integrations-all-enabled.png)
 
 ### Recommendations
 
 When a recommendations plugin is connected, users get personalized suggestions based on their library and reading history.
 
-![Recommendations Page](../manual-screenshots/plugins/recommendations-page.png)
+![Recommendations - Initial](../screenshots/plugins/recommendations-initial.png)
+
+![Recommendations - Results](../screenshots/plugins/recommendations-results.png)
 
 ## Authentication
 

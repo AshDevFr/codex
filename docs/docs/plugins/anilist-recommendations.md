@@ -135,6 +135,10 @@ The same `_codex` settings used by sync plugins also influence which library ent
 
 See the [Plugins overview](./index.md#codex-sync-settings) for the full reference.
 
+### Metadata enrichment
+
+The admin-managed [Metadata Enrichment](./anilist-sync.md#metadata-enrichment) policy also governs recommendation plugins: genres and tags are attached to the library seeds sent to the service by default, and an admin can turn them off per plugin (in the plugin's **Configure** dialog) to trim the payload. The toggles only take effect for plugins whose manifest declares the enrichment capability.
+
 ## Using the plugin
 
 Once connected:
