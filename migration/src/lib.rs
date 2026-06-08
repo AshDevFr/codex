@@ -188,6 +188,10 @@ pub mod m20260524_000090_create_access_groups;
 mod m20260530_000091_add_release_ledger_released_at;
 // Admin-managed per-plugin cron for scheduled user-plugin syncs
 mod m20260606_000092_add_plugin_sync_cron;
+// Distributed claim so a cron firing runs on exactly one replica
+mod m20260607_000093_create_scheduled_firing_claims;
+// Atomic per-(plugin,user) dedup for scheduled user-plugin syncs
+mod m20260607_000094_add_user_plugin_sync_unique_index;
 
 pub struct Migrator;
 
@@ -347,6 +351,10 @@ impl MigratorTrait for Migrator {
             Box::new(m20260530_000091_add_release_ledger_released_at::Migration),
             // Admin-managed per-plugin cron for scheduled user-plugin syncs
             Box::new(m20260606_000092_add_plugin_sync_cron::Migration),
+            // Distributed claim so a cron firing runs on exactly one replica
+            Box::new(m20260607_000093_create_scheduled_firing_claims::Migration),
+            // Atomic per-(plugin,user) dedup for scheduled user-plugin syncs
+            Box::new(m20260607_000094_add_user_plugin_sync_unique_index::Migration),
         ]
     }
 }

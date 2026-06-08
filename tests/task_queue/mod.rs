@@ -2156,6 +2156,48 @@ async fn test_enqueue_user_plugin_sync_coalesces_same_user() {
     );
 }
 
+/// The partial unique index makes the (plugin_id, user_id) dedup atomic at the
+/// DB level, not just via enqueue's check-then-insert. A second *raw* pending
+/// `user_plugin_sync` row for the same connection must be rejected — this is the
+/// guarantee that protects against two schedulers (or scheduled + manual)
+/// racing the soft `has_pending_or_processing` check in a multi-replica deploy.
+#[tokio::test]
+async fn user_plugin_sync_unique_index_blocks_duplicate_pending() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let plugin_id = Uuid::new_v4();
+    let user_id = Uuid::new_v4();
+
+    let row = |plugin_id: Uuid, user_id: Uuid| tasks::ActiveModel {
+        id: Set(Uuid::new_v4()),
+        task_type: Set("user_plugin_sync".to_string()),
+        status: Set("pending".to_string()),
+        params: Set(Some(
+            serde_json::json!({ "plugin_id": plugin_id, "user_id": user_id }),
+        )),
+        scheduled_for: Set(Utc::now()),
+        created_at: Set(Utc::now()),
+        ..Default::default()
+    };
+
+    row(plugin_id, user_id)
+        .insert(&db)
+        .await
+        .expect("first pending row inserts");
+
+    let dup = row(plugin_id, user_id).insert(&db).await;
+    assert!(
+        dup.is_err(),
+        "a second pending row for the same (plugin, user) must violate the unique index"
+    );
+
+    // A different user of the same plugin is unaffected.
+    row(plugin_id, Uuid::new_v4())
+        .insert(&db)
+        .await
+        .expect("a different user's pending row is still allowed");
+}
+
 /// Test has_pending_or_processing with recommendations task type
 #[tokio::test]
 async fn test_find_duplicates_handler_reads_trusted_sources_setting() {

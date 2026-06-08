@@ -18,6 +18,7 @@ pub use super::library_jobs::Entity as LibraryJobs;
 pub use super::pages::Entity as Pages;
 #[allow(unused_imports)]
 pub use super::refresh_tokens::Entity as RefreshTokens;
+pub use super::scheduled_firing_claims::Entity as ScheduledFiringClaims;
 pub use super::series::Entity as Series;
 pub use super::task_metrics::Entity as TaskMetrics;
 pub use super::tasks::Entity as Tasks;

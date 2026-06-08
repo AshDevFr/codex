@@ -1,6 +1,7 @@
 pub mod release_sources;
 
 use anyhow::{Context, Result};
+use chrono::{DateTime, Duration, DurationRound, Utc};
 use chrono_tz::Tz;
 use sea_orm::DatabaseConnection;
 use tokio_cron_scheduler::{Job, JobScheduler};
@@ -9,8 +10,8 @@ use uuid::Uuid;
 
 use codex_db::entities::{library_jobs, plugins, user_plugins};
 use codex_db::repositories::{
-    LibraryJobRepository, LibraryRepository, PluginsRepository, TaskRepository,
-    UserPluginsRepository,
+    LibraryJobRepository, LibraryRepository, PluginsRepository, ScheduledFiringRepository,
+    TaskRepository, UserPluginsRepository,
 };
 use codex_scanner::{ScanMode, ScanningConfig};
 use codex_services::library_jobs::{LibraryJobConfig, parse_job_config};
@@ -780,6 +781,29 @@ impl Scheduler {
             let db = db.clone();
             let plugin_name = plugin_name.clone();
             Box::pin(async move {
+                // Every replica runs this scheduler, so every replica's cron
+                // fires this closure. Claim the firing so exactly one replica
+                // fans out; the rest skip. Fail open on a claim error: the
+                // per-(plugin,user) unique index still prevents duplicate tasks,
+                // so proceeding is safe and keeps syncs flowing if the claim
+                // table is briefly unavailable.
+                let slot = firing_slot(Utc::now());
+                let job_key = plugin_sync_job_key(plugin_id);
+                match ScheduledFiringRepository::try_claim(&db, &job_key, slot).await {
+                    Ok(false) => {
+                        debug!(
+                            "Plugin sync '{}' ({}) firing {} already claimed by another replica; skipping",
+                            plugin_name, plugin_id, slot
+                        );
+                        return;
+                    }
+                    Ok(true) => {}
+                    Err(e) => warn!(
+                        "Plugin sync claim check failed for '{}' ({}): {}; proceeding",
+                        plugin_name, plugin_id, e
+                    ),
+                }
+
                 match fan_out_plugin_sync(&db, plugin_id).await {
                     Ok(summary) => info!(
                         "Plugin sync '{}' ({}): {} eligible, {} enqueued, {} skipped (ineligible), {} skipped (in flight)",
@@ -908,6 +932,21 @@ pub async fn has_active_refresh_for_job(db: &DatabaseConnection, job_id: Uuid) -
 /// (v1 does not refresh in the cron path).
 pub(crate) fn is_auto_sync_eligible(up: &user_plugins::Model, requires_auth: bool) -> bool {
     up.enabled && up.is_connected(requires_auth) && up.auto_sync_enabled()
+}
+
+/// Logical job key for a plugin's scheduled-sync firing claim.
+pub(crate) fn plugin_sync_job_key(plugin_id: Uuid) -> String {
+    format!("plugin_sync:{plugin_id}")
+}
+
+/// Truncate a firing instant to its minute so every replica firing for the same
+/// cron occurrence computes the same claim slot, tolerating the sub-second clock
+/// skew between replicas. Trade-off: sub-minute cron cadences collapse to at
+/// most one fan-out per minute under multi-replica claiming — an acceptable
+/// bound, since sub-minute external sync is not a sane cadence and the
+/// per-(plugin, user) dedup still applies as a backstop.
+pub(crate) fn firing_slot(now: DateTime<Utc>) -> DateTime<Utc> {
+    now.duration_trunc(Duration::minutes(1)).unwrap_or(now)
 }
 
 /// Outcome of one plugin-sync fan-out, used for the per-firing log line.
@@ -1088,6 +1127,31 @@ mod tests {
             created_at: Utc::now(),
             updated_at: Utc::now(),
         }
+    }
+
+    #[test]
+    fn firing_slot_truncates_to_the_minute() {
+        // 1_700_000_040 is an exact minute boundary (divisible by 60).
+        let minute = DateTime::from_timestamp(1_700_000_040, 0).unwrap();
+        // Two instants in that minute (sub-second skew between replicas) must
+        // map to the same slot so they claim the same firing.
+        let a = DateTime::from_timestamp(1_700_000_057, 250_000_000).unwrap();
+        let b = DateTime::from_timestamp(1_700_000_082, 900_000_000).unwrap();
+        assert_eq!(firing_slot(a), minute);
+        assert_eq!(firing_slot(b), minute);
+        // The next minute is a distinct slot.
+        let next_minute = DateTime::from_timestamp(1_700_000_100, 0).unwrap();
+        let c = DateTime::from_timestamp(1_700_000_115, 0).unwrap();
+        assert_eq!(firing_slot(c), next_minute);
+    }
+
+    #[test]
+    fn plugin_sync_job_key_is_stable_and_scoped() {
+        let id = uuid::Uuid::nil();
+        assert_eq!(
+            plugin_sync_job_key(id),
+            "plugin_sync:00000000-0000-0000-0000-000000000000"
+        );
     }
 
     #[test]
