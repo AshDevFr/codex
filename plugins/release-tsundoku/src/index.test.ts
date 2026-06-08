@@ -1,6 +1,12 @@
-import { HostRpcClient } from "@ashdev/codex-plugin-sdk";
-import { describe, expect, it } from "vitest";
-import { normalizeBaseUrl, registerSources } from "./index.js";
+import { HostRpcClient, type PluginStorage } from "@ashdev/codex-plugin-sdk";
+import { describe, expect, it, vi } from "vitest";
+import {
+  CURSOR_STORAGE_KEY,
+  loadCursor,
+  normalizeBaseUrl,
+  registerSources,
+  saveCursor,
+} from "./index.js";
 
 // -----------------------------------------------------------------------------
 // Mock host RPC
@@ -71,6 +77,68 @@ describe("normalizeBaseUrl", () => {
     expect(normalizeBaseUrl("https://t.example.com/")).toBe("https://t.example.com");
     expect(normalizeBaseUrl("  https://t.example.com///  ")).toBe("https://t.example.com");
     expect(normalizeBaseUrl("https://t.example.com")).toBe("https://t.example.com");
+  });
+});
+
+// -----------------------------------------------------------------------------
+// Cursor persistence
+// -----------------------------------------------------------------------------
+
+/** Minimal in-memory `PluginStorage` double exposing only get/set. */
+function makeFakeStorage(initial?: unknown): {
+  storage: PluginStorage;
+  get: ReturnType<typeof vi.fn>;
+  set: ReturnType<typeof vi.fn>;
+} {
+  const get = vi.fn(async () => ({ data: initial ?? null }));
+  const set = vi.fn(async () => ({ success: true }));
+  const storage = { get, set } as unknown as PluginStorage;
+  return { storage, get, set };
+}
+
+describe("loadCursor", () => {
+  it("returns the stored cursor string", async () => {
+    const { storage, get } = makeFakeStorage("cursor-42");
+    expect(await loadCursor(storage)).toBe("cursor-42");
+    expect(get).toHaveBeenCalledWith(CURSOR_STORAGE_KEY);
+  });
+
+  it("returns null when no cursor is stored", async () => {
+    const { storage } = makeFakeStorage(null);
+    expect(await loadCursor(storage)).toBeNull();
+  });
+
+  it("returns null for a non-string / empty stored value", async () => {
+    expect(await loadCursor(makeFakeStorage("").storage)).toBeNull();
+    expect(await loadCursor(makeFakeStorage(123).storage)).toBeNull();
+  });
+
+  it("returns null and does not throw when the read fails", async () => {
+    const storage = {
+      get: vi.fn(async () => {
+        throw new Error("kv down");
+      }),
+      set: vi.fn(),
+    } as unknown as PluginStorage;
+    expect(await loadCursor(storage)).toBeNull();
+  });
+});
+
+describe("saveCursor", () => {
+  it("writes the cursor under the feed-cursor key", async () => {
+    const { storage, set } = makeFakeStorage();
+    await saveCursor(storage, "cursor-99");
+    expect(set).toHaveBeenCalledWith(CURSOR_STORAGE_KEY, "cursor-99");
+  });
+
+  it("swallows a write failure without throwing", async () => {
+    const storage = {
+      get: vi.fn(),
+      set: vi.fn(async () => {
+        throw new Error("kv full");
+      }),
+    } as unknown as PluginStorage;
+    await expect(saveCursor(storage, "cursor-99")).resolves.toBeUndefined();
   });
 });
 
