@@ -156,6 +156,7 @@ jobs:
           - sync-anilist
           - release-mangaupdates
           - release-nyaa
+          - release-tsundoku
     steps:
       - uses: actions/checkout@v4
       - name: Setup Node.js
@@ -586,6 +587,7 @@ jobs:
           - sync-anilist
           - release-mangaupdates
           - release-nyaa
+          - release-tsundoku
     steps:
       - uses: actions/checkout@v4
         with:
