@@ -10,7 +10,7 @@ use std::time::Duration;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
-use tokio::sync::{Mutex, RwLock, mpsc};
+use tokio::sync::{Mutex, Notify, RwLock, mpsc};
 use tokio::time::timeout;
 use tracing::{Instrument, debug, error, warn};
 
@@ -35,6 +35,11 @@ pub struct ReverseRpcContext {
     releases_handler: Option<ReleasesRequestHandler>,
     /// `None` until the plugin has been initialized.
     capabilities: Option<PluginCapabilities>,
+    /// Notified once `capabilities` is populated. Lets the dispatcher park an
+    /// early reverse-RPC call (one that raced ahead of the host installing the
+    /// post-`initialize` context) until the plugin is ready, instead of
+    /// bouncing it with `METHOD_NOT_FOUND` and relying on plugin-side retries.
+    ready: Arc<Notify>,
 }
 
 impl ReverseRpcContext {
@@ -43,6 +48,7 @@ impl ReverseRpcContext {
             storage_handler: None,
             releases_handler: None,
             capabilities: None,
+            ready: Arc::new(Notify::new()),
         }
     }
 
@@ -51,13 +57,16 @@ impl ReverseRpcContext {
             storage_handler: Some(storage_handler),
             releases_handler: None,
             capabilities: None,
+            ready: Arc::new(Notify::new()),
         }
     }
 
     /// Replace the plugin's capability snapshot, used by [`super::handle::PluginHandle`]
-    /// once `initialize` returns.
+    /// once `initialize` returns. Wakes any reverse-RPC calls parked in the
+    /// readiness barrier (see [`await_capabilities`]).
     pub fn set_capabilities(&mut self, caps: PluginCapabilities) {
         self.capabilities = Some(caps);
+        self.ready.notify_waiters();
     }
 
     /// Install the releases handler. Called after capabilities are known
@@ -385,6 +394,7 @@ impl RpcClient {
                             &reverse_method,
                             &reverse_request,
                             &self.reverse_ctx,
+                            REVERSE_RPC_READINESS_TIMEOUT,
                         )
                         .await;
                         // Write the response back to the plugin. Best-effort:
@@ -511,6 +521,50 @@ impl Drop for RpcClient {
     }
 }
 
+/// How long a reverse-RPC call parks waiting for the plugin's capabilities to
+/// be installed before giving up with `METHOD_NOT_FOUND`. Real initialization
+/// completes in milliseconds; this is a generous upper bound for a process
+/// under load. Only calls that race `initialize` ever wait at all.
+const REVERSE_RPC_READINESS_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Park until the plugin's capabilities are installed (`set_capabilities`), or
+/// `timeout` elapses. Returns immediately when capabilities are already set
+/// (the common case). This closes the startup race where a plugin fires a
+/// reverse-RPC from `onInitialize` before the host installs the post-`initialize`
+/// context, without requiring plugins to retry on `METHOD_NOT_FOUND`.
+async fn await_capabilities(reverse_ctx: &Arc<RwLock<ReverseRpcContext>>, timeout: Duration) {
+    // Fast path + grab the notify handle without holding the read lock across
+    // the await below.
+    let ready = {
+        let guard = reverse_ctx.read().await;
+        if guard.capabilities.is_some() {
+            return;
+        }
+        guard.ready.clone()
+    };
+
+    let sleep = tokio::time::sleep(timeout);
+    tokio::pin!(sleep);
+
+    loop {
+        // Register interest *before* re-checking the condition so a notify that
+        // fires between the check and the await isn't lost (the canonical
+        // `tokio::sync::Notify` pattern, via `enable()`).
+        let notified = ready.notified();
+        tokio::pin!(notified);
+        notified.as_mut().enable();
+
+        if reverse_ctx.read().await.capabilities.is_some() {
+            return;
+        }
+
+        tokio::select! {
+            _ = &mut sleep => return,
+            _ = &mut notified => { /* woken — re-check on the next iteration */ }
+        }
+    }
+}
+
 /// Dispatch a single reverse-RPC request to the appropriate handler after
 /// running the permission check.
 ///
@@ -523,28 +577,35 @@ async fn dispatch_reverse_rpc(
     method: &str,
     request: &JsonRpcRequest,
     reverse_ctx: &Arc<RwLock<ReverseRpcContext>>,
+    readiness_timeout: Duration,
 ) -> JsonRpcResponse {
     let request_id = request.id.clone();
+
+    // Readiness barrier. A plugin can fire a reverse-RPC (e.g. a release
+    // source's `register_sources`) from its `onInitialize` the instant after
+    // it returns the manifest — before the host has finished installing the
+    // post-`initialize` context (capabilities + handlers). Rather than bounce
+    // that call and depend on plugin-side retries, park here until the
+    // capabilities are installed or the timeout elapses.
+    await_capabilities(reverse_ctx, readiness_timeout).await;
 
     // Take a read snapshot of the context. We keep it as long as we're
     // dispatching so the handlers don't get swapped mid-call.
     let ctx_guard = reverse_ctx.read().await;
 
-    // 1. Permission check. If capabilities haven't been set yet (i.e. the
-    //    plugin tried to make a reverse-RPC call before the host installed
-    //    the per-plugin reverse-RPC handlers), we return METHOD_NOT_FOUND
-    //    rather than AUTH_FAILED. From the plugin's perspective the method
-    //    isn't dispatchable *yet* — distinguishing this from a real
-    //    permission denial lets the plugin SDK retry with backoff to ride
-    //    out the brief initialization race (see e.g. release-nyaa's
-    //    `registerSources` retry on -32601). AUTH_FAILED stays reserved
-    //    for actual capability-declined-method denials.
+    // 1. Permission check. If capabilities are *still* unset after the
+    //    readiness wait (initialization stalled or failed), we return
+    //    METHOD_NOT_FOUND rather than AUTH_FAILED. From the plugin's
+    //    perspective the method isn't dispatchable *yet* — distinguishing this
+    //    from a real permission denial lets a plugin SDK retry with backoff as
+    //    a last resort. AUTH_FAILED stays reserved for actual
+    //    capability-declined-method denials.
     let caps = match ctx_guard.capabilities.as_ref() {
         Some(c) => c,
         None => {
             warn!(
                 method = %method,
-                "Reverse-RPC call before plugin initialized; deferring (METHOD_NOT_FOUND)"
+                "Reverse-RPC call still uninitialized after readiness wait; deferring (METHOD_NOT_FOUND)"
             );
             return JsonRpcResponse::error(
                 Some(request_id),
@@ -870,7 +931,13 @@ async fn dispatch_and_write(
     process: &Arc<Mutex<PluginProcess>>,
 ) {
     let request_id = request.id.clone();
-    let response = dispatch_reverse_rpc(&method, &request, reverse_ctx).await;
+    let response = dispatch_reverse_rpc(
+        &method,
+        &request,
+        reverse_ctx,
+        REVERSE_RPC_READINESS_TIMEOUT,
+    )
+    .await;
     let response_json = match serde_json::to_string(&response) {
         Ok(j) => j,
         Err(e) => {
@@ -1009,12 +1076,11 @@ mod tests {
         }
     }
 
-    /// Reverse-RPC dispatch should reject calls before the plugin has been
-    /// initialized — at that point the host doesn't yet know the plugin's
-    /// capabilities. Returned as `METHOD_NOT_FOUND` (rather than
-    /// `AUTH_FAILED`) so plugin SDKs can retry with backoff to ride out the
-    /// brief init race; an `AUTH_FAILED` response would tell the SDK to
-    /// give up. See the doc comment on `dispatch_reverse_rpc`.
+    /// Reverse-RPC dispatch parks on the readiness barrier when capabilities
+    /// aren't installed, then — if they never arrive within the timeout —
+    /// rejects with `METHOD_NOT_FOUND` (rather than `AUTH_FAILED`). The short
+    /// timeout here exercises the give-up path; `test_dispatch_waits_for_late_capabilities`
+    /// covers the success path where caps land mid-wait.
     #[tokio::test]
     async fn test_dispatch_rejects_before_init() {
         let ctx = Arc::new(RwLock::new(ReverseRpcContext::new()));
@@ -1023,9 +1089,55 @@ mod tests {
             super::super::protocol::methods::STORAGE_GET,
             Some(json!({"key": "x"})),
         );
-        let resp = dispatch_reverse_rpc(&request.method, &request, &ctx).await;
+        let resp =
+            dispatch_reverse_rpc(&request.method, &request, &ctx, Duration::from_millis(50)).await;
         assert!(resp.is_error());
         assert_eq!(resp.error.unwrap().code, error_codes::METHOD_NOT_FOUND);
+    }
+
+    /// The readiness barrier: a reverse-RPC that arrives before the host has
+    /// installed capabilities must not be bounced. It parks until
+    /// `set_capabilities` runs, then dispatches normally — here a storage call
+    /// with no handler resolves to the "no storage handler" error (proving it
+    /// got *past* the capabilities gate) rather than the pre-init rejection.
+    #[tokio::test]
+    async fn test_dispatch_waits_for_late_capabilities() {
+        use super::super::protocol::PluginCapabilities;
+
+        let ctx = Arc::new(RwLock::new(ReverseRpcContext::new()));
+        let request = JsonRpcRequest::new(
+            1i64,
+            super::super::protocol::methods::STORAGE_GET,
+            Some(json!({"key": "x"})),
+        );
+
+        // Install capabilities shortly after dispatch begins, simulating the
+        // host finishing `update_reverse_ctx` while an early call is parked.
+        let ctx_writer = Arc::clone(&ctx);
+        let setter = tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+            ctx_writer
+                .write()
+                .await
+                .set_capabilities(PluginCapabilities::default());
+        });
+
+        // Generous barrier timeout so the late caps win the race.
+        let resp =
+            dispatch_reverse_rpc(&request.method, &request, &ctx, Duration::from_secs(2)).await;
+        setter.await.unwrap();
+
+        assert!(resp.is_error());
+        // Past the capabilities gate: storage is permitted but no handler is
+        // installed, so we get the handler-missing error, NOT a pre-init bounce.
+        // (Both are METHOD_NOT_FOUND, so assert on the message to disambiguate.)
+        let err = resp.error.unwrap();
+        assert_eq!(err.code, error_codes::METHOD_NOT_FOUND);
+        assert!(
+            err.message.contains("Storage is not available"),
+            "expected to pass the readiness gate and reach the storage handler check, got: {}",
+            err.message
+        );
     }
 
     /// A plugin without `release_source` calling `releases/record` should be
@@ -1046,7 +1158,8 @@ mod tests {
             super::super::protocol::methods::RELEASES_RECORD,
             Some(json!({})),
         );
-        let resp = dispatch_reverse_rpc(&request.method, &request, &ctx).await;
+        let resp =
+            dispatch_reverse_rpc(&request.method, &request, &ctx, Duration::from_millis(50)).await;
         assert!(resp.is_error());
         assert_eq!(resp.error.unwrap().code, error_codes::AUTH_FAILED);
     }
@@ -1062,7 +1175,8 @@ mod tests {
         let ctx = Arc::new(RwLock::new(ctx_inner));
 
         let request = JsonRpcRequest::new(1i64, "frobnicate/zap", Some(json!({})));
-        let resp = dispatch_reverse_rpc(&request.method, &request, &ctx).await;
+        let resp =
+            dispatch_reverse_rpc(&request.method, &request, &ctx, Duration::from_millis(50)).await;
         assert!(resp.is_error());
         assert_eq!(resp.error.unwrap().code, error_codes::METHOD_NOT_FOUND);
     }
@@ -1083,7 +1197,8 @@ mod tests {
             super::super::protocol::methods::STORAGE_GET,
             Some(json!({"key": "x"})),
         );
-        let resp = dispatch_reverse_rpc(&request.method, &request, &ctx).await;
+        let resp =
+            dispatch_reverse_rpc(&request.method, &request, &ctx, Duration::from_millis(50)).await;
         assert!(resp.is_error());
         assert_eq!(resp.error.unwrap().code, error_codes::METHOD_NOT_FOUND);
     }
