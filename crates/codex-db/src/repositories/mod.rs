@@ -50,6 +50,9 @@ pub mod access_group;
 // OIDC authentication
 pub mod oidc_connection;
 
+// System-scoped plugin KV store (per-plugin, no user context)
+pub mod plugin_data;
+
 // User plugin system
 pub mod user_plugin_data;
 pub mod user_plugins;
@@ -118,6 +121,10 @@ pub use access_group::AccessGroupRepository;
 
 // OIDC authentication
 pub use oidc_connection::OidcConnectionRepository;
+
+// System-scoped plugin KV store
+#[allow(unused_imports)]
+pub use plugin_data::PluginDataRepository;
 
 // User plugin system
 #[allow(unused_imports)]
