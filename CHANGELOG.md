@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.37.1] - 2026-06-09
+
+### 🐛 Bug Fixes
+
+- *(plugins)* Break reverse-RPC deadlock during plugin initialize
+
 ## [1.37.0] - 2026-06-09
 
 ### 🚀 Features
