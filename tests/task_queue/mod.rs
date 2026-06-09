@@ -231,7 +231,7 @@ async fn test_mark_failed_retry() {
         .expect("Failed to claim task");
 
     // Mark as failed (should retry)
-    TaskRepository::mark_failed(&db, task_id, "Test error".to_string())
+    TaskRepository::mark_failed(&db, task_id, "Test error".to_string(), None)
         .await
         .expect("Failed to mark failed");
 
@@ -266,7 +266,7 @@ async fn test_max_attempts_reached() {
     TaskRepository::claim_next(&db, "worker-1", 300)
         .await
         .expect("Failed to claim");
-    TaskRepository::mark_failed(&db, task_id, "Error 1".to_string())
+    TaskRepository::mark_failed(&db, task_id, "Error 1".to_string(), None)
         .await
         .expect("Failed to mark failed");
     // Reset scheduled_for to now so we can claim immediately
@@ -284,7 +284,7 @@ async fn test_max_attempts_reached() {
     TaskRepository::claim_next(&db, "worker-1", 300)
         .await
         .expect("Failed to claim");
-    TaskRepository::mark_failed(&db, task_id, "Error 2".to_string())
+    TaskRepository::mark_failed(&db, task_id, "Error 2".to_string(), None)
         .await
         .expect("Failed to mark failed");
     // Reset scheduled_for
@@ -302,7 +302,7 @@ async fn test_max_attempts_reached() {
     TaskRepository::claim_next(&db, "worker-1", 300)
         .await
         .expect("Failed to claim");
-    TaskRepository::mark_failed(&db, task_id, "Error 3".to_string())
+    TaskRepository::mark_failed(&db, task_id, "Error 3".to_string(), None)
         .await
         .expect("Failed to mark failed");
 
