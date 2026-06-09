@@ -21,6 +21,8 @@
  * implementation and assert.
  */
 
+import { logger } from "./logger.js";
+
 /** Discriminated fetch result. */
 export type FetchResult =
   | { kind: "ok"; body: string; etag: string | null; lastModified: string | null; status: 200 }
@@ -246,13 +248,16 @@ export async function fetchSubscriptionFeed(
 
   const signal = AbortSignal.timeout(timeoutMs);
 
+  logger.debug(`GET ${url}${previousEtag ? " (conditional)" : ""}`);
   let resp: Response;
   try {
     resp = await fetchImpl(url, { method: "GET", headers, signal });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown fetch error";
+    logger.debug(`fetch failed for ${url}: ${msg}`);
     return { kind: "error", status: 0, message: msg };
   }
+  logger.debug(`GET ${url} -> ${resp.status}`);
 
   if (resp.status === 304) {
     return { kind: "notModified", status: 304 };

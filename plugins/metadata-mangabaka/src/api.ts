@@ -3,18 +3,12 @@
  * API docs: https://mangabaka.org/api
  */
 
-import {
-  ApiError,
-  AuthError,
-  createLogger,
-  NotFoundError,
-  RateLimitError,
-} from "@ashdev/codex-plugin-sdk";
+import { ApiError, AuthError, NotFoundError, RateLimitError } from "@ashdev/codex-plugin-sdk";
+import { logger } from "./logger.js";
 import type { MbGetSeriesResponse, MbSearchResponse, MbSeries } from "./types.js";
 
 const BASE_URL = "https://api.mangabaka.dev";
 const DEFAULT_TIMEOUT_SECONDS = 60;
-const logger = createLogger({ name: "mangabaka-api", level: "debug" });
 
 export interface MangaBakaClientOptions {
   /** Request timeout in seconds (default: 60) */

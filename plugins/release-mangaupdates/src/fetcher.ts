@@ -13,6 +13,8 @@
  * implementation and assert.
  */
 
+import { logger } from "./logger.js";
+
 /** Discriminated fetch result. */
 export type FetchResult =
   | { kind: "ok"; body: string; etag: string | null; status: 200 }
@@ -99,6 +101,7 @@ export async function fetchSeriesFeed(
   // 22+).
   const signal = AbortSignal.timeout(timeoutMs);
 
+  logger.debug(`GET ${url}${previousEtag ? " (conditional)" : ""}`);
   let resp: Response;
   try {
     resp = await fetchImpl(url, { method: "GET", headers, signal });
@@ -107,8 +110,10 @@ export async function fetchSeriesFeed(
     // Treat aborts and other transport-level failures as 0/unavailable so
     // the host's per-host backoff layer can detect "this domain is sad
     // right now" without us having to invent a fake HTTP status.
+    logger.debug(`fetch failed for ${url}: ${msg}`);
     return { kind: "error", status: 0, message: msg };
   }
+  logger.debug(`GET ${url} -> ${resp.status}`);
 
   if (resp.status === 304) {
     return { kind: "notModified", status: 304 };

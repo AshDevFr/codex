@@ -32,7 +32,6 @@
  */
 
 import {
-  createLogger,
   createReleaseSourcePlugin,
   type HostRpcClient,
   HostRpcError,
@@ -50,11 +49,10 @@ import {
   subscriptionToSourceKey,
   type UploaderSubscription,
 } from "./fetcher.js";
+import { logger } from "./logger.js";
 import { DEFAULT_MIN_CONFIDENCE, DEFAULT_REQUEST_TIMEOUT_MS, manifest } from "./manifest.js";
 import { type AliasCandidate, type AliasMatch, matchSeriesAny } from "./matcher.js";
 import { type ParsedRssItem, parseFeed } from "./parser.js";
-
-const logger = createLogger({ name: manifest.name, level: "info" });
 
 // =============================================================================
 // Plugin-level state (set during initialize)
@@ -298,6 +296,9 @@ export async function pollSubscription(
 
   // result.kind === "ok"
   const items = parseFeed(result.body);
+  logger.debug(
+    `feed ${subscription.kind}:${subscription.identifier} parsed ${items.length} item(s) against ${candidates.length} tracked alias-set(s)`,
+  );
   let matched = 0;
   let recorded = 0;
   let deduped = 0;
@@ -313,6 +314,9 @@ export async function pollSubscription(
     });
     if (m === null) continue;
     matched++;
+    logger.debug(
+      `matched "${item.seriesGuess}" -> series ${m.seriesId} via alias "${m.matchedAlias}" (confidence ${m.confidence.toFixed(2)})`,
+    );
     const candidate = toCandidate(m, item, subscription);
     const outcome = await recordCandidate(rpc, sourceId, candidate);
     if (!outcome) continue;

@@ -12,7 +12,6 @@
  */
 
 import {
-  createLogger,
   createSyncPlugin,
   type ExternalUserInfo,
   type InitializeParams,
@@ -35,9 +34,8 @@ import {
   isoToFuzzyDate,
   syncStatusToAnilist,
 } from "./anilist.js";
+import { logger } from "./logger.js";
 import { manifest } from "./manifest.js";
-
-const logger = createLogger({ name: "sync-anilist", level: "debug" });
 
 // Plugin state (set during initialization)
 let client: AniListClient | null = null;

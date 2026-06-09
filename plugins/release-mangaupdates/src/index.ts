@@ -25,7 +25,6 @@
  */
 
 import {
-  createLogger,
   createReleaseSourcePlugin,
   type HostRpcClient,
   HostRpcError,
@@ -38,10 +37,9 @@ import {
 } from "@ashdev/codex-plugin-sdk";
 import { fetchSeriesFeed } from "./fetcher.js";
 import { parseCommaList, passesFilters, resolveFilters } from "./filter.js";
+import { logger } from "./logger.js";
 import { EXTERNAL_ID_SOURCE_MANGAUPDATES, manifest } from "./manifest.js";
 import { type ParsedRssItem, parseFeed } from "./parser.js";
-
-const logger = createLogger({ name: manifest.name, level: "info" });
 
 // =============================================================================
 // Plugin-level state (set during initialize)
@@ -370,11 +368,19 @@ export async function pollSeries(
     languages: effectiveLanguagesForSeries(entry),
     blockedGroups: options.blockedGroups,
   });
+  logger.debug(
+    `series ${entry.seriesId} (mu:${muId}) parsed ${items.length} item(s); filters langs=[${[...filters.languages].join(",")}] blockedGroups=${filters.blockedGroups.size}`,
+  );
   let matched = 0;
   let recorded = 0;
   let deduped = 0;
   for (const item of items) {
-    if (!passesFilters(item, filters)) continue;
+    if (!passesFilters(item, filters)) {
+      logger.debug(
+        `  filtered out vol=${item.volume ?? "-"} ch=${item.chapter ?? "-"} lang=${item.language} group=${item.group ?? "-"}`,
+      );
+      continue;
+    }
     matched++;
     const candidate = toCandidate(entry, item, channelLink);
     const outcome = await recordCandidate(rpc, sourceId, candidate);

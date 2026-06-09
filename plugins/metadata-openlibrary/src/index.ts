@@ -18,7 +18,6 @@ import {
   type BookMatchParams,
   type BookMetadataProvider,
   type BookSearchParams,
-  createLogger,
   createMetadataPlugin,
   type InitializeParams,
   type MetadataGetParams,
@@ -28,14 +27,13 @@ import {
 } from "@ashdev/codex-plugin-sdk";
 
 import { getEditionByIsbn, getWork, isValidIsbn, searchBooks } from "./api.js";
+import { logger } from "./logger.js";
 import { DEFAULT_MAX_RESULTS, manifest } from "./manifest.js";
 import {
   getFullBookMetadata,
   mapEditionToBookMetadata,
   mapSearchDocToSearchResult,
 } from "./mapper.js";
-
-const logger = createLogger({ name: "openlibrary", level: "info" });
 
 // Plugin configuration (set during initialization)
 const config = {
@@ -55,6 +53,9 @@ const bookProvider: BookMetadataProvider = {
   async search(params: BookSearchParams): Promise<MetadataSearchResponse> {
     const { isbn, query, author, limit } = params;
     const maxResults = Math.min(limit || config.maxResults, 50);
+    logger.debug(
+      `search: isbn=${isbn ?? "-"} query=${JSON.stringify(query ?? "")} author=${JSON.stringify(author ?? "")} maxResults=${maxResults}`,
+    );
 
     // If ISBN is provided, try direct lookup first
     if (isbn && isValidIsbn(isbn)) {
@@ -101,9 +102,13 @@ const bookProvider: BookMetadataProvider = {
     });
 
     if (!searchResponse?.docs?.length) {
+      logger.debug(`search: no results for query=${JSON.stringify(query)}`);
       return { results: [] };
     }
 
+    logger.debug(
+      `search: ${searchResponse.docs.length} result(s) for query=${JSON.stringify(query)}`,
+    );
     return {
       results: searchResponse.docs.map(mapSearchDocToSearchResult),
     };
@@ -118,6 +123,7 @@ const bookProvider: BookMetadataProvider = {
    */
   async get(params: MetadataGetParams): Promise<PluginBookMetadata> {
     const { externalId } = params;
+    logger.debug(`get: externalId=${externalId}`);
 
     // Try to get full metadata
     const metadata = await getFullBookMetadata(externalId);
@@ -125,6 +131,8 @@ const bookProvider: BookMetadataProvider = {
     if (metadata) {
       return metadata;
     }
+
+    logger.debug(`get: no full metadata for ${externalId}, returning minimal record`);
 
     // Fallback: return minimal metadata
     return {
@@ -160,12 +168,16 @@ const bookProvider: BookMetadataProvider = {
    */
   async match(params: BookMatchParams): Promise<MetadataMatchResponse> {
     const { title, authors, isbn, year } = params;
+    logger.debug(
+      `match: title=${JSON.stringify(title)} authors=${JSON.stringify(authors ?? [])} isbn=${isbn ?? "-"} year=${year ?? "-"}`,
+    );
 
     // Try ISBN first if available
     if (isbn && isValidIsbn(isbn)) {
       const edition = await getEditionByIsbn(isbn);
 
       if (edition) {
+        logger.debug(`match: ISBN ${isbn} resolved directly (confidence 0.99)`);
         const workKey = edition.works?.[0]?.key;
         const workData = workKey ? await getWork(workKey) : null;
         const metadata = await mapEditionToBookMetadata(edition, workData);
@@ -231,6 +243,9 @@ const bookProvider: BookMetadataProvider = {
     // Reduce confidence without ISBN
     confidence = Math.min(confidence, 0.85);
 
+    logger.debug(
+      `match: best=${JSON.stringify(bestMatch.title)} confidence=${confidence.toFixed(2)} (${results.length} candidate(s))`,
+    );
     return {
       match: bestMatch,
       confidence,

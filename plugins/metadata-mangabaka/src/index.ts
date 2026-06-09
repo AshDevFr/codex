@@ -12,7 +12,6 @@
 
 import {
   ConfigError,
-  createLogger,
   createMetadataPlugin,
   type InitializeParams,
   type MetadataProvider,
@@ -21,9 +20,8 @@ import { MangaBakaClient } from "./api.js";
 import { handleGet } from "./handlers/get.js";
 import { handleMatch } from "./handlers/match.js";
 import { handleSearch } from "./handlers/search.js";
+import { logger } from "./logger.js";
 import { manifest } from "./manifest.js";
-
-const logger = createLogger({ name: "mangabaka", level: "info" });
 
 // Client is initialized when we receive credentials from Codex
 let client: MangaBakaClient | null = null;

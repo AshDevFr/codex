@@ -1,14 +1,12 @@
-import {
-  createLogger,
-  type MetadataMatchParams,
-  type MetadataMatchResponse,
-  type SearchResult,
+import type {
+  MetadataMatchParams,
+  MetadataMatchResponse,
+  SearchResult,
 } from "@ashdev/codex-plugin-sdk";
 import type { MangaBakaClient } from "../api.js";
+import { logger } from "../logger.js";
 import { mapSearchResult } from "../mappers.js";
 import { similarity } from "../similarity.js";
-
-const logger = createLogger({ name: "mangabaka-match", level: "info" });
 
 /**
  * Score a search result against the match parameters
@@ -58,6 +56,7 @@ export async function handleMatch(
   const response = await client.search(params.title, 1, 10);
 
   if (response.data.length === 0) {
+    logger.debug(`No candidates returned for "${params.title}"`);
     return {
       match: null,
       confidence: 0,
@@ -81,6 +80,10 @@ export async function handleMatch(
       confidence: 0,
     };
   }
+
+  logger.debug(
+    `Best match for "${params.title}": "${best.result.title}" score=${best.score.toFixed(3)} (${scoredResults.length} candidate(s))`,
+  );
 
   // If confidence is low, include alternatives
   const alternatives =

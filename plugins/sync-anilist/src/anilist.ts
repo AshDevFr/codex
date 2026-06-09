@@ -6,8 +6,14 @@
  */
 
 import { ApiError, AuthError, RateLimitError } from "@ashdev/codex-plugin-sdk";
+import { logger } from "./logger.js";
 
 const ANILIST_API_URL = "https://graphql.anilist.co";
+
+/** First non-empty line of a GraphQL document, for compact debug labels. */
+function opLabel(queryStr: string): string {
+  return queryStr.trim().split("\n")[0].slice(0, 70);
+}
 
 // =============================================================================
 // GraphQL Queries
@@ -205,6 +211,9 @@ export class AniListClient {
     variables: Record<string, unknown> | undefined,
     allowRetry: boolean,
   ): Promise<T> {
+    logger.debug(
+      `GraphQL ${opLabel(queryStr)} vars=${variables ? JSON.stringify(variables) : "{}"}`,
+    );
     let response: Response;
     try {
       response = await fetch(ANILIST_API_URL, {
@@ -234,6 +243,7 @@ export class AniListClient {
       const waitSeconds = Number.isNaN(retrySeconds) ? 60 : retrySeconds;
 
       if (allowRetry) {
+        logger.debug(`429 rate-limited; retrying after ${waitSeconds}s`);
         await new Promise((resolve) => setTimeout(resolve, waitSeconds * 1000));
         return this.executeQuery<T>(queryStr, variables, false);
       }

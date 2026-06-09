@@ -9,6 +9,7 @@
  * @see https://openlibrary.org/developers/api
  */
 
+import { logger } from "./logger.js";
 import type {
   OLAuthor,
   OLEdition,
@@ -57,10 +58,12 @@ async function fetchJson<T>(url: string, description: string): Promise<T | null>
   // Check cache first
   const cached = getCached<T>(url);
   if (cached !== null) {
+    logger.debug(`cache hit: ${description}`);
     return cached;
   }
 
   try {
+    logger.debug(`GET ${url} (${description})`);
     const response = await fetch(url, {
       headers: {
         "User-Agent": "Codex/1.0 (https://github.com/AshDevFr/codex; codex-plugin)",
@@ -70,6 +73,7 @@ async function fetchJson<T>(url: string, description: string): Promise<T | null>
 
     if (!response.ok) {
       if (response.status === 404) {
+        logger.debug(`404 not found: ${description}`);
         return null;
       }
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -77,9 +81,10 @@ async function fetchJson<T>(url: string, description: string): Promise<T | null>
 
     const data = (await response.json()) as T;
     setCache(url, data);
+    logger.debug(`${response.status} OK, cached: ${description}`);
     return data;
   } catch (error) {
-    console.error(`[openlibrary] Failed to fetch ${description}:`, error);
+    logger.error(`Failed to fetch ${description}`, error);
     return null;
   }
 }

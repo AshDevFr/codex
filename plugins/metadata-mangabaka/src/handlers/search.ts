@@ -1,14 +1,12 @@
-import {
-  createLogger,
-  type MetadataSearchParams,
-  type MetadataSearchResponse,
-  type SearchResult,
+import type {
+  MetadataSearchParams,
+  MetadataSearchResponse,
+  SearchResult,
 } from "@ashdev/codex-plugin-sdk";
 import type { MangaBakaClient } from "../api.js";
+import { logger } from "../logger.js";
 import { mapSearchResult } from "../mappers.js";
 import { similarity } from "../similarity.js";
-
-const logger = createLogger({ name: "mangabaka-search", level: "debug" });
 
 /** MangaBaka API enforces a maximum of 50 results per request */
 const MAX_LIMIT = 50;
@@ -53,6 +51,9 @@ export async function handleSearch(
   const hasNextPage = response.page < response.totalPages;
   const nextCursor = hasNextPage ? String(response.page + 1) : undefined;
 
+  logger.debug(
+    `Search "${params.query}" -> ${results.length} result(s), page ${response.page}/${response.totalPages}${nextCursor ? " (more)" : ""}`,
+  );
   return {
     results,
     nextCursor,
