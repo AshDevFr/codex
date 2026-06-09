@@ -1,14 +1,7 @@
-import { HostRpcClient, type PluginStorage } from "@ashdev/codex-plugin-sdk";
+import { HostRpcClient } from "@ashdev/codex-plugin-sdk";
 import { describe, expect, it, vi } from "vitest";
 import type { FeedItem, FeedResponse } from "./fetcher.js";
-import {
-  CURSOR_STORAGE_KEY,
-  loadCursor,
-  normalizeBaseUrl,
-  poll,
-  registerSources,
-  saveCursor,
-} from "./index.js";
+import { normalizeBaseUrl, poll, registerSources } from "./index.js";
 
 // -----------------------------------------------------------------------------
 // Mock host RPC
@@ -83,68 +76,6 @@ describe("normalizeBaseUrl", () => {
 });
 
 // -----------------------------------------------------------------------------
-// Cursor persistence (system-scoped KV store)
-// -----------------------------------------------------------------------------
-
-/** A stateful in-memory `PluginStorage` double recording every `set`. */
-function makeStorage(initialCursor: string | null = null): {
-  storage: PluginStorage;
-  sets: string[];
-} {
-  let value = initialCursor;
-  const sets: string[] = [];
-  const storage = {
-    get: vi.fn(async () => ({ data: value })),
-    set: vi.fn(async (_key: string, data: unknown) => {
-      value = data as string;
-      sets.push(value);
-      return { success: true };
-    }),
-  } as unknown as PluginStorage;
-  return { storage, sets };
-}
-
-describe("loadCursor", () => {
-  it("returns the stored cursor string", async () => {
-    const { storage } = makeStorage("cursor-42");
-    expect(await loadCursor(storage)).toBe("cursor-42");
-  });
-
-  it("returns null when nothing is stored", async () => {
-    expect(await loadCursor(makeStorage(null).storage)).toBeNull();
-  });
-
-  it("returns null and does not throw when the read fails", async () => {
-    const storage = {
-      get: vi.fn(async () => {
-        throw new Error("kv down");
-      }),
-      set: vi.fn(),
-    } as unknown as PluginStorage;
-    expect(await loadCursor(storage)).toBeNull();
-  });
-});
-
-describe("saveCursor", () => {
-  it("writes the cursor under the feed-cursor key", async () => {
-    const { storage, sets } = makeStorage();
-    await saveCursor(storage, "cursor-99");
-    expect(sets).toEqual(["cursor-99"]);
-    expect((storage.set as ReturnType<typeof vi.fn>).mock.calls[0][0]).toBe(CURSOR_STORAGE_KEY);
-  });
-
-  it("swallows a write failure without throwing", async () => {
-    const storage = {
-      get: vi.fn(),
-      set: vi.fn(async () => {
-        throw new Error("kv full");
-      }),
-    } as unknown as PluginStorage;
-    await expect(saveCursor(storage, "cursor-99")).resolves.toBeUndefined();
-  });
-});
-
-// -----------------------------------------------------------------------------
 // registerSources
 // -----------------------------------------------------------------------------
 
@@ -184,15 +115,19 @@ describe("registerSources", () => {
 
 type PageOrError = FeedResponse | { errorStatus: number };
 
-/** A `fetch` impl that returns the given pages/errors in order, then empties. */
+/**
+ * A `fetch` impl that returns the given pages/errors in order, then empties.
+ * Captures each POST request body so tests can assert the posted filter set
+ * and the in-poll pagination cursor.
+ */
 function makeFetchSequence(pages: PageOrError[]): {
   fetchImpl: typeof fetch;
-  urls: string[];
+  bodies: Array<Record<string, unknown>>;
 } {
-  const urls: string[] = [];
+  const bodies: Array<Record<string, unknown>> = [];
   let i = 0;
-  const fetchImpl = vi.fn(async (url: string) => {
-    urls.push(url);
+  const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
+    bodies.push(init?.body ? JSON.parse(init.body as string) : {});
     const page = pages[i++] ?? { items: [], hasMore: false, nextCursor: null };
     if ("errorStatus" in page) {
       return new Response("err", { status: page.errorStatus });
@@ -202,7 +137,7 @@ function makeFetchSequence(pages: PageOrError[]): {
       headers: { "content-type": "application/json" },
     });
   }) as unknown as typeof fetch;
-  return { fetchImpl, urls };
+  return { fetchImpl, bodies };
 }
 
 function item(
@@ -250,8 +185,7 @@ function makePollRpc(opts: {
   });
 }
 
-const pollDeps = (fetchImpl: typeof fetch, storage: PluginStorage) => ({
-  storage,
+const pollDeps = (fetchImpl: typeof fetch) => ({
   baseUrl: "https://t.example.com",
   language: "en",
   pageLimit: 100,
@@ -260,15 +194,14 @@ const pollDeps = (fetchImpl: typeof fetch, storage: PluginStorage) => ({
 });
 
 describe("poll", () => {
-  it("walks pages, matches by external id, records, and persists the cursor per page", async () => {
+  it("posts the tracked external-id filter, walks pages, and records matches", async () => {
     const { rpc } = makePollRpc({
       tracked: [
         { seriesId: "uuid-a", externalIds: { mangabaka: "9741" } },
         { seriesId: "uuid-b", externalIds: { mangabaka: "5555" } },
       ],
     });
-    const { storage, sets } = makeStorage();
-    const { fetchImpl } = makeFetchSequence([
+    const { fetchImpl, bodies } = makeFetchSequence([
       {
         items: [item(87, "mangabaka", "9741", 16), item(99, "anilist", "999")],
         hasMore: true,
@@ -277,7 +210,7 @@ describe("poll", () => {
       { items: [item(88, "mangabaka", "5555", 3)], hasMore: false, nextCursor: "c2" },
     ]);
 
-    const res = await poll({ sourceId: "src-1" }, rpc, pollDeps(fetchImpl, storage));
+    const res = await poll({ sourceId: "src-1" }, rpc, pollDeps(fetchImpl));
 
     expect(res).toMatchObject({
       parsed: 3, // 87, 99, 88
@@ -286,7 +219,23 @@ describe("poll", () => {
       deduped: 0,
       upstreamStatus: 200,
     });
-    expect(sets).toEqual(["c1", "c2"]);
+    // Posted the tracked external-id filter, and paginated within the poll
+    // (first page cursor null, second page the prior response's nextCursor).
+    expect(new Set(bodies[0].externalIds as string[])).toEqual(
+      new Set(["mangabaka:9741", "mangabaka:5555"]),
+    );
+    expect(bodies[0].cursor).toBeNull();
+    expect(bodies[1].cursor).toBe("c1");
+  });
+
+  it("skips the fetch entirely when no tracked series carry a known id", async () => {
+    const { rpc } = makePollRpc({ tracked: [] });
+    const { fetchImpl, bodies } = makeFetchSequence([{ items: [], hasMore: false }]);
+
+    const res = await poll({ sourceId: "src-1" }, rpc, pollDeps(fetchImpl));
+    expect(res).toMatchObject({ parsed: 0, matched: 0, recorded: 0 });
+    // Never POSTed — an empty filter would mean "whole catalog" upstream.
+    expect(bodies).toHaveLength(0);
   });
 
   it("counts host dedup separately from inserts", async () => {
@@ -294,12 +243,11 @@ describe("poll", () => {
       tracked: [{ seriesId: "uuid-a", externalIds: { mangabaka: "9741" } }],
       onRecord: () => ({ ledgerId: "l1", deduped: true }),
     });
-    const { storage } = makeStorage();
     const { fetchImpl } = makeFetchSequence([
       { items: [item(87, "mangabaka", "9741", 16)], hasMore: false, nextCursor: "c1" },
     ]);
 
-    const res = await poll({ sourceId: "src-1" }, rpc, pollDeps(fetchImpl, storage));
+    const res = await poll({ sourceId: "src-1" }, rpc, pollDeps(fetchImpl));
     expect(res).toMatchObject({ matched: 1, recorded: 0, deduped: 1 });
   });
 
@@ -310,7 +258,6 @@ describe("poll", () => {
     const { rpc, calls } = makePollRpc({
       tracked: [{ seriesId: "uuid-a", externalIds: { mangabaka: "9741", mal: "555" } }],
     });
-    const { storage } = makeStorage();
     const { fetchImpl } = makeFetchSequence([
       {
         items: [item(87, "mangabaka", "9741", 16), item(88, "mal", "555", 9)],
@@ -319,7 +266,7 @@ describe("poll", () => {
       },
     ]);
 
-    const res = await poll({ sourceId: "src-1" }, rpc, pollDeps(fetchImpl, storage));
+    const res = await poll({ sourceId: "src-1" }, rpc, pollDeps(fetchImpl));
     expect(res).toMatchObject({ parsed: 2, matched: 1, recorded: 1 });
 
     const recordCalls = calls.filter((c) => c.method === "releases/record");
@@ -335,7 +282,6 @@ describe("poll", () => {
     const { rpc, calls } = makePollRpc({
       tracked: [{ seriesId: "uuid-a", externalIds: { mal: "555" } }],
     });
-    const { storage } = makeStorage();
     const { fetchImpl } = makeFetchSequence([
       {
         items: [item(87, "mal", "555", 16), item(88, "mal", "555", 9)],
@@ -344,7 +290,7 @@ describe("poll", () => {
       },
     ]);
 
-    const res = await poll({ sourceId: "src-1" }, rpc, pollDeps(fetchImpl, storage));
+    const res = await poll({ sourceId: "src-1" }, rpc, pollDeps(fetchImpl));
     expect(res).toMatchObject({ parsed: 2, matched: 0, recorded: 0 });
     expect(calls.some((c) => c.method === "releases/record")).toBe(false);
   });
@@ -353,12 +299,11 @@ describe("poll", () => {
     const { rpc, calls } = makePollRpc({
       tracked: [{ seriesId: "uuid-a", externalIds: { mangabaka: "9741" } }],
     });
-    const { storage } = makeStorage();
     const { fetchImpl } = makeFetchSequence([
       { items: [item(99, "anilist", "999")], hasMore: false, nextCursor: "c1" },
     ]);
 
-    const res = await poll({ sourceId: "src-1" }, rpc, pollDeps(fetchImpl, storage));
+    const res = await poll({ sourceId: "src-1" }, rpc, pollDeps(fetchImpl));
     expect(res).toMatchObject({ parsed: 1, matched: 0, recorded: 0 });
     expect(calls.some((c) => c.method === "releases/record")).toBe(false);
   });
@@ -368,57 +313,38 @@ describe("poll", () => {
       tracked: [{ seriesId: "uuid-a", externalIds: { mangabaka: "9741" } }],
       onRecord: () => ({ __error: { code: -32000, message: "ledger down" } }),
     });
-    const { storage, sets } = makeStorage();
     const { fetchImpl } = makeFetchSequence([
       { items: [item(87, "mangabaka", "9741", 16)], hasMore: false, nextCursor: "c1" },
     ]);
 
-    const res = await poll({ sourceId: "src-1" }, rpc, pollDeps(fetchImpl, storage));
+    const res = await poll({ sourceId: "src-1" }, rpc, pollDeps(fetchImpl));
     expect(res).toMatchObject({ parsed: 1, matched: 1, recorded: 0, deduped: 0 });
-    expect(sets).toEqual(["c1"]); // walk still completed and advanced the cursor
-  });
-
-  it("resumes from the cursor stored in the KV store", async () => {
-    const { rpc } = makePollRpc({ tracked: [] });
-    const { storage } = makeStorage("resume-here");
-    const { fetchImpl, urls } = makeFetchSequence([
-      { items: [], hasMore: false, nextCursor: null },
-    ]);
-
-    await poll({ sourceId: "src-1" }, rpc, pollDeps(fetchImpl, storage));
-    expect(new URL(urls[0]).searchParams.get("cursor")).toBe("resume-here");
   });
 
   it("throws when even the first page can't be fetched (so the source shows last_error)", async () => {
     const { rpc } = makePollRpc({
       tracked: [{ seriesId: "uuid-a", externalIds: { mangabaka: "9741" } }],
     });
-    const { storage, sets } = makeStorage();
     const { fetchImpl } = makeFetchSequence([{ errorStatus: 503 }]);
 
-    await expect(poll({ sourceId: "src-1" }, rpc, pollDeps(fetchImpl, storage))).rejects.toThrow(
-      /503/,
-    );
-    expect(sets).toEqual([]); // nothing persisted on a hard failure
+    await expect(poll({ sourceId: "src-1" }, rpc, pollDeps(fetchImpl))).rejects.toThrow(/503/);
   });
 
   it("stops without throwing on a mid-walk fetch error, keeping prior progress", async () => {
     const { rpc } = makePollRpc({
       tracked: [{ seriesId: "uuid-a", externalIds: { mangabaka: "9741" } }],
     });
-    const { storage, sets } = makeStorage();
     const { fetchImpl } = makeFetchSequence([
       { items: [item(87, "mangabaka", "9741", 16)], hasMore: true, nextCursor: "c1" },
       { errorStatus: 503 },
     ]);
 
-    const res = await poll({ sourceId: "src-1" }, rpc, pollDeps(fetchImpl, storage));
+    const res = await poll({ sourceId: "src-1" }, rpc, pollDeps(fetchImpl));
     expect(res).toMatchObject({
       parsed: 1,
       matched: 1,
       recorded: 1,
       upstreamStatus: 503,
     });
-    expect(sets).toEqual(["c1"]);
   });
 });

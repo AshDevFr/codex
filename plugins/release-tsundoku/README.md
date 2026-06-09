@@ -15,10 +15,12 @@ incremental series feed. **Notification-only** — Codex does not download anyth
   agreement wins. So a trusted disagreement (different MangaBaka IDs) overrides
   a sloppy agreement (a shared MAL ID), and genuinely ambiguous ties are
   skipped rather than mis-attributed.
-- **Incremental, cursor-based.** Walks Tsundoku's keyset-paginated
-  `/api/v1/series/feed`, persisting its position in the plugin's
-  (system-scoped) KV store so each poll only processes activity since the last
-  run.
+- **Filtered feed, no stored cursor.** Each poll `POST`s your tracked series'
+  `provider:externalId` set to Tsundoku's filtered `/api/v1/series/feed`, so the
+  response contains only your series (not the whole catalog). There's no
+  persisted cursor — every poll re-evaluates your tracked set's current
+  coverage and lets Codex dedup unchanged releases. Newly tracked series are
+  picked up automatically and untracked ones drop out, with no bookkeeping.
 - **Volume- and chapter-aware.** The feed's merged, gap-preserving coverage
   spans map directly onto Codex's release model.
 
@@ -69,24 +71,25 @@ providers, in match-priority order:
 
 On each poll the plugin:
 
-1. Loads its stored feed cursor from the plugin's system-scoped KV store
-   (`feed_cursor`).
-2. Builds a reverse index (`provider:id → Codex series`) from your tracked
-   series via the host's `releases/list_tracked`.
-3. Walks the feed from the cursor. Each item is matched to a tracked series by
-   weighted external-ID voting (see Features); on a confident match it records a
-   release candidate whose `volumes`/`chapters` mirror the item's coverage and
-   whose confidence reflects the vote. When several feed entries map to the same
-   Codex series, only the best-scoring one is recorded (ties are skipped). The
-   cursor is persisted after each processed page, so an interrupted walk resumes
-   cleanly.
+1. Builds a match context from your tracked series via the host's
+   `releases/list_tracked`, and derives the `provider:externalId` filter set.
+2. `POST`s that filter to `/api/v1/series/feed`, paginating through the response
+   (cursor used only within the poll; nothing is persisted). The response is
+   narrowed to your tracked series.
+3. Matches each returned item to a tracked series by weighted external-ID voting
+   (see Features); on a confident match it records a release candidate whose
+   `volumes`/`chapters` mirror the item's coverage and whose confidence reflects
+   the vote. When several feed entries map to the same Codex series, only the
+   best-scoring one is recorded (ambiguous ties are skipped).
 4. Reports counters back to the host; the host applies its own threshold,
    auto-ignore (for coverage you already own), and dedup.
 
 The candidate's dedup key is the coverage high-water mark
 (`tsundoku:{seriesId}:v{highestVolume}:c{highestChapter}`), so a new
 announcement fires only when the frontier advances; re-delivery of the same
-coverage dedups host-side.
+coverage dedups host-side. Because each poll re-evaluates the full tracked set,
+**newly tracked series are backfilled on the next poll** and untracked ones stop
+without any cursor bookkeeping.
 
 If the very first feed page can't be fetched (e.g. `baseUrl` is wrong or the
 instance is unreachable), the poll fails and the source shows `last_error` in
@@ -100,10 +103,11 @@ container can resolve (e.g. `http://host.docker.internal:<port>`), not
 - **Default language.** Tsundoku tracks official release coverage and carries no
   language, so every candidate uses `defaultLanguage` (`en` unless overridden).
   Per-series language preferences still gate the high-water mark host-side.
-- **Incremental backfill gap.** Because the walk is cursor-based, a series you
-  start tracking *after* its last Tsundoku coverage change won't get a catch-up
-  announcement until it changes again. This is correct for "new releases going
-  forward"; a full backfill would require resetting the cursor.
+- **Full re-walk each poll.** Each poll re-fetches the current coverage of your
+  whole tracked set (filtered server-side, so only your series). Cheap at
+  typical sizes and polled a few times a day; if it ever needs to scale, an
+  incremental cursor could be reintroduced (with explicit invalidation on
+  track/untrack).
 - **High-water dedup.** A filled interior gap that doesn't move the highest
   volume/chapter won't re-announce.
 

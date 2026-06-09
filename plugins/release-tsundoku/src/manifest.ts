@@ -2,27 +2,32 @@ import type { PluginManifest } from "@ashdev/codex-plugin-sdk";
 import packageJson from "../package.json" with { type: "json" };
 
 /**
- * External-ID source names Tsundoku exposes on each feed item, in match
- * priority order (most canonical first). These are the *bare* service names
- * (no `api:` / `plugin:` prefix): the host strips the stored prefix before
- * filtering, so a manifest `requiresExternalIds` entry of `"mangabaka"`
- * matches a series whose ID was stored as `api:mangabaka` or
- * `plugin:mangabaka`.
+ * Maps a Codex external-ID source name to the provider name the Tsundoku feed
+ * uses. Codex stores some sources under different names than Tsundoku emits
+ * (e.g. Codex `myanimelist` ↔ Tsundoku `mal`), so we translate when building
+ * the match index and the feed filter. Identity for names that already agree.
  *
- * The order matters only for the candidate's `reason` string — the first
- * provider that resolves a tracked series wins. MangaBaka is the dominant
- * cross-reference hub in Codex, so it leads.
+ * The keys are the *bare* Codex source names — the host strips the stored
+ * `api:` / `plugin:` prefix before matching `requiresExternalIds`, so a series
+ * stored as `api:myanimelist` is delivered to us as `myanimelist`.
  */
-export const TSUNDOKU_EXTERNAL_ID_SOURCES = [
-  "mangabaka",
-  "anilist",
-  "mal",
-  "mangaupdates",
-  "kitsu",
-  "shikimori",
-  "anime_planet",
-  "anime_news_network",
-] as const;
+export const CODEX_TO_TSUNDOKU_PROVIDER: Record<string, string> = {
+  mangabaka: "mangabaka",
+  anilist: "anilist",
+  myanimelist: "mal",
+  mangaupdates: "mangaupdates",
+  kitsu: "kitsu",
+  shikimori: "shikimori",
+  animeplanet: "anime_planet",
+  animenewsnetwork: "anime_news_network",
+};
+
+/**
+ * The Codex source names the plugin asks the host for via
+ * `requiresExternalIds`. These must be the names Codex *stores* (the map keys),
+ * not Tsundoku's — the host filters `series_external_ids.source` against them.
+ */
+export const CODEX_EXTERNAL_ID_SOURCES = Object.keys(CODEX_TO_TSUNDOKU_PROVIDER);
 
 export const manifest = {
   name: "release-tsundoku",
@@ -37,7 +42,7 @@ export const manifest = {
     releaseSource: {
       kinds: ["api-feed"],
       requiresAliases: false,
-      requiresExternalIds: [...TSUNDOKU_EXTERNAL_ID_SOURCES],
+      requiresExternalIds: [...CODEX_EXTERNAL_ID_SOURCES],
       canAnnounceChapters: true,
       canAnnounceVolumes: true,
     },
