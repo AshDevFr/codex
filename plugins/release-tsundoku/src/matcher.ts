@@ -17,6 +17,7 @@
 
 import type { TrackedSeriesEntry } from "@ashdev/codex-plugin-sdk";
 import type { FeedItem } from "./fetcher.js";
+import { CODEX_TO_TSUNDOKU_PROVIDER } from "./manifest.js";
 
 /**
  * Vote weight per provider — higher means more trusted as a match signal.
@@ -70,8 +71,12 @@ export function buildMatchContext(entries: TrackedSeriesEntry[]): MatchContext {
     const ids = entry.externalIds;
     if (!ids) continue;
     const map = new Map<string, string>();
-    for (const [provider, externalId] of Object.entries(ids)) {
+    for (const [codexProvider, externalId] of Object.entries(ids)) {
       if (!externalId) continue;
+      // Translate the Codex source name to Tsundoku's provider name so both
+      // the index keys and the feed filter line up with what the feed emits
+      // (e.g. Codex `myanimelist` -> Tsundoku `mal`).
+      const provider = CODEX_TO_TSUNDOKU_PROVIDER[codexProvider] ?? codexProvider;
       map.set(provider, externalId);
       const key = indexKey(provider, externalId);
       const arr = byKey.get(key);

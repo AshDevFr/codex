@@ -1,15 +1,18 @@
 /**
  * Tsundoku series-feed fetcher.
  *
- * Wraps `fetch` against `GET {baseUrl}/api/v1/series/feed` with a hard
+ * Wraps `fetch` against `POST {baseUrl}/api/v1/series/feed` with a hard
  * timeout and JSON parsing, returning a discriminated result so the caller
  * can act on a parsed page (`ok`) or surface the upstream status back to the
  * host's per-host backoff layer (`error`).
  *
- * The feed is keyset-paginated: pass the previous response's `nextCursor`
- * back as `cursor` and walk while `hasMore` is true. Network and parsing are
- * the only side effects; nothing here touches storage, the host, or process
- * state, which keeps it trivially testable with a mocked `fetch`.
+ * We use the filtered `POST` variant — the body carries the consumer's
+ * `provider:externalId` set so the feed returns only the tracked series, not
+ * the whole catalog. The response is keyset-paginated: walk while `hasMore` is
+ * true, passing `nextCursor` back as `cursor`. That cursor paginates *within a
+ * single poll* and is not persisted — each poll re-walks the tracked set's
+ * current coverage and relies on host-side dedup. Network and parsing are the
+ * only side effects, which keeps it trivially testable with a mocked `fetch`.
  */
 
 // =============================================================================
@@ -78,50 +81,64 @@ export const FEED_PATH = "/api/v1/series/feed";
 
 const DEFAULT_TIMEOUT_MS = 10_000;
 
-/**
- * Build the feed URL for a page. Defensively strips trailing slashes off
- * `baseUrl` so callers don't have to. `limit` is always sent; `cursor` is
- * sent only when non-empty (its absence starts the walk from the beginning).
- */
-export function feedUrl(baseUrl: string, cursor: string | null, limit: number): string {
-  const base = baseUrl.replace(/\/+$/, "");
-  const params = new URLSearchParams();
-  params.set("limit", String(limit));
-  if (cursor) {
-    params.set("cursor", cursor);
-  }
-  return `${base}${FEED_PATH}?${params.toString()}`;
+/** Body for one `POST /series/feed` page. */
+export interface FeedRequest {
+  /**
+   * `provider:externalId` filter — the feed is narrowed to series carrying one
+   * of these. Must be non-empty (an empty list means "no filter" upstream,
+   * i.e. the whole catalog — callers guard against that).
+   */
+  externalIds: string[];
+  /** Pagination cursor within this poll. `null` starts at the beginning. */
+  cursor: string | null;
+  /** Page size (the caller clamps to 1..=500). */
+  limit: number;
+}
+
+/** Build the feed endpoint URL (trailing slashes on `baseUrl` tolerated). */
+export function feedUrl(baseUrl: string): string {
+  return `${baseUrl.replace(/\/+$/, "")}${FEED_PATH}`;
 }
 
 /**
- * Fetch one page of the Tsundoku series feed.
+ * Fetch one page of the filtered Tsundoku series feed via `POST`.
+ *
+ * We post the tracked `externalIds` set so the feed returns only the
+ * consumer's series (not the whole catalog). The `cursor` is for pagination
+ * *within a single poll* — it is not persisted across polls; each poll walks
+ * the current coverage of the tracked set and relies on host-side dedup to
+ * suppress unchanged releases.
  *
  * @param baseUrl - Tsundoku instance base URL (trailing slash tolerated).
- * @param cursor - Cursor from the previous page, or null to start over.
- * @param limit - Page size (the caller is responsible for clamping to 1..=500).
+ * @param req - Filter set + pagination cursor + page size.
  * @param opts - Fetcher options (custom fetch, timeout).
  */
 export async function fetchFeedPage(
   baseUrl: string,
-  cursor: string | null,
-  limit: number,
+  req: FeedRequest,
   opts: FeedFetcherOptions = {},
 ): Promise<FeedFetchResult> {
   const fetchImpl = opts.fetchImpl ?? globalThis.fetch;
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
-  const url = feedUrl(baseUrl, cursor, limit);
+  const url = feedUrl(baseUrl);
   const headers: Record<string, string> = {
     Accept: "application/json",
+    "Content-Type": "application/json",
     "User-Agent": "Codex-ReleaseTracker/1.0 (+https://github.com/AshDevFr/codex)",
   };
+  const body = JSON.stringify({
+    externalIds: req.externalIds,
+    cursor: req.cursor,
+    limit: req.limit,
+  });
 
   // AbortSignal.timeout is the cleanest path; we already require Node 22+.
   const signal = AbortSignal.timeout(timeoutMs);
 
   let resp: Response;
   try {
-    resp = await fetchImpl(url, { method: "GET", headers, signal });
+    resp = await fetchImpl(url, { method: "POST", headers, body, signal });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown fetch error";
     // Aborts and transport-level failures map to 0/unavailable so the host's

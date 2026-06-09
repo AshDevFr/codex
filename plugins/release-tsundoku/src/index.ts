@@ -1,26 +1,27 @@
 /**
  * Tsundoku API-feed release-source plugin for Codex.
  *
- * Tsundoku exposes a single, catalog-wide incremental feed
- * (`GET /api/v1/series/feed`) ordered by `(updatedAt, id)` and walked with an
- * opaque keyset cursor. Each item carries the provider external IDs Codex
- * matches on plus the merged volume/chapter coverage for the series. This
- * plugin polls that feed, matches each item to a tracked Codex series by
- * *exact* external ID (no fuzzy matching), and records release candidates.
+ * Tsundoku exposes a series feed at `/api/v1/series/feed` carrying, per series,
+ * the provider external IDs Codex matches on plus the merged volume/chapter
+ * coverage. This plugin polls the **filtered** `POST` variant, matches each
+ * returned series to a tracked Codex series by weighted external-ID voting, and
+ * records release candidates.
  *
- * Unlike the per-series RSS plugins (MangaUpdates, Nyaa), the feed is not
- * scoped to the user's tracked series — it's the whole Tsundoku catalog's
- * recent activity. So each poll:
- *   1. Loads the stored cursor from the plugin KV store.
- *   2. Builds a reverse index `"provider:id" -> codexSeriesId` from the
- *      host's `releases/list_tracked` rows (scoped by `requiresExternalIds`).
- *   3. Walks the feed from the cursor, matching each item against the index
- *      and streaming matches via `releases/record`.
- *   4. Persists the advancing cursor back to the KV store.
+ * Each poll:
+ *   1. Builds a match context from the host's `releases/list_tracked` rows
+ *      (scoped by `requiresExternalIds`) and derives the `provider:externalId`
+ *      filter set.
+ *   2. `POST`s that filter to `/series/feed`, so the response contains only the
+ *      tracked series — not the whole catalog. There is no persisted cursor:
+ *      each poll re-walks the tracked set's current coverage and relies on
+ *      host-side dedup to suppress unchanged releases. This keeps newly
+ *      tracked series backfilled and untracked ones dropped, automatically.
+ *   3. Matches each item (weighted voting), resolves cross-item (one feed entry
+ *      per Codex series), and records via `releases/record`.
  *
- * The feed walk and matching land in dedicated modules (`fetcher`,
- * `matcher`, `candidate`); this entry point owns plugin lifecycle, config,
- * source registration, and the poll orchestration that ties them together.
+ * The fetch, matching, and candidate mapping live in dedicated modules
+ * (`fetcher`, `matcher`, `candidate`); this entry point owns plugin lifecycle,
+ * config, source registration, and the poll orchestration.
  */
 
 import {
@@ -29,7 +30,6 @@ import {
   type HostRpcClient,
   HostRpcError,
   type InitializeParams,
-  type PluginStorage,
   RELEASES_METHODS,
   type ReleaseCandidate,
   type ReleasePollRequest,
@@ -39,12 +39,9 @@ import {
 import { feedItemToCandidate } from "./candidate.js";
 import { type FeedItem, fetchFeedPage } from "./fetcher.js";
 import { manifest } from "./manifest.js";
-import { buildMatchContext, type MatchResult, matchItem } from "./matcher.js";
+import { buildMatchContext, externalIdFilter, type MatchResult, matchItem } from "./matcher.js";
 
 const logger = createLogger({ name: manifest.name, level: "info" });
-
-/** KV-store key under which the feed cursor bookmark is persisted. */
-export const CURSOR_STORAGE_KEY = "feed_cursor";
 
 /** Default feed page size when config omits / mis-types `pageLimit`. */
 const DEFAULT_PAGE_LIMIT = 100;
@@ -62,8 +59,6 @@ const DEFAULT_LANGUAGE = "en";
 
 interface PluginState {
   hostRpc: HostRpcClient | null;
-  /** Per-plugin (system-scoped) KV store for the feed cursor bookmark. */
-  storage: PluginStorage | null;
   /** Tsundoku instance base URL (no trailing slash), e.g. `https://t.example.com`. */
   baseUrl: string;
   /** ISO 639-1 tag stamped on every candidate (the feed carries none). */
@@ -76,7 +71,6 @@ interface PluginState {
 
 const state: PluginState = {
   hostRpc: null,
-  storage: null,
   baseUrl: "",
   defaultLanguage: DEFAULT_LANGUAGE,
   pageLimit: DEFAULT_PAGE_LIMIT,
@@ -86,7 +80,6 @@ const state: PluginState = {
 /** Reset state. Exported for tests; not part of the plugin contract. */
 export function _resetState(): void {
   state.hostRpc = null;
-  state.storage = null;
   state.baseUrl = "";
   state.defaultLanguage = DEFAULT_LANGUAGE;
   state.pageLimit = DEFAULT_PAGE_LIMIT;
@@ -96,47 +89,6 @@ export function _resetState(): void {
 /** Strip a single trailing slash so URL building stays predictable. */
 export function normalizeBaseUrl(raw: string): string {
   return raw.trim().replace(/\/+$/, "");
-}
-
-// =============================================================================
-// Cursor persistence (system-scoped KV store)
-// =============================================================================
-//
-// The feed cursor lives in the plugin's KV store under `feed_cursor`. Release
-// sources are *system* plugins (no user context), so this is the per-plugin
-// (system) bucket — the host resolves the scope from the connection. Persisted
-// after each processed page so a long or interrupted walk resumes mid-feed.
-
-/**
- * Load the feed cursor bookmark from the KV store. Returns `null` when no
- * cursor has been stored yet (first run) or when the read fails — a missing
- * cursor simply restarts the walk from the beginning, which is safe given
- * keyset pagination is gap-free and the host dedups re-delivered items.
- */
-export async function loadCursor(storage: PluginStorage): Promise<string | null> {
-  try {
-    const res = await storage.get(CURSOR_STORAGE_KEY);
-    const data = res?.data;
-    return typeof data === "string" && data.length > 0 ? data : null;
-  } catch (err) {
-    const reason = err instanceof Error ? err.message : String(err);
-    logger.warn(`failed to load cursor; restarting from the beginning: ${reason}`);
-    return null;
-  }
-}
-
-/**
- * Persist the feed cursor bookmark. Best-effort: a failed write is logged but
- * never aborts a poll — the worst case is re-walking already-seen pages on the
- * next poll, which dedups host-side.
- */
-export async function saveCursor(storage: PluginStorage, cursor: string): Promise<void> {
-  try {
-    await storage.set(CURSOR_STORAGE_KEY, cursor);
-  } catch (err) {
-    const reason = err instanceof Error ? err.message : String(err);
-    logger.warn(`failed to persist cursor "${cursor}": ${reason}`);
-  }
 }
 
 // =============================================================================
@@ -260,8 +212,6 @@ async function reportProgress(
 
 /** Dependencies a poll needs, defaulted from plugin state at the call site. */
 export interface PollDeps {
-  /** System-scoped KV store holding the feed cursor bookmark. */
-  storage: PluginStorage;
   /** Tsundoku base URL (no trailing slash). */
   baseUrl: string;
   /** Language stamped on every candidate. */
@@ -277,12 +227,13 @@ export interface PollDeps {
 /**
  * Top-level poll handler.
  *
- * Builds the exact-match index from the host's tracked series, then walks the
- * Tsundoku feed from the stored cursor: each item is matched by external ID
- * and, on a hit, recorded as a candidate. The cursor is persisted after every
- * processed page so an interrupted walk resumes from the last completed page
- * (keyset pagination is gap-free, and host-side dedup makes re-processing
- * safe). Exported for tests.
+ * Builds the match context from the host's tracked series and posts their
+ * `provider:externalId` set to Tsundoku's filtered feed, so the response
+ * contains only the tracked series (not the whole catalog). It walks every
+ * page of that filtered feed each poll — there is no persisted cursor; the
+ * in-poll cursor only paginates the current response, and host-side dedup
+ * suppresses unchanged releases. Matched items are resolved cross-item (one
+ * feed entry per Codex series) and recorded. Exported for tests.
  */
 export async function poll(
   params: ReleasePollRequest,
@@ -291,47 +242,58 @@ export async function poll(
 ): Promise<ReleasePollResponse> {
   const sourceId = params.sourceId;
 
-  // 1. Build the match context from the user's tracked series. The feed spans
-  //    the whole Tsundoku catalog, so this is what scopes it to the user.
+  // 1. Build the match context from the user's tracked series, and derive the
+  //    `provider:externalId` filter we post to Tsundoku.
   const trackedEntries: TrackedSeriesEntry[] = [];
   for await (const entry of iterateTrackedSeries(rpc, sourceId)) {
     trackedEntries.push(entry);
   }
   const ctx = buildMatchContext(trackedEntries);
-  if (ctx.series.size === 0) {
+  const externalIds = externalIdFilter(ctx);
+  if (externalIds.length === 0) {
+    // Nothing to query. Posting an empty filter would mean "no filter" upstream
+    // (the whole catalog), so skip entirely instead.
     logger.info(
-      `poll: no tracked series carry a Tsundoku-known external ID (source=${sourceId}); nothing to match`,
+      `poll: no tracked series carry a Tsundoku-known external ID (source=${sourceId}); nothing to fetch`,
     );
+    return {
+      notModified: false,
+      upstreamStatus: 200,
+      parsed: 0,
+      matched: 0,
+      recorded: 0,
+      deduped: 0,
+    };
   }
 
-  // 2. Walk the feed from the stored cursor, collecting per-item matches. We
-  //    resolve them after the walk (cross-item) rather than recording inline,
-  //    so that when several feed entries map to the same Codex series we keep
-  //    only the best one instead of polluting the ledger.
-  let cursor = await loadCursor(deps.storage);
+  // 2. Walk the filtered feed, collecting per-item matches. We resolve them
+  //    after the walk (cross-item) rather than recording inline, so that when
+  //    several feed entries map to the same Codex series we keep only the best
+  //    one instead of polluting the ledger. The cursor here is ephemeral — it
+  //    paginates this poll's response and is never persisted.
+  let cursor: string | null = null;
   let parsed = 0;
   let worstStatus = 200;
   let pagesFetched = 0;
   const hits: Array<{ item: FeedItem; match: MatchResult }> = [];
 
   while (true) {
-    const result = await fetchFeedPage(deps.baseUrl, cursor, deps.pageLimit, {
-      timeoutMs: deps.timeoutMs,
-      fetchImpl: deps.fetchImpl,
-    });
+    const result = await fetchFeedPage(
+      deps.baseUrl,
+      { externalIds, cursor, limit: deps.pageLimit },
+      { timeoutMs: deps.timeoutMs, fetchImpl: deps.fetchImpl },
+    );
 
     if (result.kind === "error") {
       worstStatus = Math.max(worstStatus, result.status);
       // Couldn't fetch even the first page: surface a hard failure so the host
       // records `last_error` and the source shows it (e.g. an unreachable or
       // misconfigured `baseUrl`). A mid-walk failure, by contrast, keeps the
-      // pages already processed and just stops — the cursor is preserved.
+      // pages already processed and just stops.
       if (pagesFetched === 0) {
         throw new Error(`feed fetch failed (status ${result.status}): ${result.message}`);
       }
-      logger.warn(
-        `feed fetch failed (status ${result.status}): ${result.message}; stopping walk, cursor preserved`,
-      );
+      logger.warn(`feed fetch failed (status ${result.status}): ${result.message}; stopping walk`);
       break;
     }
 
@@ -345,16 +307,9 @@ export async function poll(
       }
     }
 
-    // Advance + persist the cursor before deciding whether to continue, so an
-    // error or crash on the next page resumes from this point.
-    const next = page.nextCursor ?? null;
-    if (next) {
-      cursor = next;
-      await saveCursor(deps.storage, next);
-    }
-
     await reportProgress(rpc, parsed, parsed, `Processed ${parsed} feed items`);
 
+    const next = page.nextCursor ?? null;
     if (!page.hasMore) break;
     if (!next) {
       // hasMore with no advancing cursor would loop forever; stop defensively.
@@ -362,6 +317,7 @@ export async function poll(
       break;
     }
     if (page.items.length === 0) break;
+    cursor = next;
   }
 
   // 3. Cross-item resolution: a Codex series should map to at most one feed
@@ -439,14 +395,13 @@ createReleaseSourcePlugin({
   manifest,
   provider: {
     async poll(params: ReleasePollRequest): Promise<ReleasePollResponse> {
-      if (!state.hostRpc || !state.storage) {
-        throw new Error("Plugin not initialized: host RPC / storage client missing");
+      if (!state.hostRpc) {
+        throw new Error("Plugin not initialized: host RPC client missing");
       }
       if (!state.baseUrl) {
         throw new Error("Plugin not configured: baseUrl is required");
       }
       return poll(params, state.hostRpc, {
-        storage: state.storage,
         baseUrl: state.baseUrl,
         language: state.defaultLanguage,
         pageLimit: state.pageLimit,
@@ -457,7 +412,6 @@ createReleaseSourcePlugin({
   logLevel: "info",
   async onInitialize(params: InitializeParams) {
     state.hostRpc = params.hostRpc;
-    state.storage = params.storage;
 
     const ac = params.adminConfig ?? {};
     if (typeof ac.baseUrl === "string") {

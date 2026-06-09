@@ -70,6 +70,14 @@ describe("matchItem", () => {
     expect(res?.score).toBe(1);
   });
 
+  it("translates Codex provider names to Tsundoku's (myanimelist -> mal)", () => {
+    // Codex stores `myanimelist`; the feed uses `mal`. They must still match.
+    const ctx = buildMatchContext([tracked("uuid-a", { myanimelist: "128555" })]);
+    const res = matchItem(feedItem([ext("mal", "128555")]), ctx);
+    expect(res?.codexSeriesId).toBe("uuid-a");
+    expect(res?.agreeingProviders).toEqual(["mal"]);
+  });
+
   it("returns null when nothing is shared", () => {
     const ctx = buildMatchContext([tracked("uuid-a", { mangabaka: "9741" })]);
     expect(matchItem(feedItem([ext("mangabaka", "0000")]), ctx)).toBeNull();
