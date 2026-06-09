@@ -8245,7 +8245,8 @@
         "tags": [
           "Releases"
         ],
-        "summary": "List all configured release sources (admin-only).",
+        "summary": "List configured release sources (admin-only).",
+        "description": "Returns only sources whose owning plugin is currently enabled (plus\nsynthetic in-core sources). Sources belonging to a disabled plugin are\nhidden but not deleted — they reappear when the plugin is re-enabled.",
         "operationId": "list_release_sources",
         "responses": {
           "200": {

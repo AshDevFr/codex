@@ -865,7 +865,11 @@ pub async fn bulk_release_action(
 // Source admin
 // =============================================================================
 
-/// List all configured release sources (admin-only).
+/// List configured release sources (admin-only).
+///
+/// Returns only sources whose owning plugin is currently enabled (plus
+/// synthetic in-core sources). Sources belonging to a disabled plugin are
+/// hidden but not deleted — they reappear when the plugin is re-enabled.
 #[utoipa::path(
     get,
     path = "/api/v1/release-sources",
@@ -884,7 +888,7 @@ pub async fn list_release_sources(
     auth: AuthContext,
 ) -> Result<Json<ReleaseSourceListResponse>, ApiError> {
     auth.require_permission(&Permission::PluginsManage)?;
-    let sources = ReleaseSourceRepository::list_all(&state.db)
+    let sources = ReleaseSourceRepository::list_for_enabled_plugins(&state.db)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to list sources: {}", e)))?;
     let server_default = resolve_server_default_cron(&state.db).await;

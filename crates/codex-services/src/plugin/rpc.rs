@@ -74,6 +74,17 @@ impl ReverseRpcContext {
     pub fn set_releases_handler(&mut self, handler: ReleasesRequestHandler) {
         self.releases_handler = Some(handler);
     }
+
+    /// Whether the post-`initialize` capability snapshot has been installed.
+    ///
+    /// A reverse-RPC that arrives while this is `false` is racing `initialize`:
+    /// the plugin fired it from `onInitialize` before the host processed the
+    /// `initialize` response that installs capabilities. Such calls must not be
+    /// dispatched inline on the task awaiting that response (see
+    /// [`dispatch_reverse_rpc_frame`]).
+    pub fn capabilities_ready(&self) -> bool {
+        self.capabilities.is_some()
+    }
 }
 
 impl Default for ReverseRpcContext {
@@ -388,38 +399,21 @@ impl RpcClient {
                 match rx.recv().await {
                     Some(PendingFrame::Response(result)) => return Ok::<_, RpcError>(result),
                     Some(PendingFrame::ReverseRpc(reverse_request)) => {
-                        // Dispatch on this task so task-locals propagate.
+                        // Service the reverse-RPC. When the plugin is already
+                        // initialized this dispatches inline on the caller's
+                        // task so task-locals propagate; when it's still racing
+                        // `initialize` it spawns, so this loop stays free to
+                        // receive the `initialize` response that installs the
+                        // capabilities the reverse-RPC is waiting on. See
+                        // [`dispatch_reverse_rpc_frame`].
                         let reverse_method = reverse_request.method.clone();
-                        let response = dispatch_reverse_rpc(
-                            &reverse_method,
-                            &reverse_request,
-                            &self.reverse_ctx,
-                            REVERSE_RPC_READINESS_TIMEOUT,
+                        dispatch_reverse_rpc_frame(
+                            reverse_request,
+                            reverse_method,
+                            Arc::clone(&self.reverse_ctx),
+                            Arc::clone(&self.process),
                         )
                         .await;
-                        // Write the response back to the plugin. Best-effort:
-                        // a write failure here is logged but doesn't abort
-                        // the forward call (the plugin may still complete).
-                        match serde_json::to_string(&response) {
-                            Ok(response_json) => {
-                                let process_guard = self.process.lock().await;
-                                if let Err(e) = process_guard.write_line(&response_json).await {
-                                    error!(
-                                        error = %e,
-                                        method = %reverse_method,
-                                        forward_id = id,
-                                        "Failed to write reverse-RPC response to plugin"
-                                    );
-                                }
-                            }
-                            Err(e) => {
-                                error!(
-                                    error = %e,
-                                    method = %reverse_method,
-                                    "Failed to serialize reverse-RPC response"
-                                );
-                            }
-                        }
                     }
                     None => {
                         // Channel closed — plugin process died and the
@@ -799,7 +793,13 @@ async fn response_reader_task(
                             parent_id = parent_id,
                             "Caller dropped pending channel; falling back to reader-task dispatch"
                         );
-                        dispatch_and_write(dropped, method.clone(), &reverse_ctx, &process).await;
+                        dispatch_reverse_rpc_frame(
+                            dropped,
+                            method.clone(),
+                            Arc::clone(&reverse_ctx),
+                            Arc::clone(&process),
+                        )
+                        .await;
                     }
                     continue;
                 }
@@ -810,8 +810,16 @@ async fn response_reader_task(
                 );
             }
 
-            // No parent id, or parent not pending: dispatch on the reader.
-            dispatch_and_write(request, method, &reverse_ctx, &process).await;
+            // No parent id, or parent not pending: dispatch on the reader
+            // (spawning if the plugin isn't initialized yet, so the reader
+            // keeps draining stdout).
+            dispatch_reverse_rpc_frame(
+                request,
+                method,
+                Arc::clone(&reverse_ctx),
+                Arc::clone(&process),
+            )
+            .await;
             continue;
         }
 
@@ -920,6 +928,36 @@ fn parent_id_to_i64(id: &RequestId) -> Option<i64> {
     }
 }
 
+/// Dispatch a reverse-RPC, choosing inline vs. spawned execution based on
+/// whether the plugin has finished initializing.
+///
+/// - **Capabilities installed** (the steady state — e.g. an `announce` during
+///   `poll`): dispatch inline on the current task so task-local context (the
+///   recording broadcaster from [`crate::tasks::worker`]) propagates into the
+///   handler.
+/// - **Capabilities not yet installed**: the reverse-RPC is racing
+///   `initialize` — the plugin fired it from `onInitialize` before the host
+///   processed the `initialize` response that installs those capabilities.
+///   Dispatching inline would park the readiness barrier on the very task that
+///   must drain that response (the forward-call loop, or the reader), a
+///   guaranteed deadlock until the readiness timeout (observed as a ~5s connect
+///   stall plus a failed `register_sources`). Spawn instead so that task stays
+///   free. No recording broadcaster is ever in scope during `initialize`, so
+///   spawning loses nothing.
+async fn dispatch_reverse_rpc_frame(
+    request: JsonRpcRequest,
+    method: String,
+    reverse_ctx: Arc<RwLock<ReverseRpcContext>>,
+    process: Arc<Mutex<PluginProcess>>,
+) {
+    let ready = reverse_ctx.read().await.capabilities_ready();
+    if ready {
+        dispatch_and_write(request, method, reverse_ctx, process).await;
+    } else {
+        tokio::spawn(dispatch_and_write(request, method, reverse_ctx, process));
+    }
+}
+
 /// Dispatch a reverse-RPC on the *current* task and write the response back
 /// to the plugin. Used as the fallback when no parent forward call is
 /// available to dispatch on (legacy plugins, or the parent's caller has
@@ -927,14 +965,14 @@ fn parent_id_to_i64(id: &RequestId) -> Option<i64> {
 async fn dispatch_and_write(
     request: JsonRpcRequest,
     method: String,
-    reverse_ctx: &Arc<RwLock<ReverseRpcContext>>,
-    process: &Arc<Mutex<PluginProcess>>,
+    reverse_ctx: Arc<RwLock<ReverseRpcContext>>,
+    process: Arc<Mutex<PluginProcess>>,
 ) {
     let request_id = request.id.clone();
     let response = dispatch_reverse_rpc(
         &method,
         &request,
-        reverse_ctx,
+        &reverse_ctx,
         REVERSE_RPC_READINESS_TIMEOUT,
     )
     .await;
@@ -1325,6 +1363,83 @@ mod tests {
             elapsed < Duration::from_secs(5),
             "timeout should fire near 150ms, took {:?}",
             elapsed
+        );
+    }
+
+    /// Regression: a plugin that fires a reverse-RPC from `onInitialize`
+    /// (tagged with the `initialize` call's id) before returning the
+    /// `initialize` response must not stall the forward call.
+    ///
+    /// The host installs capabilities only *after* `call("initialize")`
+    /// returns, so a reverse-RPC routed back into the in-flight `initialize`
+    /// call's channel cannot be dispatched inline: parking it on the readiness
+    /// barrier blocks the very loop that must drain the `initialize` response,
+    /// deadlocking until the 5s `REVERSE_RPC_READINESS_TIMEOUT` fires. That bug
+    /// surfaced as ~5s plugin "connect" times and a failed
+    /// `releases/register_sources` (so release sources never materialized).
+    ///
+    /// With the fix, the racing reverse-RPC is spawned off and `initialize`
+    /// returns promptly. We assert it completes well under the readiness
+    /// timeout.
+    #[tokio::test]
+    async fn initialize_not_blocked_by_reverse_rpc_from_on_initialize() {
+        if std::process::Command::new("node")
+            .arg("--version")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map(|s| !s.success())
+            .unwrap_or(true)
+        {
+            eprintln!("skipping: node not available");
+            return;
+        }
+
+        // Mock plugin: on `initialize`, emit a reverse-RPC tagged with the
+        // forward call's id *before* the `initialize` response, mimicking a
+        // release-source plugin calling `releases/register_sources` from
+        // `onInitialize`. Stays alive afterward (readline keeps stdin open).
+        let script = r#"
+        const readline = require('readline');
+        const rl = readline.createInterface({ input: process.stdin });
+        rl.on('line', (line) => {
+            let req;
+            try { req = JSON.parse(line); } catch (e) { return; }
+            if (req.method === 'initialize') {
+                // Reverse-RPC first, parented to the initialize call.
+                process.stdout.write(JSON.stringify({
+                    jsonrpc: '2.0', id: 9999, method: 'storage/get',
+                    params: { key: 'x' }, parentRequestId: req.id,
+                }) + '\n');
+                // Then the initialize response.
+                process.stdout.write(JSON.stringify({
+                    jsonrpc: '2.0', id: req.id, result: { ok: true },
+                }) + '\n');
+            }
+        });
+        "#;
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let script_path = temp_dir.path().join("mock-init-reverse-rpc.js");
+        std::fs::write(&script_path, script).unwrap();
+
+        let config = PluginProcessConfig::new("node").arg(script_path.to_str().unwrap());
+        let process = PluginProcess::spawn_unchecked(&config).await.unwrap();
+        // Long default timeout so we prove the *fix* unblocks the call, not a
+        // short forward-call timeout masking the stall.
+        let client = RpcClient::new(process, Duration::from_secs(30));
+
+        let start = std::time::Instant::now();
+        let result: Result<Value, _> = client.call("initialize", json!({})).await;
+        let elapsed = start.elapsed();
+
+        assert!(result.is_ok(), "initialize should succeed: {result:?}");
+        // Pre-fix this took ~5s (the readiness timeout). Assert comfortably
+        // under that while leaving headroom for node startup on slow CI.
+        assert!(
+            elapsed < Duration::from_secs(3),
+            "initialize stalled on a reverse-RPC fired during onInitialize ({elapsed:?}); \
+             the reverse-RPC must be dispatched off the forward-call loop"
         );
     }
 

@@ -2793,7 +2793,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List all configured release sources (admin-only). */
+        /**
+         * List configured release sources (admin-only).
+         * @description Returns only sources whose owning plugin is currently enabled (plus
+         *     synthetic in-core sources). Sources belonging to a disabled plugin are
+         *     hidden but not deleted — they reappear when the plugin is re-enabled.
+         */
         get: operations["list_release_sources"];
         put?: never;
         post?: never;

@@ -11,8 +11,8 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter,
-    QueryOrder, Set,
+    ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection, EntityTrait, PaginatorTrait,
+    QueryFilter, QueryOrder, Set,
 };
 use uuid::Uuid;
 
@@ -116,6 +116,34 @@ impl ReleaseSourceRepository {
     /// List all sources, ordered by `(plugin_id, source_key)` for stable display.
     pub async fn list_all(db: &DatabaseConnection) -> Result<Vec<ReleaseSource>> {
         Ok(ReleaseSources::find()
+            .order_by_asc(release_sources::Column::PluginId)
+            .order_by_asc(release_sources::Column::SourceKey)
+            .all(db)
+            .await?)
+    }
+
+    /// List sources for the admin Release-tracking view: every source whose
+    /// owning plugin is currently enabled, plus synthetic in-core sources
+    /// (`plugin_uuid IS NULL`). Sources owned by a *disabled* plugin are
+    /// hidden — their rows and `release_ledger` history are left intact and
+    /// reappear when the plugin is re-enabled. Ordered by
+    /// `(plugin_id, source_key)` for stable display.
+    ///
+    /// Distinct from [`Self::list_enabled`], which filters on the per-source
+    /// `enabled` toggle (the scheduler hot path) regardless of plugin state.
+    pub async fn list_for_enabled_plugins(db: &DatabaseConnection) -> Result<Vec<ReleaseSource>> {
+        let enabled_plugin_uuids: Vec<Uuid> = PluginsRepository::get_enabled(db)
+            .await?
+            .into_iter()
+            .map(|p| p.id)
+            .collect();
+
+        Ok(ReleaseSources::find()
+            .filter(
+                Condition::any()
+                    .add(release_sources::Column::PluginUuid.is_null())
+                    .add(release_sources::Column::PluginUuid.is_in(enabled_plugin_uuids)),
+            )
             .order_by_asc(release_sources::Column::PluginId)
             .order_by_asc(release_sources::Column::SourceKey)
             .all(db)
@@ -775,6 +803,89 @@ mod tests {
             .unwrap();
         assert_eq!(nyaa.len(), 1);
         assert_eq!(nyaa[0].plugin_id, "release-nyaa");
+    }
+
+    #[tokio::test]
+    async fn list_for_enabled_plugins_hides_disabled_plugin_sources() {
+        let (db, _temp) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+
+        // Two real plugins: one enabled, one disabled. The source rows resolve
+        // their `plugin_uuid` by matching `plugin_id` to the plugin name.
+        let create_plugin = |name: &'static str, enabled: bool| async move {
+            PluginsRepository::create(
+                conn,
+                name,
+                name,
+                None,
+                "system",
+                "npx",
+                vec![],
+                vec![],
+                None,
+                vec![],
+                vec![],
+                vec![],
+                None,
+                "env",
+                None,
+                enabled,
+                None,
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+        };
+        create_plugin("release-tsundoku", true).await;
+        create_plugin("release-nyaa", false).await;
+
+        // One source per plugin, plus a synthetic in-core source (plugin_uuid
+        // NULL) which must never be hidden.
+        let mut tsundoku = nyaa_source();
+        tsundoku.plugin_id = "release-tsundoku".to_string();
+        tsundoku.source_key = "default".to_string();
+        ReleaseSourceRepository::create(conn, tsundoku)
+            .await
+            .unwrap();
+        ReleaseSourceRepository::create(conn, nyaa_source())
+            .await
+            .unwrap();
+        ReleaseSourceRepository::create(
+            conn,
+            NewReleaseSource {
+                plugin_id: source_plugin_id::CORE.to_string(),
+                source_key: "core:piggyback".to_string(),
+                display_name: "Core".to_string(),
+                kind: kind::RSS_UPLOADER.to_string(),
+                enabled: None,
+                config: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        let listed = ReleaseSourceRepository::list_for_enabled_plugins(conn)
+            .await
+            .unwrap();
+        let ids: Vec<&str> = listed.iter().map(|s| s.plugin_id.as_str()).collect();
+
+        assert!(
+            ids.contains(&"release-tsundoku"),
+            "enabled plugin's source must be listed"
+        );
+        assert!(
+            ids.contains(&source_plugin_id::CORE),
+            "synthetic in-core source must always be listed"
+        );
+        assert!(
+            !ids.contains(&"release-nyaa"),
+            "disabled plugin's source must be hidden"
+        );
+
+        // The hidden row is preserved, not deleted — `list_all` still sees it.
+        let all = ReleaseSourceRepository::list_all(conn).await.unwrap();
+        assert_eq!(all.len(), 3, "hidden source must remain in the table");
     }
 
     #[tokio::test]
