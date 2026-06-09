@@ -41,6 +41,9 @@ pub use super::series_duplicates::Entity as SeriesDuplicates;
 pub use super::series_external_ids::Entity as SeriesExternalIds;
 pub use super::series_metadata::Entity as SeriesMetadata;
 
+// System-scoped plugin KV store
+#[allow(unused_imports)]
+pub use super::plugin_data::Entity as PluginData;
 // User plugin system
 #[allow(unused_imports)]
 pub use super::user_plugin_data::Entity as UserPluginData;

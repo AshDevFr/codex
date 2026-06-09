@@ -1,7 +1,14 @@
-import { HostRpcClient } from "@ashdev/codex-plugin-sdk";
+import { HostRpcClient, type PluginStorage } from "@ashdev/codex-plugin-sdk";
 import { describe, expect, it, vi } from "vitest";
 import type { FeedItem, FeedResponse } from "./fetcher.js";
-import { loadCursor, normalizeBaseUrl, poll, registerSources, saveCursor } from "./index.js";
+import {
+  CURSOR_STORAGE_KEY,
+  loadCursor,
+  normalizeBaseUrl,
+  poll,
+  registerSources,
+  saveCursor,
+} from "./index.js";
 
 // -----------------------------------------------------------------------------
 // Mock host RPC
@@ -76,32 +83,64 @@ describe("normalizeBaseUrl", () => {
 });
 
 // -----------------------------------------------------------------------------
-// Cursor persistence (per-source state / etag slot)
+// Cursor persistence (system-scoped KV store)
 // -----------------------------------------------------------------------------
 
+/** A stateful in-memory `PluginStorage` double recording every `set`. */
+function makeStorage(initialCursor: string | null = null): {
+  storage: PluginStorage;
+  sets: string[];
+} {
+  let value = initialCursor;
+  const sets: string[] = [];
+  const storage = {
+    get: vi.fn(async () => ({ data: value })),
+    set: vi.fn(async (_key: string, data: unknown) => {
+      value = data as string;
+      sets.push(value);
+      return { success: true };
+    }),
+  } as unknown as PluginStorage;
+  return { storage, sets };
+}
+
 describe("loadCursor", () => {
-  it("returns the etag the host passed back from the last poll", () => {
-    expect(loadCursor({ sourceId: "s", etag: "cursor-42" })).toBe("cursor-42");
+  it("returns the stored cursor string", async () => {
+    const { storage } = makeStorage("cursor-42");
+    expect(await loadCursor(storage)).toBe("cursor-42");
   });
 
-  it("returns null when no etag was supplied", () => {
-    expect(loadCursor({ sourceId: "s" })).toBeNull();
-    expect(loadCursor({ sourceId: "s", etag: "" })).toBeNull();
+  it("returns null when nothing is stored", async () => {
+    expect(await loadCursor(makeStorage(null).storage)).toBeNull();
+  });
+
+  it("returns null and does not throw when the read fails", async () => {
+    const storage = {
+      get: vi.fn(async () => {
+        throw new Error("kv down");
+      }),
+      set: vi.fn(),
+    } as unknown as PluginStorage;
+    expect(await loadCursor(storage)).toBeNull();
   });
 });
 
 describe("saveCursor", () => {
-  it("persists the cursor into the source-state etag slot", async () => {
-    const { rpc, calls } = makeMockRpc(() => ({ success: true }));
-    await saveCursor(rpc, "src-1", "cursor-99");
-    expect(calls).toHaveLength(1);
-    expect(calls[0].method).toBe("releases/source_state/set");
-    expect(calls[0].params).toEqual({ sourceId: "src-1", etag: "cursor-99" });
+  it("writes the cursor under the feed-cursor key", async () => {
+    const { storage, sets } = makeStorage();
+    await saveCursor(storage, "cursor-99");
+    expect(sets).toEqual(["cursor-99"]);
+    expect((storage.set as ReturnType<typeof vi.fn>).mock.calls[0][0]).toBe(CURSOR_STORAGE_KEY);
   });
 
   it("swallows a write failure without throwing", async () => {
-    const { rpc } = makeMockRpc(() => ({ __error: { code: -32000, message: "db error" } }));
-    await expect(saveCursor(rpc, "src-1", "cursor-99")).resolves.toBeUndefined();
+    const storage = {
+      get: vi.fn(),
+      set: vi.fn(async () => {
+        throw new Error("kv full");
+      }),
+    } as unknown as PluginStorage;
+    await expect(saveCursor(storage, "cursor-99")).resolves.toBeUndefined();
   });
 });
 
@@ -126,29 +165,9 @@ describe("registerSources", () => {
     });
   });
 
-  it("retries on METHOD_NOT_FOUND then succeeds", async () => {
-    const { rpc, calls } = makeMockRpc((_m, _p, attempt) =>
-      attempt < 3
-        ? { __error: { code: -32601, message: "method not found" } }
-        : { registered: 1, pruned: 0 },
-    );
-    const result = await registerSources(rpc);
-
-    expect(result).toEqual({ registered: 1, pruned: 0 });
-    expect(calls.length).toBe(3);
-  });
-
-  it("returns null after exhausting retries on METHOD_NOT_FOUND", async () => {
-    const { rpc, calls } = makeMockRpc(() => ({
-      __error: { code: -32601, message: "method not found" },
-    }));
-    const result = await registerSources(rpc);
-
-    expect(result).toBeNull();
-    expect(calls.length).toBe(5);
-  });
-
-  it("does not retry on a non-METHOD_NOT_FOUND error", async () => {
+  it("issues a single call (no retry) and returns null on failure", async () => {
+    // The host's readiness barrier makes registration race-free, so the
+    // plugin no longer retries: one call, and a failure surfaces as null.
     const { rpc, calls } = makeMockRpc(() => ({
       __error: { code: -32000, message: "db error" },
     }));
@@ -184,13 +203,6 @@ function makeFetchSequence(pages: PageOrError[]): {
     });
   }) as unknown as typeof fetch;
   return { fetchImpl, urls };
-}
-
-/** Cursors persisted via `releases/source_state/set`, in order. */
-function cursorsPersisted(calls: CapturedCall[]): string[] {
-  return calls
-    .filter((c) => c.method === "releases/source_state/set")
-    .map((c) => (c.params as { etag: string }).etag);
 }
 
 function item(
@@ -234,14 +246,12 @@ function makePollRpc(opts: {
     if (method === "releases/report_progress") {
       return { emitted: true };
     }
-    if (method === "releases/source_state/set") {
-      return { success: true };
-    }
     return {};
   });
 }
 
-const pollDeps = (fetchImpl: typeof fetch) => ({
+const pollDeps = (fetchImpl: typeof fetch, storage: PluginStorage) => ({
+  storage,
   baseUrl: "https://t.example.com",
   language: "en",
   pageLimit: 100,
@@ -251,9 +261,10 @@ const pollDeps = (fetchImpl: typeof fetch) => ({
 
 describe("poll", () => {
   it("walks pages, matches by external id, records, and persists the cursor per page", async () => {
-    const { rpc, calls } = makePollRpc({
+    const { rpc } = makePollRpc({
       tracked: [{ seriesId: "uuid-a", externalIds: { mangabaka: "9741" } }],
     });
+    const { storage, sets } = makeStorage();
     const { fetchImpl } = makeFetchSequence([
       {
         items: [item(87, "mangabaka", "9741", 16), item(99, "anilist", "999")],
@@ -263,7 +274,7 @@ describe("poll", () => {
       { items: [item(87, "mangabaka", "9741", 17)], hasMore: false, nextCursor: "c2" },
     ]);
 
-    const res = await poll({ sourceId: "src-1" }, rpc, pollDeps(fetchImpl));
+    const res = await poll({ sourceId: "src-1" }, rpc, pollDeps(fetchImpl, storage));
 
     expect(res).toMatchObject({
       parsed: 3,
@@ -271,9 +282,8 @@ describe("poll", () => {
       recorded: 2,
       deduped: 0,
       upstreamStatus: 200,
-      etag: "c2",
     });
-    expect(cursorsPersisted(calls)).toEqual(["c1", "c2"]);
+    expect(sets).toEqual(["c1", "c2"]);
   });
 
   it("counts host dedup separately from inserts", async () => {
@@ -281,6 +291,7 @@ describe("poll", () => {
       tracked: [{ seriesId: "uuid-a", externalIds: { mangabaka: "9741" } }],
       onRecord: (n) => ({ ledgerId: `l${n}`, deduped: n > 1 }),
     });
+    const { storage } = makeStorage();
     const { fetchImpl } = makeFetchSequence([
       {
         items: [item(87, "mangabaka", "9741", 16), item(87, "mangabaka", "9741", 17)],
@@ -289,7 +300,7 @@ describe("poll", () => {
       },
     ]);
 
-    const res = await poll({ sourceId: "src-1" }, rpc, pollDeps(fetchImpl));
+    const res = await poll({ sourceId: "src-1" }, rpc, pollDeps(fetchImpl, storage));
     expect(res).toMatchObject({ matched: 2, recorded: 1, deduped: 1 });
   });
 
@@ -297,66 +308,72 @@ describe("poll", () => {
     const { rpc, calls } = makePollRpc({
       tracked: [{ seriesId: "uuid-a", externalIds: { mangabaka: "9741" } }],
     });
+    const { storage } = makeStorage();
     const { fetchImpl } = makeFetchSequence([
       { items: [item(99, "anilist", "999")], hasMore: false, nextCursor: "c1" },
     ]);
 
-    const res = await poll({ sourceId: "src-1" }, rpc, pollDeps(fetchImpl));
+    const res = await poll({ sourceId: "src-1" }, rpc, pollDeps(fetchImpl, storage));
     expect(res).toMatchObject({ parsed: 1, matched: 0, recorded: 0 });
     expect(calls.some((c) => c.method === "releases/record")).toBe(false);
   });
 
   it("tolerates a record failure without aborting the walk", async () => {
-    const { rpc, calls } = makePollRpc({
+    const { rpc } = makePollRpc({
       tracked: [{ seriesId: "uuid-a", externalIds: { mangabaka: "9741" } }],
       onRecord: () => ({ __error: { code: -32000, message: "ledger down" } }),
     });
+    const { storage, sets } = makeStorage();
     const { fetchImpl } = makeFetchSequence([
       { items: [item(87, "mangabaka", "9741", 16)], hasMore: false, nextCursor: "c1" },
     ]);
 
-    const res = await poll({ sourceId: "src-1" }, rpc, pollDeps(fetchImpl));
+    const res = await poll({ sourceId: "src-1" }, rpc, pollDeps(fetchImpl, storage));
     expect(res).toMatchObject({ parsed: 1, matched: 1, recorded: 0, deduped: 0 });
-    expect(cursorsPersisted(calls)).toEqual(["c1"]); // walk still completed and advanced the cursor
+    expect(sets).toEqual(["c1"]); // walk still completed and advanced the cursor
   });
 
-  it("resumes from the etag the host passed in", async () => {
+  it("resumes from the cursor stored in the KV store", async () => {
     const { rpc } = makePollRpc({ tracked: [] });
+    const { storage } = makeStorage("resume-here");
     const { fetchImpl, urls } = makeFetchSequence([
       { items: [], hasMore: false, nextCursor: null },
     ]);
 
-    await poll({ sourceId: "src-1", etag: "resume-here" }, rpc, pollDeps(fetchImpl));
+    await poll({ sourceId: "src-1" }, rpc, pollDeps(fetchImpl, storage));
     expect(new URL(urls[0]).searchParams.get("cursor")).toBe("resume-here");
   });
 
   it("throws when even the first page can't be fetched (so the source shows last_error)", async () => {
-    const { rpc, calls } = makePollRpc({
+    const { rpc } = makePollRpc({
       tracked: [{ seriesId: "uuid-a", externalIds: { mangabaka: "9741" } }],
     });
+    const { storage, sets } = makeStorage();
     const { fetchImpl } = makeFetchSequence([{ errorStatus: 503 }]);
 
-    await expect(poll({ sourceId: "src-1" }, rpc, pollDeps(fetchImpl))).rejects.toThrow(/503/);
-    expect(cursorsPersisted(calls)).toEqual([]); // nothing persisted on a hard failure
+    await expect(poll({ sourceId: "src-1" }, rpc, pollDeps(fetchImpl, storage))).rejects.toThrow(
+      /503/,
+    );
+    expect(sets).toEqual([]); // nothing persisted on a hard failure
   });
 
   it("stops without throwing on a mid-walk fetch error, keeping prior progress", async () => {
-    const { rpc, calls } = makePollRpc({
+    const { rpc } = makePollRpc({
       tracked: [{ seriesId: "uuid-a", externalIds: { mangabaka: "9741" } }],
     });
+    const { storage, sets } = makeStorage();
     const { fetchImpl } = makeFetchSequence([
       { items: [item(87, "mangabaka", "9741", 16)], hasMore: true, nextCursor: "c1" },
       { errorStatus: 503 },
     ]);
 
-    const res = await poll({ sourceId: "src-1" }, rpc, pollDeps(fetchImpl));
+    const res = await poll({ sourceId: "src-1" }, rpc, pollDeps(fetchImpl, storage));
     expect(res).toMatchObject({
       parsed: 1,
       matched: 1,
       recorded: 1,
       upstreamStatus: 503,
-      etag: "c1",
     });
-    expect(cursorsPersisted(calls)).toEqual(["c1"]);
+    expect(sets).toEqual(["c1"]);
   });
 });

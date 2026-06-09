@@ -38,6 +38,9 @@ pub mod users;
 // OIDC authentication
 pub mod oidc_connections;
 
+// System-scoped plugin KV store (per-plugin, no user context)
+pub mod plugin_data;
+
 // User plugin system (per-user plugin instances and data storage)
 pub mod user_plugin_data;
 pub mod user_plugins;

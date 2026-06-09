@@ -646,7 +646,14 @@ impl PluginManager {
 
         // Need to spawn/initialize the plugin
         let handle_config = self.create_plugin_config(&entry.db_config).await?;
-        let mut handle = PluginHandle::new(handle_config).with_release_db(self.db.as_ref().clone());
+        // System plugins have no user context, so they get a per-plugin KV
+        // bucket keyed by `plugins.id` (used e.g. by release sources to persist
+        // a feed cursor). Per-user storage is wired separately on the
+        // user-plugin spawn path.
+        let storage_handler =
+            StorageRequestHandler::new_system(self.db.as_ref().clone(), plugin_id);
+        let mut handle = PluginHandle::new_with_storage(handle_config, storage_handler)
+            .with_release_db(self.db.as_ref().clone());
         if let Some(ref s) = self.scheduler {
             handle = handle.with_scheduler(s.clone());
         }

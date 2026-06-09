@@ -1,9 +1,10 @@
 //! Handler for CleanupPluginData task
 //!
-//! Periodically cleans up expired key-value data from plugin storage
-//! (`user_plugin_data` table). Entries with a past `expires_at` timestamp
-//! are deleted in bulk. Also cleans up expired OAuth state flows from the
-//! in-memory `OAuthStateManager` to prevent memory leaks.
+//! Periodically cleans up expired key-value data from plugin storage — both
+//! the per-user `user_plugin_data` table and the system-scoped `plugin_data`
+//! table. Entries with a past `expires_at` timestamp are deleted in bulk.
+//! Also cleans up expired OAuth state flows from the in-memory
+//! `OAuthStateManager` to prevent memory leaks.
 
 use anyhow::Result;
 use sea_orm::DatabaseConnection;
@@ -14,7 +15,7 @@ use tracing::info;
 use crate::handlers::TaskHandler;
 use crate::types::TaskResult;
 use codex_db::entities::tasks;
-use codex_db::repositories::UserPluginDataRepository;
+use codex_db::repositories::{PluginDataRepository, UserPluginDataRepository};
 use codex_events::EventBroadcaster;
 use codex_services::user_plugin::OAuthStateManager;
 
@@ -46,7 +47,8 @@ impl TaskHandler for CleanupPluginDataHandler {
         Box::pin(async move {
             info!("Task {}: Starting plugin data cleanup", task.id);
 
-            let deleted_count = UserPluginDataRepository::cleanup_expired(db).await?;
+            let deleted_count = UserPluginDataRepository::cleanup_expired(db).await?
+                + PluginDataRepository::cleanup_expired(db).await?;
 
             // Clean up expired OAuth pending flows from in-memory state
             let (oauth_cleaned, oauth_remaining) =

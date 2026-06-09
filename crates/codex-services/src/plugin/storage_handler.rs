@@ -19,7 +19,8 @@ use super::storage::{
     StorageGetResponse, StorageKeyEntry, StorageListResponse, StorageSetRequest,
     StorageSetResponse,
 };
-use codex_db::repositories::UserPluginDataRepository;
+use anyhow::Result;
+use codex_db::repositories::{PluginDataRepository, UserPluginDataRepository};
 
 /// Maximum number of storage keys allowed per plugin instance
 const MAX_KEYS_PER_PLUGIN: usize = 100;
@@ -27,21 +28,147 @@ const MAX_KEYS_PER_PLUGIN: usize = 100;
 /// Maximum serialized size of a single storage value (1 MB)
 const MAX_VALUE_SIZE_BYTES: usize = 1_048_576;
 
+/// Which storage bucket a handler is bound to.
+///
+/// User plugins get a per-(user, plugin) bucket; system plugins (which have no
+/// user context) get a per-plugin bucket. The handler is created per-connection
+/// with exactly one scope, so a plugin can only ever address its own data.
+#[derive(Clone, Copy)]
+enum StorageScope {
+    /// Per-(user, plugin) bucket, keyed by `user_plugins.id`.
+    User(Uuid),
+    /// Per-plugin bucket, keyed by `plugins.id` (system plugins).
+    System(Uuid),
+}
+
+impl StorageScope {
+    fn describe(&self) -> String {
+        match self {
+            StorageScope::User(id) => format!("user_plugin:{id}"),
+            StorageScope::System(id) => format!("plugin:{id}"),
+        }
+    }
+}
+
+/// A storage entry normalized across the user- and system-scoped tables, so
+/// the JSON-RPC handlers don't care which backing table produced it.
+struct StoredEntry {
+    key: String,
+    data: Value,
+    expires_at: Option<DateTime<Utc>>,
+    updated_at: DateTime<Utc>,
+}
+
+impl From<codex_db::entities::user_plugin_data::Model> for StoredEntry {
+    fn from(m: codex_db::entities::user_plugin_data::Model) -> Self {
+        Self {
+            key: m.key,
+            data: m.data,
+            expires_at: m.expires_at,
+            updated_at: m.updated_at,
+        }
+    }
+}
+
+impl From<codex_db::entities::plugin_data::Model> for StoredEntry {
+    fn from(m: codex_db::entities::plugin_data::Model) -> Self {
+        Self {
+            key: m.key,
+            data: m.data,
+            expires_at: m.expires_at,
+            updated_at: m.updated_at,
+        }
+    }
+}
+
 /// Handles storage requests from plugins.
 ///
-/// This handler is created per-connection with a specific `user_plugin_id`,
-/// providing architectural isolation - each handler can only access its own
-/// user-plugin instance's data.
+/// This handler is created per-connection bound to a single [`StorageScope`],
+/// providing architectural isolation — each handler can only access its own
+/// bucket's data.
 #[derive(Clone)]
 pub struct StorageRequestHandler {
     db: DatabaseConnection,
-    user_plugin_id: Uuid,
+    scope: StorageScope,
 }
 
 impl StorageRequestHandler {
-    /// Create a new storage handler for a specific user-plugin instance
+    /// Create a new storage handler for a specific user-plugin instance.
     pub fn new(db: DatabaseConnection, user_plugin_id: Uuid) -> Self {
-        Self { db, user_plugin_id }
+        Self {
+            db,
+            scope: StorageScope::User(user_plugin_id),
+        }
+    }
+
+    /// Create a new storage handler for a system plugin (no user context),
+    /// scoped by the `plugins.id` row.
+    pub fn new_system(db: DatabaseConnection, plugin_id: Uuid) -> Self {
+        Self {
+            db,
+            scope: StorageScope::System(plugin_id),
+        }
+    }
+
+    // =========================================================================
+    // Scope-dispatched data access (routes to the right backing table)
+    // =========================================================================
+
+    async fn data_get(&self, key: &str) -> Result<Option<StoredEntry>> {
+        Ok(match self.scope {
+            StorageScope::User(id) => UserPluginDataRepository::get(&self.db, id, key)
+                .await?
+                .map(StoredEntry::from),
+            StorageScope::System(id) => PluginDataRepository::get(&self.db, id, key)
+                .await?
+                .map(StoredEntry::from),
+        })
+    }
+
+    async fn data_list_keys(&self) -> Result<Vec<StoredEntry>> {
+        Ok(match self.scope {
+            StorageScope::User(id) => UserPluginDataRepository::list_keys(&self.db, id)
+                .await?
+                .into_iter()
+                .map(StoredEntry::from)
+                .collect(),
+            StorageScope::System(id) => PluginDataRepository::list_keys(&self.db, id)
+                .await?
+                .into_iter()
+                .map(StoredEntry::from)
+                .collect(),
+        })
+    }
+
+    async fn data_set(
+        &self,
+        key: &str,
+        data: Value,
+        expires_at: Option<DateTime<Utc>>,
+    ) -> Result<()> {
+        match self.scope {
+            StorageScope::User(id) => {
+                UserPluginDataRepository::set(&self.db, id, key, data, expires_at).await?;
+            }
+            StorageScope::System(id) => {
+                PluginDataRepository::set(&self.db, id, key, data, expires_at).await?;
+            }
+        }
+        Ok(())
+    }
+
+    async fn data_delete(&self, key: &str) -> Result<bool> {
+        Ok(match self.scope {
+            StorageScope::User(id) => UserPluginDataRepository::delete(&self.db, id, key).await?,
+            StorageScope::System(id) => PluginDataRepository::delete(&self.db, id, key).await?,
+        })
+    }
+
+    async fn data_clear_all(&self) -> Result<u64> {
+        Ok(match self.scope {
+            StorageScope::User(id) => UserPluginDataRepository::clear_all(&self.db, id).await?,
+            StorageScope::System(id) => PluginDataRepository::clear_all(&self.db, id).await?,
+        })
     }
 
     /// Handle a storage JSON-RPC request and return a response
@@ -51,7 +178,7 @@ impl StorageRequestHandler {
 
         debug!(
             method = method,
-            user_plugin_id = %self.user_plugin_id,
+            scope = %self.scope.describe(),
             "Handling storage request"
         );
 
@@ -79,7 +206,7 @@ impl StorageRequestHandler {
             Err(resp) => return resp.with_id(id),
         };
 
-        match UserPluginDataRepository::get(&self.db, self.user_plugin_id, &params.key).await {
+        match self.data_get(&params.key).await {
             Ok(Some(entry)) => {
                 let response = StorageGetResponse {
                     data: Some(entry.data),
@@ -118,7 +245,7 @@ impl StorageRequestHandler {
             .unwrap_or(0);
         if serialized_size > MAX_VALUE_SIZE_BYTES {
             warn!(
-                user_plugin_id = %self.user_plugin_id,
+                scope = %self.scope.describe(),
                 key = %params.key,
                 size = serialized_size,
                 max = MAX_VALUE_SIZE_BYTES,
@@ -137,27 +264,23 @@ impl StorageRequestHandler {
         }
 
         // Enforce key count limit (only for new keys, not upserts)
-        let is_new_key =
-            match UserPluginDataRepository::get(&self.db, self.user_plugin_id, &params.key).await {
-                Ok(existing) => existing.is_none(),
-                Err(e) => {
-                    error!(error = %e, "Storage key existence check failed");
-                    return JsonRpcResponse::error(
-                        Some(id),
-                        JsonRpcError::new(
-                            error_codes::INTERNAL_ERROR,
-                            format!("Storage error: {}", e),
-                        ),
-                    );
-                }
-            };
+        let is_new_key = match self.data_get(&params.key).await {
+            Ok(existing) => existing.is_none(),
+            Err(e) => {
+                error!(error = %e, "Storage key existence check failed");
+                return JsonRpcResponse::error(
+                    Some(id),
+                    JsonRpcError::new(error_codes::INTERNAL_ERROR, format!("Storage error: {}", e)),
+                );
+            }
+        };
 
         if is_new_key {
-            match UserPluginDataRepository::list_keys(&self.db, self.user_plugin_id).await {
+            match self.data_list_keys().await {
                 Ok(keys) => {
                     if keys.len() >= MAX_KEYS_PER_PLUGIN {
                         warn!(
-                            user_plugin_id = %self.user_plugin_id,
+                            scope = %self.scope.describe(),
                             key_count = keys.len(),
                             max = MAX_KEYS_PER_PLUGIN,
                             "Storage key limit exceeded"
@@ -205,15 +328,7 @@ impl StorageRequestHandler {
             None => None,
         };
 
-        match UserPluginDataRepository::set(
-            &self.db,
-            self.user_plugin_id,
-            &params.key,
-            params.data,
-            expires_at,
-        )
-        .await
-        {
+        match self.data_set(&params.key, params.data, expires_at).await {
             Ok(_) => {
                 let response = StorageSetResponse { success: true };
                 JsonRpcResponse::success(id, serde_json::to_value(response).unwrap())
@@ -236,7 +351,7 @@ impl StorageRequestHandler {
             Err(resp) => return resp.with_id(id),
         };
 
-        match UserPluginDataRepository::delete(&self.db, self.user_plugin_id, &params.key).await {
+        match self.data_delete(&params.key).await {
             Ok(deleted) => {
                 let response = StorageDeleteResponse { deleted };
                 JsonRpcResponse::success(id, serde_json::to_value(response).unwrap())
@@ -254,7 +369,7 @@ impl StorageRequestHandler {
     async fn handle_list(&self, request: &JsonRpcRequest) -> JsonRpcResponse {
         let id = request.id.clone();
 
-        match UserPluginDataRepository::list_keys(&self.db, self.user_plugin_id).await {
+        match self.data_list_keys().await {
             Ok(entries) => {
                 let keys: Vec<StorageKeyEntry> = entries
                     .into_iter()
@@ -280,7 +395,7 @@ impl StorageRequestHandler {
     async fn handle_clear(&self, request: &JsonRpcRequest) -> JsonRpcResponse {
         let id = request.id.clone();
 
-        match UserPluginDataRepository::clear_all(&self.db, self.user_plugin_id).await {
+        match self.data_clear_all().await {
             Ok(count) => {
                 let response = StorageClearResponse {
                     deleted_count: count,
@@ -394,6 +509,13 @@ mod tests {
             .unwrap();
         let handler = StorageRequestHandler::new(db.clone(), user_plugin.id);
         (handler, user_plugin.id)
+    }
+
+    /// A system-scoped handler keyed by the `plugins` row (no user context).
+    async fn setup_system_handler(db: &DatabaseConnection) -> (StorageRequestHandler, Uuid) {
+        let plugin = create_test_plugin(db).await;
+        let handler = StorageRequestHandler::new_system(db.clone(), plugin.id);
+        (handler, plugin.id)
     }
 
     fn make_request(method: &str, params: Option<Value>) -> JsonRpcRequest {
@@ -732,6 +854,31 @@ mod tests {
         let err = resp.error.unwrap();
         assert_eq!(err.code, error_codes::INVALID_PARAMS);
         assert!(err.message.contains("key limit exceeded"));
+    }
+
+    #[tokio::test]
+    async fn test_system_scope_set_get_and_isolation() {
+        let db = setup_test_db().await;
+        let (handler, _) = setup_system_handler(&db).await;
+
+        // A system plugin (no user context) can persist and read back data.
+        let set = make_request(
+            "storage/set",
+            Some(json!({"key": "feed_cursor", "data": "abc"})),
+        );
+        assert!(!handler.handle_request(&set).await.is_error());
+
+        let get = make_request("storage/get", Some(json!({"key": "feed_cursor"})));
+        let resp = handler.handle_request(&get).await;
+        let result: StorageGetResponse = serde_json::from_value(resp.result.unwrap()).unwrap();
+        assert_eq!(result.data.unwrap(), json!("abc"));
+
+        // A different system plugin's bucket is isolated.
+        let (other, _) = setup_system_handler(&db).await;
+        let get2 = make_request("storage/get", Some(json!({"key": "feed_cursor"})));
+        let resp2 = other.handle_request(&get2).await;
+        let result2: StorageGetResponse = serde_json::from_value(resp2.result.unwrap()).unwrap();
+        assert!(result2.data.is_none());
     }
 
     #[tokio::test]
