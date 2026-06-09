@@ -6,10 +6,15 @@ incremental series feed. **Notification-only** — Codex does not download anyth
 
 ## Features
 
-- **Exact external-ID matching, no fuzzy logic.** Series are matched to your
-  Codex catalog by provider IDs (MangaBaka, AniList, MAL, MangaUpdates, Kitsu,
-  Shikimori, Anime-Planet, Anime News Network), so announcements always land on
-  the right series with full confidence.
+- **External-ID matching by weighted voting, no title fuzzing.** Series are
+  matched to your Codex catalog by provider IDs (MangaBaka, AniList, MAL,
+  MangaUpdates, Kitsu, Shikimori, Anime-Planet, Anime News Network). Because
+  some providers occasionally share/merge IDs across distinct series, each
+  shared ID *votes*: an agreeing ID adds its weight (MangaBaka 3, AniList 2,
+  rest 1), a disagreeing one subtracts it, and a series matches only when
+  agreement wins. So a trusted disagreement (different MangaBaka IDs) overrides
+  a sloppy agreement (a shared MAL ID), and genuinely ambiguous ties are
+  skipped rather than mis-attributed.
 - **Incremental, cursor-based.** Walks Tsundoku's keyset-paginated
   `/api/v1/series/feed`, persisting its position in the plugin's
   (system-scoped) KV store so each poll only processes activity since the last
@@ -68,10 +73,13 @@ On each poll the plugin:
    (`feed_cursor`).
 2. Builds a reverse index (`provider:id → Codex series`) from your tracked
    series via the host's `releases/list_tracked`.
-3. Walks the feed from the cursor. Each item is matched against the index by
-   external ID; on a hit it records a release candidate (confidence `1.0`) whose
-   `volumes`/`chapters` mirror the item's coverage. The cursor is persisted after
-   each processed page, so an interrupted walk resumes cleanly.
+3. Walks the feed from the cursor. Each item is matched to a tracked series by
+   weighted external-ID voting (see Features); on a confident match it records a
+   release candidate whose `volumes`/`chapters` mirror the item's coverage and
+   whose confidence reflects the vote. When several feed entries map to the same
+   Codex series, only the best-scoring one is recorded (ties are skipped). The
+   cursor is persisted after each processed page, so an interrupted walk resumes
+   cleanly.
 4. Reports counters back to the host; the host applies its own threshold,
    auto-ignore (for coverage you already own), and dedup.
 
@@ -125,7 +133,7 @@ src/
 ├── index.ts        # Plugin lifecycle, config, source registration, poll loop
 ├── manifest.ts     # Capability + config schema + supported providers
 ├── fetcher.ts      # Feed wire types + paginated fetchFeedPage
-├── matcher.ts      # Reverse index + exact external-ID matching
+├── matcher.ts      # Weighted-vote external-ID matching + cross-item resolution
 └── candidate.ts    # Feed item → ReleaseCandidate mapping
 ```
 
