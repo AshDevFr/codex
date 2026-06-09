@@ -2,6 +2,27 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.37.0] - 2026-06-09
+
+### 🚀 Features
+
+- *(plugins)* Scaffold tsundoku release-source plugin
+- *(plugins)* Add tsundoku feed fetcher and cursor persistence
+- *(plugins)* Add tsundoku external-id matching and candidate mapping
+- *(plugins)* Implement tsundoku release poll loop
+- *(plugins)* Add system-scoped plugin KV store and use it for the tsundoku cursor
+- *(plugins)* Match tsundoku series by weighted external-id voting
+- *(plugins)* Fetch tsundoku via filtered POST, drop the cursor
+
+### 🐛 Bug Fixes
+
+- *(plugins)* Make release-source init race-free and fix system-plugin cursor storage
+- *(tasks)* Replay recorded events for failed tasks
+
+### 🧪 Testing
+
+- *(tasks)* Pass result_data arg to mark_failed in task queue tests
+
 ## [1.36.1] - 2026-06-08
 
 ### 🚜 Refactor
