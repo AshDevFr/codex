@@ -23,8 +23,9 @@ function feedItem(overrides: Partial<FeedItem> = {}): FeedItem {
 
 const match: MatchResult = {
   codexSeriesId: "uuid-a",
-  provider: "mangabaka",
-  externalId: "9741",
+  score: 4,
+  confidence: 1.0,
+  agreeingProviders: ["mangabaka", "mal"],
 };
 
 const opts = {
@@ -95,12 +96,12 @@ describe("externalReleaseId", () => {
 // -----------------------------------------------------------------------------
 
 describe("feedItemToCandidate", () => {
-  it("builds an exact-match candidate (confidence 1.0)", () => {
+  it("carries the vote confidence and agreeing providers into seriesMatch", () => {
     const c = feedItemToCandidate(feedItem(), match, opts);
     expect(c.seriesMatch).toEqual({
       codexSeriesId: "uuid-a",
       confidence: 1.0,
-      reason: "tsundoku:mangabaka:9741",
+      reason: "tsundoku:vote:mangabaka+mal",
     });
     expect(c.externalReleaseId).toBe("tsundoku:87:v16:c-");
     expect(c.language).toBe("en");

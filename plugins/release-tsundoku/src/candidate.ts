@@ -51,8 +51,9 @@ export function externalReleaseId(item: FeedItem): string {
 }
 
 /**
- * Build a `ReleaseCandidate` for a matched feed item. Confidence is 1.0 — the
- * match is an exact external-ID hit, never fuzzy.
+ * Build a `ReleaseCandidate` for a matched feed item. Confidence and `reason`
+ * come from the weighted-vote match: confidence reflects the net agreement
+ * score, and `reason` lists the providers that agreed (highest-weight first).
  */
 export function feedItemToCandidate(
   item: FeedItem,
@@ -63,8 +64,8 @@ export function feedItemToCandidate(
   return {
     seriesMatch: {
       codexSeriesId: match.codexSeriesId,
-      confidence: 1.0,
-      reason: `tsundoku:${match.provider}:${match.externalId}`,
+      confidence: match.confidence,
+      reason: `tsundoku:vote:${match.agreeingProviders.join("+")}`,
     },
     externalReleaseId: externalReleaseId(item),
     volumes: toSpans(item.volumeCoverage),

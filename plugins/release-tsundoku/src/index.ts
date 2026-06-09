@@ -37,9 +37,9 @@ import {
   type TrackedSeriesEntry,
 } from "@ashdev/codex-plugin-sdk";
 import { feedItemToCandidate } from "./candidate.js";
-import { fetchFeedPage } from "./fetcher.js";
+import { type FeedItem, fetchFeedPage } from "./fetcher.js";
 import { manifest } from "./manifest.js";
-import { buildIndex, matchItem } from "./matcher.js";
+import { buildMatchContext, type MatchResult, matchItem } from "./matcher.js";
 
 const logger = createLogger({ name: manifest.name, level: "info" });
 
@@ -291,27 +291,28 @@ export async function poll(
 ): Promise<ReleasePollResponse> {
   const sourceId = params.sourceId;
 
-  // 1. Build the reverse index from the user's tracked series. The feed spans
+  // 1. Build the match context from the user's tracked series. The feed spans
   //    the whole Tsundoku catalog, so this is what scopes it to the user.
   const trackedEntries: TrackedSeriesEntry[] = [];
   for await (const entry of iterateTrackedSeries(rpc, sourceId)) {
     trackedEntries.push(entry);
   }
-  const index = buildIndex(trackedEntries);
-  if (index.size === 0) {
+  const ctx = buildMatchContext(trackedEntries);
+  if (ctx.series.size === 0) {
     logger.info(
       `poll: no tracked series carry a Tsundoku-known external ID (source=${sourceId}); nothing to match`,
     );
   }
 
-  // 2. Walk the feed from the stored cursor.
+  // 2. Walk the feed from the stored cursor, collecting per-item matches. We
+  //    resolve them after the walk (cross-item) rather than recording inline,
+  //    so that when several feed entries map to the same Codex series we keep
+  //    only the best one instead of polluting the ledger.
   let cursor = await loadCursor(deps.storage);
   let parsed = 0;
-  let matched = 0;
-  let recorded = 0;
-  let deduped = 0;
   let worstStatus = 200;
   let pagesFetched = 0;
+  const hits: Array<{ item: FeedItem; match: MatchResult }> = [];
 
   while (true) {
     const result = await fetchFeedPage(deps.baseUrl, cursor, deps.pageLimit, {
@@ -338,19 +339,9 @@ export async function poll(
     const page = result.data;
     for (const item of page.items) {
       parsed++;
-      const match = matchItem(item, index);
-      if (!match) continue;
-      matched++;
-      const candidate = feedItemToCandidate(item, match, {
-        baseUrl: deps.baseUrl,
-        language: deps.language,
-      });
-      const outcome = await recordCandidate(rpc, sourceId, candidate);
-      if (!outcome) continue;
-      if (outcome.deduped) {
-        deduped++;
-      } else {
-        recorded++;
+      const match = matchItem(item, ctx);
+      if (match) {
+        hits.push({ item, match });
       }
     }
 
@@ -373,8 +364,61 @@ export async function poll(
     if (page.items.length === 0) break;
   }
 
+  // 3. Cross-item resolution: a Codex series should map to at most one feed
+  //    entry. Group hits by Codex series; keep the highest-scoring one. If the
+  //    top two tie (e.g. two entries match only via the same low-trust ID),
+  //    it's genuinely ambiguous — skip both rather than record the wrong one.
+  const byCodex = new Map<string, Array<{ item: FeedItem; match: MatchResult }>>();
+  for (const hit of hits) {
+    const arr = byCodex.get(hit.match.codexSeriesId);
+    if (arr) {
+      arr.push(hit);
+    } else {
+      byCodex.set(hit.match.codexSeriesId, [hit]);
+    }
+  }
+
+  let matched = 0;
+  let recorded = 0;
+  let deduped = 0;
+  let ambiguous = 0;
+  let superseded = 0;
+
+  for (const [codexSeriesId, group] of byCodex) {
+    // Best score first; for ties prefer the most recently updated entry (newest
+    // coverage). The same Tsundoku series appearing twice in one walk is not a
+    // conflict — only *different* series tying is.
+    group.sort((a, b) => b.match.score - a.match.score || b.item.updatedAt - a.item.updatedAt);
+    if (
+      group.length > 1 &&
+      group[0].match.score === group[1].match.score &&
+      group[0].item.seriesId !== group[1].item.seriesId
+    ) {
+      ambiguous += group.length;
+      logger.warn(
+        `ambiguous: feed entries from different Tsundoku series match Codex series ${codexSeriesId} at score ${group[0].match.score}; skipping`,
+      );
+      continue;
+    }
+    superseded += group.length - 1;
+
+    const { item, match } = group[0];
+    matched++;
+    const candidate = feedItemToCandidate(item, match, {
+      baseUrl: deps.baseUrl,
+      language: deps.language,
+    });
+    const outcome = await recordCandidate(rpc, sourceId, candidate);
+    if (!outcome) continue;
+    if (outcome.deduped) {
+      deduped++;
+    } else {
+      recorded++;
+    }
+  }
+
   logger.info(
-    `poll complete: source=${sourceId} tracked=${trackedEntries.length} parsed=${parsed} matched=${matched} recorded=${recorded} deduped=${deduped} worst_status=${worstStatus}`,
+    `poll complete: source=${sourceId} tracked=${trackedEntries.length} parsed=${parsed} matched=${matched} recorded=${recorded} deduped=${deduped} ambiguous=${ambiguous} superseded=${superseded} worst_status=${worstStatus}`,
   );
 
   return {

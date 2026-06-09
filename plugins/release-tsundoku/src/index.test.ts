@@ -262,7 +262,10 @@ const pollDeps = (fetchImpl: typeof fetch, storage: PluginStorage) => ({
 describe("poll", () => {
   it("walks pages, matches by external id, records, and persists the cursor per page", async () => {
     const { rpc } = makePollRpc({
-      tracked: [{ seriesId: "uuid-a", externalIds: { mangabaka: "9741" } }],
+      tracked: [
+        { seriesId: "uuid-a", externalIds: { mangabaka: "9741" } },
+        { seriesId: "uuid-b", externalIds: { mangabaka: "5555" } },
+      ],
     });
     const { storage, sets } = makeStorage();
     const { fetchImpl } = makeFetchSequence([
@@ -271,14 +274,14 @@ describe("poll", () => {
         hasMore: true,
         nextCursor: "c1",
       },
-      { items: [item(87, "mangabaka", "9741", 17)], hasMore: false, nextCursor: "c2" },
+      { items: [item(88, "mangabaka", "5555", 3)], hasMore: false, nextCursor: "c2" },
     ]);
 
     const res = await poll({ sourceId: "src-1" }, rpc, pollDeps(fetchImpl, storage));
 
     expect(res).toMatchObject({
-      parsed: 3,
-      matched: 2,
+      parsed: 3, // 87, 99, 88
+      matched: 2, // 87 -> uuid-a, 88 -> uuid-b; 99 unmatched
       recorded: 2,
       deduped: 0,
       upstreamStatus: 200,
@@ -289,19 +292,61 @@ describe("poll", () => {
   it("counts host dedup separately from inserts", async () => {
     const { rpc } = makePollRpc({
       tracked: [{ seriesId: "uuid-a", externalIds: { mangabaka: "9741" } }],
-      onRecord: (n) => ({ ledgerId: `l${n}`, deduped: n > 1 }),
+      onRecord: () => ({ ledgerId: "l1", deduped: true }),
+    });
+    const { storage } = makeStorage();
+    const { fetchImpl } = makeFetchSequence([
+      { items: [item(87, "mangabaka", "9741", 16)], hasMore: false, nextCursor: "c1" },
+    ]);
+
+    const res = await poll({ sourceId: "src-1" }, rpc, pollDeps(fetchImpl, storage));
+    expect(res).toMatchObject({ matched: 1, recorded: 0, deduped: 1 });
+  });
+
+  it("resolves a collision to the highest-scoring feed entry", async () => {
+    // Two different Tsundoku series both map to uuid-a: #87 via mangabaka
+    // (score 3) and #88 via mal (score 1). The mangabaka match wins; the mal
+    // one is superseded, so only one record call is made — for series #87.
+    const { rpc, calls } = makePollRpc({
+      tracked: [{ seriesId: "uuid-a", externalIds: { mangabaka: "9741", mal: "555" } }],
     });
     const { storage } = makeStorage();
     const { fetchImpl } = makeFetchSequence([
       {
-        items: [item(87, "mangabaka", "9741", 16), item(87, "mangabaka", "9741", 17)],
+        items: [item(87, "mangabaka", "9741", 16), item(88, "mal", "555", 9)],
         hasMore: false,
         nextCursor: "c1",
       },
     ]);
 
     const res = await poll({ sourceId: "src-1" }, rpc, pollDeps(fetchImpl, storage));
-    expect(res).toMatchObject({ matched: 2, recorded: 1, deduped: 1 });
+    expect(res).toMatchObject({ parsed: 2, matched: 1, recorded: 1 });
+
+    const recordCalls = calls.filter((c) => c.method === "releases/record");
+    expect(recordCalls).toHaveLength(1);
+    const candidate = (recordCalls[0].params as { candidate: { externalReleaseId: string } })
+      .candidate;
+    expect(candidate.externalReleaseId).toContain("tsundoku:87:");
+  });
+
+  it("skips an ambiguous collision (different series tie at the same score)", async () => {
+    // Both #87 and #88 match uuid-a only via the same low-trust mal id (score
+    // 1 each) — genuinely ambiguous, so neither is recorded.
+    const { rpc, calls } = makePollRpc({
+      tracked: [{ seriesId: "uuid-a", externalIds: { mal: "555" } }],
+    });
+    const { storage } = makeStorage();
+    const { fetchImpl } = makeFetchSequence([
+      {
+        items: [item(87, "mal", "555", 16), item(88, "mal", "555", 9)],
+        hasMore: false,
+        nextCursor: "c1",
+      },
+    ]);
+
+    const res = await poll({ sourceId: "src-1" }, rpc, pollDeps(fetchImpl, storage));
+    expect(res).toMatchObject({ parsed: 2, matched: 0, recorded: 0 });
+    expect(calls.some((c) => c.method === "releases/record")).toBe(false);
   });
 
   it("skips items with no tracked match (no record calls)", async () => {
