@@ -250,6 +250,25 @@ export async function poll(
   }
   const ctx = buildMatchContext(trackedEntries);
   const externalIds = externalIdFilter(ctx);
+
+  // Diagnostics: the filter POSTed to Tsundoku is built from whatever external
+  // IDs the host handed us. A large tracked count with a small filter means
+  // most tracked series carry no Tsundoku-known external ID (host-side gap); a
+  // large filter with few parsed items means Tsundoku itself only knows a
+  // subset (upstream gap). Log the breakdown so the two can be told apart.
+  const withIds = trackedEntries.filter(
+    (e) => e.externalIds && Object.keys(e.externalIds).length > 0,
+  ).length;
+  const providerCounts: Record<string, number> = {};
+  for (const key of externalIds) {
+    const provider = key.slice(0, key.indexOf(":"));
+    providerCounts[provider] = (providerCounts[provider] ?? 0) + 1;
+  }
+  logger.info(
+    `poll: filter built — tracked=${trackedEntries.length} withExternalIds=${withIds} filterKeys=${externalIds.length} byProvider=${JSON.stringify(providerCounts)}`,
+  );
+  logger.debug(`poll: full external-id filter posted to Tsundoku: ${JSON.stringify(externalIds)}`);
+
   if (externalIds.length === 0) {
     // Nothing to query. Posting an empty filter would mean "no filter" upstream
     // (the whole catalog), so skip entirely instead.
@@ -304,6 +323,14 @@ export async function poll(
       const match = matchItem(item, ctx);
       if (match) {
         hits.push({ item, match });
+      } else {
+        // An item Tsundoku returned that we couldn't tie to a tracked series.
+        // Usually means the provider/id Tsundoku emits for it differs from what
+        // Codex stored. Trace the provider mappings so the mismatch is visible.
+        logger.debug(
+          `poll: feed item ${item.seriesId} (${item.canonicalTitle}) returned but matched no tracked series; ` +
+            `itemExternalIds=${JSON.stringify(item.externalIds.map((e) => `${e.provider}:${e.externalId}`))}`,
+        );
       }
     }
 
@@ -411,6 +438,8 @@ createReleaseSourcePlugin({
   },
   logLevel: "info",
   async onInitialize(params: InitializeParams) {
+    // Honor the host-supplied log level (Codex `plugins.log_level` config).
+    if (params.logLevel) logger.setLevel(params.logLevel);
     state.hostRpc = params.hostRpc;
 
     const ac = params.adminConfig ?? {};

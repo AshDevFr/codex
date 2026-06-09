@@ -143,6 +143,10 @@ pub struct PluginManagerConfig {
     /// TTL for the plugin cache before refreshing from database
     /// This ensures multi-pod deployments eventually see plugin changes
     pub cache_ttl: Duration,
+    /// Log level sent to plugins at `initialize` (`debug`/`info`/`warn`/
+    /// `error`), from the host's `plugins.log_level` config. `None` leaves each
+    /// plugin on its own default.
+    pub plugin_log_level: Option<String>,
 }
 
 impl Default for PluginManagerConfig {
@@ -156,6 +160,7 @@ impl Default for PluginManagerConfig {
             auto_sync_health: true,
             health_check_interval: Duration::from_secs(60), // Check every minute
             cache_ttl: Duration::from_secs(30),             // Refresh from DB every 30 seconds
+            plugin_log_level: None,
         }
     }
 }
@@ -357,6 +362,14 @@ impl PluginManager {
     /// Create a new plugin manager with default configuration
     pub fn with_defaults(db: Arc<DatabaseConnection>) -> Self {
         Self::new(db, PluginManagerConfig::default())
+    }
+
+    /// Set the log level sent to plugins at `initialize`, from the host's
+    /// `plugins.log_level` config. Builder-style; `None` is a no-op (plugins
+    /// keep their own default).
+    pub fn with_plugin_log_level(mut self, level: Option<String>) -> Self {
+        self.config.plugin_log_level = level;
+        self
     }
 
     /// Set the metrics service for recording plugin operation metrics
@@ -924,6 +937,7 @@ impl PluginManager {
             // data per user (the credential alone may not identify the user).
             user_id: Some(user_plugin.user_id.to_string()),
             user_plugin_id: Some(user_plugin.id.to_string()),
+            log_level: self.config.plugin_log_level.clone(),
         })
     }
 
@@ -1886,6 +1900,7 @@ impl PluginManager {
             // System plugins are not bound to a user.
             user_id: None,
             user_plugin_id: None,
+            log_level: self.config.plugin_log_level.clone(),
         })
     }
 

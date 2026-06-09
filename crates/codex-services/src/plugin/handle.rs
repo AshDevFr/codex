@@ -86,6 +86,10 @@ pub struct PluginConfig {
     pub user_id: Option<String>,
     /// User-plugin connection id (user plugins only; matches storage scope)
     pub user_plugin_id: Option<String>,
+    /// Log level handed to the plugin at `initialize` (`debug`/`info`/`warn`/
+    /// `error`). Sourced from the host's `plugins.log_level` config. `None`
+    /// leaves the plugin on its own default.
+    pub log_level: Option<String>,
 }
 
 impl std::fmt::Debug for PluginConfig {
@@ -118,6 +122,7 @@ impl Default for PluginConfig {
             data_dir: None,
             user_id: None,
             user_plugin_id: None,
+            log_level: None,
         }
     }
 }
@@ -308,6 +313,7 @@ impl PluginHandle {
             data_dir: self.config.data_dir.clone(),
             user_id: self.config.user_id.clone(),
             user_plugin_id: self.config.user_plugin_id.clone(),
+            log_level: self.config.log_level.clone(),
         };
 
         debug!(

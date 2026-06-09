@@ -13,7 +13,7 @@
 import { createInterface } from "node:readline";
 import { PluginError } from "./errors.js";
 import { HostRpcClient } from "./host-rpc.js";
-import { createLogger, type Logger } from "./logger.js";
+import { createLogger, type Logger, type LogLevel } from "./logger.js";
 import { runWithParentRequestId } from "./request-context.js";
 import { PluginStorage } from "./storage.js";
 import type {
@@ -201,6 +201,14 @@ export interface InitializeParams {
    * declaring the `releaseSource` capability.
    */
   hostRpc: HostRpcClient;
+  /**
+   * Log level the host wants this plugin to use (`debug` | `info` | `warn` |
+   * `error`), from the Codex `plugins.log_level` config. Sent on every
+   * `initialize`. Honoring it is optional and up to the plugin — typically
+   * `logger.setLevel(params.logLevel)` in `onInitialize`. The SDK already
+   * applies it to its own internal logger before calling `onInitialize`.
+   */
+  logLevel?: LogLevel;
 }
 
 /**
@@ -377,6 +385,11 @@ async function handleRequest(
       // call host-side methods (e.g. releases/list_tracked).
       initParams.storage = storage;
       initParams.hostRpc = hostRpc;
+      // Apply the host-supplied level to the SDK's own logger so lifecycle
+      // logs honor it too. Plugins opt in for their own logger in onInitialize.
+      if (initParams.logLevel) {
+        logger.setLevel(initParams.logLevel);
+      }
       if (onInitialize) {
         await onInitialize(initParams);
       }

@@ -135,6 +135,8 @@ createRecommendationPlugin({
   provider,
   logLevel: "debug",
   onInitialize(params: InitializeParams) {
+    // Honor the host-supplied log level (Codex `plugins.log_level` config).
+    if (params.logLevel) logger.setLevel(params.logLevel);
     // Set up payload recording (on by default for this debug plugin)
     const recordPayloads = params.adminConfig?.recordPayloads !== false;
     const maxPayloadFiles =

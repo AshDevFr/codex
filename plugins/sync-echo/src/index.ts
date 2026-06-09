@@ -158,6 +158,8 @@ createSyncPlugin({
   provider,
   logLevel: "debug",
   onInitialize(params: InitializeParams) {
+    // Honor the host-supplied log level (Codex `plugins.log_level` config).
+    if (params.logLevel) logger.setLevel(params.logLevel);
     const pullCount = params.adminConfig?.pullCount;
     if (typeof pullCount === "number") {
       config.pullCount = Math.min(Math.max(1, Math.floor(pullCount)), 50);

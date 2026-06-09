@@ -421,6 +421,8 @@ createRecommendationPlugin({
   provider,
   logLevel: "debug",
   async onInitialize(params: InitializeParams) {
+    // Honor the host-supplied log level (Codex `plugins.log_level` config).
+    if (params.logLevel) logger.setLevel(params.logLevel);
     const accessToken = params.credentials?.access_token;
     if (accessToken) {
       client = new AniListRecommendationClient(accessToken);

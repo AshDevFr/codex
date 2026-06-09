@@ -23,8 +23,8 @@ mod tests {
     use crate::{
         ApiConfig, ApplicationConfig, AuthConfig, DatabaseConfig, DatabaseType, EmailConfig,
         FilesConfig, KomgaApiConfig, KoreaderApiConfig, LoggingConfig, ObservabilityConfig,
-        PdfConfig, PdfHandleCacheConfig, RateLimitConfig, SQLiteConfig, ScannerConfig,
-        SchedulerConfig, TaskConfig,
+        PdfConfig, PdfHandleCacheConfig, PluginsConfig, RateLimitConfig, SQLiteConfig,
+        ScannerConfig, SchedulerConfig, TaskConfig,
     };
     use tempfile::NamedTempFile;
 
@@ -77,6 +77,7 @@ application:
             scanner: ScannerConfig::default(),
             scheduler: SchedulerConfig::default(),
             files: FilesConfig::default(),
+            plugins: PluginsConfig::default(),
             pdf: PdfConfig::default(),
             pdf_handle_cache: PdfHandleCacheConfig::default(),
             komga_api: KomgaApiConfig::default(),
@@ -165,6 +166,7 @@ scanner:
             },
             scheduler: SchedulerConfig::default(),
             files: FilesConfig::default(),
+            plugins: PluginsConfig::default(),
             pdf: PdfConfig::default(),
             pdf_handle_cache: PdfHandleCacheConfig::default(),
             komga_api: KomgaApiConfig::default(),

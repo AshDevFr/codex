@@ -3,8 +3,8 @@ use super::types::{
     ApiConfig, ApplicationConfig, AuthConfig, Config, DatabaseConfig, DatabaseType, FilesConfig,
     KomgaApiConfig, KoreaderApiConfig, LogLevel, LoggingConfig, ObservabilityBrowserConfig,
     ObservabilityConfig, ObservabilityMetricsConfig, ObservabilityTracesConfig, OidcConfig,
-    OidcDefaultRole, OidcProviderConfig, OtlpConfig, OtlpProtocol, PostgresConfig, RateLimitConfig,
-    SQLiteConfig, ScannerConfig, TaskConfig,
+    OidcDefaultRole, OidcProviderConfig, OtlpConfig, OtlpProtocol, PluginsConfig, PostgresConfig,
+    RateLimitConfig, SQLiteConfig, ScannerConfig, TaskConfig,
 };
 use std::collections::HashMap;
 use std::env;
@@ -234,6 +234,8 @@ impl EnvOverride for Config {
         self.scanner
             .apply_env_overrides(&format!("{}_SCANNER", prefix));
         self.files.apply_env_overrides(&format!("{}_FILES", prefix));
+        self.plugins
+            .apply_env_overrides(&format!("{}_PLUGINS", prefix));
         self.komga_api
             .apply_env_overrides(&format!("{}_KOMGA_API", prefix));
         self.rate_limit
@@ -454,6 +456,23 @@ impl EnvOverride for LoggingConfig {
             } else {
                 Some(log_file)
             };
+        }
+    }
+}
+
+impl EnvOverride for PluginsConfig {
+    fn apply_env_overrides(&mut self, prefix: &str) {
+        if let Ok(level_str) = env::var(format!("{}_LOG_LEVEL", prefix))
+            && let Some(level) = match level_str.to_lowercase().as_str() {
+                "error" => Some(LogLevel::Error),
+                "warn" => Some(LogLevel::Warn),
+                "info" => Some(LogLevel::Info),
+                "debug" => Some(LogLevel::Debug),
+                "trace" => Some(LogLevel::Trace),
+                _ => None,
+            }
+        {
+            self.log_level = level;
         }
     }
 }
@@ -780,6 +799,7 @@ mod tests {
             },
             scheduler: SchedulerConfig::default(),
             files: FilesConfig::default(),
+            plugins: PluginsConfig::default(),
             pdf: PdfConfig::default(),
             pdf_handle_cache: PdfHandleCacheConfig::default(),
             komga_api: KomgaApiConfig::default(),
@@ -969,6 +989,7 @@ mod tests {
             },
             scheduler: SchedulerConfig::default(),
             files: FilesConfig::default(),
+            plugins: PluginsConfig::default(),
             pdf: PdfConfig::default(),
             pdf_handle_cache: PdfHandleCacheConfig::default(),
             komga_api: KomgaApiConfig {

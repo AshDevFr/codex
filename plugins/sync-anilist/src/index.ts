@@ -353,6 +353,8 @@ createSyncPlugin({
   provider,
   logLevel: "debug",
   onInitialize(params: InitializeParams) {
+    // Honor the host-supplied log level (Codex `plugins.log_level` config).
+    if (params.logLevel) logger.setLevel(params.logLevel);
     // Get access token from credentials
     const accessToken = params.credentials?.access_token;
     if (accessToken) {

@@ -346,6 +346,25 @@ Additional thumbnail settings are stored in the database and can be changed via 
 - `thumbnail_max_dimension` - Maximum width/height (default: 400px)
 - `thumbnail_jpeg_quality` - JPEG quality (default: 85%)
 
+## Plugins Configuration
+
+Settings for the plugin runtime.
+
+```yaml
+plugins:
+  log_level: info
+```
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `log_level` | `info` | Log level sent to plugins at startup (`error`, `warn`, `info`, `debug`, `trace`). Independent of the host's own `logging.level`, so you can make plugins verbose without flooding the host's logs. `trace` is delivered to plugins as `debug` (the plugin SDK logger has no `trace` level). Plugins honor it on a best-effort basis. |
+
+The host sends this level to every plugin in the `initialize` message; the plugin SDK applies it to its own logger and exposes it so each plugin can adopt it for its own logging. Override with the `CODEX_PLUGINS_LOG_LEVEL` environment variable.
+
+:::tip
+Set `plugins.log_level: debug` (or `CODEX_PLUGINS_LOG_LEVEL=debug`) when debugging a misbehaving plugin to surface its diagnostic logging, then revert to `info` to keep logs quiet.
+:::
+
 ## Email Configuration (Optional)
 
 For email verification and notifications:

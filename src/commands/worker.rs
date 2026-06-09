@@ -145,6 +145,7 @@ pub async fn worker_command(config_path: PathBuf) -> anyhow::Result<()> {
         codex_services::plugin::PluginManager::with_defaults(Arc::new(
             db.sea_orm_connection().clone(),
         ))
+        .with_plugin_log_level(Some(config.plugins.plugin_log_level_str().to_string()))
         .with_metrics_service(plugin_metrics_service)
         .with_plugin_file_storage(plugin_file_storage),
     );

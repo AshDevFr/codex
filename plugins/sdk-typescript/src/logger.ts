@@ -28,13 +28,23 @@ export interface LoggerOptions {
  */
 export class Logger {
   private readonly name: string;
-  private readonly minLevel: number;
+  private minLevel: number;
   private readonly timestamps: boolean;
 
   constructor(options: LoggerOptions) {
     this.name = options.name;
     this.minLevel = LOG_LEVELS[options.level ?? "info"];
     this.timestamps = options.timestamps ?? true;
+  }
+
+  /**
+   * Change the minimum level at runtime. Plugins typically call this from
+   * `onInitialize` with the host-supplied `logLevel` so debug output can be
+   * toggled centrally via the `plugins.log_level` Codex config without a
+   * rebuild.
+   */
+  setLevel(level: LogLevel): void {
+    this.minLevel = LOG_LEVELS[level];
   }
 
   private shouldLog(level: LogLevel): boolean {

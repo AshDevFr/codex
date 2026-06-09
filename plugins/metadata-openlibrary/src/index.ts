@@ -248,6 +248,8 @@ createMetadataPlugin({
   bookProvider,
   logLevel: "info",
   onInitialize(params: InitializeParams) {
+    // Honor the host-supplied log level (Codex `plugins.log_level` config).
+    if (params.logLevel) logger.setLevel(params.logLevel);
     // Read config from initialization params
     const maxResults = params.adminConfig?.maxResults as number | undefined;
     if (maxResults !== undefined) {

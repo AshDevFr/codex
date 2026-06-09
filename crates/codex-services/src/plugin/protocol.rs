@@ -1137,6 +1137,12 @@ pub struct InitializeParams {
     /// spawns, absent for system plugins. Opaque UUID.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub user_plugin_id: Option<String>,
+    /// Log level the plugin should adopt for its own logger (`debug`, `info`,
+    /// `warn`, `error`). Sourced from the host's `plugins.log_level` config and
+    /// sent on every spawn. The plugin SDK surfaces it; honoring it is
+    /// best-effort and up to each plugin.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub log_level: Option<String>,
 }
 
 // =============================================================================
@@ -2485,6 +2491,7 @@ mod tests {
             data_dir: None,
             user_id: None,
             user_plugin_id: None,
+            log_level: None,
         };
         let json = serde_json::to_value(&params).unwrap();
         assert_eq!(json["adminConfig"]["clientId"], "abc");
@@ -2503,6 +2510,7 @@ mod tests {
             data_dir: None,
             user_id: None,
             user_plugin_id: None,
+            log_level: None,
         };
         let json = serde_json::to_value(&params).unwrap();
         assert_eq!(json["config"]["merged"], true);

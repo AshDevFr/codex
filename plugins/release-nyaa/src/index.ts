@@ -483,6 +483,8 @@ createReleaseSourcePlugin({
   },
   logLevel: "info",
   async onInitialize(params: InitializeParams) {
+    // Honor the host-supplied log level (Codex `plugins.log_level` config).
+    if (params.logLevel) logger.setLevel(params.logLevel);
     state.hostRpc = params.hostRpc;
     const ac = params.adminConfig ?? {};
     state.subscriptions = parseSubscriptionList(ac.uploaders);

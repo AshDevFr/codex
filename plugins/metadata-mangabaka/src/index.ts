@@ -56,6 +56,8 @@ createMetadataPlugin({
   provider,
   logLevel: "info",
   onInitialize(params: InitializeParams) {
+    // Honor the host-supplied log level (Codex `plugins.log_level` config).
+    if (params.logLevel) logger.setLevel(params.logLevel);
     const apiKey = params.credentials?.api_key;
     if (!apiKey) {
       throw new ConfigError("api_key credential is required");
