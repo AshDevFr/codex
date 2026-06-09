@@ -847,7 +847,21 @@ impl TaskRepository {
     }
 
     /// Mark task as failed (will retry if attempts < max_attempts)
-    pub async fn mark_failed(db: &DatabaseConnection, task_id: Uuid, error: String) -> Result<()> {
+    /// Mark a task failed (or reschedule for retry if attempts remain).
+    ///
+    /// `result_data`, when provided, is persisted on the row. The worker uses
+    /// it to carry recorded entity events (`emitted_events`) so the web
+    /// server's `TaskListener` can replay them to SSE subscribers even for
+    /// *failed* tasks in distributed deployments — otherwise events emitted
+    /// during a failing task (e.g. a `release_source_polled` from a poll that
+    /// errored) would be lost and the UI wouldn't refresh until a manual
+    /// reload.
+    pub async fn mark_failed(
+        db: &DatabaseConnection,
+        task_id: Uuid,
+        error: String,
+        result_data: Option<serde_json::Value>,
+    ) -> Result<()> {
         let task = Tasks::find_by_id(task_id)
             .one(db)
             .await
@@ -855,6 +869,10 @@ impl TaskRepository {
             .ok_or_else(|| anyhow::anyhow!("Task not found"))?;
 
         let mut active: tasks::ActiveModel = task.clone().into();
+
+        if let Some(data) = result_data {
+            active.result = Set(Some(data));
+        }
 
         // Check if we should retry
         if task.attempts < task.max_attempts {
@@ -1304,5 +1322,55 @@ impl TaskRepository {
         }
 
         Ok(recovered)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_helpers::setup_test_db;
+
+    /// `mark_failed` persists `result_data` so the web `TaskListener` can replay
+    /// recorded events for failed tasks (distributed mode). Without this, events
+    /// emitted during a failing task would be lost.
+    #[tokio::test]
+    async fn mark_failed_persists_result_data() {
+        let db = setup_test_db().await;
+        let task_id = TaskRepository::enqueue(&db, TaskType::CleanupPluginData, None)
+            .await
+            .unwrap();
+
+        let result_data = serde_json::json!({
+            "emitted_events": [{ "marker": "release_source_polled" }]
+        });
+        TaskRepository::mark_failed(&db, task_id, "boom".to_string(), Some(result_data.clone()))
+            .await
+            .unwrap();
+
+        let task = TaskRepository::get_by_id(&db, task_id)
+            .await
+            .unwrap()
+            .expect("task exists");
+        assert_eq!(task.last_error.as_deref(), Some("boom"));
+        assert_eq!(task.result, Some(result_data));
+    }
+
+    /// Passing `None` leaves the result column untouched.
+    #[tokio::test]
+    async fn mark_failed_without_result_data_leaves_result_null() {
+        let db = setup_test_db().await;
+        let task_id = TaskRepository::enqueue(&db, TaskType::CleanupPluginData, None)
+            .await
+            .unwrap();
+
+        TaskRepository::mark_failed(&db, task_id, "boom".to_string(), None)
+            .await
+            .unwrap();
+
+        let task = TaskRepository::get_by_id(&db, task_id)
+            .await
+            .unwrap()
+            .expect("task exists");
+        assert!(task.result.is_none());
     }
 }

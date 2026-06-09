@@ -178,9 +178,12 @@ impl TaskListener {
             }
         }
 
-        // Replay any recorded entity events from the task result
-        // This bridges events from worker processes to the web server
-        if status == TaskStatus::Completed
+        // Replay any recorded entity events from the task result. This bridges
+        // events from worker processes to the web server. Failed tasks can
+        // carry events too (e.g. a `release_source_polled` from a poll that
+        // errored), so replay on both terminal states — otherwise the UI
+        // wouldn't refresh after a failed poll until a manual reload.
+        if matches!(status, TaskStatus::Completed | TaskStatus::Failed)
             && let Err(e) = self.replay_recorded_events(task_id).await
         {
             warn!(

@@ -738,10 +738,10 @@ impl TaskWorker {
                             .message
                             .unwrap_or_else(|| "task reported failure".to_string())
                     );
-                    self.fail_task(&task, err, started_at).await?;
+                    self.fail_task(&task, err, started_at, events).await?;
                 }
                 Err(e) => {
-                    self.fail_task(&task, e, started_at).await?;
+                    self.fail_task(&task, e, started_at, events).await?;
                 }
             }
 
@@ -794,10 +794,12 @@ impl TaskWorker {
                         .message
                         .unwrap_or_else(|| "task reported failure".to_string())
                 );
-                self.fail_task(&task, err, started_at).await?;
+                // Single-process mode: events flow live to the shared
+                // broadcaster, so there are none to record/replay.
+                self.fail_task(&task, err, started_at, None).await?;
             }
             Err(e) => {
-                self.fail_task(&task, e, started_at).await?;
+                self.fail_task(&task, e, started_at, None).await?;
             }
         }
 
@@ -901,6 +903,7 @@ impl TaskWorker {
         task: &codex_db::entities::tasks::Model,
         error: anyhow::Error,
         started_at: chrono::DateTime<Utc>,
+        recorded_events: Option<Vec<RecordedEvent>>,
     ) -> Result<()> {
         let completed_at = Utc::now();
         let error_string = error.to_string();
@@ -963,9 +966,16 @@ impl TaskWorker {
             return Ok(());
         }
 
-        // Not rate-limited: handle as normal failure
+        // Not rate-limited: handle as normal failure. Carry any recorded
+        // events through so the web `TaskListener` can replay them for failed
+        // tasks too (distributed mode) — e.g. a `release_source_polled` from a
+        // poll that errored, so the Release tracking UI updates without a
+        // manual reload.
         error!("Task {} failed: {}", task.id, error_string);
-        TaskRepository::mark_failed(&self.db, task.id, error_string.clone()).await?;
+        let result_data = recorded_events
+            .filter(|events| !events.is_empty())
+            .map(|events| json!({ "emitted_events": events }));
+        TaskRepository::mark_failed(&self.db, task.id, error_string.clone(), result_data).await?;
 
         // Record metrics
         if let Some(ref metrics_service) = self.task_metrics_service {
