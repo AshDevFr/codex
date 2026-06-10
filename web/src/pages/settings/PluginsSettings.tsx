@@ -86,6 +86,10 @@ export function PluginsSettings() {
   const showSkeleton = useShowSkeleton(isLoading);
 
   const plugins = pluginsResponse?.plugins ?? [];
+  // Server default plugin log level (host logging.level) — the same for every
+  // plugin, surfaced on each DTO. Used to label "off uses the server default".
+  const serverDefaultLogLevel =
+    plugins.find((p) => p.defaultLogLevel)?.defaultLogLevel ?? "info";
 
   // Below xs we render a card stack instead of the wide Table. Using
   // useMediaQuery here (rather than `visibleFrom`/`hiddenFrom`) ensures only
@@ -154,6 +158,7 @@ export function PluginsSettings() {
         requestTimeoutSeconds: values.requestTimeoutOverrideEnabled
           ? values.requestTimeoutSeconds
           : null,
+        logLevel: values.logLevelOverrideEnabled ? values.logLevel : null,
       };
       return pluginsApi.create(request);
     },
@@ -210,6 +215,7 @@ export function PluginsSettings() {
         requestTimeoutSeconds: values.requestTimeoutOverrideEnabled
           ? values.requestTimeoutSeconds
           : null,
+        logLevel: values.logLevelOverrideEnabled ? values.logLevel : null,
       });
     },
     onSuccess: () => {
@@ -395,6 +401,8 @@ export function PluginsSettings() {
       rateLimitRequestsPerMinute: plugin.rateLimitRequestsPerMinute ?? 60,
       requestTimeoutOverrideEnabled: plugin.requestTimeoutSeconds != null,
       requestTimeoutSeconds: plugin.requestTimeoutSeconds ?? 30,
+      logLevelOverrideEnabled: plugin.logLevel != null,
+      logLevel: plugin.logLevel ?? plugin.defaultLogLevel ?? "debug",
     });
     openEditModal();
   };
@@ -846,6 +854,7 @@ export function PluginsSettings() {
             createForm.reset();
           }}
           isCreate
+          defaultLogLevel={serverDefaultLogLevel}
         />
       </Modal>
 
@@ -871,6 +880,9 @@ export function PluginsSettings() {
             setSelectedPlugin(null);
           }}
           manifest={selectedPlugin?.manifest}
+          defaultLogLevel={
+            selectedPlugin?.defaultLogLevel ?? serverDefaultLogLevel
+          }
         />
       </Modal>
 

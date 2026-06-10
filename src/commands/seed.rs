@@ -379,6 +379,7 @@ async fn seed_plugins(
             None, // created_by
             None, // rate_limit_requests_per_minute
             None, // request_timeout_seconds
+            None, // log_level
         )
         .await
         .context(format!("Failed to create plugin '{}'", plugin_cfg.name))?;

@@ -13,8 +13,7 @@ pub use types::{
     FilesConfig, KomgaApiConfig, KoreaderApiConfig, LoggingConfig, ObservabilityBrowserConfig,
     ObservabilityConfig, ObservabilityMetricsConfig, ObservabilityTracesConfig, OidcConfig,
     OidcDefaultRole, OidcProviderConfig, OtlpConfig, OtlpProtocol, PdfConfig, PdfHandleCacheConfig,
-    PluginsConfig, PostgresConfig, RateLimitConfig, SQLiteConfig, ScannerConfig, SchedulerConfig,
-    TaskConfig,
+    PostgresConfig, RateLimitConfig, SQLiteConfig, ScannerConfig, SchedulerConfig, TaskConfig,
 };
 
 pub use env_override::EnvOverride;

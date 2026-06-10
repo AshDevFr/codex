@@ -87,8 +87,9 @@ pub struct PluginConfig {
     /// User-plugin connection id (user plugins only; matches storage scope)
     pub user_plugin_id: Option<String>,
     /// Log level handed to the plugin at `initialize` (`debug`/`info`/`warn`/
-    /// `error`). Sourced from the host's `plugins.log_level` config. `None`
-    /// leaves the plugin on its own default.
+    /// `error`). Resolved per-plugin: the plugin row's override when set,
+    /// otherwise the host's own `logging.level`. `None` leaves the plugin on
+    /// its own default.
     pub log_level: Option<String>,
 }
 

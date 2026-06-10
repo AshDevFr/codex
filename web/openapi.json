@@ -24438,6 +24438,14 @@
             "description": "Library IDs this plugin applies to (empty = all libraries)",
             "example": []
           },
+          "logLevel": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Per-plugin log level override (`error`/`warn`/`info`/`debug`).\nNone = use the server default (the host's `logging.level`).",
+            "example": "debug"
+          },
           "metadataTargets": {
             "type": [
               "array",
@@ -34015,6 +34023,14 @@
             "description": "How credentials are delivered to the plugin",
             "example": "env"
           },
+          "defaultLogLevel": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Read-only: the default log level a plugin gets when it has no override,\ni.e. the server's own `logging.level` (with `trace` shown as `debug`).\nSurfaced so the UI can label what \"use the server default\" resolves to.",
+            "example": "info"
+          },
           "description": {
             "type": [
               "string",
@@ -34100,6 +34116,14 @@
             },
             "description": "Library IDs this plugin applies to (empty = all libraries)",
             "example": []
+          },
+          "logLevel": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Per-plugin override for the log level sent to the plugin at startup\n(`error`/`warn`/`info`/`debug`). None means \"use the server default\".",
+            "example": "debug"
           },
           "manifest": {
             "oneOf": [
@@ -41835,6 +41859,14 @@
               "format": "uuid"
             },
             "description": "Updated library IDs (empty = all libraries)"
+          },
+          "logLevel": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Updated per-plugin log level override (Some(None) = remove override and\nfall back to the server default). Omitted = leave unchanged.",
+            "example": "debug"
           },
           "metadataTargets": {
             "description": "Metadata targets: which resource types this plugin auto-matches against\nnull = clear to auto-detect from plugin capabilities"

@@ -125,6 +125,19 @@ pub struct PluginDto {
     #[schema(example = 300)]
     pub request_timeout_seconds: Option<i32>,
 
+    /// Per-plugin override for the log level sent to the plugin at startup
+    /// (`error`/`warn`/`info`/`debug`). None means "use the server default".
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "debug")]
+    pub log_level: Option<String>,
+
+    /// Read-only: the default log level a plugin gets when it has no override,
+    /// i.e. the server's own `logging.level` (with `trace` shown as `debug`).
+    /// Surfaced so the UI can label what "use the server default" resolves to.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "info")]
+    pub default_log_level: Option<String>,
+
     /// When the plugin was created
     pub created_at: DateTime<Utc>,
 
@@ -213,6 +226,9 @@ impl From<plugins::Model> for PluginDto {
             disabled_reason: model.disabled_reason,
             rate_limit_requests_per_minute: model.rate_limit_requests_per_minute,
             request_timeout_seconds: model.request_timeout_seconds,
+            log_level: model.log_level,
+            // Populated by the handler (needs server config); None here.
+            default_log_level: None,
             created_at: model.created_at,
             updated_at: model.updated_at,
             search_query_template: model.search_query_template,
@@ -591,6 +607,12 @@ pub struct CreatePluginRequest {
     #[schema(example = 300)]
     pub request_timeout_seconds: Option<i32>,
 
+    /// Per-plugin log level override (`error`/`warn`/`info`/`debug`).
+    /// None = use the server default (the host's `logging.level`).
+    #[serde(default)]
+    #[schema(example = "debug")]
+    pub log_level: Option<String>,
+
     /// Handlebars template for customizing search queries
     #[serde(skip_serializing_if = "Option::is_none")]
     pub search_query_template: Option<String>,
@@ -701,6 +723,12 @@ pub struct UpdatePluginRequest {
     #[serde(default)]
     #[schema(example = 300)]
     pub request_timeout_seconds: Option<Option<i32>>,
+
+    /// Updated per-plugin log level override (Some(None) = remove override and
+    /// fall back to the server default). Omitted = leave unchanged.
+    #[serde(default)]
+    #[schema(example = "debug")]
+    pub log_level: Option<Option<String>>,
 
     /// Handlebars template for customizing search queries (null = clear template)
     #[serde(

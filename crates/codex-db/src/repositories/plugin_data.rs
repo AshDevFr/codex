@@ -167,6 +167,7 @@ mod tests {
             None,
             None,
             None,
+            None, // log_level
         )
         .await
         .expect("create plugin");

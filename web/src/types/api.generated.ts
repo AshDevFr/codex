@@ -9957,6 +9957,12 @@ export interface components {
              */
             libraryIds?: string[];
             /**
+             * @description Per-plugin log level override (`error`/`warn`/`info`/`debug`).
+             *     None = use the server default (the host's `logging.level`).
+             * @example debug
+             */
+            logLevel?: string | null;
+            /**
              * @description Metadata targets: which resource types this plugin auto-matches against
              *     null = auto-detect from plugin capabilities
              * @example [
@@ -15033,6 +15039,13 @@ export interface components {
              */
             credentialDelivery: string;
             /**
+             * @description Read-only: the default log level a plugin gets when it has no override,
+             *     i.e. the server's own `logging.level` (with `trace` shown as `debug`).
+             *     Surfaced so the UI can label what "use the server default" resolves to.
+             * @example info
+             */
+            defaultLogLevel?: string | null;
+            /**
              * @description Description of the plugin
              * @example Fetch manga metadata from MangaBaka (MangaUpdates)
              */
@@ -15089,6 +15102,12 @@ export interface components {
              * @example []
              */
             libraryIds: string[];
+            /**
+             * @description Per-plugin override for the log level sent to the plugin at startup
+             *     (`error`/`warn`/`info`/`debug`). None means "use the server default".
+             * @example debug
+             */
+            logLevel?: string | null;
             manifest?: null | components["schemas"]["PluginManifestDto"];
             /**
              * @description Metadata targets: which resource types this plugin auto-matches against
@@ -19294,6 +19313,12 @@ export interface components {
             internalConfig?: unknown;
             /** @description Updated library IDs (empty = all libraries) */
             libraryIds?: string[] | null;
+            /**
+             * @description Updated per-plugin log level override (Some(None) = remove override and
+             *     fall back to the server default). Omitted = leave unchanged.
+             * @example debug
+             */
+            logLevel?: string | null;
             /**
              * @description Metadata targets: which resource types this plugin auto-matches against
              *     null = clear to auto-detect from plugin capabilities

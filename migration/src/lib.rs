@@ -193,6 +193,7 @@ mod m20260607_000093_create_scheduled_firing_claims;
 // Atomic per-(plugin,user) dedup for scheduled user-plugin syncs
 mod m20260607_000094_add_user_plugin_sync_unique_index;
 mod m20260608_000095_create_plugin_data;
+mod m20260609_000096_add_plugin_log_level;
 
 pub struct Migrator;
 
@@ -358,6 +359,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260607_000094_add_user_plugin_sync_unique_index::Migration),
             // System-scoped plugin KV store (keyed by plugin, no user context)
             Box::new(m20260608_000095_create_plugin_data::Migration),
+            // Per-plugin log-level override column on `plugins`
+            Box::new(m20260609_000096_add_plugin_log_level::Migration),
         ]
     }
 }

@@ -105,6 +105,7 @@ async fn create_user_type_plugin(
         None,
         None,
         None,
+        None, // log_level
     )
     .await
     .unwrap();
@@ -137,6 +138,7 @@ async fn create_sync_plugin(
         None,
         None,
         None,
+        None, // log_level
     )
     .await
     .unwrap();
@@ -189,6 +191,7 @@ async fn create_system_type_plugin(db: &sea_orm::DatabaseConnection, name: &str)
         None,
         None,
         None,
+        None, // log_level
     )
     .await
     .unwrap();

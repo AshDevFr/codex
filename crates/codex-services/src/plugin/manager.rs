@@ -143,9 +143,10 @@ pub struct PluginManagerConfig {
     /// TTL for the plugin cache before refreshing from database
     /// This ensures multi-pod deployments eventually see plugin changes
     pub cache_ttl: Duration,
-    /// Log level sent to plugins at `initialize` (`debug`/`info`/`warn`/
-    /// `error`), from the host's `plugins.log_level` config. `None` leaves each
-    /// plugin on its own default.
+    /// Default log level sent to plugins at `initialize` (`debug`/`info`/
+    /// `warn`/`error`), derived from the host's own `logging.level`. Used when
+    /// a plugin has no per-plugin override. `None` leaves each plugin on its
+    /// own default.
     pub plugin_log_level: Option<String>,
 }
 
@@ -364,12 +365,19 @@ impl PluginManager {
         Self::new(db, PluginManagerConfig::default())
     }
 
-    /// Set the log level sent to plugins at `initialize`, from the host's
-    /// `plugins.log_level` config. Builder-style; `None` is a no-op (plugins
-    /// keep their own default).
+    /// Set the default log level sent to plugins at `initialize`, derived from
+    /// the host's own `logging.level`. Applied when a plugin has no per-plugin
+    /// override. Builder-style; `None` is a no-op (plugins keep their default).
     pub fn with_plugin_log_level(mut self, level: Option<String>) -> Self {
         self.config.plugin_log_level = level;
         self
+    }
+
+    /// The default plugin log level (host `logging.level`, mapped) applied to
+    /// any plugin without a per-plugin override. Surfaced so the API can show
+    /// the UI what "use the server default" resolves to.
+    pub fn default_plugin_log_level(&self) -> Option<String> {
+        self.config.plugin_log_level.clone()
     }
 
     /// Set the metrics service for recording plugin operation metrics
@@ -937,7 +945,12 @@ impl PluginManager {
             // data per user (the credential alone may not identify the user).
             user_id: Some(user_plugin.user_id.to_string()),
             user_plugin_id: Some(user_plugin.id.to_string()),
-            log_level: self.config.plugin_log_level.clone(),
+            // Per-plugin override (on the parent plugin row) wins; otherwise the
+            // server default (host `logging.level`).
+            log_level: resolve_plugin_log_level(
+                plugin.log_level.clone(),
+                &self.config.plugin_log_level,
+            ),
         })
     }
 
@@ -1900,7 +1913,12 @@ impl PluginManager {
             // System plugins are not bound to a user.
             user_id: None,
             user_plugin_id: None,
-            log_level: self.config.plugin_log_level.clone(),
+            // Per-plugin override wins; otherwise the server default
+            // (host `logging.level`).
+            log_level: resolve_plugin_log_level(
+                plugin.log_level.clone(),
+                &self.config.plugin_log_level,
+            ),
         })
     }
 
@@ -1925,6 +1943,16 @@ fn resolve_request_timeout(override_secs: Option<i32>, default: Duration) -> Dur
         Some(n) if n > 0 => Duration::from_secs(n as u64),
         _ => default,
     }
+}
+
+/// Resolve the log level sent to a plugin at `initialize`: the plugin's own
+/// override when set, otherwise the server default (host `logging.level`,
+/// already mapped to a plugin level). `None` when neither is set.
+fn resolve_plugin_log_level(
+    plugin_override: Option<String>,
+    default: &Option<String>,
+) -> Option<String> {
+    plugin_override.or_else(|| default.clone())
 }
 
 #[cfg(test)]
@@ -1954,6 +1982,26 @@ mod tests {
             default,
             "negative values are treated as unset"
         );
+    }
+
+    #[test]
+    fn resolve_plugin_log_level_prefers_override_then_server_default() {
+        let server_default = Some("info".to_string());
+
+        // Per-plugin override wins over the server default.
+        assert_eq!(
+            resolve_plugin_log_level(Some("debug".to_string()), &server_default),
+            Some("debug".to_string()),
+        );
+
+        // No override → fall back to the server default.
+        assert_eq!(
+            resolve_plugin_log_level(None, &server_default),
+            Some("info".to_string()),
+        );
+
+        // Neither set → None (plugin keeps its own default).
+        assert_eq!(resolve_plugin_log_level(None, &None), None);
     }
 
     #[test]
@@ -2113,6 +2161,7 @@ mod tests {
             disabled_reason: None,
             rate_limit_requests_per_minute: Some(0), // 0 = disabled
             request_timeout_seconds: None,
+            log_level: None,
             search_query_template: None,
             search_preprocessing_rules: None,
             auto_match_conditions: None,
@@ -2163,6 +2212,7 @@ mod tests {
             disabled_reason: None,
             rate_limit_requests_per_minute: None, // None = disabled
             request_timeout_seconds: None,
+            log_level: None,
             search_query_template: None,
             search_preprocessing_rules: None,
             auto_match_conditions: None,
@@ -2213,6 +2263,7 @@ mod tests {
             disabled_reason: None,
             rate_limit_requests_per_minute: Some(60), // 60 = enabled
             request_timeout_seconds: None,
+            log_level: None,
             search_query_template: None,
             search_preprocessing_rules: None,
             auto_match_conditions: None,
@@ -2265,6 +2316,7 @@ mod tests {
             disabled_reason: None,
             rate_limit_requests_per_minute: None,
             request_timeout_seconds: None,
+            log_level: None,
             search_query_template: None,
             search_preprocessing_rules: None,
             auto_match_conditions: None,

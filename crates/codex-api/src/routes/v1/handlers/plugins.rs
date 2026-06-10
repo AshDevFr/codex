@@ -103,6 +103,7 @@ pub async fn list_plugins(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to count plugin users: {}", e)))?;
 
+    let default_log_level = state.plugin_manager.default_plugin_log_level();
     let total = plugins.len();
     let dtos: Vec<PluginDto> = plugins
         .into_iter()
@@ -110,6 +111,7 @@ pub async fn list_plugins(
             let id = p.id;
             let is_user_plugin = p.plugin_type == "user";
             let mut dto: PluginDto = p.into();
+            dto.default_log_level = default_log_level.clone();
             if is_user_plugin {
                 dto.user_count = Some(*user_counts.get(&id).unwrap_or(&0));
             }
@@ -253,6 +255,7 @@ pub async fn create_plugin(
         Some(auth.user_id),
         request.rate_limit_requests_per_minute,
         request.request_timeout_seconds,
+        request.log_level.clone(),
     )
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to create plugin: {}", e)))?;
@@ -406,7 +409,9 @@ pub async fn get_plugin(
         .map_err(|e| ApiError::Internal(format!("Failed to get plugin: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Plugin not found".to_string()))?;
 
-    Ok(Json(plugin.into()))
+    let mut dto: PluginDto = plugin.into();
+    dto.default_log_level = state.plugin_manager.default_plugin_log_level();
+    Ok(Json(dto))
 }
 
 /// Update a plugin
@@ -556,6 +561,7 @@ pub async fn update_plugin(
         Some(auth.user_id),
         request.rate_limit_requests_per_minute,
         request.request_timeout_seconds,
+        request.log_level,
         sync_cron_schedule,
     )
     .await

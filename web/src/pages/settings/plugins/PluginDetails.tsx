@@ -258,6 +258,15 @@ export function PluginDetails({
                   : "Default"}
               </Text>
             </div>
+            <div>
+              <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+                Log Level
+              </Text>
+              <Text size="sm">
+                {plugin.logLevel ??
+                  `Default${plugin.defaultLogLevel ? ` (${plugin.defaultLogLevel})` : ""}`}
+              </Text>
+            </div>
             {plugin.userCount != null && (
               <div>
                 <Text size="xs" c="dimmed" tt="uppercase" fw={600}>

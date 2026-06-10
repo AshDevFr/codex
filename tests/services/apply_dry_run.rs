@@ -61,6 +61,7 @@ fn create_test_plugin() -> plugins::Model {
         disabled_reason: None,
         rate_limit_requests_per_minute: None,
         request_timeout_seconds: None,
+        log_level: None,
         search_query_template: None,
         search_preprocessing_rules: None,
         auto_match_conditions: None,

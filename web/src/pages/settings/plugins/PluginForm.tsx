@@ -47,6 +47,8 @@ export interface PluginFormValues {
   rateLimitRequestsPerMinute: number;
   requestTimeoutOverrideEnabled: boolean;
   requestTimeoutSeconds: number;
+  logLevelOverrideEnabled: boolean;
+  logLevel: string;
 }
 
 export const defaultFormValues: PluginFormValues = {
@@ -65,6 +67,8 @@ export const defaultFormValues: PluginFormValues = {
   rateLimitRequestsPerMinute: 60,
   requestTimeoutOverrideEnabled: false,
   requestTimeoutSeconds: 30,
+  logLevelOverrideEnabled: false,
+  logLevel: "debug",
 };
 
 // Normalize plugin name to slug format (lowercase alphanumeric with hyphens)
@@ -183,6 +187,8 @@ export interface PluginFormProps {
   onCancel: () => void;
   isCreate?: boolean;
   manifest?: PluginDto["manifest"];
+  /** Server default log level a plugin gets with no override (host logging.level). */
+  defaultLogLevel?: string | null;
 }
 
 export function PluginForm({
@@ -192,6 +198,7 @@ export function PluginForm({
   onCancel,
   isCreate,
   manifest,
+  defaultLogLevel,
 }: PluginFormProps) {
   const [activeTab, setActiveTab] = useState<string | null>("general");
   const [nameManuallyEdited, setNameManuallyEdited] = useState(false);
@@ -359,6 +366,32 @@ export function PluginForm({
                   min={1}
                   max={3600}
                   {...form.getInputProps("requestTimeoutSeconds")}
+                />
+              )}
+              <Divider label="Log Level" labelPosition="center" />
+              <Switch
+                label="Override log level"
+                description={
+                  defaultLogLevel
+                    ? `Off uses the server default (${defaultLogLevel}).`
+                    : "Off uses the server log level."
+                }
+                {...form.getInputProps("logLevelOverrideEnabled", {
+                  type: "checkbox",
+                })}
+              />
+              {form.values.logLevelOverrideEnabled && (
+                <Select
+                  label="Log Level"
+                  description="Verbosity for this plugin's own logging, independent of the server level."
+                  allowDeselect={false}
+                  data={[
+                    { value: "error", label: "Error" },
+                    { value: "warn", label: "Warning" },
+                    { value: "info", label: "Info" },
+                    { value: "debug", label: "Debug" },
+                  ]}
+                  {...form.getInputProps("logLevel")}
                 />
               )}
             </Stack>

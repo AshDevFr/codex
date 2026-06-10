@@ -111,6 +111,15 @@ pub struct Model {
     /// override is supplied.
     pub request_timeout_seconds: Option<i32>,
 
+    /// Per-plugin override for the log level sent to the plugin at `initialize`
+    /// (`error`/`warn`/`info`/`debug`).
+    ///
+    /// - `None`: use the default, which is the host's own `logging.level`
+    ///   (the plugin SDK has no `trace`, so `trace` is delivered as `debug`).
+    /// - `Some(level)`: force this plugin's verbosity regardless of the server
+    ///   level, without affecting other plugins.
+    pub log_level: Option<String>,
+
     // Search configuration
     /// Handlebars template for customizing search queries
     #[sea_orm(column_type = "Text")]
@@ -952,6 +961,7 @@ mod tests {
             disabled_reason: None,
             rate_limit_requests_per_minute: Some(60),
             request_timeout_seconds: None,
+            log_level: None,
             search_query_template: None,
             search_preprocessing_rules: None,
             auto_match_conditions: None,
@@ -1151,6 +1161,7 @@ mod tests {
             disabled_reason: None,
             rate_limit_requests_per_minute: Some(60),
             request_timeout_seconds: None,
+            log_level: None,
             search_query_template: None,
             search_preprocessing_rules: None,
             auto_match_conditions: None,
@@ -1333,6 +1344,7 @@ mod tests {
             disabled_reason: None,
             rate_limit_requests_per_minute: Some(60),
             request_timeout_seconds: None,
+            log_level: None,
             search_query_template: None,
             search_preprocessing_rules: None,
             auto_match_conditions: None,
@@ -1384,6 +1396,7 @@ mod tests {
             disabled_reason: None,
             rate_limit_requests_per_minute: Some(60),
             request_timeout_seconds: None,
+            log_level: None,
             search_query_template: None,
             search_preprocessing_rules: None,
             auto_match_conditions: None,
@@ -1446,6 +1459,7 @@ mod tests {
             disabled_reason: None,
             rate_limit_requests_per_minute: Some(60),
             request_timeout_seconds: None,
+            log_level: None,
             search_query_template: None,
             search_preprocessing_rules: None,
             auto_match_conditions: None,
@@ -1491,6 +1505,7 @@ mod tests {
             disabled_reason: None,
             rate_limit_requests_per_minute: Some(60),
             request_timeout_seconds: None,
+            log_level: None,
             search_query_template: None,
             search_preprocessing_rules: None,
             auto_match_conditions: None,

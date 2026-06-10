@@ -1138,9 +1138,9 @@ pub struct InitializeParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub user_plugin_id: Option<String>,
     /// Log level the plugin should adopt for its own logger (`debug`, `info`,
-    /// `warn`, `error`). Sourced from the host's `plugins.log_level` config and
-    /// sent on every spawn. The plugin SDK surfaces it; honoring it is
-    /// best-effort and up to each plugin.
+    /// `warn`, `error`). Resolved per-plugin (the plugin's override when set,
+    /// else the host's `logging.level`) and sent on every spawn. The plugin SDK
+    /// surfaces it; honoring it is best-effort and up to each plugin.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub log_level: Option<String>,
 }

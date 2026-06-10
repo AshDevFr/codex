@@ -91,6 +91,7 @@ async fn create_recommendation_plugin(
         None,
         None,
         None,
+        None, // log_level
     )
     .await
     .unwrap();
@@ -140,6 +141,7 @@ async fn create_non_recommendation_plugin(
         None,
         None,
         None,
+        None, // log_level
     )
     .await
     .unwrap();
@@ -819,6 +821,7 @@ async fn create_recommendation_plugin_with_external_source(
         None,
         None,
         None,
+        None, // log_level
     )
     .await
     .unwrap();

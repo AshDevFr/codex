@@ -496,6 +496,7 @@ mod tests {
             None,
             None,
             None,
+            None, // log_level
         )
         .await
         .unwrap()

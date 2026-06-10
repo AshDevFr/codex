@@ -260,8 +260,6 @@ pub struct Config {
     #[serde(default)]
     pub files: FilesConfig,
     #[serde(default)]
-    pub plugins: PluginsConfig,
-    #[serde(default)]
     pub pdf: PdfConfig,
     #[serde(default)]
     pub pdf_handle_cache: PdfHandleCacheConfig,
@@ -398,7 +396,6 @@ impl Default for Config {
             scanner: ScannerConfig::default(),
             scheduler: SchedulerConfig::default(),
             files: FilesConfig::default(),
-            plugins: PluginsConfig::default(),
             pdf: PdfConfig::default(),
             pdf_handle_cache: PdfHandleCacheConfig::default(),
             komga_api: KomgaApiConfig::default(),
@@ -825,6 +822,18 @@ impl LogLevel {
             LogLevel::Trace => "trace",
         }
     }
+
+    /// The level as the plugin SDK logger understands it. Plugins inherit the
+    /// host's log level by default; since the SDK logger has only
+    /// `debug`/`info`/`warn`/`error`, `trace` collapses to `debug`.
+    pub fn as_plugin_log_level(&self) -> &'static str {
+        match self {
+            LogLevel::Trace | LogLevel::Debug => "debug",
+            LogLevel::Info => "info",
+            LogLevel::Warn => "warn",
+            LogLevel::Error => "error",
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -891,49 +900,6 @@ impl Default for FilesConfig {
                 .unwrap_or_else(|| "data/uploads".to_string()),
             plugins_dir: env_string_opt("CODEX_FILES_PLUGINS_DIR")
                 .unwrap_or_else(|| "data/plugins".to_string()),
-        }
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(default)]
-pub struct PluginsConfig {
-    /// Log level handed to plugins at `initialize` (env: CODEX_PLUGINS_LOG_LEVEL).
-    ///
-    /// Independent of the host's own `logging.level`: set this to `debug` to
-    /// make plugins verbose without flooding the host's logs (and vice versa).
-    /// Plugins honor it on a best-effort basis (the SDK exposes it; each plugin
-    /// opts in). `trace` is sent to plugins as `debug` — the plugin SDK logger
-    /// has no `trace` level.
-    pub log_level: LogLevel,
-}
-
-impl Default for PluginsConfig {
-    fn default() -> Self {
-        Self {
-            log_level: env_string_opt("CODEX_PLUGINS_LOG_LEVEL")
-                .and_then(|s| match s.to_lowercase().as_str() {
-                    "error" => Some(LogLevel::Error),
-                    "warn" => Some(LogLevel::Warn),
-                    "info" => Some(LogLevel::Info),
-                    "debug" => Some(LogLevel::Debug),
-                    "trace" => Some(LogLevel::Trace),
-                    _ => None,
-                })
-                .unwrap_or(LogLevel::Info),
-        }
-    }
-}
-
-impl PluginsConfig {
-    /// The level as the plugin SDK understands it. The SDK logger has only
-    /// `debug`/`info`/`warn`/`error`, so `trace` collapses to `debug`.
-    pub fn plugin_log_level_str(&self) -> &'static str {
-        match self.log_level {
-            LogLevel::Trace | LogLevel::Debug => "debug",
-            LogLevel::Info => "info",
-            LogLevel::Warn => "warn",
-            LogLevel::Error => "error",
         }
     }
 }
@@ -1605,7 +1571,6 @@ verification_url_base: https://codex.example.com
             scanner: ScannerConfig::default(),
             scheduler: SchedulerConfig::default(),
             files: FilesConfig::default(),
-            plugins: PluginsConfig::default(),
             pdf: PdfConfig::default(),
             pdf_handle_cache: PdfHandleCacheConfig::default(),
             komga_api: KomgaApiConfig::default(),

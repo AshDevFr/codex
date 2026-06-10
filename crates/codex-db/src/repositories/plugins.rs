@@ -274,6 +274,7 @@ impl PluginsRepository {
         created_by: Option<Uuid>,
         rate_limit_requests_per_minute: Option<i32>,
         request_timeout_seconds: Option<i32>,
+        log_level: Option<String>,
     ) -> Result<plugins::Model> {
         let now = Utc::now();
 
@@ -324,6 +325,7 @@ impl PluginsRepository {
             disabled_reason: Set(None),
             rate_limit_requests_per_minute: Set(rate_limit_requests_per_minute),
             request_timeout_seconds: Set(request_timeout_seconds),
+            log_level: Set(log_level),
             search_query_template: Set(None),
             search_preprocessing_rules: Set(None),
             auto_match_conditions: Set(None),
@@ -364,6 +366,7 @@ impl PluginsRepository {
         updated_by: Option<Uuid>,
         rate_limit_requests_per_minute: Option<Option<i32>>,
         request_timeout_seconds: Option<Option<i32>>,
+        log_level: Option<Option<String>>,
         sync_cron_schedule: Option<Option<String>>,
     ) -> Result<plugins::Model> {
         let existing = Self::get_by_id(db, id)
@@ -433,6 +436,10 @@ impl PluginsRepository {
 
         if let Some(timeout) = request_timeout_seconds {
             active_model.request_timeout_seconds = Set(timeout);
+        }
+
+        if let Some(level) = log_level {
+            active_model.log_level = Set(level);
         }
 
         if let Some(cron) = sync_cron_schedule {
@@ -873,6 +880,7 @@ mod tests {
             None,
             Some(60), // rate_limit_requests_per_minute
             None,     // request_timeout_seconds
+            None,     // log_level
         )
         .await
         .unwrap();
@@ -917,6 +925,7 @@ mod tests {
             None,
             Some(60), // rate_limit_requests_per_minute
             None,     // request_timeout_seconds
+            None,     // log_level
         )
         .await
         .unwrap();
@@ -958,6 +967,7 @@ mod tests {
             None,
             Some(60), // rate_limit_requests_per_minute
             None,     // request_timeout_seconds
+            None,     // log_level
         )
         .await
         .unwrap();
@@ -999,6 +1009,7 @@ mod tests {
             None,
             Some(60), // rate_limit_requests_per_minute
             None,     // request_timeout_seconds
+            None,     // log_level
         )
         .await
         .unwrap();
@@ -1045,6 +1056,7 @@ mod tests {
             None,
             Some(60), // rate_limit_requests_per_minute
             None,     // request_timeout_seconds
+            None,     // log_level
         )
         .await
         .unwrap();
@@ -1097,6 +1109,7 @@ mod tests {
             None,
             Some(60), // rate_limit_requests_per_minute
             None,     // request_timeout_seconds
+            None,     // log_level
         )
         .await
         .unwrap();
@@ -1147,6 +1160,7 @@ mod tests {
             None,
             Some(60), // rate_limit_requests_per_minute
             None,     // request_timeout_seconds
+            None,     // log_level
         )
         .await
         .unwrap();
@@ -1199,6 +1213,7 @@ mod tests {
             None,
             Some(60), // rate_limit_requests_per_minute
             None,     // request_timeout_seconds
+            None,     // log_level
         )
         .await
         .unwrap();
@@ -1251,6 +1266,7 @@ mod tests {
             None,
             Some(60), // rate_limit_requests_per_minute
             None,     // request_timeout_seconds
+            None,     // log_level
         )
         .await
         .unwrap();
@@ -1297,6 +1313,7 @@ mod tests {
             None,
             Some(60),
             None,
+            None, // log_level
         )
         .await
         .unwrap();
@@ -1347,6 +1364,7 @@ mod tests {
             None,
             Some(60),
             None,
+            None, // log_level
         )
         .await
         .unwrap();
@@ -1396,6 +1414,7 @@ mod tests {
             None,
             Some(60), // rate_limit_requests_per_minute
             None,     // request_timeout_seconds
+            None,     // log_level
         )
         .await
         .unwrap();
@@ -1432,6 +1451,7 @@ mod tests {
             None,
             Some(60), // rate_limit_requests_per_minute
             None,     // request_timeout_seconds
+            None,     // log_level
         )
         .await
         .unwrap();
@@ -1456,6 +1476,7 @@ mod tests {
             None,
             Some(60), // rate_limit_requests_per_minute
             None,     // request_timeout_seconds
+            None,     // log_level
         )
         .await
         .unwrap();
@@ -1490,6 +1511,7 @@ mod tests {
             None,
             Some(60), // rate_limit_requests_per_minute
             None,     // request_timeout_seconds
+            None,     // log_level
         )
         .await
         .unwrap();
@@ -1514,6 +1536,7 @@ mod tests {
             None,
             Some(60), // rate_limit_requests_per_minute
             None,     // request_timeout_seconds
+            None,     // log_level
         )
         .await
         .unwrap();
@@ -1566,6 +1589,7 @@ mod tests {
             None,
             Some(60), // rate_limit_requests_per_minute
             None,     // request_timeout_seconds
+            None,     // log_level
         )
         .await
         .unwrap();
@@ -1615,6 +1639,7 @@ mod tests {
             None,
             Some(60), // rate_limit_requests_per_minute
             None,     // request_timeout_seconds
+            None,     // log_level
         )
         .await
         .unwrap();
@@ -1659,6 +1684,7 @@ mod tests {
             None,
             Some(60), // rate_limit_requests_per_minute
             None,     // request_timeout_seconds
+            None,     // log_level
         )
         .await
         .unwrap();
@@ -1684,6 +1710,7 @@ mod tests {
             None,
             Some(60), // rate_limit_requests_per_minute
             None,     // request_timeout_seconds
+            None,     // log_level
         )
         .await
         .unwrap();
@@ -1709,6 +1736,7 @@ mod tests {
             None,
             Some(60), // rate_limit_requests_per_minute
             None,     // request_timeout_seconds
+            None,     // log_level
         )
         .await
         .unwrap();
@@ -1777,6 +1805,7 @@ mod tests {
                 None,
                 Some(60),
                 None,
+                None, // log_level
             )
             .await
             .unwrap();
@@ -1841,6 +1870,7 @@ mod tests {
                 None,
                 Some(60),
                 None,
+                None, // log_level
             )
             .await
             .unwrap();
@@ -1898,6 +1928,7 @@ mod tests {
             None,
             Some(60),
             None,
+            None, // log_level
         )
         .await
         .unwrap()
