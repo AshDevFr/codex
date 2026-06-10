@@ -3,6 +3,7 @@ import {
   type RefObject,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -112,13 +113,17 @@ export function ContinuousScrollReader({
   );
   const pageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   // Measured rendered height (px) of each page once its image has loaded.
-  // Used as the placeholder height when a page is virtualised out of the
-  // render window, so collapsing a loaded page back to a placeholder does not
+  // Used as the reserved height while a page is a placeholder or still
+  // loading, so virtualising a page in/out of the render window does not
   // change the height of content above the viewport and shift the user's
   // scroll position.  Without this, stopping a scroll (which flushes the
   // render window) snaps the view because off-screen pages above revert to a
   // fixed 100vh placeholder that rarely matches their real height.
   const pageHeightsRef = useRef<Map<number, number>>(new Map());
+  // Image loads awaiting scroll compensation.  onLoad fires while the img is
+  // still display:none (loadedPages hasn't flushed), so the height delta can
+  // only be measured after React commits — see the layout effect below.
+  const pendingLoadsRef = useRef<{ page: number; prevHeight: number }[]>([]);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const hasScrolledToInitialRef = useRef(false);
   // Initialise to initialPage so the external-sync effect doesn't scroll on mount.
@@ -376,33 +381,66 @@ export function ContinuousScrollReader({
     }
   }, [initialPage]);
 
-  // Handle image load.  When an external sync is active, re-scroll to the
-  // target page after each image load to compensate for layout shifts caused
-  // by images above the target changing from placeholder to actual height.
+  // Handle image load.  The img is still display:none here (loadedPages
+  // hasn't flushed yet), so only record the pre-commit height; measurement
+  // and scroll compensation happen in the layout effect below, after React
+  // commits and the image actually occupies its real height.
   const handleImageLoad = useCallback((pageNumber: number) => {
-    setLoadedPages((prev) => new Set([...prev, pageNumber]));
-
-    // Remember the rendered height so virtualising this page out later keeps
-    // the layout stable (see pageHeightsRef).  Measured after load when the
-    // image has its intrinsic dimensions.
     const pageEl = pageRefs.current.get(pageNumber);
-    if (pageEl) {
-      const height = pageEl.offsetHeight;
-      if (height > 0) {
-        pageHeightsRef.current.set(pageNumber, height);
-      }
-    }
+    pendingLoadsRef.current.push({
+      page: pageNumber,
+      prevHeight: pageEl?.offsetHeight ?? 0,
+    });
+    setLoadedPages((prev) => new Set([...prev, pageNumber]));
+  }, []);
+
+  // Scroll anchoring for image loads.  Runs after React commits the
+  // loadedPages update, when freshly-loaded images have their real height.
+  // For each load: record the measured height (used as the reserved
+  // placeholder height), then keep the user's view anchored:
+  // - during an external sync, re-snap the sync target to the viewport top;
+  // - otherwise, if the page sits above the viewport, its growth shifted
+  //   everything below by the height delta, so shift scrollTop to match.
+  // The container sets overflow-anchor:none so browsers with native scroll
+  // anchoring don't compensate a second time.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: loadedPages is the commit signal for freshly-loaded images; the effect reads refs
+  useLayoutEffect(() => {
+    const pending = pendingLoadsRef.current;
+    if (pending.length === 0) return;
+    pendingLoadsRef.current = [];
+    const container = containerRef.current;
+    if (!container) return;
 
     const syncTarget = syncTargetPageRef.current;
-    if (syncTarget != null && pageNumber < syncTarget) {
-      const container = containerRef.current;
-      if (!container) return;
-      const el = container.querySelector(`[data-page="${syncTarget}"]`);
-      if (el) {
-        el.scrollIntoView({ behavior: "instant", block: "start" });
+    const containerTop = container.getBoundingClientRect().top;
+    let delta = 0;
+    let resyncNeeded = false;
+
+    for (const { page, prevHeight } of pending) {
+      const el = pageRefs.current.get(page);
+      if (!el) continue;
+      const newHeight = el.offsetHeight;
+      if (newHeight > 0) {
+        pageHeightsRef.current.set(page, newHeight);
+      }
+      if (syncTarget != null) {
+        if (page < syncTarget) resyncNeeded = true;
+      } else if (el.getBoundingClientRect().top < containerTop) {
+        delta += newHeight - prevHeight;
       }
     }
-  }, []);
+
+    if (syncTarget != null) {
+      if (resyncNeeded) {
+        const el = container.querySelector(`[data-page="${syncTarget}"]`);
+        el?.scrollIntoView({ behavior: "instant", block: "start" });
+      }
+      return;
+    }
+    if (delta !== 0) {
+      container.scrollTop += delta;
+    }
+  }, [loadedPages]);
 
   // Register page ref with observer
   const registerPageRef = useCallback(
@@ -473,6 +511,16 @@ export function ContinuousScrollReader({
     );
   }
 
+  // Estimate for pages that have never been measured.  Webtoon pages are
+  // usually much taller than the viewport and vary a lot, so the average of
+  // already-measured pages is a far better guess than a flat 100vh — it keeps
+  // first-load height deltas (and thus scroll compensation) small.
+  const measured = Array.from(pageHeightsRef.current.values());
+  const estimatedHeight =
+    measured.length > 0
+      ? `${Math.round(measured.reduce((sum, h) => sum + h, 0) / measured.length)}px`
+      : "100vh";
+
   return (
     <Box
       ref={setContainerRef}
@@ -482,6 +530,10 @@ export function ContinuousScrollReader({
         height: "100dvh",
         overflow: "auto",
         backgroundColor: BACKGROUND_COLORS[backgroundColor],
+        // We anchor the scroll position ourselves when images above the
+        // viewport load (see the layout effect); disable native scroll
+        // anchoring so Chrome doesn't compensate the same shift twice.
+        overflowAnchor: "none",
       }}
     >
       <Box
@@ -497,14 +549,14 @@ export function ContinuousScrollReader({
       >
         {pages.map((page) => {
           const shouldRender = pagesToRender.has(page.pageNumber);
-          // Reserve the page's last measured height for the placeholder so
-          // virtualising it out is layout-neutral and doesn't shift the
-          // scroll position.  Fall back to a viewport-height guess for pages
-          // that have never been measured.
+          // Reserve the page's last measured height while it is a placeholder
+          // OR rendered but not yet loaded, so both virtualising in/out and
+          // the loading state are layout-neutral and don't shift the scroll
+          // position.  Never-measured pages use the average measured height.
           const measuredHeight = pageHeightsRef.current.get(page.pageNumber);
           const reservedHeight = measuredHeight
             ? `${measuredHeight}px`
-            : "100vh";
+            : estimatedHeight;
 
           return (
             <Box
@@ -514,7 +566,8 @@ export function ContinuousScrollReader({
               data-testid={`page-container-${page.pageNumber}`}
               style={{
                 width: "100%",
-                minHeight: shouldRender ? undefined : reservedHeight,
+                minHeight:
+                  shouldRender && page.isLoaded ? undefined : reservedHeight,
                 display: "flex",
                 justifyContent: "center",
                 alignItems: "center",

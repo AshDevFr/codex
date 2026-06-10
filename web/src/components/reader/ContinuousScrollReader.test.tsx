@@ -805,9 +805,114 @@ describe("ContinuousScrollReader", () => {
         />,
       );
 
-      // A far page that was never rendered/measured uses the 100vh guess.
+      // With no measurements at all, unmeasured pages use the 100vh guess.
       const placeholder = screen.getByTestId("page-placeholder-15");
       expect(placeholder).toHaveStyle({ height: "100vh" });
+    });
+
+    it("reserves height for a rendered page whose image has not loaded yet", () => {
+      renderWithProviders(
+        <ContinuousScrollReader
+          {...defaultProps}
+          totalPages={20}
+          initialPage={1}
+          preloadBuffer={0}
+        />,
+      );
+
+      // Page 1 is in the render window but its image hasn't loaded. The
+      // container must keep the reserved height so entering the render
+      // window doesn't collapse the page to the loader height and shift
+      // everything below it.
+      const container = screen.getByTestId("page-container-1");
+      expect(container).toHaveStyle({ minHeight: "100vh" });
+    });
+
+    it("estimates unmeasured placeholders from the average measured height", async () => {
+      const { rerender } = renderWithProviders(
+        <ContinuousScrollReader
+          {...defaultProps}
+          totalPages={20}
+          initialPage={1}
+          preloadBuffer={0}
+        />,
+      );
+
+      const page1Container = screen.getByTestId("page-container-1");
+      Object.defineProperty(page1Container, "offsetHeight", {
+        configurable: true,
+        value: 1500,
+      });
+
+      const image1 = screen.getByTestId("page-image-1");
+      await act(async () => {
+        image1.dispatchEvent(new Event("load"));
+      });
+
+      // Heights are measured in a layout effect (after the loadedPages
+      // commit), so estimates apply from the next render onward. That lag is
+      // invisible: placeholders are outside the render window, so only their
+      // contribution to scroll geometry matters.
+      await act(async () => {
+        rerender(
+          <ContinuousScrollReader
+            {...defaultProps}
+            totalPages={20}
+            initialPage={1}
+            preloadBuffer={0}
+          />,
+        );
+      });
+
+      // Webtoon pages are tall; once one page is measured, never-measured
+      // placeholders use the measured average instead of the 100vh guess.
+      const placeholder = screen.getByTestId("page-placeholder-10");
+      expect(placeholder).toHaveStyle({ height: "1500px" });
+    });
+
+    it("compensates scrollTop when a page above the viewport grows on load", async () => {
+      renderWithProviders(
+        <ContinuousScrollReader
+          {...defaultProps}
+          totalPages={20}
+          initialPage={1}
+          preloadBuffer={1}
+        />,
+      );
+
+      const scrollContainer = screen.getByTestId("continuous-scroll-container");
+      // Track scrollTop assignments (jsdom has no layout).
+      let scrollTop = 2000;
+      Object.defineProperty(scrollContainer, "scrollTop", {
+        configurable: true,
+        get: () => scrollTop,
+        set: (v: number) => {
+          scrollTop = v;
+        },
+      });
+      scrollContainer.getBoundingClientRect = () =>
+        ({ top: 0, bottom: 800, height: 800 }) as DOMRect;
+
+      // Page 1 sits above the viewport: reserved at 1000px pre-load, real
+      // image height 1600px. offsetHeight is read once in the load handler
+      // (pre-commit) and once in the layout effect (post-commit).
+      const page1Container = screen.getByTestId("page-container-1");
+      let reads = 0;
+      Object.defineProperty(page1Container, "offsetHeight", {
+        configurable: true,
+        get: () => (++reads === 1 ? 1000 : 1600),
+      });
+      page1Container.getBoundingClientRect = () =>
+        ({ top: -1200, bottom: -200, height: 1000 }) as DOMRect;
+
+      const image1 = screen.getByTestId("page-image-1");
+      await act(async () => {
+        image1.dispatchEvent(new Event("load"));
+      });
+
+      // The page grew by 600px above the viewport, so the scroll position
+      // must shift by the same amount to keep the visible content anchored.
+      expect(scrollTop).toBe(2600);
     });
   });
 });
