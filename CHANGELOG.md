@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.38.1] - 2026-06-10
+
+### 🐛 Bug Fixes
+
+- *(reader)* Anchor webtoon scroll position when images load above the viewport
+
 ## [1.38.0] - 2026-06-10
 
 ### 🚀 Features
