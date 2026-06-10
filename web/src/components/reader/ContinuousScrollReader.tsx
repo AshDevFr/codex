@@ -45,6 +45,11 @@ interface ContinuousScrollReaderProps {
   onPageChange?: (page: number) => void;
   /** External ref to the scroll container (for keyboard scrolling) */
   scrollContainerRef?: RefObject<HTMLDivElement | null>;
+  /**
+   * Callback ref attached to the scroll container so tap-to-toggle-toolbar
+   * navigation (useTouchNav) can listen on the same element that scrolls.
+   */
+  tapRef?: (el: HTMLDivElement | null) => void;
 }
 
 // =============================================================================
@@ -85,23 +90,35 @@ export function ContinuousScrollReader({
   sidePadding = 0,
   onPageChange,
   scrollContainerRef,
+  tapRef,
 }: ContinuousScrollReaderProps) {
   // Use explicit undefined checks to allow 0 as a valid value
   const effectivePageGap = pageGap ?? DEFAULT_PAGE_GAP;
   const effectivePreloadBuffer = preloadBuffer ?? 0;
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Ref callback that assigns the container to both internal and external refs
+  // Ref callback that assigns the container to the internal ref, the optional
+  // external scroll-container ref, and the optional tap ref (so tap-to-toggle
+  // navigation can listen on the element that actually scrolls).
   const setContainerRef = useCallback(
     (el: HTMLDivElement | null) => {
       containerRef.current = el;
       if (scrollContainerRef) {
         (scrollContainerRef as { current: HTMLDivElement | null }).current = el;
       }
+      tapRef?.(el);
     },
-    [scrollContainerRef],
+    [scrollContainerRef, tapRef],
   );
   const pageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+  // Measured rendered height (px) of each page once its image has loaded.
+  // Used as the placeholder height when a page is virtualised out of the
+  // render window, so collapsing a loaded page back to a placeholder does not
+  // change the height of content above the viewport and shift the user's
+  // scroll position.  Without this, stopping a scroll (which flushes the
+  // render window) snaps the view because off-screen pages above revert to a
+  // fixed 100vh placeholder that rarely matches their real height.
+  const pageHeightsRef = useRef<Map<number, number>>(new Map());
   const observerRef = useRef<IntersectionObserver | null>(null);
   const hasScrolledToInitialRef = useRef(false);
   // Initialise to initialPage so the external-sync effect doesn't scroll on mount.
@@ -365,6 +382,17 @@ export function ContinuousScrollReader({
   const handleImageLoad = useCallback((pageNumber: number) => {
     setLoadedPages((prev) => new Set([...prev, pageNumber]));
 
+    // Remember the rendered height so virtualising this page out later keeps
+    // the layout stable (see pageHeightsRef).  Measured after load when the
+    // image has its intrinsic dimensions.
+    const pageEl = pageRefs.current.get(pageNumber);
+    if (pageEl) {
+      const height = pageEl.offsetHeight;
+      if (height > 0) {
+        pageHeightsRef.current.set(pageNumber, height);
+      }
+    }
+
     const syncTarget = syncTargetPageRef.current;
     if (syncTarget != null && pageNumber < syncTarget) {
       const container = containerRef.current;
@@ -469,6 +497,14 @@ export function ContinuousScrollReader({
       >
         {pages.map((page) => {
           const shouldRender = pagesToRender.has(page.pageNumber);
+          // Reserve the page's last measured height for the placeholder so
+          // virtualising it out is layout-neutral and doesn't shift the
+          // scroll position.  Fall back to a viewport-height guess for pages
+          // that have never been measured.
+          const measuredHeight = pageHeightsRef.current.get(page.pageNumber);
+          const reservedHeight = measuredHeight
+            ? `${measuredHeight}px`
+            : "100vh";
 
           return (
             <Box
@@ -478,7 +514,7 @@ export function ContinuousScrollReader({
               data-testid={`page-container-${page.pageNumber}`}
               style={{
                 width: "100%",
-                minHeight: shouldRender ? undefined : "100vh",
+                minHeight: shouldRender ? undefined : reservedHeight,
                 display: "flex",
                 justifyContent: "center",
                 alignItems: "center",
@@ -515,7 +551,7 @@ export function ContinuousScrollReader({
                   data-testid={`page-placeholder-${page.pageNumber}`}
                   style={{
                     width: "100%",
-                    height: "100vh",
+                    height: reservedHeight,
                     display: "flex",
                     justifyContent: "center",
                     alignItems: "center",

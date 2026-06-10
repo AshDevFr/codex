@@ -40,6 +40,11 @@ interface PdfContinuousScrollReaderProps {
   onDocumentLoadSuccess?: (pdf: { numPages: number }) => void;
   /** Callback when PDF fails to load */
   onDocumentLoadError?: (error: Error) => void;
+  /**
+   * Callback ref attached to the scroll container so tap-to-toggle-toolbar
+   * navigation (useTouchNav) can listen on the same element that scrolls.
+   */
+  tapRef?: (el: HTMLDivElement | null) => void;
 }
 
 // =============================================================================
@@ -81,9 +86,17 @@ export function PdfContinuousScrollReader({
   onPageChange,
   onDocumentLoadSuccess,
   onDocumentLoadError,
+  tapRef,
 }: PdfContinuousScrollReaderProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const pageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+  // Measured rendered height (px) of each page once it has rendered. Used as
+  // the placeholder height when a page is virtualised out of the render
+  // window, so collapsing a rendered page back to a placeholder does not shift
+  // content above the viewport and snap the scroll position when scrolling
+  // settles. Without it, off-screen pages revert to a fixed 800px guess that
+  // rarely matches their real (zoom-dependent) height.
+  const pageHeightsRef = useRef<Map<number, number>>(new Map());
   const observerRef = useRef<IntersectionObserver | null>(null);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const hasScrolledToInitialRef = useRef(false);
@@ -163,28 +176,35 @@ export function PdfContinuousScrollReader({
 
   // Ref callback to set up ResizeObserver when container is attached
   // This solves the timing issue where the effect runs before ref is attached
-  const setContainerRef = useCallback((element: HTMLDivElement | null) => {
-    // Clean up previous observer
-    if (resizeObserverRef.current) {
-      resizeObserverRef.current.disconnect();
-      resizeObserverRef.current = null;
-    }
+  const setContainerRef = useCallback(
+    (element: HTMLDivElement | null) => {
+      // Clean up previous observer
+      if (resizeObserverRef.current) {
+        resizeObserverRef.current.disconnect();
+        resizeObserverRef.current = null;
+      }
 
-    // Update the ref
-    (containerRef as React.MutableRefObject<HTMLDivElement | null>).current =
-      element;
+      // Update the ref
+      (containerRef as React.MutableRefObject<HTMLDivElement | null>).current =
+        element;
 
-    // Set up new observer if element exists
-    if (element) {
-      const resizeObserver = new ResizeObserver((entries) => {
-        for (const entry of entries) {
-          setContainerWidth(entry.contentRect.width);
-        }
-      });
-      resizeObserver.observe(element);
-      resizeObserverRef.current = resizeObserver;
-    }
-  }, []);
+      // Wire the tap ref to the element that actually scrolls so tap-to-toggle
+      // navigation works without breaking native scrolling.
+      tapRef?.(element);
+
+      // Set up new observer if element exists
+      if (element) {
+        const resizeObserver = new ResizeObserver((entries) => {
+          for (const entry of entries) {
+            setContainerWidth(entry.contentRect.width);
+          }
+        });
+        resizeObserver.observe(element);
+        resizeObserverRef.current = resizeObserver;
+      }
+    },
+    [tapRef],
+  );
 
   // Cleanup ResizeObserver on unmount
   useEffect(() => {
@@ -302,6 +322,18 @@ export function PdfContinuousScrollReader({
     [],
   );
 
+  // Remember a page's rendered height once react-pdf finishes drawing it, so
+  // virtualising it out later keeps the layout stable (see pageHeightsRef).
+  const handlePageRenderSuccess = useCallback((pageNumber: number) => {
+    const pageEl = pageRefs.current.get(pageNumber);
+    if (pageEl) {
+      const height = pageEl.offsetHeight;
+      if (height > 0) {
+        pageHeightsRef.current.set(pageNumber, height);
+      }
+    }
+  }, []);
+
   // Handle PDF load success
   const handleDocumentLoadSuccess = useCallback(
     (pdf: { numPages: number }) => {
@@ -396,6 +428,13 @@ export function PdfContinuousScrollReader({
             {Array.from({ length: totalPages }, (_, i) => {
               const pageNumber = i + 1;
               const shouldRender = pagesToRender.has(pageNumber);
+              // Reserve a virtualised page's last measured height so it doesn't
+              // collapse to the 800px guess and shift the scroll position when
+              // scrolling settles. Fall back to 800px for never-rendered pages.
+              const measuredHeight = pageHeightsRef.current.get(pageNumber);
+              const reservedHeight = measuredHeight
+                ? `${measuredHeight}px`
+                : "800px";
 
               return (
                 <Box
@@ -405,7 +444,7 @@ export function PdfContinuousScrollReader({
                   data-testid={`pdf-page-container-${pageNumber}`}
                   style={{
                     width: "100%",
-                    minHeight: shouldRender ? undefined : "800px",
+                    minHeight: shouldRender ? undefined : reservedHeight,
                     display: "flex",
                     justifyContent: "center",
                     alignItems: "center",
@@ -423,6 +462,9 @@ export function PdfContinuousScrollReader({
                       }
                       renderTextLayer={true}
                       renderAnnotationLayer={true}
+                      onRenderSuccess={() =>
+                        handlePageRenderSuccess(pageNumber)
+                      }
                       loading={
                         <Center
                           style={{
@@ -441,7 +483,7 @@ export function PdfContinuousScrollReader({
                       data-testid={`pdf-page-placeholder-${pageNumber}`}
                       style={{
                         width: "100%",
-                        height: "800px",
+                        height: reservedHeight,
                         display: "flex",
                         justifyContent: "center",
                         alignItems: "center",

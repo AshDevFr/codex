@@ -625,13 +625,14 @@ export function ComicReader({
     onBoundaryStart: isContinuousScroll ? handleScrollReachedStart : undefined,
   });
 
-  // Touch/swipe navigation for mobile devices
-  // Only enabled for paginated modes (not continuous scroll)
+  // Touch/tap navigation for mobile devices.
+  // Paginated modes use tap zones (outer thirds page, center toggles toolbar).
+  // Continuous-scroll / webtoon modes navigate by scrolling, so the whole
+  // surface toggles the toolbar (tapZones: false) — this is the only way to
+  // reveal the toolbar on a phone there, since pointer-move is mouse-only.
   const { touchRef } = useTouchNav({
-    enabled:
-      !settingsOpened &&
-      pageLayout !== "continuous" &&
-      readingDirection !== "webtoon",
+    enabled: !settingsOpened,
+    tapZones: !isContinuousScroll,
     onNextPage:
       pageLayout === "double"
         ? handleSpreadNextPage
@@ -824,6 +825,7 @@ export function ComicReader({
           pageGap={webtoonPageGap}
           sidePadding={webtoonSidePadding}
           scrollContainerRef={scrollContainerRef}
+          tapRef={touchRef}
         />
       ) : (
         <Box

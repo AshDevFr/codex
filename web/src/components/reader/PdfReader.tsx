@@ -461,9 +461,14 @@ export function PdfReader({
     onPrevPage: handlePrevPage,
   });
 
-  // Touch/swipe navigation for mobile devices
+  // Touch/tap navigation for mobile devices.
+  // In continuous-scroll mode pages are navigated by scrolling, so the whole
+  // surface toggles the toolbar (tapZones: false) — the only way to reveal it
+  // on a phone there, since pointer-move is mouse-only. Paginated mode keeps
+  // tap zones (outer thirds page, center toggles).
   const { touchRef } = useTouchNav({
     enabled: !settingsOpened && !searchOpen,
+    tapZones: !pdfContinuousScroll,
     onNextPage: handleNextPage,
     onPrevPage: handlePrevPage,
     onTap: toggleToolbar,
@@ -792,6 +797,7 @@ export function PdfReader({
             searchText={debouncedSearchText}
             onDocumentLoadSuccess={handleDocumentLoadSuccess}
             onDocumentLoadError={handleDocumentLoadError}
+            tapRef={touchRef}
           />
         </Box>
       ) : (

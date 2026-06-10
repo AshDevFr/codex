@@ -723,4 +723,91 @@ describe("ContinuousScrollReader", () => {
   // moved from ContinuousScrollReader (scroll-based) to useKeyboardNav
   // (arrow-key-based) to prevent accidental triggers from casual scrolling.
   // See useKeyboardNav tests for boundary callback coverage.
+
+  describe("Tap-to-toggle ref", () => {
+    it("forwards the scroll container to tapRef", () => {
+      const tapRef = vi.fn();
+
+      renderWithProviders(
+        <ContinuousScrollReader {...defaultProps} tapRef={tapRef} />,
+      );
+
+      const container = screen.getByTestId("continuous-scroll-container");
+      // The tap ref is wired to the element that actually scrolls so
+      // useTouchNav can detect taps without breaking native scrolling.
+      expect(tapRef).toHaveBeenCalledWith(container);
+    });
+  });
+
+  describe("Scroll position stability", () => {
+    // Regression: when a loaded page scrolled out of the render window, it used
+    // to collapse to a fixed 100vh placeholder. If its real height differed,
+    // content above the viewport shifted and the reader "snapped" / lost the
+    // stop position when scrolling settled. A virtualised page must reserve its
+    // last measured height instead.
+    it("reserves a loaded page's measured height when it is virtualised out", async () => {
+      vi.useFakeTimers();
+
+      renderWithProviders(
+        <ContinuousScrollReader
+          {...defaultProps}
+          totalPages={20}
+          initialPage={1}
+          preloadBuffer={0}
+        />,
+      );
+
+      // Page 1 renders initially (visible set is empty -> render around initial
+      // page). Give its container a concrete rendered height, then load it.
+      const page1Container = screen.getByTestId("page-container-1");
+      Object.defineProperty(page1Container, "offsetHeight", {
+        configurable: true,
+        value: 742,
+      });
+
+      const image1 = screen.getByTestId("page-image-1");
+      await act(async () => {
+        image1.dispatchEvent(new Event("load"));
+      });
+
+      // Scroll far away so page 1 leaves the (zero) buffer and virtualises.
+      const scrollContainer = screen.getByTestId("continuous-scroll-container");
+      const page10Container = screen.getByTestId("page-container-10");
+      act(() => {
+        mockObserverInstance?.simulateIntersection([
+          {
+            target: page10Container,
+            isIntersecting: true,
+            boundingClientRect: { top: 0, bottom: 800, height: 800 } as DOMRect,
+          },
+        ]);
+        scrollContainer.dispatchEvent(new Event("scroll", { bubbles: false }));
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(150);
+      });
+
+      // Page 1 is now a placeholder, but keeps the height it was measured at
+      // rather than reverting to 100vh, so content below it does not shift.
+      const placeholder = screen.getByTestId("page-placeholder-1");
+      expect(placeholder).toHaveStyle({ height: "742px" });
+
+      vi.useRealTimers();
+    });
+
+    it("falls back to a viewport-height placeholder for never-measured pages", () => {
+      renderWithProviders(
+        <ContinuousScrollReader
+          {...defaultProps}
+          totalPages={20}
+          initialPage={1}
+          preloadBuffer={2}
+        />,
+      );
+
+      // A far page that was never rendered/measured uses the 100vh guess.
+      const placeholder = screen.getByTestId("page-placeholder-15");
+      expect(placeholder).toHaveStyle({ height: "100vh" });
+    });
+  });
 });

@@ -503,4 +503,40 @@ describe("PdfContinuousScrollReader", () => {
       ).toBeInTheDocument();
     });
   });
+
+  describe("Tap-to-toggle ref", () => {
+    it("forwards the scroll container to tapRef", () => {
+      const tapRef = vi.fn();
+
+      renderWithProviders(
+        <PdfContinuousScrollReader {...defaultProps} tapRef={tapRef} />,
+      );
+
+      const container = screen.getByTestId("pdf-continuous-scroll-container");
+      // The tap ref is wired to the element that actually scrolls so
+      // useTouchNav can detect taps without breaking native scrolling.
+      expect(tapRef).toHaveBeenCalledWith(container);
+    });
+  });
+
+  describe("Scroll position stability", () => {
+    // Regression: a page virtualised out of the render window must reserve a
+    // height rather than snap content. Until a page has rendered (and its real
+    // height is known), the placeholder falls back to an 800px guess.
+    it("uses an 800px placeholder for pages outside the render window", async () => {
+      renderWithProviders(
+        <PdfContinuousScrollReader
+          {...defaultProps}
+          totalPages={20}
+          initialPage={1}
+          preloadBuffer={2}
+        />,
+      );
+
+      // A far page that has never rendered uses the fallback placeholder
+      // height, keeping the scrollable area roughly sized.
+      const placeholder = await screen.findByTestId("pdf-page-placeholder-15");
+      expect(placeholder).toHaveStyle({ height: "800px" });
+    });
+  });
 });
