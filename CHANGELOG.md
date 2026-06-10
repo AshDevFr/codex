@@ -2,6 +2,18 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.38.0] - 2026-06-10
+
+### 🚀 Features
+
+- *(plugins)* Add host-configurable plugin log level
+- *(plugins)* Add debug logging across network-backed plugins
+- *(plugins)* Per-plugin log level override, default to server level
+
+### 🐛 Bug Fixes
+
+- *(reader)* Restore mobile toolbar toggle and scroll position in continuous modes
+
 ## [1.37.1] - 2026-06-09
 
 ### 🐛 Bug Fixes
