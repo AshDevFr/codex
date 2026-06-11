@@ -147,6 +147,14 @@ pub struct OidcProviderConfig {
     /// Claim for email (default: "email")
     #[serde(default = "default_email_claim")]
     pub email_claim: String,
+
+    /// Audiences accepted on API bearer tokens from this provider.
+    /// Empty means "accept only `client_id`". Add the client IDs of trusted
+    /// apps that forward their users' tokens (e.g. a shared Shisho/claude.ai
+    /// client). Resolution of the empty default happens at validator
+    /// construction.
+    #[serde(default)]
+    pub accepted_audiences: Vec<String>,
 }
 
 fn default_groups_claim() -> String {
@@ -2140,6 +2148,7 @@ database:
             groups_claim: "groups".to_string(),
             username_claim: "preferred_username".to_string(),
             email_claim: "email".to_string(),
+            accepted_audiences: vec![],
         };
 
         let yaml = serde_yaml::to_string(&provider).unwrap();
@@ -2223,6 +2232,43 @@ client_id: "test-client"
     }
 
     #[test]
+    fn test_oidc_provider_config_accepted_audiences_default_empty() {
+        let yaml_content = r#"
+display_name: "Test Provider"
+issuer_url: "https://test.example.com"
+client_id: "test-client"
+"#;
+
+        let provider: OidcProviderConfig = serde_yaml::from_str(yaml_content).unwrap();
+        // Empty means "use [client_id]"; resolution happens at validator
+        // construction, not here.
+        assert!(provider.accepted_audiences.is_empty());
+    }
+
+    #[test]
+    fn test_oidc_provider_config_accepted_audiences_from_yaml() {
+        let yaml_content = r#"
+display_name: "Authentik"
+issuer_url: "https://authentik.example.com/application/o/codex/"
+client_id: "codex-client"
+accepted_audiences:
+  - "codex-client"
+  - "shared-shisho-client"
+"#;
+
+        let provider: OidcProviderConfig = serde_yaml::from_str(yaml_content).unwrap();
+        assert_eq!(
+            provider.accepted_audiences,
+            vec!["codex-client", "shared-shisho-client"]
+        );
+
+        // Round-trips through serialization
+        let yaml = serde_yaml::to_string(&provider).unwrap();
+        let deserialized: OidcProviderConfig = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(deserialized.accepted_audiences, provider.accepted_audiences);
+    }
+
+    #[test]
     fn test_oidc_config_serialization() {
         let mut providers = HashMap::new();
         providers.insert(
@@ -2238,6 +2284,7 @@ client_id: "test-client"
                 groups_claim: "groups".to_string(),
                 username_claim: "preferred_username".to_string(),
                 email_claim: "email".to_string(),
+                accepted_audiences: vec![],
             },
         );
 

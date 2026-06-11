@@ -127,6 +127,13 @@ impl EnvOverride for OidcProviderConfig {
         if let Ok(email_claim) = env::var(format!("{}_EMAIL_CLAIM", prefix)) {
             self.email_claim = email_claim;
         }
+        if let Ok(accepted_audiences) = env::var(format!("{}_ACCEPTED_AUDIENCES", prefix)) {
+            self.accepted_audiences = accepted_audiences
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+        }
 
         // Role mapping: ROLE_MAPPING_ADMIN="group1, group2", ROLE_MAPPING_MAINTAINER="group3"
         let role_mapping_prefix = format!("{}_ROLE_MAPPING_", prefix);
@@ -207,6 +214,7 @@ impl EnvOverride for OidcConfig {
                             groups_claim: "groups".to_string(),
                             username_claim: "preferred_username".to_string(),
                             email_claim: "email".to_string(),
+                            accepted_audiences: vec![],
                         };
                         new_provider.apply_env_overrides(&provider_prefix);
                         new_provider
@@ -1232,6 +1240,7 @@ mod tests {
         remove_var("CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_CLIENT_SECRET");
         remove_var("CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_SCOPES");
         remove_var("CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_GROUPS_CLAIM");
+        remove_var("CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_ACCEPTED_AUDIENCES");
 
         use crate::OidcProviderConfig;
 
@@ -1246,6 +1255,7 @@ mod tests {
             groups_claim: "groups".to_string(),
             username_claim: "preferred_username".to_string(),
             email_claim: "email".to_string(),
+            accepted_audiences: vec![],
         };
 
         set_var(
@@ -1272,6 +1282,10 @@ mod tests {
             "CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_GROUPS_CLAIM",
             "custom_groups",
         );
+        set_var(
+            "CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_ACCEPTED_AUDIENCES",
+            "codex-client, shared-shisho-client",
+        );
         provider.apply_env_overrides("CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK");
 
         assert_eq!(provider.display_name, "Authentik SSO");
@@ -1287,6 +1301,13 @@ mod tests {
             ]
         );
         assert_eq!(provider.groups_claim, "custom_groups");
+        assert_eq!(
+            provider.accepted_audiences,
+            vec![
+                "codex-client".to_string(),
+                "shared-shisho-client".to_string()
+            ]
+        );
 
         remove_var("CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_DISPLAY_NAME");
         remove_var("CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_ISSUER_URL");
@@ -1294,6 +1315,7 @@ mod tests {
         remove_var("CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_CLIENT_SECRET");
         remove_var("CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_SCOPES");
         remove_var("CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_GROUPS_CLAIM");
+        remove_var("CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_ACCEPTED_AUDIENCES");
     }
 
     #[test]
@@ -1319,6 +1341,7 @@ mod tests {
                 groups_claim: "groups".to_string(),
                 username_claim: "preferred_username".to_string(),
                 email_claim: "email".to_string(),
+                accepted_audiences: vec![],
             },
         );
 
@@ -1463,6 +1486,7 @@ mod tests {
             groups_claim: "groups".to_string(),
             username_claim: "preferred_username".to_string(),
             email_claim: "email".to_string(),
+            accepted_audiences: vec![],
         };
 
         set_var(
@@ -1525,6 +1549,7 @@ mod tests {
             groups_claim: "groups".to_string(),
             username_claim: "preferred_username".to_string(),
             email_claim: "email".to_string(),
+            accepted_audiences: vec![],
         };
 
         // Add admin via env, reader stays from YAML

@@ -747,6 +747,7 @@ mod tests {
                 groups_claim: "groups".to_string(),
                 username_claim: "preferred_username".to_string(),
                 email_claim: "email".to_string(),
+                accepted_audiences: vec![],
             },
         );
 
@@ -817,6 +818,7 @@ mod tests {
             groups_claim: "groups".to_string(),
             username_claim: "preferred_username".to_string(),
             email_claim: "email".to_string(),
+            accepted_audiences: vec![],
         };
 
         let config = create_test_config();
@@ -1215,6 +1217,7 @@ mod tests {
                 groups_claim: "groups".to_string(),
                 username_claim: "preferred_username".to_string(),
                 email_claim: "email".to_string(),
+                accepted_audiences: vec![],
             },
         );
         providers.insert(
@@ -1230,6 +1233,7 @@ mod tests {
                 groups_claim: "groups".to_string(),
                 username_claim: "preferred_username".to_string(),
                 email_claim: "email".to_string(),
+                accepted_audiences: vec![],
             },
         );
 
@@ -1306,6 +1310,7 @@ mod tests {
             groups_claim: "groups".to_string(),
             username_claim: "preferred_username".to_string(),
             email_claim: "email".to_string(),
+            accepted_audiences: vec![],
         };
 
         let secret = service.resolve_client_secret(&provider);
@@ -1329,6 +1334,7 @@ mod tests {
             groups_claim: "groups".to_string(),
             username_claim: "preferred_username".to_string(),
             email_claim: "email".to_string(),
+            accepted_audiences: vec![],
         };
 
         let secret = service.resolve_client_secret(&provider);
