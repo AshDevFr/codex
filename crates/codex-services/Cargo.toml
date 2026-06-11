@@ -52,6 +52,8 @@ csv = "1.3"
 
 # Auth / identity
 openidconnect = "4"
+# IdP bearer validation (resource-server path); same version/backend as codex-utils
+jsonwebtoken = { version = "10", features = ["aws_lc_rs"] }
 sha2 = "0.10"
 base64 = "0.22"
 rand = "0.10"
@@ -106,6 +108,8 @@ sysinfo = { version = "0.39", default-features = false, features = ["system"], o
 [dev-dependencies]
 tempfile = { workspace = true }
 serial_test = { workspace = true }
+# Local IdP stub (discovery + JWKS endpoints) for idp_bearer integration tests
+axum = "0.8"
 codex-db = { workspace = true, features = ["test-utils"] }
 # Capturing tracing layer for plugin::manager span-emission tests and the
 # metrics::tests in-memory exporter checks.

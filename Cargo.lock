@@ -1102,6 +1102,7 @@ name = "codex-services"
 version = "1.38.1"
 dependencies = [
  "anyhow",
+ "axum",
  "base64 0.22.1",
  "chrono",
  "codex-config",
@@ -1115,6 +1116,7 @@ dependencies = [
  "futures",
  "handlebars",
  "image",
+ "jsonwebtoken",
  "jxl-oxide",
  "lettre",
  "lru",

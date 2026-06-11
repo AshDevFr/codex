@@ -132,6 +132,7 @@ fn create_test_oidc_config() -> OidcConfig {
             groups_claim: "groups".to_string(),
             username_claim: "preferred_username".to_string(),
             email_claim: "email".to_string(),
+            accepted_audiences: vec![],
         },
     );
 
@@ -357,6 +358,7 @@ async fn test_list_multiple_providers() {
             groups_claim: "groups".to_string(),
             username_claim: "preferred_username".to_string(),
             email_claim: "email".to_string(),
+            accepted_audiences: vec![],
         },
     );
 
@@ -373,6 +375,7 @@ async fn test_list_multiple_providers() {
             groups_claim: "groups".to_string(),
             username_claim: "preferred_username".to_string(),
             email_claim: "email".to_string(),
+            accepted_audiences: vec![],
         },
     );
 
@@ -627,6 +630,7 @@ fn test_oidc_role_mapping_empty_role_mapping() {
         groups_claim: "groups".to_string(),
         username_claim: "preferred_username".to_string(),
         email_claim: "email".to_string(),
+        accepted_audiences: vec![],
     };
     oidc_config
         .providers
@@ -965,6 +969,7 @@ fn test_oidc_provider_config_serde() {
         groups_claim: "groups".to_string(),
         username_claim: "preferred_username".to_string(),
         email_claim: "email".to_string(),
+        accepted_audiences: vec![],
     };
 
     let json = serde_json::to_string(&config).unwrap();
