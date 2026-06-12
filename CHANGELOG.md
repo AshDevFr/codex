@@ -2,6 +2,17 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.38.2] - 2026-06-12
+
+### 🚀 Features
+
+- *(auth)* Add IdP bearer token validator and per-provider accepted audiences
+- *(auth)* Accept IdP bearer tokens on the API and resolve linked users
+
+### 📚 Documentation
+
+- *(auth)* Document IdP bearer tokens and accepted_audiences config
+
 ## [1.38.1] - 2026-06-10
 
 ### 🐛 Bug Fixes
