@@ -163,6 +163,9 @@ zip = "8.1"
 migration = { path = "migration" }
 serial_test = { workspace = true }
 tracing-test = "0.2"
+# Signs RS256 fixture tokens for the IdP bearer API tests; same version and
+# backend as codex-utils/codex-services.
+jsonwebtoken = { version = "10", features = ["aws_lc_rs"] }
 # Enables codex_db::test_helpers (gated behind the `test-utils` feature) so
 # the root crate's integration suite under `tests/` can mint SQLite test
 # databases.

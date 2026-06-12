@@ -20,6 +20,7 @@ mod external_ratings;
 mod filesystem;
 mod filter_presets;
 mod genres;
+mod idp_bearer;
 mod info;
 mod komga;
 mod koreader;

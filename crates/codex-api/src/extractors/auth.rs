@@ -92,6 +92,75 @@ impl UserAuthCache {
     }
 }
 
+/// Cache TTL for resolved IdP `(provider, subject) -> user_id` links.
+/// Longer than the user cache: the link itself only changes when a user
+/// (un)links a provider, which is rare; user data freshness is still
+/// governed by `USER_CACHE_TTL_SECS` downstream.
+const OIDC_SUBJECT_CACHE_TTL_SECS: i64 = 300;
+
+struct CachedSubject {
+    user_id: Uuid,
+    cached_at: DateTime<Utc>,
+}
+
+/// TTL'd map from a validated IdP identity to the linked local user, so
+/// hot paths (thumbnail bursts) don't hit `oidc_connections` per request.
+#[derive(Default)]
+pub struct OidcSubjectCache {
+    cache: DashMap<(String, String), CachedSubject>,
+}
+
+impl OidcSubjectCache {
+    fn get(&self, provider_name: &str, subject: &str) -> Option<Uuid> {
+        let key = (provider_name.to_string(), subject.to_string());
+        if let Some(entry) = self.cache.get(&key) {
+            let age = Utc::now().signed_duration_since(entry.cached_at);
+            if age.num_seconds() < OIDC_SUBJECT_CACHE_TTL_SECS {
+                return Some(entry.user_id);
+            }
+            drop(entry);
+            self.cache.remove(&key);
+        }
+        None
+    }
+
+    fn insert(&self, provider_name: &str, subject: &str, user_id: Uuid) {
+        self.cache.insert(
+            (provider_name.to_string(), subject.to_string()),
+            CachedSubject {
+                user_id,
+                cached_at: Utc::now(),
+            },
+        );
+    }
+
+    /// Drop every cached link for a user (e.g. after disconnecting a
+    /// provider). Mirrors `UserAuthCache::invalidate`; like it, nothing
+    /// calls this yet — expiry is TTL-driven.
+    #[allow(dead_code)]
+    pub fn invalidate_user(&self, user_id: &Uuid) {
+        self.cache.retain(|_, entry| entry.user_id != *user_id);
+    }
+}
+
+/// IdP bearer authentication state: the token validator plus the
+/// subject-resolution cache. Present on [`AppState`] only when OIDC is
+/// enabled with at least one provider; absent means the bearer path is
+/// byte-for-byte the local-JWT behavior.
+pub struct IdpBearerAuth {
+    validator: codex_services::IdpBearerValidator,
+    subject_cache: OidcSubjectCache,
+}
+
+impl IdpBearerAuth {
+    pub fn new(config: &codex_config::OidcConfig) -> Self {
+        Self {
+            validator: codex_services::IdpBearerValidator::new(config),
+            subject_cache: OidcSubjectCache::default(),
+        }
+    }
+}
+
 /// Authentication context extracted from JWT or API key
 #[derive(Debug, Clone)]
 pub struct AuthContext {
@@ -115,6 +184,11 @@ pub enum AuthMethod {
     Jwt,
     ApiKey,
     BasicAuth,
+    /// Bearer token issued by a configured OIDC identity provider and
+    /// resolved to a local user via their `oidc_connections` link.
+    /// Semantically closest to `Jwt`: a full-user credential, no token
+    /// permission constraints.
+    OidcBearer,
 }
 
 impl AuthContext {
@@ -230,6 +304,11 @@ pub struct AppState {
     /// OIDC authentication service for external identity provider authentication
     /// None when OIDC is disabled in config
     pub oidc_service: Option<Arc<codex_services::OidcService>>,
+    /// IdP bearer token validation (resource-server path): accepts provider-
+    /// issued RS256/ES256 access tokens on the API. None when OIDC is
+    /// disabled or no providers are configured; the bearer path then keeps
+    /// today's local-JWT-only behavior.
+    pub idp_bearer: Option<Arc<IdpBearerAuth>>,
     /// OAuth state manager for user plugin OAuth flows
     pub oauth_state_manager: Arc<codex_services::user_plugin::OAuthStateManager>,
     /// Plugin file storage service for managing plugin data directories
@@ -300,8 +379,21 @@ impl FromRequestParts<Arc<AppState>> for AuthContext {
     }
 }
 
-/// Extract auth context from JWT token
+/// Extract auth context from a bearer token: either a Codex session JWT
+/// (HS256, local secret) or an IdP-issued access token (RS256/ES256,
+/// validated against the provider's JWKS).
+///
+/// Routing is by the JWT header's algorithm, not try-and-fallback: HS256
+/// keeps the existing local path verbatim, and only RS256/ES256 tokens
+/// with a configured validator divert. Tokens whose header doesn't decode
+/// also follow the existing path, preserving today's error messages.
 async fn extract_from_jwt(token: &str, state: &AppState) -> Result<AuthContext, ApiError> {
+    if let Some(idp_bearer) = &state.idp_bearer
+        && codex_services::idp_bearer::is_idp_algorithm(token)
+    {
+        return extract_from_idp_bearer(token, state, idp_bearer).await;
+    }
+
     // Verify and decode JWT
     let claims = state
         .jwt_service
@@ -312,6 +404,77 @@ async fn extract_from_jwt(token: &str, state: &AppState) -> Result<AuthContext, 
     let user_id = Uuid::parse_str(&claims.sub)
         .map_err(|_| ApiError::Unauthorized("Invalid user ID in token".to_string()))?;
 
+    resolve_user_context(user_id, AuthMethod::Jwt, state).await
+}
+
+/// Extract auth context from an IdP-issued bearer token.
+///
+/// The validator proves authenticity (signature, issuer, audience,
+/// expiry); the resulting `(provider, subject)` identity is then resolved
+/// to a local user through their `oidc_connections` link. There is
+/// deliberately no auto-provisioning here: an unlinked identity is a 401
+/// telling the user to sign into Codex via SSO once.
+async fn extract_from_idp_bearer(
+    token: &str,
+    state: &AppState,
+    idp_bearer: &IdpBearerAuth,
+) -> Result<AuthContext, ApiError> {
+    let validated = idp_bearer.validator.validate(token).await.map_err(|err| {
+        if err.is_backend() {
+            // The token may be fine; the IdP couldn't be consulted.
+            tracing::warn!(reason = %err, "IdP bearer validation failed on the IdP side");
+            ApiError::ServiceUnavailable("Identity provider is unreachable".to_string())
+        } else {
+            // The precise cause goes to the log only; the response stays
+            // uniform so callers can't probe validation internals.
+            tracing::debug!(reason = %err, "Rejected IdP bearer token");
+            ApiError::Unauthorized("Invalid bearer token".to_string())
+        }
+    })?;
+
+    let user_id = match idp_bearer
+        .subject_cache
+        .get(&validated.provider_name, &validated.subject)
+    {
+        Some(user_id) => user_id,
+        None => {
+            let connection = codex_db::repositories::OidcConnectionRepository::find_by_provider_subject(
+                &state.db,
+                &validated.provider_name,
+                &validated.subject,
+            )
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to load OIDC connection: {}", e)))?
+            .ok_or_else(|| {
+                tracing::debug!(
+                    provider = %validated.provider_name,
+                    "Valid IdP bearer token for an unlinked identity"
+                );
+                ApiError::Unauthorized(
+                    "No Codex account is linked to this identity; sign in to Codex via SSO once to link it"
+                        .to_string(),
+                )
+            })?;
+            idp_bearer.subject_cache.insert(
+                &validated.provider_name,
+                &validated.subject,
+                connection.user_id,
+            );
+            connection.user_id
+        }
+    };
+
+    resolve_user_context(user_id, AuthMethod::OidcBearer, state).await
+}
+
+/// Build an [`AuthContext`] for a user id whose credential has already
+/// been verified (session JWT or IdP bearer), going through the user auth
+/// cache. Inactive users are rejected identically on every path.
+async fn resolve_user_context(
+    user_id: Uuid,
+    auth_method: AuthMethod,
+    state: &AppState,
+) -> Result<AuthContext, ApiError> {
     // OPTIMIZATION: Check cache first to avoid DB query on every request
     // This significantly reduces DB load when many requests come in from the same user
     // (e.g., loading a page with 30+ thumbnail requests)
@@ -328,7 +491,7 @@ async fn extract_from_jwt(token: &str, state: &AppState) -> Result<AuthContext, 
             email: cached.email,
             role: cached.role,
             custom_permissions: cached.custom_permissions,
-            auth_method: AuthMethod::Jwt,
+            auth_method,
             token_permissions: None,
         });
     }
@@ -369,7 +532,7 @@ async fn extract_from_jwt(token: &str, state: &AppState) -> Result<AuthContext, 
         email: user.email,
         role,
         custom_permissions,
-        auth_method: AuthMethod::Jwt,
+        auth_method,
         token_permissions: None,
     })
 }
@@ -601,4 +764,59 @@ fn extract_token_from_cookies(cookie_str: &str) -> Option<String> {
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn oidc_subject_cache_returns_fresh_entries() {
+        let cache = OidcSubjectCache::default();
+        let user_id = Uuid::new_v4();
+
+        assert_eq!(cache.get("authentik", "sub-1"), None);
+
+        cache.insert("authentik", "sub-1", user_id);
+        assert_eq!(cache.get("authentik", "sub-1"), Some(user_id));
+
+        // Distinct provider or subject is a distinct identity.
+        assert_eq!(cache.get("keycloak", "sub-1"), None);
+        assert_eq!(cache.get("authentik", "sub-2"), None);
+    }
+
+    #[test]
+    fn oidc_subject_cache_expires_entries_after_ttl() {
+        let cache = OidcSubjectCache::default();
+        let user_id = Uuid::new_v4();
+
+        cache.cache.insert(
+            ("authentik".to_string(), "sub-1".to_string()),
+            CachedSubject {
+                user_id,
+                cached_at: Utc::now() - chrono::Duration::seconds(OIDC_SUBJECT_CACHE_TTL_SECS + 1),
+            },
+        );
+
+        assert_eq!(cache.get("authentik", "sub-1"), None);
+        // The expired entry is evicted, not just skipped.
+        assert!(cache.cache.is_empty());
+    }
+
+    #[test]
+    fn oidc_subject_cache_invalidates_all_links_for_a_user() {
+        let cache = OidcSubjectCache::default();
+        let user_a = Uuid::new_v4();
+        let user_b = Uuid::new_v4();
+
+        cache.insert("authentik", "sub-a", user_a);
+        cache.insert("keycloak", "sub-a2", user_a);
+        cache.insert("authentik", "sub-b", user_b);
+
+        cache.invalidate_user(&user_a);
+
+        assert_eq!(cache.get("authentik", "sub-a"), None);
+        assert_eq!(cache.get("keycloak", "sub-a2"), None);
+        assert_eq!(cache.get("authentik", "sub-b"), Some(user_b));
+    }
 }
