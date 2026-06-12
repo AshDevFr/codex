@@ -98,6 +98,7 @@ async fn build_state(db: DatabaseConnection, refresh_enabled: bool) -> Arc<AppSt
         plugin_manager,
         plugin_metrics_service,
         oidc_service: None,
+        idp_bearer: None,
         oauth_state_manager: Arc::new(codex::services::user_plugin::OAuthStateManager::new()),
         export_storage: None,
         plugin_file_storage: None,

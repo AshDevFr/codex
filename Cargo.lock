@@ -832,6 +832,7 @@ dependencies = [
  "http-body-util",
  "hyper",
  "image",
+ "jsonwebtoken",
  "lopdf",
  "migration",
  "opentelemetry 0.32.0",

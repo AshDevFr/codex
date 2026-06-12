@@ -407,6 +407,16 @@ impl IdpBearerValidator {
     }
 }
 
+/// Whether the token's header names an algorithm this module handles.
+///
+/// The auth extractor uses this to route bearer tokens: HS256 session JWTs
+/// (and anything with an undecodable header) stay on the local-secret path
+/// and keep today's error behavior; only RS256/ES256 tokens are diverted to
+/// IdP validation, and only when a validator is configured.
+pub fn is_idp_algorithm(token: &str) -> bool {
+    decode_header(token).is_ok_and(|header| ALLOWED_ALGS.contains(&header.alg))
+}
+
 /// Read the token's `iss` claim without verifying anything. Used solely to
 /// select which provider's keys and rules apply; the claim is re-validated
 /// against that provider during signature verification.
@@ -610,6 +620,23 @@ mod tests {
             validator.validate(&token).await,
             Err(IdpBearerError::UnknownIssuer)
         ));
+    }
+
+    #[test]
+    fn is_idp_algorithm_routes_only_allowlisted_asymmetric_tokens() {
+        let token_with_alg = |alg: &str| {
+            let header = URL_SAFE_NO_PAD.encode(format!(r#"{{"alg":"{alg}","typ":"JWT"}}"#));
+            format!("{header}.e30.c2ln")
+        };
+
+        assert!(is_idp_algorithm(&token_with_alg("RS256")));
+        assert!(is_idp_algorithm(&token_with_alg("ES256")));
+
+        // Local session tokens and oddities stay on the existing path.
+        assert!(!is_idp_algorithm(&token_with_alg("HS256")));
+        assert!(!is_idp_algorithm(&token_with_alg("none")));
+        assert!(!is_idp_algorithm("garbage"));
+        assert!(!is_idp_algorithm(""));
     }
 
     #[test]

@@ -360,6 +360,25 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         None
     };
 
+    // IdP bearer validation (resource-server path): accept provider-issued
+    // access tokens on the API, gated on the same OIDC config as web SSO.
+    let idp_bearer = if config.auth.oidc.enabled && !config.auth.oidc.providers.is_empty() {
+        info!("Initializing IdP bearer token validation...");
+        for (name, provider_config) in &config.auth.oidc.providers {
+            let audiences = if provider_config.accepted_audiences.is_empty() {
+                format!("{} (client_id default)", provider_config.client_id)
+            } else {
+                provider_config.accepted_audiences.join(", ")
+            };
+            info!("  - {}: accepted audiences: {}", name, audiences);
+        }
+        Some(Arc::new(codex_api::extractors::IdpBearerAuth::new(
+            &config.auth.oidc,
+        )))
+    } else {
+        None
+    };
+
     // Initialize plugin metrics service
     info!("Initializing plugin metrics service...");
     let plugin_metrics_service = Arc::new(codex_services::PluginMetricsService::new());
@@ -535,6 +554,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         plugin_manager: plugin_manager.clone(),
         plugin_metrics_service,
         oidc_service,
+        idp_bearer,
         oauth_state_manager: oauth_state_manager.clone(),
         export_storage: Some(export_storage.clone()),
         plugin_file_storage: Some(plugin_file_storage),

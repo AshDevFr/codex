@@ -79,6 +79,7 @@ pub async fn create_test_auth_state(db: DatabaseConnection) -> Arc<AuthState> {
         plugin_manager,
         plugin_metrics_service,
         oidc_service: None, // Tests disable OIDC by default
+        idp_bearer: None,
         oauth_state_manager: Arc::new(codex::services::user_plugin::OAuthStateManager::new()),
         export_storage: None,
         plugin_file_storage: None,
@@ -146,6 +147,7 @@ pub async fn create_test_app_state(db: DatabaseConnection) -> Arc<AppState> {
         plugin_manager,
         plugin_metrics_service,
         oidc_service: None, // Tests disable OIDC by default
+        idp_bearer: None,
         oauth_state_manager: Arc::new(codex::services::user_plugin::OAuthStateManager::new()),
         export_storage: None,
         plugin_file_storage: None,
@@ -238,6 +240,7 @@ pub async fn create_test_router(state: Arc<AuthState>) -> Router {
         plugin_manager,
         plugin_metrics_service,
         oidc_service: None, // Tests disable OIDC by default
+        idp_bearer: None,
         oauth_state_manager: Arc::new(codex::services::user_plugin::OAuthStateManager::new()),
         export_storage: None,
         plugin_file_storage: None,
