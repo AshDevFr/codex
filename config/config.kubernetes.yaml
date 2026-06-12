@@ -135,6 +135,12 @@ files:
 #         scopes:
 #           - profile
 #           - email
+#         # Audiences accepted on API bearer tokens from this provider.
+#         # Defaults to [client_id]. Add the client IDs of trusted apps that
+#         # forward their users' IdP tokens to the Codex API.
+#         # accepted_audiences:
+#         #   - codex-client-id
+#         #   - other-trusted-client-id
 #         # role_mapping:
 #         #   admin:
 #         #     - codex-admins

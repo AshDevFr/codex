@@ -15,6 +15,7 @@ OIDC authentication allows you to:
 - **Automatic User Creation**: New users are created on first OIDC login
 - **Group-to-Role Mapping**: Map IdP groups to Codex roles (Admin, Maintainer, Reader)
 - **Hybrid Mode**: OIDC and local authentication work side by side
+- **API Bearer Tokens**: Provider-issued access tokens authenticate API requests directly (see [API Bearer Tokens](#api-bearer-tokens-resource-server))
 
 ## Configuration
 
@@ -72,6 +73,7 @@ auth:
 | `groups_claim` | No | `groups` | JWT claim containing user's groups |
 | `username_claim` | No | `preferred_username` | JWT claim for the username |
 | `email_claim` | No | `email` | JWT claim for the email address |
+| `accepted_audiences` | No | `[client_id]` | Audiences accepted on API bearer tokens from this provider (see [API Bearer Tokens](#api-bearer-tokens-resource-server)) |
 
 ### Environment Variable Overrides
 
@@ -94,6 +96,7 @@ CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_SCOPES="email, profile, groups"
 CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_GROUPS_CLAIM="groups"
 CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_USERNAME_CLAIM="preferred_username"
 CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_EMAIL_CLAIM="email"
+CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_ACCEPTED_AUDIENCES="codex-client, other-trusted-client"
 
 # Role mapping (comma-separated group names per role)
 CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_ROLE_MAPPING_ADMIN="codex-admins, administrators"
@@ -277,6 +280,72 @@ auth:
 ```
 
 A user can link their account to multiple providers. The same Codex account is used as long as the email address matches.
+
+## API Bearer Tokens (Resource Server)
+
+Besides web sign-in, Codex accepts access tokens issued by your configured providers as API credentials:
+
+```bash
+curl -H "Authorization: Bearer $IDP_ACCESS_TOKEN" https://codex.example.com/api/v1/auth/me
+```
+
+This makes Codex an OAuth2 resource server: applications that already hold a user's IdP token (a reverse proxy doing forward-auth, an MCP service, another app in your SSO ecosystem) can call the Codex API as that user without managing Codex API keys.
+
+### How Validation Works
+
+1. The token's signing algorithm is checked. Only asymmetric algorithms (RS256, ES256) are accepted on this path; Codex's own session tokens are HS256 and verified separately, so the two can never be confused.
+2. The token's `iss` claim selects the matching configured provider (trailing slashes are tolerated).
+3. The signature is verified against the provider's published JWKS, fetched via OIDC discovery and cached. Key rotation at the IdP is picked up automatically, no restart needed.
+4. The `aud` claim must match one of the provider's `accepted_audiences`, and `exp`/`nbf` are enforced with a small clock-skew allowance. Tokens without `aud` or `exp` are rejected.
+5. The token's `sub` is resolved to the Codex user who linked that identity.
+
+The feature needs no extra configuration: it is active whenever `auth.oidc.enabled` is `true` with at least one provider. With OIDC disabled, bearer authentication behaves exactly as before.
+
+### Linking Requirement
+
+There is **no auto-provisioning from API tokens**: the user must have signed into Codex web via SSO at least once so that the identity link exists. A valid token for an unlinked identity gets a `401` asking the user to sign in via SSO once. This is deliberate: a valid IdP token proves who the caller is at the IdP, but it should not silently create Codex accounts for everyone in your organization.
+
+Two related limitations:
+
+- Role/group sync happens only at web login. A bearer token's `groups` claim is ignored; role changes at the IdP take effect on the user's next web sign-in.
+- Tokens are accepted from configured providers only. There is no way to accept tokens from an issuer you have not configured.
+
+### Audience Rules
+
+OAuth2 access tokens carry an `aud` (audience) claim naming the client they were issued to. By default Codex only accepts tokens whose audience is the provider's own `client_id`, which covers tokens obtained through Codex's sign-in flow.
+
+If another application obtains tokens under its own client ID and forwards them to Codex, add that client ID to `accepted_audiences`:
+
+```yaml
+auth:
+  oidc:
+    enabled: true
+    providers:
+      authentik:
+        issuer_url: "https://authentik.example.com/application/o/codex/"
+        client_id: "codex-client-id"
+        accepted_audiences:
+          - "codex-client-id"        # keep accepting Codex's own tokens
+          - "shared-apps-client-id"  # tokens minted for a trusted app
+```
+
+Only list clients you trust to act on behalf of their users: accepting an audience means any valid token minted for that client authenticates against Codex.
+
+### Troubleshooting
+
+Rejected tokens return a generic `401 Invalid bearer token`; the precise reason is logged server-side (debug level) and never echoed to the caller. Look for `Rejected IdP bearer token` in the logs:
+
+| Logged reason | Likely cause | Fix |
+|---------------|--------------|-----|
+| `unsupported signing algorithm` | Token is HS256 or another symmetric/unsupported algorithm | Configure the IdP to sign access tokens with RS256 or ES256 |
+| `token issuer does not match any configured provider` | The token's `iss` is not a configured `issuer_url` | Add the provider, or fix `issuer_url` (compare with the token's `iss` claim) |
+| `wrong audience` or `token missing required claim` for `aud` | Token minted for a client not in `accepted_audiences`, or the IdP omits `aud` | Add the requesting app's client ID to `accepted_audiences`; ensure the IdP stamps an audience |
+| `token expired` | The access token's `exp` has passed | Obtain a fresh token; check for clock skew beyond ~30s |
+| `no JWKS key matches the token's key id` | Token signed with a key the IdP no longer publishes | Re-issue the token; verify the issuer's `jwks_uri` is reachable from Codex |
+| `signature verification failed` | Token tampered with, or signed by a different issuer's key | Verify the token actually comes from the configured provider |
+| `No Codex account is linked to this identity` (response message) | The user never signed into Codex web via SSO | Sign into the Codex web UI through the provider once |
+
+If the IdP itself is unreachable (discovery or JWKS fetch fails), Codex returns `503 Identity provider is unreachable` rather than `401`, and logs `IdP bearer validation failed on the IdP side` at warn level.
 
 ## Security
 

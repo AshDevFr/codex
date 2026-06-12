@@ -70,6 +70,12 @@ auth:
   #       # groups_claim: groups
   #       # username_claim: preferred_username
   #       # email_claim: email
+  #       # Audiences accepted on API bearer tokens from this provider.
+  #       # Defaults to [client_id]. Add the client IDs of trusted apps that
+  #       # forward their users' IdP tokens to the Codex API.
+  #       # accepted_audiences:
+  #       #   - codex-client-id
+  #       #   - other-trusted-client-id
   #       # Group-to-role mapping (optional)
   #       # role_mapping:
   #       #   admin:
