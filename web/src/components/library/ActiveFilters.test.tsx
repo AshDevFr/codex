@@ -260,4 +260,38 @@ describe("ActiveFilters", () => {
     });
     expect(removeButton).toBeInTheDocument();
   });
+
+  it("should render hasUserRating include filter chip", () => {
+    render(
+      <TestWrapper initialRoute="/?urf=include">
+        <ActiveFilters />
+      </TestWrapper>,
+    );
+
+    expect(screen.getByText("Filters:")).toBeInTheDocument();
+    expect(screen.getByText("Has Rating")).toBeInTheDocument();
+  });
+
+  it("should render hasUserRating exclude filter chip with NOT prefix", () => {
+    render(
+      <TestWrapper initialRoute="/?urf=exclude">
+        <ActiveFilters />
+      </TestWrapper>,
+    );
+
+    expect(screen.getByText(/NOT Has Rating/)).toBeInTheDocument();
+  });
+
+  it("should have remove button on hasUserRating chip", () => {
+    render(
+      <TestWrapper initialRoute="/?urf=include">
+        <ActiveFilters />
+      </TestWrapper>,
+    );
+
+    const removeButton = screen.getByRole("button", {
+      name: /Remove rating filter/i,
+    });
+    expect(removeButton).toBeInTheDocument();
+  });
 });

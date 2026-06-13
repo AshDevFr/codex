@@ -18,6 +18,7 @@ export function ActiveBookFilters() {
     setGenreState,
     setTagState,
     setReadStatusState,
+    setBookTypeState,
     setHasErrorState,
     clearAll,
   } = useBookFilterState();
@@ -105,6 +106,7 @@ export function ActiveBookFilters() {
       "Read Status",
       setReadStatusState,
     ),
+    ...renderGroupChips(filters.bookType, "bookType", "Type", setBookTypeState),
     ...renderHasErrorChip(),
   ];
 
