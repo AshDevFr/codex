@@ -71,8 +71,9 @@ impl CoverService {
             .context("Failed to read cover data")?
             .to_vec();
 
-        // Validate that it's a valid image
-        image::load_from_memory(&image_data).context("Invalid image file")?;
+        // Validate that it's a valid image (with a bounded allocation budget so a
+        // decompression bomb is rejected instead of OOMing the process).
+        crate::image_decode::decode_image_limited(&image_data).context("Invalid image file")?;
 
         // Compute hash of image data for deduplication
         let image_hash = codex_utils::hasher::hash_bytes(&image_data);
@@ -181,8 +182,9 @@ impl CoverService {
             .context("Failed to read book cover data")?
             .to_vec();
 
-        // Validate that it's a valid image
-        image::load_from_memory(&image_data).context("Invalid image file")?;
+        // Validate that it's a valid image (with a bounded allocation budget so a
+        // decompression bomb is rejected instead of OOMing the process).
+        crate::image_decode::decode_image_limited(&image_data).context("Invalid image file")?;
 
         // Compute hash of image data for deduplication
         let image_hash = codex_utils::hasher::hash_bytes(&image_data);

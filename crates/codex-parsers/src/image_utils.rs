@@ -301,11 +301,9 @@ pub fn process_image_data(filename: &str, data: &[u8]) -> Option<ProcessedImage>
     let (width, height) = match format {
         ImageFormat::SVG => get_svg_dimensions(data)?,
         ImageFormat::JXL => get_jxl_dimensions(data)?,
-        _ => {
-            // Use image crate for raster formats
-            use image::GenericImageView;
-            image::load_from_memory(data).ok()?.dimensions()
-        }
+        // Raster formats: read dimensions from the header only, never decode the
+        // full image. See `raster_dimensions`.
+        _ => raster_dimensions(data)?,
     };
 
     Some(ProcessedImage {
@@ -313,6 +311,23 @@ pub fn process_image_data(filename: &str, data: &[u8]) -> Option<ProcessedImage>
         width,
         height,
     })
+}
+
+/// Read raster image dimensions from the header only, without decoding pixels.
+///
+/// `image::load_from_memory(..).dimensions()` fully decodes an image into a
+/// bitmap just to read its size. A page whose header declares enormous
+/// dimensions (a corrupt file, or a decompression bomb that is tiny on disk)
+/// then makes the decoder allocate `width * height * channels` bytes up front —
+/// this has OOM-killed scans. `into_dimensions` reads only the header, so memory
+/// stays O(1) regardless of the declared size. Returns `None` if the bytes are
+/// not a decodable raster image.
+pub fn raster_dimensions(data: &[u8]) -> Option<(u32, u32)> {
+    image::ImageReader::new(Cursor::new(data))
+        .with_guessed_format()
+        .ok()?
+        .into_dimensions()
+        .ok()
 }
 
 /// Create a PageInfo from processed image data
@@ -439,6 +454,46 @@ pub fn get_image_format(name: &str) -> Option<ImageFormat> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    mod raster_dimensions {
+        use super::*;
+
+        fn encode_png(w: u32, h: u32) -> Vec<u8> {
+            let img = image::RgbaImage::from_pixel(w, h, image::Rgba([1, 2, 3, 255]));
+            let mut buf = Cursor::new(Vec::new());
+            image::DynamicImage::ImageRgba8(img)
+                .write_to(&mut buf, image::ImageFormat::Png)
+                .unwrap();
+            buf.into_inner()
+        }
+
+        #[test]
+        fn reads_png_dimensions() {
+            let data = encode_png(7, 11);
+            assert_eq!(super::super::raster_dimensions(&data), Some((7, 11)));
+        }
+
+        #[test]
+        fn reads_jpeg_dimensions() {
+            let img = image::RgbImage::from_pixel(13, 5, image::Rgb([9, 9, 9]));
+            let mut buf = Cursor::new(Vec::new());
+            image::DynamicImage::ImageRgb8(img)
+                .write_to(&mut buf, image::ImageFormat::Jpeg)
+                .unwrap();
+            assert_eq!(
+                super::super::raster_dimensions(&buf.into_inner()),
+                Some((13, 5))
+            );
+        }
+
+        #[test]
+        fn rejects_non_image_bytes() {
+            assert_eq!(
+                super::super::raster_dimensions(b"definitely not an image"),
+                None
+            );
+        }
+    }
 
     mod is_image_file {
         use super::*;

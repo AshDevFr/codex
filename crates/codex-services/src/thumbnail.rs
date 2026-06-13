@@ -645,7 +645,7 @@ fn load_image_with_svg_support(data: &[u8]) -> Result<DynamicImage> {
     } else if is_jxl_data(data) {
         decode_jxl_to_image(data)
     } else {
-        image::load_from_memory(data).map_err(|e| {
+        crate::image_decode::decode_image_limited(data).map_err(|e| {
             let detected_format = detect_image_format(data);
             let magic_bytes = format_magic_bytes(data);
             anyhow!(

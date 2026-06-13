@@ -5,7 +5,6 @@ use crate::traits::FormatParser;
 use crate::{BookMetadata, FileFormat, ImageFormat, PageInfo};
 use chrono::{DateTime, Utc};
 use codex_utils::hash_file;
-use image::GenericImageView;
 use lopdf::{Document, Object, ObjectId};
 use std::path::Path;
 
@@ -496,13 +495,11 @@ impl PdfParser {
                 && let Some((image_data, format, width, height, img_file_size)) =
                     page_images.into_iter().next()
             {
-                // Try to verify dimensions with image crate
+                // Verify dimensions from the image header only — never decode the
+                // full image (a bomb header would allocate gigabytes). Fall back
+                // to the embedded image's reported dimensions if unreadable.
                 let (final_width, final_height) =
-                    if let Ok(img) = image::load_from_memory(&image_data) {
-                        img.dimensions()
-                    } else {
-                        (width, height)
-                    };
+                    crate::image_utils::raster_dimensions(&image_data).unwrap_or((width, height));
 
                 pages.push(PageInfo {
                     page_number,

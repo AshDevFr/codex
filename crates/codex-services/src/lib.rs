@@ -16,6 +16,7 @@ pub mod export_storage;
 pub mod file_cleanup;
 pub mod filter;
 pub mod idp_bearer;
+pub mod image_decode;
 pub mod inflight_thumbnails;
 pub mod library_jobs;
 pub mod metadata;

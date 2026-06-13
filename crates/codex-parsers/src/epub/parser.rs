@@ -7,7 +7,6 @@ use crate::traits::FormatParser;
 use crate::{BookMetadata, FileFormat, ImageFormat, PageInfo};
 use chrono::{DateTime, Utc};
 use codex_utils::hash_file;
-use image::GenericImageView;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
@@ -447,12 +446,12 @@ impl FormatParser for EpubParser {
                     None => continue, // Skip if we can't parse the SVG
                 }
             } else {
-                // Use image crate for raster formats
-                let img = match image::load_from_memory(&image_data) {
-                    Ok(img) => img,
-                    Err(_) => continue, // Skip if we can't load the image
-                };
-                img.dimensions()
+                // Raster formats: read dimensions from the header only, never
+                // decode the full image (a bomb header would allocate gigabytes).
+                match crate::image_utils::raster_dimensions(&image_data) {
+                    Some(dims) => dims,
+                    None => continue, // Skip if we can't read the dimensions
+                }
             };
 
             pages.push(PageInfo {
