@@ -78,3 +78,10 @@ pub mod access_group_oidc_mappings;
 pub mod access_group_sharing_tags;
 pub mod access_groups;
 pub mod user_access_groups;
+
+// Collections (series), read lists (books), and the per-user want-to-read queue
+pub mod collection_series;
+pub mod collections;
+pub mod read_list_books;
+pub mod read_lists;
+pub mod want_to_read;

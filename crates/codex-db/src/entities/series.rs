@@ -68,6 +68,11 @@ pub enum Relation {
     // Release ledger entries for this series.
     #[sea_orm(has_many = "super::release_ledger::Entity")]
     ReleaseLedger,
+    // Collection membership and per-user want-to-read flags.
+    #[sea_orm(has_many = "super::collection_series::Entity")]
+    CollectionSeries,
+    #[sea_orm(has_many = "super::want_to_read::Entity")]
+    WantToRead,
 }
 
 impl Related<super::books::Entity> for Entity {
@@ -191,6 +196,28 @@ impl Related<super::series_aliases::Entity> for Entity {
 impl Related<super::release_ledger::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::ReleaseLedger.def()
+    }
+}
+
+impl Related<super::collection_series::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::CollectionSeries.def()
+    }
+}
+
+impl Related<super::want_to_read::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::WantToRead.def()
+    }
+}
+
+// Many-to-many: series belong to many collections via the collection_series join.
+impl Related<super::collections::Entity> for Entity {
+    fn to() -> RelationDef {
+        super::collection_series::Relation::Collection.def()
+    }
+    fn via() -> Option<RelationDef> {
+        Some(super::collection_series::Relation::Series.def().rev())
     }
 }
 

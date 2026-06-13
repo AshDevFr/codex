@@ -75,3 +75,15 @@ pub use super::access_group_sharing_tags::Entity as AccessGroupSharingTags;
 pub use super::access_groups::Entity as AccessGroups;
 #[allow(unused_imports)]
 pub use super::user_access_groups::Entity as UserAccessGroups;
+
+// Collections, read lists, and the per-user want-to-read queue
+#[allow(unused_imports)]
+pub use super::collection_series::Entity as CollectionSeries;
+#[allow(unused_imports)]
+pub use super::collections::Entity as Collections;
+#[allow(unused_imports)]
+pub use super::read_list_books::Entity as ReadListBooks;
+#[allow(unused_imports)]
+pub use super::read_lists::Entity as ReadLists;
+#[allow(unused_imports)]
+pub use super::want_to_read::Entity as WantToRead;

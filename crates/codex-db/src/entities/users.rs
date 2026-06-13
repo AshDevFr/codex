@@ -45,6 +45,8 @@ pub enum Relation {
     UserPlugins,
     #[sea_orm(has_many = "super::user_access_groups::Entity")]
     UserAccessGroups,
+    #[sea_orm(has_many = "super::want_to_read::Entity")]
+    WantToRead,
 }
 
 impl Related<super::read_progress::Entity> for Entity {
@@ -83,6 +85,12 @@ impl Related<super::user_plugins::Entity> for Entity {
 impl Related<super::user_access_groups::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::UserAccessGroups.def()
+    }
+}
+
+impl Related<super::want_to_read::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::WantToRead.def()
     }
 }
 

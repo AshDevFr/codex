@@ -69,6 +69,11 @@ pub enum Relation {
     BookGenres,
     #[sea_orm(has_many = "super::book_tags::Entity")]
     BookTags,
+    // Read list membership and per-user want-to-read flags.
+    #[sea_orm(has_many = "super::read_list_books::Entity")]
+    ReadListBooks,
+    #[sea_orm(has_many = "super::want_to_read::Entity")]
+    WantToRead,
 }
 
 impl Related<super::book_metadata::Entity> for Entity {
@@ -128,6 +133,28 @@ impl Related<super::tags::Entity> for Entity {
     }
     fn via() -> Option<RelationDef> {
         Some(super::book_tags::Relation::Book.def().rev())
+    }
+}
+
+impl Related<super::read_list_books::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::ReadListBooks.def()
+    }
+}
+
+impl Related<super::want_to_read::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::WantToRead.def()
+    }
+}
+
+// Many-to-many: books belong to many read lists via the read_list_books join.
+impl Related<super::read_lists::Entity> for Entity {
+    fn to() -> RelationDef {
+        super::read_list_books::Relation::ReadList.def()
+    }
+    fn via() -> Option<RelationDef> {
+        Some(super::read_list_books::Relation::Book.def().rev())
     }
 }
 
