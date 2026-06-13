@@ -82,6 +82,84 @@ describe("LibraryToolbar", () => {
     expect(screen.getByText("Books")).toBeInTheDocument();
   });
 
+  it("should render Keep Reading and On Deck tabs", () => {
+    renderWithProviders(
+      <LibraryToolbar {...defaultProps} showRecommended={true} />,
+    );
+
+    expect(screen.getByText("Keep Reading")).toBeInTheDocument();
+    expect(screen.getByText("On Deck")).toBeInTheDocument();
+  });
+
+  it("should render Keep Reading and On Deck tabs even without recommended", () => {
+    renderWithProviders(
+      <LibraryToolbar {...defaultProps} showRecommended={false} />,
+    );
+
+    expect(screen.queryByText("Recommended")).not.toBeInTheDocument();
+    expect(screen.getByText("Keep Reading")).toBeInTheDocument();
+    expect(screen.getByText("On Deck")).toBeInTheDocument();
+  });
+
+  it("should order tabs Recommended, Keep Reading, On Deck, Series, Books", () => {
+    renderWithProviders(
+      <LibraryToolbar {...defaultProps} showRecommended={true} />,
+    );
+
+    const labels = screen
+      .getAllByRole("tab")
+      .map((tab) => tab.textContent?.trim());
+    expect(labels).toEqual([
+      "Recommended",
+      "Keep Reading",
+      "On Deck",
+      "Series",
+      "Books",
+    ]);
+  });
+
+  it("should navigate to keep-reading when its tab is clicked", async () => {
+    const user = userEvent.setup();
+    const onTabChange = vi.fn();
+
+    renderWithProviders(
+      <LibraryToolbar {...defaultProps} onTabChange={onTabChange} />,
+    );
+
+    await user.click(screen.getByText("Keep Reading"));
+    expect(onTabChange).toHaveBeenCalledWith("keep-reading");
+  });
+
+  it("should not show controls on keep-reading tab", () => {
+    renderWithProviders(
+      <LibraryToolbar
+        {...defaultProps}
+        currentTab="keep-reading"
+        sortOptions={sortOptions}
+      />,
+    );
+
+    expect(screen.queryByLabelText("Sort options")).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Page size options"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("should not show controls on on-deck tab", () => {
+    renderWithProviders(
+      <LibraryToolbar
+        {...defaultProps}
+        currentTab="on-deck"
+        sortOptions={sortOptions}
+      />,
+    );
+
+    expect(screen.queryByLabelText("Sort options")).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Page size options"),
+    ).not.toBeInTheDocument();
+  });
+
   it("should call onTabChange when tab is clicked", async () => {
     const user = userEvent.setup();
     const onTabChange = vi.fn();

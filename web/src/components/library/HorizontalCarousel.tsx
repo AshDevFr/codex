@@ -1,17 +1,29 @@
-import { ActionIcon, Box, Group, Stack, Text, Title } from "@mantine/core";
+import {
+  ActionIcon,
+  Anchor,
+  Box,
+  Group,
+  Stack,
+  Text,
+  Title,
+} from "@mantine/core";
 import { IconChevronLeft, IconChevronRight } from "@tabler/icons-react";
 import { type ReactNode, useCallback, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import classes from "./HorizontalCarousel.module.css";
 
 interface HorizontalCarouselProps {
   title: string;
   subtitle?: string;
+  /** When set, renders a "See all" link in the header pointing at this route. */
+  seeAllLink?: string;
   children: ReactNode;
 }
 
 export function HorizontalCarousel({
   title,
   subtitle,
+  seeAllLink,
   children,
 }: HorizontalCarouselProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -55,25 +67,32 @@ export function HorizontalCarousel({
             </Text>
           )}
         </Box>
-        <Group gap="xs" visibleFrom="xs">
-          <ActionIcon
-            variant="subtle"
-            size="lg"
-            onClick={() => scroll("left")}
-            disabled={!canScrollLeft}
-            aria-label="Scroll left"
-          >
-            <IconChevronLeft size={20} />
-          </ActionIcon>
-          <ActionIcon
-            variant="subtle"
-            size="lg"
-            onClick={() => scroll("right")}
-            disabled={!canScrollRight}
-            aria-label="Scroll right"
-          >
-            <IconChevronRight size={20} />
-          </ActionIcon>
+        <Group gap="md" align="center" wrap="nowrap">
+          {seeAllLink && (
+            <Anchor component={Link} to={seeAllLink} size="sm" fw={500}>
+              See all
+            </Anchor>
+          )}
+          <Group gap="xs" visibleFrom="xs">
+            <ActionIcon
+              variant="subtle"
+              size="lg"
+              onClick={() => scroll("left")}
+              disabled={!canScrollLeft}
+              aria-label="Scroll left"
+            >
+              <IconChevronLeft size={20} />
+            </ActionIcon>
+            <ActionIcon
+              variant="subtle"
+              size="lg"
+              onClick={() => scroll("right")}
+              disabled={!canScrollRight}
+              aria-label="Scroll right"
+            >
+              <IconChevronRight size={20} />
+            </ActionIcon>
+          </Group>
         </Group>
       </Group>
 

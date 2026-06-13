@@ -30,6 +30,13 @@ interface LibraryToolbarProps {
   libraryId?: string | null;
 }
 
+// Tabs that show a curated feed without sort/page-size/filter controls.
+const TABS_WITHOUT_CONTROLS = new Set([
+  "recommended",
+  "keep-reading",
+  "on-deck",
+]);
+
 const PAGE_SIZE_OPTIONS = [
   { value: 25, label: "25" },
   { value: 50, label: "50" },
@@ -49,7 +56,10 @@ export function LibraryToolbar({
   onPageSizeChange,
   libraryId,
 }: LibraryToolbarProps) {
-  const showControls = currentTab !== "recommended" && sortOptions.length > 0;
+  // Tabs whose content is a curated, sort-less, filter-less feed: no toolbar
+  // controls apply to them.
+  const showControls =
+    !TABS_WITHOUT_CONTROLS.has(currentTab) && sortOptions.length > 0;
   // Below the `xs` breakpoint the tabs + controls don't fit in one row (audit
   // finding L1). Stack the controls underneath instead of letting the row wrap.
   const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY) ?? false;
@@ -60,6 +70,8 @@ export function LibraryToolbar({
         {showRecommended && (
           <Tabs.Tab value="recommended">Recommended</Tabs.Tab>
         )}
+        <Tabs.Tab value="keep-reading">Keep Reading</Tabs.Tab>
+        <Tabs.Tab value="on-deck">On Deck</Tabs.Tab>
         <Tabs.Tab value="series">Series</Tabs.Tab>
         <Tabs.Tab value="books">Books</Tabs.Tab>
       </Tabs.List>

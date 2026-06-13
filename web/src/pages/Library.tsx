@@ -29,6 +29,7 @@ import { BooksSection } from "@/components/library/BooksSection";
 import { BulkSelectionToolbar } from "@/components/library/BulkSelectionToolbar";
 import { LibraryActionsMenu } from "@/components/library/LibraryActionsMenu";
 import { LibraryToolbar } from "@/components/library/LibraryToolbar";
+import { ReadingFeedSection } from "@/components/library/ReadingFeedSection";
 import { RecommendedSection } from "@/components/library/RecommendedSection";
 import { SeriesSection } from "@/components/library/SeriesSection";
 import { CoverGridSkeleton } from "@/components/skeletons";
@@ -563,6 +564,22 @@ export function LibraryPage() {
         >
           {currentTab === "recommended" && !isAllLibraries && (
             <RecommendedSection libraryId={libraryId} />
+          )}
+
+          {currentTab === "keep-reading" && (
+            <ReadingFeedSection
+              libraryId={libraryId}
+              feed="in-progress"
+              searchParams={searchParams}
+            />
+          )}
+
+          {currentTab === "on-deck" && (
+            <ReadingFeedSection
+              libraryId={libraryId}
+              feed="on-deck"
+              searchParams={searchParams}
+            />
           )}
 
           {currentTab === "series" && (

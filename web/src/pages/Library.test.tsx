@@ -31,6 +31,20 @@ vi.mock("@/components/library/BooksSection", () => ({
   ),
 }));
 
+vi.mock("@/components/library/ReadingFeedSection", () => ({
+  ReadingFeedSection: ({
+    libraryId,
+    feed,
+  }: {
+    libraryId: string;
+    feed: string;
+  }) => (
+    <div data-testid={`reading-feed-${feed}`}>
+      {feed}: {libraryId}
+    </div>
+  ),
+}));
+
 const renderWithRouter = (initialPath: string) => {
   return renderWithProviders(
     <Routes>
@@ -122,6 +136,49 @@ describe("LibraryPage", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId("books-section")).toBeInTheDocument();
+    });
+  });
+
+  it("should render the keep-reading feed when navigating to keep-reading", async () => {
+    renderWithRouter("/libraries/all/keep-reading");
+
+    await waitFor(() => {
+      expect(
+        screen.getByTestId("reading-feed-in-progress"),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("should render the on-deck feed when navigating to on-deck", async () => {
+    renderWithRouter("/libraries/all/on-deck");
+
+    await waitFor(() => {
+      expect(screen.getByTestId("reading-feed-on-deck")).toBeInTheDocument();
+    });
+  });
+
+  it("should render the keep-reading feed for a specific library", async () => {
+    const mockLibrary = {
+      id: "lib-123",
+      name: "Test Library",
+      path: "/test/path",
+      isActive: true,
+      createdAt: "2024-01-01",
+      updatedAt: "2024-01-01",
+      bookStrategy: "filename" as const,
+      defaultReadingDirection: "ltr",
+      numberStrategy: "filename" as const,
+      seriesStrategy: "flat" as const,
+    };
+
+    vi.mocked(librariesApi.getById).mockResolvedValue(mockLibrary);
+
+    renderWithRouter("/libraries/lib-123/keep-reading");
+
+    await waitFor(() => {
+      expect(screen.getByTestId("reading-feed-in-progress")).toHaveTextContent(
+        "in-progress: lib-123",
+      );
     });
   });
 

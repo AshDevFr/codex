@@ -100,6 +100,16 @@ export function RecommendedSection({ libraryId }: RecommendedSectionProps) {
     MAX_ITEMS_PER_SECTION,
   );
 
+  // Link to the full paginated tab only when there's more than the carousel shows.
+  const keepReadingSeeAllLink =
+    (inProgressBooks?.total ?? 0) > MAX_ITEMS_PER_SECTION
+      ? `/libraries/${libraryId}/keep-reading`
+      : undefined;
+  const onDeckSeeAllLink =
+    (onDeckResponse?.total ?? 0) > MAX_ITEMS_PER_SECTION
+      ? `/libraries/${libraryId}/on-deck`
+      : undefined;
+
   const isLoading =
     loadingInProgress ||
     loadingRecentBooks ||
@@ -146,7 +156,10 @@ export function RecommendedSection({ libraryId }: RecommendedSectionProps) {
     <Stack gap="xl">
       {/* Keep Reading Section */}
       {limitedInProgressBooks.length > 0 && (
-        <HorizontalCarousel title="Keep Reading">
+        <HorizontalCarousel
+          title="Keep Reading"
+          seeAllLink={keepReadingSeeAllLink}
+        >
           {limitedInProgressBooks.map((book) => (
             <MediaCard
               key={book.id}
@@ -166,6 +179,7 @@ export function RecommendedSection({ libraryId }: RecommendedSectionProps) {
         <HorizontalCarousel
           title="On Deck"
           subtitle="Next book in series you've been reading"
+          seeAllLink={onDeckSeeAllLink}
         >
           {onDeckBooks.map((book) => (
             <MediaCard
