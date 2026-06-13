@@ -5,6 +5,7 @@ pub mod book_covers;
 pub mod book_duplicates;
 pub mod book_external_id;
 pub mod book_external_links;
+pub mod collection;
 pub mod email_verification_token;
 pub mod external_link;
 pub mod external_rating;
@@ -17,6 +18,7 @@ pub mod metrics;
 pub mod page;
 pub mod plugin_failures;
 pub mod plugins;
+pub mod read_list;
 pub mod read_progress;
 pub mod refresh_token;
 pub mod release_ledger;
@@ -37,6 +39,7 @@ pub mod task_metrics;
 pub mod user;
 pub mod user_preferences;
 pub mod user_series_rating;
+pub mod want_to_read;
 
 // Sharing tags for content access control
 pub mod sharing_tag;
@@ -68,6 +71,7 @@ pub use book_covers::BookCoversRepository;
 pub use book_duplicates::BookDuplicatesRepository;
 pub use book_external_id::BookExternalIdRepository;
 pub use book_external_links::BookExternalLinkRepository;
+pub use collection::CollectionRepository;
 pub use email_verification_token::EmailVerificationTokenRepository;
 pub use external_link::ExternalLinkRepository;
 pub use external_rating::ExternalRatingRepository;
@@ -80,6 +84,7 @@ pub use metrics::MetricsRepository;
 pub use page::PageRepository;
 pub use plugin_failures::{FailureContext, PluginFailuresRepository};
 pub use plugins::PluginsRepository;
+pub use read_list::ReadListRepository;
 pub use read_progress::ReadProgressRepository;
 #[allow(unused_imports)]
 pub use refresh_token::{NewRefreshToken, RefreshTokenRepository};
@@ -107,6 +112,7 @@ pub use task::TaskRepository;
 pub use user::{UserListFilter, UserRepository};
 pub use user_preferences::UserPreferencesRepository;
 pub use user_series_rating::UserSeriesRatingRepository;
+pub use want_to_read::WantToReadRepository;
 
 // Sharing tags
 pub use sharing_tag::SharingTagRepository;
