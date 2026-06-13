@@ -601,6 +601,15 @@ async fn scan_batched(
         load_start.elapsed()
     );
 
+    // Share the read-only map across all series futures instead of deep-cloning
+    // it once per series. Series processing only reads this map (`.get()` /
+    // `.values()`), but all per-series futures are built up front, so a
+    // per-series clone kept every copy alive at once: peak memory was
+    // O(series * existing_books). On a real library (hundreds of series, tens
+    // of thousands of books) that allocated several GB and got the scan
+    // OOM-killed. An Arc shares a single copy at no per-series memory cost.
+    let existing_books_map = Arc::new(existing_books_map);
+
     // Parse allowed formats
     let allowed_extensions = parse_allowed_formats(library);
     if let Some(ref formats) = allowed_extensions {
@@ -701,7 +710,7 @@ async fn scan_batched(
             let state = shared_state.clone();
             let db = db.clone();
             let library = library.clone();
-            let existing_books_map = existing_books_map.clone();
+            let existing_books_map = Arc::clone(&existing_books_map);
             let all_series_paths = Arc::clone(&all_series_paths);
             let config = config.clone();
             let event_broadcaster = event_broadcaster.cloned();
