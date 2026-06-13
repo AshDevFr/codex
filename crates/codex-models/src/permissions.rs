@@ -91,6 +91,16 @@ pub enum Permission {
     BooksWrite,
     BooksDelete,
 
+    // Collections (shared groupings of series)
+    CollectionsRead,
+    CollectionsWrite,
+    CollectionsDelete,
+
+    // Read lists (shared groupings of books)
+    ReadListsRead,
+    ReadListsWrite,
+    ReadListsDelete,
+
     // Pages (image serving)
     PagesRead,
 
@@ -134,6 +144,12 @@ impl Permission {
             Permission::BooksRead => "books:read",
             Permission::BooksWrite => "books:write",
             Permission::BooksDelete => "books:delete",
+            Permission::CollectionsRead => "collections:read",
+            Permission::CollectionsWrite => "collections:write",
+            Permission::CollectionsDelete => "collections:delete",
+            Permission::ReadListsRead => "readlists:read",
+            Permission::ReadListsWrite => "readlists:write",
+            Permission::ReadListsDelete => "readlists:delete",
             Permission::PagesRead => "pages:read",
             Permission::ProgressRead => "progress:read",
             Permission::ProgressWrite => "progress:write",
@@ -166,6 +182,12 @@ impl FromStr for Permission {
             "books:read" => Ok(Permission::BooksRead),
             "books:write" => Ok(Permission::BooksWrite),
             "books:delete" => Ok(Permission::BooksDelete),
+            "collections:read" => Ok(Permission::CollectionsRead),
+            "collections:write" => Ok(Permission::CollectionsWrite),
+            "collections:delete" => Ok(Permission::CollectionsDelete),
+            "readlists:read" => Ok(Permission::ReadListsRead),
+            "readlists:write" => Ok(Permission::ReadListsWrite),
+            "readlists:delete" => Ok(Permission::ReadListsDelete),
             "pages:read" => Ok(Permission::PagesRead),
             "progress:read" => Ok(Permission::ProgressRead),
             "progress:write" => Ok(Permission::ProgressWrite),
@@ -230,6 +252,9 @@ lazy_static::lazy_static! {
         // Progress tracking
         set.insert(Permission::ProgressRead);
         set.insert(Permission::ProgressWrite);
+        // Browse shared collections and read lists (management is gated separately)
+        set.insert(Permission::CollectionsRead);
+        set.insert(Permission::ReadListsRead);
         // Own API keys
         set.insert(Permission::ApiKeysRead);
         set.insert(Permission::ApiKeysWrite);
@@ -256,6 +281,11 @@ lazy_static::lazy_static! {
         // Books (full control)
         set.insert(Permission::BooksWrite);
         set.insert(Permission::BooksDelete);
+        // Collections + read lists (create/modify/delete shared groupings)
+        set.insert(Permission::CollectionsWrite);
+        set.insert(Permission::CollectionsDelete);
+        set.insert(Permission::ReadListsWrite);
+        set.insert(Permission::ReadListsDelete);
         // Tasks (view and manage)
         set.insert(Permission::TasksRead);
         set.insert(Permission::TasksWrite);
@@ -370,15 +400,21 @@ mod tests {
         // Reader can track reading progress
         assert!(READER_PERMISSIONS.contains(&Permission::ProgressRead));
         assert!(READER_PERMISSIONS.contains(&Permission::ProgressWrite));
+        // Reader can browse shared collections and read lists
+        assert!(READER_PERMISSIONS.contains(&Permission::CollectionsRead));
+        assert!(READER_PERMISSIONS.contains(&Permission::ReadListsRead));
         // Reader cannot modify content
         assert!(!READER_PERMISSIONS.contains(&Permission::BooksWrite));
         assert!(!READER_PERMISSIONS.contains(&Permission::SeriesWrite));
         assert!(!READER_PERMISSIONS.contains(&Permission::LibrariesWrite));
+        // Reader cannot manage (write/delete) collections or read lists
+        assert!(!READER_PERMISSIONS.contains(&Permission::CollectionsWrite));
+        assert!(!READER_PERMISSIONS.contains(&Permission::ReadListsWrite));
         // Reader cannot manage users or system
         assert!(!READER_PERMISSIONS.contains(&Permission::UsersRead));
         assert!(!READER_PERMISSIONS.contains(&Permission::SystemAdmin));
 
-        assert_eq!(READER_PERMISSIONS.len(), 10);
+        assert_eq!(READER_PERMISSIONS.len(), 12);
     }
 
     #[test]
@@ -401,11 +437,16 @@ mod tests {
         assert!(MAINTAINER_PERMISSIONS.contains(&Permission::BooksDelete));
         // Maintainer can manage tasks
         assert!(MAINTAINER_PERMISSIONS.contains(&Permission::TasksWrite));
+        // Maintainer can manage collections and read lists
+        assert!(MAINTAINER_PERMISSIONS.contains(&Permission::CollectionsWrite));
+        assert!(MAINTAINER_PERMISSIONS.contains(&Permission::CollectionsDelete));
+        assert!(MAINTAINER_PERMISSIONS.contains(&Permission::ReadListsWrite));
+        assert!(MAINTAINER_PERMISSIONS.contains(&Permission::ReadListsDelete));
         // Maintainer cannot manage users or system admin
         assert!(!MAINTAINER_PERMISSIONS.contains(&Permission::UsersRead));
         assert!(!MAINTAINER_PERMISSIONS.contains(&Permission::SystemAdmin));
 
-        assert_eq!(MAINTAINER_PERMISSIONS.len(), 17);
+        assert_eq!(MAINTAINER_PERMISSIONS.len(), 23);
     }
 
     #[test]
@@ -429,7 +470,7 @@ mod tests {
         // Admin has system admin
         assert!(ADMIN_PERMISSIONS.contains(&Permission::SystemAdmin));
 
-        assert_eq!(ADMIN_PERMISSIONS.len(), 23); // All permissions
+        assert_eq!(ADMIN_PERMISSIONS.len(), 29); // All permissions
     }
 
     // ============== UserRole tests ==============
