@@ -195,6 +195,13 @@ mod m20260607_000094_add_user_plugin_sync_unique_index;
 mod m20260608_000095_create_plugin_data;
 mod m20260609_000096_add_plugin_log_level;
 
+// Collections: shared, ordered groupings of series + their join table
+pub mod m20260615_000097_create_collections;
+// Read lists: shared, ordered groupings of books across series + their join table
+pub mod m20260615_000098_create_read_lists;
+// Want to Read: per-user flat queue of series and/or books
+pub mod m20260615_000099_create_want_to_read;
+
 pub struct Migrator;
 
 #[async_trait::async_trait]
@@ -361,6 +368,12 @@ impl MigratorTrait for Migrator {
             Box::new(m20260608_000095_create_plugin_data::Migration),
             // Per-plugin log-level override column on `plugins`
             Box::new(m20260609_000096_add_plugin_log_level::Migration),
+            // Collections: shared, ordered groupings of series + collection_series join
+            Box::new(m20260615_000097_create_collections::Migration),
+            // Read lists: shared, ordered groupings of books + read_list_books join
+            Box::new(m20260615_000098_create_read_lists::Migration),
+            // Want to Read: per-user flat queue of series and/or books
+            Box::new(m20260615_000099_create_want_to_read::Migration),
         ]
     }
 }
