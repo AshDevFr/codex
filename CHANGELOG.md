@@ -2,6 +2,13 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.38.3] - 2026-06-15
+
+### 🐛 Bug Fixes
+
+- *(scanner)* Share existing_books_map via Arc to stop scan OOM
+- *(parsers,services)* Bound image memory to prevent decode OOM
+
 ## [1.38.2] - 2026-06-12
 
 ### 🚀 Features
