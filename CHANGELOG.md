@@ -2,6 +2,17 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.38.4] - 2026-06-15
+
+### 🚀 Features
+
+- *(web)* Add paginated ReadingFeedSection for keep-reading and on-deck
+- *(web)* Add Keep Reading and On Deck tabs with See all links
+
+### 🐛 Bug Fixes
+
+- *(web)* Show hasUserRating and bookType in active filter chips
+
 ## [1.38.3] - 2026-06-15
 
 ### 🐛 Bug Fixes
