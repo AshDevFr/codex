@@ -104,12 +104,16 @@ export const booksApi = {
   // Get books with reading progress (incomplete reads)
   getInProgress: async (
     libraryId: string,
+    params?: { page?: number; pageSize?: number },
   ): Promise<PaginatedResponse<Book>> => {
-    const params = new URLSearchParams();
+    const searchParams = new URLSearchParams();
     if (libraryId !== "all") {
-      params.set("libraryId", libraryId);
+      searchParams.set("libraryId", libraryId);
     }
-    const queryString = params.toString();
+    if (params?.page) searchParams.set("page", params.page.toString());
+    if (params?.pageSize)
+      searchParams.set("pageSize", params.pageSize.toString());
+    const queryString = searchParams.toString();
     const url = `/books/in-progress${queryString ? `?${queryString}` : ""}`;
 
     const response = await api.get<PaginatedResponse<Book>>(url);
@@ -117,12 +121,18 @@ export const booksApi = {
   },
 
   // Get on-deck books (next unread book in series where user has completed at least one book)
-  getOnDeck: async (libraryId: string): Promise<PaginatedResponse<Book>> => {
-    const params = new URLSearchParams();
+  getOnDeck: async (
+    libraryId: string,
+    params?: { page?: number; pageSize?: number },
+  ): Promise<PaginatedResponse<Book>> => {
+    const searchParams = new URLSearchParams();
     if (libraryId !== "all") {
-      params.set("libraryId", libraryId);
+      searchParams.set("libraryId", libraryId);
     }
-    const queryString = params.toString();
+    if (params?.page) searchParams.set("page", params.page.toString());
+    if (params?.pageSize)
+      searchParams.set("pageSize", params.pageSize.toString());
+    const queryString = searchParams.toString();
     const url = `/books/on-deck${queryString ? `?${queryString}` : ""}`;
 
     const response = await api.get<PaginatedResponse<Book>>(url);

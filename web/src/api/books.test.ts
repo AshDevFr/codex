@@ -240,6 +240,30 @@ describe("booksApi", () => {
 
       expect(api.get).toHaveBeenCalledWith("/books/in-progress");
     });
+
+    it("should forward pagination params for a specific library", async () => {
+      vi.mocked(api.get).mockResolvedValueOnce({
+        data: { data: [], total: 0 },
+      });
+
+      await booksApi.getInProgress("library-123", { page: 2, pageSize: 24 });
+
+      expect(api.get).toHaveBeenCalledWith(
+        "/books/in-progress?libraryId=library-123&page=2&pageSize=24",
+      );
+    });
+
+    it("should forward pagination params when libraryId is 'all'", async () => {
+      vi.mocked(api.get).mockResolvedValueOnce({
+        data: { data: [], total: 0 },
+      });
+
+      await booksApi.getInProgress("all", { page: 3, pageSize: 50 });
+
+      expect(api.get).toHaveBeenCalledWith(
+        "/books/in-progress?page=3&pageSize=50",
+      );
+    });
   });
 
   describe("getOnDeck", () => {
@@ -257,6 +281,28 @@ describe("booksApi", () => {
         "/books/on-deck?libraryId=library-123",
       );
       expect(result).toEqual(mockResponse);
+    });
+
+    it("should forward pagination params for a specific library", async () => {
+      vi.mocked(api.get).mockResolvedValueOnce({
+        data: { data: [], total: 0 },
+      });
+
+      await booksApi.getOnDeck("library-123", { page: 2, pageSize: 24 });
+
+      expect(api.get).toHaveBeenCalledWith(
+        "/books/on-deck?libraryId=library-123&page=2&pageSize=24",
+      );
+    });
+
+    it("should forward pagination params when libraryId is 'all'", async () => {
+      vi.mocked(api.get).mockResolvedValueOnce({
+        data: { data: [], total: 0 },
+      });
+
+      await booksApi.getOnDeck("all", { page: 3, pageSize: 50 });
+
+      expect(api.get).toHaveBeenCalledWith("/books/on-deck?page=3&pageSize=50");
     });
   });
 
