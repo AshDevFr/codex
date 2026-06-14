@@ -5569,6 +5569,62 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/want-to-read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the authenticated user's want-to-read queue. */
+        get: operations["list_want_to_read"];
+        put?: never;
+        /**
+         * Add a series or book to the authenticated user's queue.
+         * @description Exactly one of `seriesId` / `bookId` must be provided. Idempotent: flagging
+         *     something already queued returns the existing entry.
+         */
+        post: operations["add_want_to_read"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/want-to-read/books/{book_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a book from the authenticated user's queue. */
+        delete: operations["remove_want_to_read_book"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/want-to-read/series/{series_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a series from the authenticated user's queue. */
+        delete: operations["remove_want_to_read_series"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -7128,6 +7184,22 @@ export interface components {
             name: string;
         };
         /**
+         * @description Request to add an entry to the queue. Exactly one of `series_id` / `book_id`
+         *     must be provided.
+         */
+        AddWantToReadRequest: {
+            /**
+             * Format: uuid
+             * @description Flag a book.
+             */
+            bookId?: string | null;
+            /**
+             * Format: uuid
+             * @description Flag a series.
+             */
+            seriesId?: string | null;
+        };
+        /**
          * @description Response containing adjacent books in the same series
          *
          *     Returns the previous and next books relative to the requested book,
@@ -7734,6 +7806,14 @@ export interface components {
              * @example 1
              */
             volume?: number | null;
+            /**
+             * @description Whether the requesting user has this book in their want-to-read queue.
+             *
+             *     `None` when not computed for this response; populated on book list and
+             *     detail endpoints that have a user context.
+             * @example false
+             */
+            wantToRead?: boolean | null;
         };
         /** @description A single error for a book */
         BookErrorDto: {
@@ -13705,6 +13785,14 @@ export interface components {
                  * @example 1
                  */
                 volume?: number | null;
+                /**
+                 * @description Whether the requesting user has this book in their want-to-read queue.
+                 *
+                 *     `None` when not computed for this response; populated on book list and
+                 *     detail endpoints that have a user context.
+                 * @example false
+                 */
+                wantToRead?: boolean | null;
             }[];
             /** @description HATEOAS navigation links */
             links: components["schemas"]["PaginationLinks"];
@@ -14184,6 +14272,14 @@ export interface components {
                  * @example 14
                  */
                 volumesOwned?: number | null;
+                /**
+                 * @description Whether the requesting user has this series in their want-to-read queue.
+                 *
+                 *     `None` when not computed for this response (e.g. list endpoints that
+                 *     don't enrich it); populated on the series detail endpoint.
+                 * @example false
+                 */
+                wantToRead?: boolean | null;
                 /**
                  * Format: int32
                  * @description Release year
@@ -17268,6 +17364,14 @@ export interface components {
              */
             volumesOwned?: number | null;
             /**
+             * @description Whether the requesting user has this series in their want-to-read queue.
+             *
+             *     `None` when not computed for this response (e.g. list endpoints that
+             *     don't enrich it); populated on the series detail endpoint.
+             * @example false
+             */
+            wantToRead?: boolean | null;
+            /**
              * Format: int32
              * @description Release year
              * @example 1987
@@ -19934,6 +20038,51 @@ export interface components {
             tokenType: string;
             /** @description User information */
             user: components["schemas"]["UserInfo"];
+        };
+        /**
+         * @description A single entry in a user's want-to-read queue. Exactly one of `series_id` /
+         *     `book_id` is populated, matching `item_type`.
+         */
+        WantToReadEntryDto: {
+            /**
+             * Format: date-time
+             * @description When the entry was added to the queue.
+             * @example 2026-06-15T18:45:00Z
+             */
+            addedAt: string;
+            /**
+             * Format: uuid
+             * @description The flagged book (set when `item_type` is `book`).
+             */
+            bookId?: string | null;
+            /**
+             * Format: uuid
+             * @description Queue entry ID.
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
+            id: string;
+            /** @description Whether this entry flags a series or a book. */
+            itemType: components["schemas"]["WantToReadItemType"];
+            /**
+             * Format: uuid
+             * @description The flagged series (set when `item_type` is `series`).
+             */
+            seriesId?: string | null;
+        };
+        /**
+         * @description What a want-to-read entry points at.
+         * @enum {string}
+         */
+        WantToReadItemType: "series" | "book";
+        /** @description A user's want-to-read queue. */
+        WantToReadListResponse: {
+            /** @description Queue entries. */
+            items: components["schemas"]["WantToReadEntryDto"][];
+            /**
+             * @description Total number of entries.
+             * @example 7
+             */
+            total: number;
         };
     };
     responses: never;
@@ -32350,6 +32499,139 @@ export interface operations {
             };
             /** @description Grant not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_want_to_read: {
+        parameters: {
+            query?: {
+                /**
+                 * @description Sort by add time. Accepts `added_at:asc` for oldest-first; any other
+                 *     value (or omitted) yields newest-first (`added_at:desc`).
+                 * @example added_at:desc
+                 */
+                sort?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Queue retrieved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WantToReadListResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    add_want_to_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddWantToReadRequest"];
+            };
+        };
+        responses: {
+            /** @description Entry added (or already present) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WantToReadEntryDto"];
+                };
+            };
+            /** @description Must provide exactly one of seriesId / bookId */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series or book not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    remove_want_to_read_book: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed (or was not present) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    remove_want_to_read_series: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                series_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed (or was not present) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

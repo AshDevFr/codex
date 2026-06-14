@@ -60,3 +60,4 @@ mod tracking;
 mod user_plugins;
 mod user_preferences;
 mod user_ratings;
+mod want_to_read;

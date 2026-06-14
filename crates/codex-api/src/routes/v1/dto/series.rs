@@ -144,6 +144,14 @@ pub struct SeriesDto {
     /// When the series was last updated
     #[schema(example = "2024-01-15T10:30:00Z")]
     pub updated_at: DateTime<Utc>,
+
+    /// Whether the requesting user has this series in their want-to-read queue.
+    ///
+    /// `None` when not computed for this response (e.g. list endpoints that
+    /// don't enrich it); populated on the series detail endpoint.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = false)]
+    pub want_to_read: Option<bool>,
 }
 
 /// Series list response

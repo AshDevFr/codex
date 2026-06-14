@@ -237,6 +237,12 @@ pub async fn books_to_dtos(
             .map(|(book_id, model)| (book_id, model.into()))
             .collect();
 
+    // Per-user want-to-read membership for the whole page in one query.
+    let want_to_read_ids =
+        codex_db::repositories::WantToReadRepository::book_ids_in_queue(db, user_id, &book_ids)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to load want-to-read: {}", e)))?;
+
     // Convert books to DTOs
     let dtos = books
         .into_iter()
@@ -311,6 +317,7 @@ pub async fn books_to_dtos(
                 reading_direction,
                 volume,
                 chapter,
+                want_to_read: Some(want_to_read_ids.contains(&book.id)),
             }
         })
         .collect();

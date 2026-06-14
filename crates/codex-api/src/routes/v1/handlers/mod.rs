@@ -77,6 +77,7 @@ pub mod tracking;
 pub mod user_plugins;
 pub mod user_preferences;
 pub mod users;
+pub mod want_to_read;
 
 pub use auth::*;
 pub use books::*;
@@ -93,3 +94,4 @@ pub use read_progress::*;
 pub use scan::*;
 pub use series::*;
 pub use users::*;
+pub use want_to_read::*;

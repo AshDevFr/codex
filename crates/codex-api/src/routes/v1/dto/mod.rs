@@ -37,6 +37,7 @@ pub mod tracking;
 pub mod user;
 pub mod user_plugins;
 pub mod user_preferences;
+pub mod want_to_read;
 
 pub use access_group::*;
 pub use api_key::*;
@@ -79,3 +80,4 @@ pub use user::*;
 #[allow(unused_imports)]
 pub use user_plugins::*;
 pub use user_preferences::*;
+pub use want_to_read::*;
