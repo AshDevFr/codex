@@ -512,6 +512,14 @@ pub struct BookDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(example = 42.5)]
     pub chapter: Option<f32>,
+
+    /// Whether the requesting user has this book in their want-to-read queue.
+    ///
+    /// `None` when not computed for this response; populated on book list and
+    /// detail endpoints that have a user context.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = false)]
+    pub want_to_read: Option<bool>,
 }
 
 /// Book list response

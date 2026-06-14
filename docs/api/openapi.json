@@ -16429,6 +16429,169 @@
         ]
       }
     },
+    "/api/v1/want-to-read": {
+      "get": {
+        "tags": [
+          "Want to Read"
+        ],
+        "summary": "List the authenticated user's want-to-read queue.",
+        "operationId": "list_want_to_read",
+        "parameters": [
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "Sort by add time. Accepts `added_at:asc` for oldest-first; any other\nvalue (or omitted) yields newest-first (`added_at:desc`).",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "added_at:desc"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Queue retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WantToReadListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Want to Read"
+        ],
+        "summary": "Add a series or book to the authenticated user's queue.",
+        "description": "Exactly one of `seriesId` / `bookId` must be provided. Idempotent: flagging\nsomething already queued returns the existing entry.",
+        "operationId": "add_want_to_read",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddWantToReadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Entry added (or already present)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WantToReadEntryDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Must provide exactly one of seriesId / bookId"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Series or book not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/want-to-read/books/{book_id}": {
+      "delete": {
+        "tags": [
+          "Want to Read"
+        ],
+        "summary": "Remove a book from the authenticated user's queue.",
+        "operationId": "remove_want_to_read_book",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Removed (or was not present)"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/want-to-read/series/{series_id}": {
+      "delete": {
+        "tags": [
+          "Want to Read"
+        ],
+        "summary": "Remove a series from the authenticated user's queue.",
+        "operationId": "remove_want_to_read_series",
+        "parameters": [
+          {
+            "name": "series_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Removed (or was not present)"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/health": {
       "get": {
         "tags": [
@@ -19518,6 +19681,28 @@
           }
         }
       },
+      "AddWantToReadRequest": {
+        "type": "object",
+        "description": "Request to add an entry to the queue. Exactly one of `series_id` / `book_id`\nmust be provided.",
+        "properties": {
+          "bookId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Flag a book."
+          },
+          "seriesId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Flag a series."
+          }
+        }
+      },
       "AdjacentBooksResponse": {
         "type": "object",
         "description": "Response containing adjacent books in the same series\n\nReturns the previous and next books relative to the requested book,\nordered by book number within the series.",
@@ -20605,6 +20790,14 @@
             "format": "int32",
             "description": "Volume number from book metadata",
             "example": 1
+          },
+          "wantToRead": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether the requesting user has this book in their want-to-read queue.\n\n`None` when not computed for this response; populated on book list and\ndetail endpoints that have a user context.",
+            "example": false
           }
         }
       },
@@ -31906,6 +32099,14 @@
                   "format": "int32",
                   "description": "Volume number from book metadata",
                   "example": 1
+                },
+                "wantToRead": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ],
+                  "description": "Whether the requesting user has this book in their want-to-read queue.\n\n`None` when not computed for this response; populated on book list and\ndetail endpoints that have a user context.",
+                  "example": false
                 }
               }
             },
@@ -32599,6 +32800,14 @@
                   "format": "int64",
                   "description": "Number of books in this series classified as a complete volume\n(`volume IS NOT NULL AND chapter IS NULL`).\n\nDistinct from `bookCount`: a chapter inside a volume (`v15 c126`)\ncounts as a chapter, not a volume. `None` when no books exist;\n`Some(0)` when books exist but none are complete volumes.",
                   "example": 14
+                },
+                "wantToRead": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ],
+                  "description": "Whether the requesting user has this series in their want-to-read queue.\n\n`None` when not computed for this response (e.g. list endpoints that\ndon't enrich it); populated on the series detail endpoint.",
+                  "example": false
                 },
                 "year": {
                   "type": [
@@ -37932,6 +38141,14 @@
             "description": "Number of books in this series classified as a complete volume\n(`volume IS NOT NULL AND chapter IS NULL`).\n\nDistinct from `bookCount`: a chapter inside a volume (`v15 c126`)\ncounts as a chapter, not a volume. `None` when no books exist;\n`Some(0)` when books exist but none are complete volumes.",
             "example": 14
           },
+          "wantToRead": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether the requesting user has this series in their want-to-read queue.\n\n`None` when not computed for this response (e.g. list endpoints that\ndon't enrich it); populated on the series detail endpoint.",
+            "example": false
+          },
           "year": {
             "type": [
               "integer",
@@ -42932,6 +43149,80 @@
           "user": {
             "$ref": "#/components/schemas/UserInfo",
             "description": "User information"
+          }
+        }
+      },
+      "WantToReadEntryDto": {
+        "type": "object",
+        "description": "A single entry in a user's want-to-read queue. Exactly one of `series_id` /\n`book_id` is populated, matching `item_type`.",
+        "required": [
+          "id",
+          "itemType",
+          "addedAt"
+        ],
+        "properties": {
+          "addedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the entry was added to the queue.",
+            "example": "2026-06-15T18:45:00Z"
+          },
+          "bookId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "The flagged book (set when `item_type` is `book`)."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Queue entry ID.",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "itemType": {
+            "$ref": "#/components/schemas/WantToReadItemType",
+            "description": "Whether this entry flags a series or a book."
+          },
+          "seriesId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "The flagged series (set when `item_type` is `series`)."
+          }
+        }
+      },
+      "WantToReadItemType": {
+        "type": "string",
+        "description": "What a want-to-read entry points at.",
+        "enum": [
+          "series",
+          "book"
+        ]
+      },
+      "WantToReadListResponse": {
+        "type": "object",
+        "description": "A user's want-to-read queue.",
+        "required": [
+          "items",
+          "total"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WantToReadEntryDto"
+            },
+            "description": "Queue entries."
+          },
+          "total": {
+            "type": "integer",
+            "description": "Total number of entries.",
+            "example": 7,
+            "minimum": 0
           }
         }
       }

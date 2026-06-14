@@ -19,6 +19,7 @@ mod tasks;
 mod user;
 mod user_plugins;
 mod users;
+mod want_to_read;
 
 use crate::extractors::AppState;
 use axum::Router;
@@ -45,6 +46,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .merge(recommendations::routes(state.clone()))
         .merge(releases::routes(state.clone()))
         .merge(observability::routes(state.clone()))
+        .merge(want_to_read::routes(state.clone()))
         // Apply state to all routes
         .with_state(state)
 }

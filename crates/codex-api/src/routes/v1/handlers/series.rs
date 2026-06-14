@@ -42,6 +42,7 @@ use codex_db::repositories::{
     GenreRepository, LibraryRepository, ReadProgressRepository, SeriesCoversRepository,
     SeriesExternalIdRepository, SeriesMetadataRepository, SeriesRepository,
     SeriesTrackingRepository, SharingTagRepository, TagRepository, UserSeriesRatingRepository,
+    WantToReadRepository,
 };
 use codex_events::{EntityChangeEvent, EntityEvent, EntityType};
 use codex_services::release::upstream_gap::{UpstreamGap, UpstreamGapInputs, compute_upstream_gap};
@@ -210,6 +211,16 @@ async fn series_to_dto(
         external_ids: &external_ids,
     });
 
+    // Per-user want-to-read flag (only when we know the requesting user).
+    let want_to_read = match user_id {
+        Some(uid) => Some(
+            WantToReadRepository::is_series_in_queue(db, uid, series.id)
+                .await
+                .map_err(|e| ApiError::Internal(format!("Failed to check want-to-read: {}", e)))?,
+        ),
+        None => None,
+    };
+
     Ok(SeriesDto {
         id: series.id,
         library_id: series.library_id,
@@ -233,6 +244,7 @@ async fn series_to_dto(
         upstream_gap_provider,
         created_at: series.created_at,
         updated_at: series.updated_at,
+        want_to_read,
     })
 }
 
@@ -258,6 +270,14 @@ async fn series_to_dtos_batched(
         .collect::<std::collections::HashSet<_>>()
         .into_iter()
         .collect();
+
+    // Per-user want-to-read membership for the whole page in one query.
+    let want_to_read_ids = match user_id {
+        Some(uid) => WantToReadRepository::series_ids_in_queue(db, uid, &series_ids)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to load want-to-read: {}", e)))?,
+        None => std::collections::HashSet::new(),
+    };
 
     // Bound how many of these related-table queries run at once so a single
     // request cannot hold one pool connection per query and exhaust the pool.
@@ -403,6 +423,7 @@ async fn series_to_dtos_batched(
             upstream_gap_provider,
             created_at: series.created_at,
             updated_at: series.updated_at,
+            want_to_read: user_id.map(|_| want_to_read_ids.contains(&series.id)),
         });
     }
 
