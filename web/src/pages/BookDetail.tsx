@@ -65,6 +65,7 @@ import {
   GenreTagChips,
 } from "@/components/series";
 import { BookDetailSkeleton } from "@/components/skeletons";
+import { WantToReadButton } from "@/components/WantToReadButton";
 import { useDynamicDocumentTitle } from "@/hooks/useDocumentTitle";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useShowSkeleton } from "@/lib/motion/useShowSkeleton";
@@ -528,87 +529,95 @@ export function BookDetail() {
                   </Group>
                 </Box>
 
-                <Menu shadow="md" width={200} position="bottom-end">
-                  <Menu.Target>
-                    <ActionIcon variant="subtle" size="lg">
-                      <IconDotsVertical size={20} />
-                    </ActionIcon>
-                  </Menu.Target>
-                  <Menu.Dropdown>
-                    {!isCompleted && (
-                      <Menu.Item
-                        leftSection={<IconCheck size={14} />}
-                        onClick={() => markAsReadMutation.mutate()}
-                        disabled={markAsReadMutation.isPending}
-                      >
-                        Mark as Read
-                      </Menu.Item>
-                    )}
-                    {hasProgress && (
-                      <Menu.Item
-                        leftSection={<IconBookOff size={14} />}
-                        onClick={() => markAsUnreadMutation.mutate()}
-                        disabled={markAsUnreadMutation.isPending}
-                      >
-                        Mark as Unread
-                      </Menu.Item>
-                    )}
-                    {canEditBook && (
-                      <>
-                        <Menu.Divider />
+                <Group gap="xs" wrap="nowrap">
+                  <WantToReadButton
+                    itemType="book"
+                    id={book.id}
+                    wantToRead={book.wantToRead}
+                  />
+                  <Menu shadow="md" width={200} position="bottom-end">
+                    <Menu.Target>
+                      <ActionIcon variant="subtle" size="lg">
+                        <IconDotsVertical size={20} />
+                      </ActionIcon>
+                    </Menu.Target>
+                    <Menu.Dropdown>
+                      {!isCompleted && (
                         <Menu.Item
-                          leftSection={<IconAnalyze size={14} />}
-                          onClick={() => analyzeMutation.mutate()}
-                          disabled={analyzeMutation.isPending}
+                          leftSection={<IconCheck size={14} />}
+                          onClick={() => markAsReadMutation.mutate()}
+                          disabled={markAsReadMutation.isPending}
                         >
-                          Analyze Book
+                          Mark as Read
                         </Menu.Item>
+                      )}
+                      {hasProgress && (
                         <Menu.Item
-                          leftSection={<IconPhoto size={14} />}
-                          onClick={() => generateThumbnailMutation.mutate()}
-                          disabled={generateThumbnailMutation.isPending}
+                          leftSection={<IconBookOff size={14} />}
+                          onClick={() => markAsUnreadMutation.mutate()}
+                          disabled={markAsUnreadMutation.isPending}
                         >
-                          Regenerate Thumbnail
+                          Mark as Unread
                         </Menu.Item>
-                        <Menu.Divider />
-                        <Menu.Item
-                          leftSection={<IconEdit size={14} />}
-                          onClick={openEditModal}
-                        >
-                          Edit Metadata
-                        </Menu.Item>
-                        {/* Plugin actions for metadata fetching */}
-                        {pluginActions && pluginActions.actions.length > 0 && (
-                          <>
-                            <Menu.Divider />
-                            <Menu.Label>Fetch Metadata</Menu.Label>
-                            {pluginActions.actions.map((action) => (
-                              <Menu.Item
-                                key={`search-${action.pluginId}`}
-                                leftSection={<IconSearch size={14} />}
-                                onClick={() => handlePluginAction(action)}
-                              >
-                                {action.label}
-                              </Menu.Item>
-                            ))}
-                            <Menu.Divider />
-                            <Menu.Label>Auto-Apply Metadata</Menu.Label>
-                            {pluginActions.actions.map((action) => (
-                              <Menu.Item
-                                key={`auto-${action.pluginId}`}
-                                leftSection={<IconWand size={14} />}
-                                onClick={() => handleAutoMatch(action)}
-                                disabled={autoMatchMutation.isPending}
-                              >
-                                {action.pluginDisplayName}
-                              </Menu.Item>
-                            ))}
-                          </>
-                        )}
-                      </>
-                    )}
-                  </Menu.Dropdown>
-                </Menu>
+                      )}
+                      {canEditBook && (
+                        <>
+                          <Menu.Divider />
+                          <Menu.Item
+                            leftSection={<IconAnalyze size={14} />}
+                            onClick={() => analyzeMutation.mutate()}
+                            disabled={analyzeMutation.isPending}
+                          >
+                            Analyze Book
+                          </Menu.Item>
+                          <Menu.Item
+                            leftSection={<IconPhoto size={14} />}
+                            onClick={() => generateThumbnailMutation.mutate()}
+                            disabled={generateThumbnailMutation.isPending}
+                          >
+                            Regenerate Thumbnail
+                          </Menu.Item>
+                          <Menu.Divider />
+                          <Menu.Item
+                            leftSection={<IconEdit size={14} />}
+                            onClick={openEditModal}
+                          >
+                            Edit Metadata
+                          </Menu.Item>
+                          {/* Plugin actions for metadata fetching */}
+                          {pluginActions &&
+                            pluginActions.actions.length > 0 && (
+                              <>
+                                <Menu.Divider />
+                                <Menu.Label>Fetch Metadata</Menu.Label>
+                                {pluginActions.actions.map((action) => (
+                                  <Menu.Item
+                                    key={`search-${action.pluginId}`}
+                                    leftSection={<IconSearch size={14} />}
+                                    onClick={() => handlePluginAction(action)}
+                                  >
+                                    {action.label}
+                                  </Menu.Item>
+                                ))}
+                                <Menu.Divider />
+                                <Menu.Label>Auto-Apply Metadata</Menu.Label>
+                                {pluginActions.actions.map((action) => (
+                                  <Menu.Item
+                                    key={`auto-${action.pluginId}`}
+                                    leftSection={<IconWand size={14} />}
+                                    onClick={() => handleAutoMatch(action)}
+                                    disabled={autoMatchMutation.isPending}
+                                  >
+                                    {action.pluginDisplayName}
+                                  </Menu.Item>
+                                ))}
+                              </>
+                            )}
+                        </>
+                      )}
+                    </Menu.Dropdown>
+                  </Menu>
+                </Group>
               </Group>
 
               {/* Subtitle */}

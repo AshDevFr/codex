@@ -15,6 +15,7 @@ import { useMediaQuery } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
 import {
   IconAlertTriangle,
+  IconBookmark,
   IconBooks,
   IconBrush,
   IconChartBar,
@@ -394,6 +395,14 @@ export function Sidebar({ onNavigate }: SidebarProps = {}) {
               label="Home"
               leftSection={<IconHome size={20} stroke={2} />}
               active={currentPath === "/"}
+              onClick={onNavigate}
+            />
+            <NavLink
+              component={Link}
+              to="/want-to-read"
+              label="Want to Read"
+              leftSection={<IconBookmark size={20} stroke={2} />}
+              active={currentPath === "/want-to-read"}
               onClick={onNavigate}
             />
             {hasRecommendationPlugin && (

@@ -454,6 +454,14 @@ async fn series_to_full_dtos_batched(
         .into_iter()
         .collect();
 
+    // Per-user want-to-read membership for the whole page in one query.
+    let want_to_read_ids = match user_id {
+        Some(uid) => WantToReadRepository::series_ids_in_queue(db, uid, &series_ids)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to load want-to-read: {}", e)))?,
+        None => std::collections::HashSet::new(),
+    };
+
     // Fetch all related data using batched queries, but bound how many run at
     // once so a single request cannot hold one pool connection per query and
     // exhaust the pool under concurrent load.
@@ -774,6 +782,7 @@ async fn series_to_full_dtos_batched(
             external_ids: ext_id_dtos,
             created_at: series.created_at,
             updated_at: series.updated_at,
+            want_to_read: user_id.map(|_| want_to_read_ids.contains(&series.id)),
         });
     }
 

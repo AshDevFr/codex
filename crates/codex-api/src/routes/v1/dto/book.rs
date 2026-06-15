@@ -2123,6 +2123,11 @@ pub struct FullBookResponse {
     /// When the book was last updated
     #[schema(example = "2024-01-15T10:30:00Z")]
     pub updated_at: DateTime<Utc>,
+
+    /// Whether the requesting user has this book in their want-to-read queue.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = false)]
+    pub want_to_read: Option<bool>,
 }
 
 // =============================================================================
