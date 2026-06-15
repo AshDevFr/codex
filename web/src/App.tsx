@@ -46,6 +46,7 @@ import {
   TasksSettings,
   UsersSettings,
 } from "@/pages/settings";
+import { WantToRead } from "@/pages/WantToRead";
 import { navigationService } from "@/services/navigation";
 import { useAuthStore } from "@/store/authStore";
 import { useBulkSelectionStore } from "@/store/bulkSelectionStore";
@@ -197,6 +198,17 @@ function App() {
             <ProtectedRoute>
               <AppLayout>
                 <ReleasesInbox />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/want-to-read"
+          element={
+            <ProtectedRoute>
+              <AppLayout>
+                <WantToRead />
               </AppLayout>
             </ProtectedRoute>
           }

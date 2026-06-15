@@ -11202,6 +11202,11 @@ export interface components {
              * @example 2024-01-15T10:30:00Z
              */
             updatedAt: string;
+            /**
+             * @description Whether the requesting user has this book in their want-to-read queue.
+             * @example false
+             */
+            wantToRead?: boolean | null;
         };
         /** @description Full series metadata response including all related data */
         FullSeriesMetadataResponse: {
@@ -11420,6 +11425,11 @@ export interface components {
              * @example 14
              */
             volumesOwned?: number | null;
+            /**
+             * @description Whether the requesting user has this series in their want-to-read queue.
+             * @example false
+             */
+            wantToRead?: boolean | null;
         };
         /** @description Request body for batch book thumbnail generation */
         GenerateBookThumbnailsRequest: {

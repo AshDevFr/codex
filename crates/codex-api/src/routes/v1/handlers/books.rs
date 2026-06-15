@@ -355,6 +355,12 @@ pub async fn books_to_full_dtos_batched(
         .into_iter()
         .collect();
 
+    // Per-user want-to-read membership for the whole page in one query.
+    let want_to_read_ids =
+        codex_db::repositories::WantToReadRepository::book_ids_in_queue(db, user_id, &book_ids)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to load want-to-read: {}", e)))?;
+
     // Fetch all related data in parallel, bounded so a single request cannot
     // hold one pool connection per query and exhaust the pool.
     let limiter = crate::db_batch::fan_out_limiter(crate::db_batch::configured_fan_out());
@@ -723,6 +729,7 @@ pub async fn books_to_full_dtos_batched(
             tags: book_tags,
             created_at: book.created_at,
             updated_at: book.updated_at,
+            want_to_read: Some(want_to_read_ids.contains(&book.id)),
         });
     }
 

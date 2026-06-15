@@ -71,6 +71,7 @@ import {
 } from "@/components/series";
 import { formatSeriesCounts } from "@/components/series/seriesCounts";
 import { SeriesDetailSkeleton } from "@/components/skeletons";
+import { WantToReadButton } from "@/components/WantToReadButton";
 import { useDynamicDocumentTitle } from "@/hooks/useDocumentTitle";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useReleaseTrackingApplicability } from "@/hooks/useReleaseTrackingApplicability";
@@ -634,153 +635,165 @@ export function SeriesDetail() {
                   </Group>
                 </Box>
 
-                <Menu shadow="md" width={240} position="bottom-end">
-                  <Menu.Target>
-                    <ActionIcon variant="subtle" size="lg">
-                      <IconDotsVertical size={20} />
-                    </ActionIcon>
-                  </Menu.Target>
-                  <Menu.Dropdown>
-                    {hasUnread && (
-                      <Menu.Item
-                        leftSection={<IconCheck size={14} />}
-                        onClick={() => markAsReadMutation.mutate()}
-                        disabled={markAsReadMutation.isPending}
-                      >
-                        Mark as Read
-                      </Menu.Item>
-                    )}
-                    {hasRead && (
-                      <Menu.Item
-                        leftSection={<IconBookOff size={14} />}
-                        onClick={() => markAsUnreadMutation.mutate()}
-                        disabled={markAsUnreadMutation.isPending}
-                      >
-                        Mark as Unread
-                      </Menu.Item>
-                    )}
-                    {canEditSeries && (
-                      <>
-                        <Menu.Divider />
+                <Group gap="xs" wrap="nowrap">
+                  <WantToReadButton
+                    itemType="series"
+                    id={series.id}
+                    wantToRead={series.wantToRead}
+                  />
+                  <Menu shadow="md" width={240} position="bottom-end">
+                    <Menu.Target>
+                      <ActionIcon variant="subtle" size="lg">
+                        <IconDotsVertical size={20} />
+                      </ActionIcon>
+                    </Menu.Target>
+                    <Menu.Dropdown>
+                      {hasUnread && (
                         <Menu.Item
-                          leftSection={<IconAnalyze size={14} />}
-                          onClick={() => analyzeMutation.mutate()}
-                          disabled={analyzeMutation.isPending}
+                          leftSection={<IconCheck size={14} />}
+                          onClick={() => markAsReadMutation.mutate()}
+                          disabled={markAsReadMutation.isPending}
                         >
-                          Analyze All Books
+                          Mark as Read
                         </Menu.Item>
+                      )}
+                      {hasRead && (
                         <Menu.Item
-                          leftSection={<IconAnalyze size={14} />}
-                          onClick={() => analyzeUnanalyzedMutation.mutate()}
-                          disabled={analyzeUnanalyzedMutation.isPending}
+                          leftSection={<IconBookOff size={14} />}
+                          onClick={() => markAsUnreadMutation.mutate()}
+                          disabled={markAsUnreadMutation.isPending}
                         >
-                          Analyze Unanalyzed Books
+                          Mark as Unread
                         </Menu.Item>
-                        <Menu.Item
-                          leftSection={<IconListNumbers size={14} />}
-                          onClick={() => renumberMutation.mutate()}
-                          disabled={renumberMutation.isPending}
-                        >
-                          Renumber Books
-                        </Menu.Item>
-                        <Menu.Divider />
-                        <Menu.Label>Book Thumbnails</Menu.Label>
-                        <Menu.Item
-                          leftSection={<IconPhoto size={14} />}
-                          onClick={() =>
-                            generateMissingBookThumbnailsMutation.mutate()
-                          }
-                          disabled={
-                            generateMissingBookThumbnailsMutation.isPending
-                          }
-                        >
-                          Generate Missing
-                        </Menu.Item>
-                        <Menu.Item
-                          leftSection={<IconPhoto size={14} />}
-                          onClick={() =>
-                            regenerateBookThumbnailsMutation.mutate()
-                          }
-                          disabled={regenerateBookThumbnailsMutation.isPending}
-                        >
-                          Regenerate All
-                        </Menu.Item>
-                        <Menu.Divider />
-                        <Menu.Label>Series Thumbnail</Menu.Label>
-                        <Menu.Item
-                          leftSection={<IconPhoto size={14} />}
-                          onClick={() =>
-                            generateSeriesThumbnailIfMissingMutation.mutate()
-                          }
-                          disabled={
-                            generateSeriesThumbnailIfMissingMutation.isPending
-                          }
-                        >
-                          Generate If Missing
-                        </Menu.Item>
-                        <Menu.Item
-                          leftSection={<IconPhoto size={14} />}
-                          onClick={() =>
-                            regenerateSeriesThumbnailMutation.mutate()
-                          }
-                          disabled={regenerateSeriesThumbnailMutation.isPending}
-                        >
-                          Regenerate
-                        </Menu.Item>
-                        <Menu.Divider />
-                        <Menu.Item
-                          leftSection={<IconEdit size={14} />}
-                          onClick={openEditModal}
-                        >
-                          Edit Metadata
-                        </Menu.Item>
-                        <Menu.Item
-                          leftSection={<IconRefresh size={14} />}
-                          onClick={() => reprocessTitleMutation.mutate()}
-                          disabled={reprocessTitleMutation.isPending}
-                        >
-                          Reprocess Title
-                        </Menu.Item>
-                        <Menu.Item
-                          leftSection={<IconRestore size={14} />}
-                          color="red"
-                          onClick={() => setResetConfirmOpened(true)}
-                          disabled={resetMetadataMutation.isPending}
-                        >
-                          Reset Metadata
-                        </Menu.Item>
-                        {/* Plugin actions for metadata fetching */}
-                        {pluginActions && pluginActions.actions.length > 0 && (
-                          <>
-                            <Menu.Divider />
-                            <Menu.Label>Fetch Metadata</Menu.Label>
-                            {pluginActions.actions.map((action) => (
-                              <Menu.Item
-                                key={`search-${action.pluginId}`}
-                                leftSection={<IconSearch size={14} />}
-                                onClick={() => handlePluginAction(action)}
-                              >
-                                {action.label}
-                              </Menu.Item>
-                            ))}
-                            <Menu.Divider />
-                            <Menu.Label>Auto-Apply Metadata</Menu.Label>
-                            {pluginActions.actions.map((action) => (
-                              <Menu.Item
-                                key={`auto-${action.pluginId}`}
-                                leftSection={<IconWand size={14} />}
-                                onClick={() => handleAutoMatch(action)}
-                                disabled={autoMatchMutation.isPending}
-                              >
-                                {action.pluginDisplayName}
-                              </Menu.Item>
-                            ))}
-                          </>
-                        )}
-                      </>
-                    )}
-                  </Menu.Dropdown>
-                </Menu>
+                      )}
+                      {canEditSeries && (
+                        <>
+                          <Menu.Divider />
+                          <Menu.Item
+                            leftSection={<IconAnalyze size={14} />}
+                            onClick={() => analyzeMutation.mutate()}
+                            disabled={analyzeMutation.isPending}
+                          >
+                            Analyze All Books
+                          </Menu.Item>
+                          <Menu.Item
+                            leftSection={<IconAnalyze size={14} />}
+                            onClick={() => analyzeUnanalyzedMutation.mutate()}
+                            disabled={analyzeUnanalyzedMutation.isPending}
+                          >
+                            Analyze Unanalyzed Books
+                          </Menu.Item>
+                          <Menu.Item
+                            leftSection={<IconListNumbers size={14} />}
+                            onClick={() => renumberMutation.mutate()}
+                            disabled={renumberMutation.isPending}
+                          >
+                            Renumber Books
+                          </Menu.Item>
+                          <Menu.Divider />
+                          <Menu.Label>Book Thumbnails</Menu.Label>
+                          <Menu.Item
+                            leftSection={<IconPhoto size={14} />}
+                            onClick={() =>
+                              generateMissingBookThumbnailsMutation.mutate()
+                            }
+                            disabled={
+                              generateMissingBookThumbnailsMutation.isPending
+                            }
+                          >
+                            Generate Missing
+                          </Menu.Item>
+                          <Menu.Item
+                            leftSection={<IconPhoto size={14} />}
+                            onClick={() =>
+                              regenerateBookThumbnailsMutation.mutate()
+                            }
+                            disabled={
+                              regenerateBookThumbnailsMutation.isPending
+                            }
+                          >
+                            Regenerate All
+                          </Menu.Item>
+                          <Menu.Divider />
+                          <Menu.Label>Series Thumbnail</Menu.Label>
+                          <Menu.Item
+                            leftSection={<IconPhoto size={14} />}
+                            onClick={() =>
+                              generateSeriesThumbnailIfMissingMutation.mutate()
+                            }
+                            disabled={
+                              generateSeriesThumbnailIfMissingMutation.isPending
+                            }
+                          >
+                            Generate If Missing
+                          </Menu.Item>
+                          <Menu.Item
+                            leftSection={<IconPhoto size={14} />}
+                            onClick={() =>
+                              regenerateSeriesThumbnailMutation.mutate()
+                            }
+                            disabled={
+                              regenerateSeriesThumbnailMutation.isPending
+                            }
+                          >
+                            Regenerate
+                          </Menu.Item>
+                          <Menu.Divider />
+                          <Menu.Item
+                            leftSection={<IconEdit size={14} />}
+                            onClick={openEditModal}
+                          >
+                            Edit Metadata
+                          </Menu.Item>
+                          <Menu.Item
+                            leftSection={<IconRefresh size={14} />}
+                            onClick={() => reprocessTitleMutation.mutate()}
+                            disabled={reprocessTitleMutation.isPending}
+                          >
+                            Reprocess Title
+                          </Menu.Item>
+                          <Menu.Item
+                            leftSection={<IconRestore size={14} />}
+                            color="red"
+                            onClick={() => setResetConfirmOpened(true)}
+                            disabled={resetMetadataMutation.isPending}
+                          >
+                            Reset Metadata
+                          </Menu.Item>
+                          {/* Plugin actions for metadata fetching */}
+                          {pluginActions &&
+                            pluginActions.actions.length > 0 && (
+                              <>
+                                <Menu.Divider />
+                                <Menu.Label>Fetch Metadata</Menu.Label>
+                                {pluginActions.actions.map((action) => (
+                                  <Menu.Item
+                                    key={`search-${action.pluginId}`}
+                                    leftSection={<IconSearch size={14} />}
+                                    onClick={() => handlePluginAction(action)}
+                                  >
+                                    {action.label}
+                                  </Menu.Item>
+                                ))}
+                                <Menu.Divider />
+                                <Menu.Label>Auto-Apply Metadata</Menu.Label>
+                                {pluginActions.actions.map((action) => (
+                                  <Menu.Item
+                                    key={`auto-${action.pluginId}`}
+                                    leftSection={<IconWand size={14} />}
+                                    onClick={() => handleAutoMatch(action)}
+                                    disabled={autoMatchMutation.isPending}
+                                  >
+                                    {action.pluginDisplayName}
+                                  </Menu.Item>
+                                ))}
+                              </>
+                            )}
+                        </>
+                      )}
+                    </Menu.Dropdown>
+                  </Menu>
+                </Group>
               </Group>
 
               {/* Book count */}

@@ -27176,6 +27176,14 @@
             "format": "date-time",
             "description": "When the book was last updated",
             "example": "2024-01-15T10:30:00Z"
+          },
+          "wantToRead": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether the requesting user has this book in their want-to-read queue.",
+            "example": false
           }
         }
       },
@@ -27558,6 +27566,14 @@
             "format": "int64",
             "description": "Number of books classified as a complete volume (volume set, chapter null).\nSee `SeriesDto::volumes_owned` for semantics.",
             "example": 14
+          },
+          "wantToRead": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether the requesting user has this series in their want-to-read queue.",
+            "example": false
           }
         }
       },
