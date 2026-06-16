@@ -4,10 +4,12 @@
 //! Handlers are implemented in separate modules by resource type.
 
 pub mod books;
+pub mod collections;
 pub mod libraries;
 pub mod manifest;
 pub mod pages;
 pub mod read_progress;
+pub mod readlists;
 pub mod series;
 pub mod stubs;
 pub mod users;
@@ -17,6 +19,10 @@ pub use books::{
     download_book_file, get_book, get_book_thumbnail, get_books_ondeck, get_next_book,
     get_previous_book, search_books,
 };
+pub use collections::{
+    get_collection, get_collection_series, get_collection_thumbnail, get_series_collections,
+    list_collections,
+};
 pub use libraries::{get_library, get_library_thumbnail, list_libraries};
 pub use manifest::{get_epub_manifest, get_epub_resource};
 pub use pages::{get_page, get_page_thumbnail, list_pages};
@@ -24,13 +30,16 @@ pub use read_progress::{
     delete_progress, get_progression, mark_series_as_read, mark_series_as_unread, put_progression,
     update_progress,
 };
+pub use readlists::{
+    get_book_readlists, get_readlist, get_readlist_books, get_readlist_thumbnail, list_readlists,
+};
 pub use series::{
     get_series, get_series_books, get_series_new, get_series_thumbnail, get_series_updated,
     list_series, search_series,
 };
 pub use stubs::{
-    list_age_ratings, list_authors_v2, list_collections, list_genres, list_languages,
-    list_publishers, list_readlists, list_series_release_dates, list_tags,
+    list_age_ratings, list_authors_v2, list_genres, list_languages, list_publishers,
+    list_series_release_dates, list_tags,
 };
 pub use users::get_current_user;
 
@@ -41,6 +50,12 @@ pub use users::get_current_user;
 pub use books::{
     __path_download_book_file, __path_get_book, __path_get_book_thumbnail, __path_get_books_ondeck,
     __path_get_next_book, __path_get_previous_book, __path_search_books,
+};
+#[doc(hidden)]
+#[allow(unused_imports)]
+pub use collections::{
+    __path_get_collection, __path_get_collection_series, __path_get_collection_thumbnail,
+    __path_get_series_collections, __path_list_collections,
 };
 #[doc(hidden)]
 #[allow(unused_imports)]
@@ -59,6 +74,12 @@ pub use read_progress::{
 };
 #[doc(hidden)]
 #[allow(unused_imports)]
+pub use readlists::{
+    __path_get_book_readlists, __path_get_readlist, __path_get_readlist_books,
+    __path_get_readlist_thumbnail, __path_list_readlists,
+};
+#[doc(hidden)]
+#[allow(unused_imports)]
 pub use series::{
     __path_get_series, __path_get_series_books, __path_get_series_new, __path_get_series_thumbnail,
     __path_get_series_updated, __path_list_series, __path_search_series,
@@ -66,9 +87,8 @@ pub use series::{
 #[doc(hidden)]
 #[allow(unused_imports)]
 pub use stubs::{
-    __path_list_age_ratings, __path_list_authors_v2, __path_list_collections, __path_list_genres,
-    __path_list_languages, __path_list_publishers, __path_list_readlists,
-    __path_list_series_release_dates, __path_list_tags,
+    __path_list_age_ratings, __path_list_authors_v2, __path_list_genres, __path_list_languages,
+    __path_list_publishers, __path_list_series_release_dates, __path_list_tags,
 };
 #[doc(hidden)]
 #[allow(unused_imports)]

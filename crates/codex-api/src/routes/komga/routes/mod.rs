@@ -4,9 +4,11 @@
 //! Routes are organized by resource type and composed into separate v1 and v2 routers.
 
 mod books;
+mod collections;
 mod libraries;
 mod pages;
 mod read_progress;
+mod readlists;
 mod series;
 mod stubs;
 mod users;
@@ -36,6 +38,9 @@ fn shared_routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
         .merge(read_progress::routes(state.clone()))
         // User routes
         .merge(users::routes(state.clone()))
+        // Collections + read lists (real data, read-only)
+        .merge(collections::routes(state.clone()))
+        .merge(readlists::routes(state.clone()))
 }
 
 /// Create the Komga-compatible API v1 router

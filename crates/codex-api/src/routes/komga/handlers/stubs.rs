@@ -3,93 +3,16 @@
 //! These handlers return empty results for endpoints that Komic expects
 //! but Codex doesn't fully support. This prevents 404 errors in the client.
 
-use super::super::dto::pagination::KomgaPage;
 use super::super::dto::series::KomgaAuthorDto;
-use super::super::dto::stubs::{KomgaCollectionDto, KomgaReadListDto, StubPaginationQuery};
 use crate::require_permission;
 use crate::{
     error::ApiError,
     extractors::{AuthState, FlexibleAuthContext},
     permissions::Permission,
 };
-use axum::{
-    Json,
-    extract::{Query, State},
-};
+use axum::{Json, extract::State};
 use codex_db::repositories::{GenreRepository, TagRepository};
 use std::sync::Arc;
-
-/// List collections (stub - always returns empty)
-///
-/// Komga collections are user-created groupings of series.
-/// Codex doesn't support this feature, so we return empty results.
-///
-/// ## Endpoint
-/// `GET /{prefix}/api/v1/collections`
-///
-/// ## Authentication
-/// - Bearer token (JWT)
-/// - Basic Auth
-/// - API Key
-#[utoipa::path(
-    get,
-    path = "/{prefix}/api/v1/collections",
-    responses(
-        (status = 200, description = "Empty list of collections", body = KomgaPage<KomgaCollectionDto>),
-        (status = 401, description = "Unauthorized"),
-    ),
-    params(
-        ("prefix" = String, Path, description = "Komga API prefix (default: komga)"),
-    ),
-    security(
-        ("jwt_bearer" = []),
-        ("api_key" = [])
-    ),
-    tag = "Komga"
-)]
-pub async fn list_collections(
-    FlexibleAuthContext(auth): FlexibleAuthContext,
-    Query(query): Query<StubPaginationQuery>,
-) -> Result<Json<KomgaPage<KomgaCollectionDto>>, ApiError> {
-    require_permission!(auth, Permission::SeriesRead)?;
-    Ok(Json(KomgaPage::new(vec![], query.page, query.size, 0)))
-}
-
-/// List read lists (stub - always returns empty)
-///
-/// Komga read lists are user-created lists of books to read.
-/// Codex doesn't support this feature, so we return empty results.
-///
-/// ## Endpoint
-/// `GET /{prefix}/api/v1/readlists`
-///
-/// ## Authentication
-/// - Bearer token (JWT)
-/// - Basic Auth
-/// - API Key
-#[utoipa::path(
-    get,
-    path = "/{prefix}/api/v1/readlists",
-    responses(
-        (status = 200, description = "Empty list of read lists", body = KomgaPage<KomgaReadListDto>),
-        (status = 401, description = "Unauthorized"),
-    ),
-    params(
-        ("prefix" = String, Path, description = "Komga API prefix (default: komga)"),
-    ),
-    security(
-        ("jwt_bearer" = []),
-        ("api_key" = [])
-    ),
-    tag = "Komga"
-)]
-pub async fn list_readlists(
-    FlexibleAuthContext(auth): FlexibleAuthContext,
-    Query(query): Query<StubPaginationQuery>,
-) -> Result<Json<KomgaPage<KomgaReadListDto>>, ApiError> {
-    require_permission!(auth, Permission::SeriesRead)?;
-    Ok(Json(KomgaPage::new(vec![], query.page, query.size, 0)))
-}
 
 /// List genres
 ///

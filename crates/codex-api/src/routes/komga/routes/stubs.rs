@@ -20,8 +20,6 @@ use std::sync::Arc;
 /// - `GET /age-ratings` - List age ratings (always empty)
 pub fn routes_v1(_state: Arc<AppState>) -> Router<Arc<AppState>> {
     Router::new()
-        .route("/collections", get(handlers::list_collections))
-        .route("/readlists", get(handlers::list_readlists))
         .route("/genres", get(handlers::list_genres))
         .route("/tags", get(handlers::list_tags))
         .route("/languages", get(handlers::list_languages))

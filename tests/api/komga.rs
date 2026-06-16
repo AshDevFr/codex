@@ -4963,3 +4963,146 @@ async fn test_komga_put_progression_book_not_found() {
 
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
+
+// ============================================================================
+// Collections / Read Lists (Komga-compatible, read-only)
+// ============================================================================
+
+use codex::api::routes::komga::dto::{KomgaCollectionDto, KomgaReadListDto};
+use codex::db::repositories::{CollectionRepository, ReadListRepository};
+
+#[tokio::test]
+async fn test_komga_collections_real_data() {
+    let (db, temp_dir) = setup_test_db().await;
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Batman", None)
+        .await
+        .unwrap();
+    let coll = CollectionRepository::create(&db, "Batman Collection", true)
+        .await
+        .unwrap();
+    CollectionRepository::add_series(&db, coll.id, series.id)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    // List
+    let request = get_request_with_auth("/komga/api/v1/collections", &token);
+    let (status, page): (StatusCode, Option<KomgaPage<KomgaCollectionDto>>) =
+        make_json_request(app.clone(), request).await;
+    assert_eq!(status, StatusCode::OK);
+    let page = page.unwrap();
+    assert_eq!(page.total_elements, 1);
+    assert_eq!(page.content[0].name, "Batman Collection");
+    assert_eq!(page.content[0].series_ids, vec![series.id.to_string()]);
+
+    // Detail
+    let request = get_request_with_auth(&format!("/komga/api/v1/collections/{}", coll.id), &token);
+    let (status, dto): (StatusCode, Option<KomgaCollectionDto>) =
+        make_json_request(app.clone(), request).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(dto.unwrap().id, coll.id.to_string());
+
+    // Members
+    let request = get_request_with_auth(
+        &format!("/komga/api/v1/collections/{}/series", coll.id),
+        &token,
+    );
+    let (status, members): (StatusCode, Option<KomgaPage<KomgaSeriesDto>>) =
+        make_json_request(app.clone(), request).await;
+    assert_eq!(status, StatusCode::OK);
+    let members = members.unwrap();
+    assert_eq!(members.total_elements, 1);
+    assert_eq!(members.content[0].id, series.id.to_string());
+
+    // Reverse lookup
+    let request = get_request_with_auth(
+        &format!("/komga/api/v1/series/{}/collections", series.id),
+        &token,
+    );
+    let (status, list): (StatusCode, Option<Vec<KomgaCollectionDto>>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(list.unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn test_komga_readlists_real_data() {
+    let (db, temp_dir) = setup_test_db().await;
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Spider-Man", None)
+        .await
+        .unwrap();
+    let book = create_test_book_with_hash(
+        &db,
+        &library,
+        &series,
+        "Civil War #1",
+        "/comics/cw1.cbz",
+        "hash_cw1",
+    )
+    .await;
+    let rl = ReadListRepository::create(&db, "Civil War", Some("Crossover"), true)
+        .await
+        .unwrap();
+    ReadListRepository::add_book(&db, rl.id, book.id)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    // List
+    let request = get_request_with_auth("/komga/api/v1/readlists", &token);
+    let (status, page): (StatusCode, Option<KomgaPage<KomgaReadListDto>>) =
+        make_json_request(app.clone(), request).await;
+    assert_eq!(status, StatusCode::OK);
+    let page = page.unwrap();
+    assert_eq!(page.total_elements, 1);
+    assert_eq!(page.content[0].name, "Civil War");
+    assert_eq!(page.content[0].summary, "Crossover");
+    assert_eq!(page.content[0].book_ids, vec![book.id.to_string()]);
+
+    // Members
+    let request =
+        get_request_with_auth(&format!("/komga/api/v1/readlists/{}/books", rl.id), &token);
+    let (status, members): (StatusCode, Option<KomgaPage<KomgaBookDto>>) =
+        make_json_request(app.clone(), request).await;
+    assert_eq!(status, StatusCode::OK);
+    let members = members.unwrap();
+    assert_eq!(members.total_elements, 1);
+    assert_eq!(members.content[0].id, book.id.to_string());
+
+    // Reverse lookup
+    let request = get_request_with_auth(
+        &format!("/komga/api/v1/books/{}/readlists", book.id),
+        &token,
+    );
+    let (status, list): (StatusCode, Option<Vec<KomgaReadListDto>>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(list.unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn test_komga_collection_not_found() {
+    let (db, temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    let request = get_request_with_auth(
+        &format!("/komga/api/v1/collections/{}", uuid::Uuid::new_v4()),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
