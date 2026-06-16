@@ -17733,6 +17733,77 @@
         ]
       }
     },
+    "/opds/collections": {
+      "get": {
+        "tags": [
+          "OPDS"
+        ],
+        "summary": "List collections (navigation feed)",
+        "operationId": "opds_list_collections",
+        "responses": {
+          "200": {
+            "description": "OPDS collections feed",
+            "content": {
+              "application/atom+xml": {}
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/opds/collections/{collection_id}": {
+      "get": {
+        "tags": [
+          "OPDS"
+        ],
+        "summary": "List the series in a collection (navigation feed)",
+        "operationId": "opds_collection_series",
+        "parameters": [
+          {
+            "name": "collection_id",
+            "in": "path",
+            "description": "Collection ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OPDS collection series feed",
+            "content": {
+              "application/atom+xml": {}
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Collection not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/opds/libraries": {
       "get": {
         "tags": [
@@ -17814,6 +17885,77 @@
           },
           "404": {
             "description": "Library not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/opds/readlists": {
+      "get": {
+        "tags": [
+          "OPDS"
+        ],
+        "summary": "List read lists (navigation feed)",
+        "operationId": "opds_list_readlists",
+        "responses": {
+          "200": {
+            "description": "OPDS read lists feed",
+            "content": {
+              "application/atom+xml": {}
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/opds/readlists/{read_list_id}": {
+      "get": {
+        "tags": [
+          "OPDS"
+        ],
+        "summary": "List the books in a read list (acquisition feed)",
+        "operationId": "opds_readlist_books",
+        "parameters": [
+          {
+            "name": "read_list_id",
+            "in": "path",
+            "description": "Read list ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OPDS read list books feed",
+            "content": {
+              "application/atom+xml": {}
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Read list not found"
           }
         },
         "security": [
@@ -17969,6 +18111,85 @@
         ]
       }
     },
+    "/opds/v2/collections": {
+      "get": {
+        "tags": [
+          "OPDS 2.0"
+        ],
+        "summary": "List collections (OPDS 2.0 navigation feed)",
+        "operationId": "opds2_list_collections",
+        "responses": {
+          "200": {
+            "description": "OPDS 2.0 collections feed",
+            "content": {
+              "application/opds+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Opds2Feed"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/opds/v2/collections/{collection_id}": {
+      "get": {
+        "tags": [
+          "OPDS 2.0"
+        ],
+        "summary": "List the series in a collection (OPDS 2.0 navigation feed)",
+        "operationId": "opds2_collection_series",
+        "parameters": [
+          {
+            "name": "collection_id",
+            "in": "path",
+            "description": "Collection ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OPDS 2.0 collection series feed",
+            "content": {
+              "application/opds+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Opds2Feed"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Collection not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/opds/v2/libraries": {
       "get": {
         "tags": [
@@ -18058,6 +18279,85 @@
           },
           "404": {
             "description": "Library not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/opds/v2/readlists": {
+      "get": {
+        "tags": [
+          "OPDS 2.0"
+        ],
+        "summary": "List read lists (OPDS 2.0 navigation feed)",
+        "operationId": "opds2_list_readlists",
+        "responses": {
+          "200": {
+            "description": "OPDS 2.0 read lists feed",
+            "content": {
+              "application/opds+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Opds2Feed"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/opds/v2/readlists/{read_list_id}": {
+      "get": {
+        "tags": [
+          "OPDS 2.0"
+        ],
+        "summary": "List the books in a read list (OPDS 2.0 publications feed)",
+        "operationId": "opds2_readlist_books",
+        "parameters": [
+          {
+            "name": "read_list_id",
+            "in": "path",
+            "description": "Read list ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OPDS 2.0 read list books feed",
+            "content": {
+              "application/opds+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Opds2Feed"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Read list not found"
           }
         },
         "security": [
