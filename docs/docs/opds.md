@@ -37,7 +37,13 @@ The root catalog provides navigation links to browse your library.
 | `/opds/series/{id}` | Books in a specific series |
 | `/opds/libraries` | Browse by library |
 | `/opds/libraries/{id}` | Books in a specific library |
+| `/opds/collections` | Browse [collections](./collections-readlists.md) of series |
+| `/opds/collections/{id}` | Series in a specific collection |
+| `/opds/readlists` | Browse [read lists](./collections-readlists.md) |
+| `/opds/readlists/{id}` | Books in a specific read list |
 | `/opds/search?q={query}` | Search books |
+
+The same feeds are available in OPDS 2.0 (JSON) under `/opds/v2`, including `/opds/v2/collections` and `/opds/v2/readlists`.
 
 ## Authentication
 

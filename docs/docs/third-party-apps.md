@@ -163,6 +163,30 @@ When enabled, the following Komga-compatible endpoints are available at `/{prefi
 | `/books/{id}/next` | GET | Get next book in series |
 | `/books/{id}/previous` | GET | Get previous book in series |
 
+### Collections
+
+Shared groupings of series. Read-only over the Komga API; create/manage them in the Codex web UI. See [Collections & Read Lists](./collections-readlists.md).
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/collections` | GET | List collections (paginated) |
+| `/collections/{id}` | GET | Get a collection (with member series IDs) |
+| `/collections/{id}/series` | GET | List the series in a collection |
+| `/collections/{id}/thumbnail` | GET | Collection thumbnail (first member cover) |
+| `/series/{id}/collections` | GET | Collections containing a series |
+
+### Read Lists
+
+Shared, ordered groupings of books across series. Read-only over the Komga API.
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/readlists` | GET | List read lists (paginated) |
+| `/readlists/{id}` | GET | Get a read list (with member book IDs) |
+| `/readlists/{id}/books` | GET | List the books in a read list |
+| `/readlists/{id}/thumbnail` | GET | Read list thumbnail (first member cover) |
+| `/books/{id}/readlists` | GET | Read lists containing a book |
+
 ### Pages
 
 | Endpoint | Method | Description |
@@ -265,8 +289,7 @@ The Komga-compatible API has some limitations compared to the native Komga serve
 ### Not Supported
 
 - **Metadata editing** - The API is read-only
-- **Collections** - Komga collections are not implemented
-- **Read lists** - Komga read lists are not implemented
+- **Collection / read list editing** - Collections and read lists are exposed read-only; create and manage them in the Codex web UI
 - **Full search syntax** - Only basic search is supported
 - **Oneshot detection** - The `oneshot` field is not included in responses
 - **WebPub manifests** - Not implemented
@@ -293,7 +316,6 @@ The Komga API uses Basic Auth, which transmits credentials in base64 encoding (n
 
 The following features may be added in future versions:
 
-- Collections/read lists support
 - Metadata editing (if requested)
 - More apps compatibility testing
 - WebPub manifest support
