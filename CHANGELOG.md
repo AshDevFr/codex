@@ -2,6 +2,30 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.39.0] - 2026-06-16
+
+### 🚀 Features
+
+- *(db)* Add collections, read lists, and want-to-read schema
+- *(permissions,db)* Add collection/read-list permissions and repositories
+- *(api)* Add want-to-read queue endpoints
+- *(web)* Add Want to Read page and toggle
+- *(api)* Add collections endpoints
+- *(web)* Add collections pages and management
+- *(api)* Add read list endpoints
+- *(web)* Add read list pages and management
+- *(komga)* Serve real collections and read lists
+- *(opds)* Add collection and read-list feeds
+- *(web)* Add collection/read-list membership to card and bulk menus
+
+### 📚 Documentation
+
+- Document collections, read lists, and want to read
+
+### 🧪 Testing
+
+- *(auth)* Update admin permission count after new permissions
+
 ## [1.38.4] - 2026-06-15
 
 ### 🚀 Features
