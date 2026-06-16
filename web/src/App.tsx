@@ -14,6 +14,8 @@ import { setupApi } from "@/api/setup";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useEntityEvents } from "@/hooks/useEntityEvents";
 import { BookDetail } from "@/pages/BookDetail";
+import { CollectionDetail } from "@/pages/CollectionDetail";
+import { Collections } from "@/pages/Collections";
 import { Home } from "@/pages/Home";
 import { LibraryPage } from "@/pages/Library";
 import { LibraryJobsPage } from "@/pages/LibraryJobs";
@@ -209,6 +211,28 @@ function App() {
             <ProtectedRoute>
               <AppLayout>
                 <WantToRead />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/collections"
+          element={
+            <ProtectedRoute>
+              <AppLayout>
+                <Collections />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/collections/:collectionId"
+          element={
+            <ProtectedRoute>
+              <AppLayout>
+                <CollectionDetail />
               </AppLayout>
             </ProtectedRoute>
           }
