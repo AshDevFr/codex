@@ -12,6 +12,7 @@ mod misc;
 mod observability;
 mod oidc;
 mod plugins;
+mod readlists;
 mod recommendations;
 mod releases;
 mod series;
@@ -49,6 +50,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .merge(observability::routes(state.clone()))
         .merge(want_to_read::routes(state.clone()))
         .merge(collections::routes(state.clone()))
+        .merge(readlists::routes(state.clone()))
         // Apply state to all routes
         .with_state(state)
 }

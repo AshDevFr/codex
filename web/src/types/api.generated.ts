@@ -1712,6 +1712,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/books/{book_id}/readlists": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the read lists that contain a given book. */
+        get: operations["get_book_readlists"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/books/{book_id}/retry": {
         parameters: {
             query?: never;
@@ -2868,6 +2885,96 @@ export interface paths {
         };
         /** Get all reading progress for the authenticated user */
         get: operations["get_user_progress"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/readlists": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List all read lists. */
+        get: operations["list_readlists"];
+        put?: never;
+        /** Create a read list. */
+        post: operations["create_readlist"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/readlists/{read_list_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a read list. */
+        get: operations["get_readlist"];
+        put?: never;
+        post?: never;
+        /** Delete a read list. */
+        delete: operations["delete_readlist"];
+        options?: never;
+        head?: never;
+        /** Update a read list (rename / edit summary / toggle ordered). */
+        patch: operations["update_readlist"];
+        trace?: never;
+    };
+    "/api/v1/readlists/{read_list_id}/books": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get the books in a read list (visibility-filtered, in stored order). */
+        get: operations["get_readlist_books"];
+        /** Set the manual order of a read list's books. */
+        put: operations["reorder_readlist_books"];
+        /** Add one or more books to a read list. */
+        post: operations["add_readlist_books"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/readlists/{read_list_id}/books/{book_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a book from a read list. */
+        delete: operations["remove_readlist_book"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/readlists/{read_list_id}/thumbnail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a read list's thumbnail (the first visible member book's cover). */
+        get: operations["get_readlist_thumbnail"];
         put?: never;
         post?: never;
         delete?: never;
@@ -7272,6 +7379,15 @@ export interface components {
              */
             oidcGroupName: string;
         };
+        /** @description Request to add one or more books to a read list. */
+        AddBooksToReadListRequest: {
+            /**
+             * @example [
+             *       "550e8400-e29b-41d4-a716-446655440001"
+             *     ]
+             */
+            bookIds: string[];
+        };
         /** @description Request to add a single genre to a series */
         AddSeriesGenreRequest: {
             /**
@@ -10257,6 +10373,17 @@ export interface components {
             useExistingExternalId?: boolean;
             /** @description Working directory for the plugin process */
             workingDirectory?: string | null;
+        };
+        /** @description Request to create a read list. */
+        CreateReadListRequest: {
+            /** @example Civil War */
+            name: string;
+            /**
+             * @description Defaults to `true` (manual reading order).
+             * @example true
+             */
+            ordered?: boolean;
+            summary?: string | null;
         };
         CreateSeriesAliasRequest: {
             /**
@@ -16043,6 +16170,40 @@ export interface components {
              */
             staleCount: number;
         };
+        /** @description A read list. */
+        ReadListDto: {
+            /**
+             * Format: int64
+             * @description Number of member books visible to the requesting user.
+             * @example 24
+             */
+            bookCount: number;
+            /** Format: date-time */
+            createdAt: string;
+            /**
+             * Format: uuid
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
+            id: string;
+            /** @example Civil War */
+            name: string;
+            /**
+             * @description When true, members are kept in manual reading order; otherwise sorted by
+             *     release date.
+             * @example true
+             */
+            ordered: boolean;
+            /** @description Optional description (Komga read lists carry a summary). */
+            summary?: string | null;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        /** @description List of read lists. */
+        ReadListListResponse: {
+            items: components["schemas"]["ReadListDto"][];
+            /** @example 3 */
+            total: number;
+        };
         /** @description Response containing a list of reading progress records */
         ReadProgressListResponse: {
             /** @description List of progress records */
@@ -16553,6 +16714,16 @@ export interface components {
              *     ]
              */
             seriesIds: string[];
+        };
+        /** @description Request to set the manual order of a read list's books. */
+        ReorderReadListBooksRequest: {
+            /**
+             * @example [
+             *       "550e8400-e29b-41d4-a716-446655440002",
+             *       "550e8400-e29b-41d4-a716-446655440001"
+             *     ]
+             */
+            bookIds: string[];
         };
         /**
          * @description PUT request for full replacement of book metadata
@@ -19665,6 +19836,16 @@ export interface components {
              * @example 0.45
              */
             progressPercentage?: number | null;
+        };
+        /**
+         * @description Request to update a read list. Absent fields are left unchanged. To clear the
+         *     summary, send `summary: null` explicitly.
+         */
+        UpdateReadListRequest: {
+            name?: string | null;
+            ordered?: boolean | null;
+            /** @description `Some(Some(text))` sets it, `Some(None)` clears it, absent leaves it. */
+            summary?: string | null;
         };
         /**
          * @description PATCH payload for ledger row state transitions.
@@ -24291,6 +24472,35 @@ export interface operations {
             };
         };
     };
+    get_book_readlists: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Read lists containing the book */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadListListResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     retry_book_errors: {
         parameters: {
             query?: never;
@@ -26813,6 +27023,378 @@ export interface operations {
             };
             /** @description Forbidden */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_readlists: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Read lists */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadListListResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_readlist: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateReadListRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadListDto"];
+                };
+            };
+            /** @description Invalid name */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A read list with that name already exists */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_readlist: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                read_list_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Read list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadListDto"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_readlist: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                read_list_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_readlist: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                read_list_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateReadListRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadListDto"];
+                };
+            };
+            /** @description Invalid name */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Name already in use */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_readlist_books: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                read_list_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Member books */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookDto"][];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reorder_readlist_books: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                read_list_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReorderReadListBooksRequest"];
+            };
+        };
+        responses: {
+            /** @description Reordered */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    add_readlist_books: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                read_list_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddBooksToReadListRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated read list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadListDto"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Read list or book not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    remove_readlist_book: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                read_list_id: string;
+                book_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed (or was not a member) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_readlist_thumbnail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                read_list_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Redirect to the first member book thumbnail */
+            307: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No visible member books */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

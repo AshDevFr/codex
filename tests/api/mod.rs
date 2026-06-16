@@ -42,6 +42,7 @@ mod plugins;
 mod pool_contention;
 mod rate_limit;
 mod read_progress;
+mod readlists;
 mod recommendations;
 mod refresh_token;
 mod releases;
