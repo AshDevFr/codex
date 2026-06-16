@@ -789,7 +789,10 @@ pub async fn download_book_file(
 // ============================================================================
 
 /// Get series title from series metadata or series name
-async fn get_series_title(state: &Arc<AuthState>, series_id: Uuid) -> Result<String, ApiError> {
+pub(crate) async fn get_series_title(
+    state: &Arc<AuthState>,
+    series_id: Uuid,
+) -> Result<String, ApiError> {
     if let Some(metadata) = SeriesMetadataRepository::get_by_series_id(&state.db, series_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch series metadata: {}", e)))?

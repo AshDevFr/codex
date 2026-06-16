@@ -637,7 +637,15 @@ The following paths are exempt from rate limiting:
 
         // Komga stub endpoints (empty responses for third-party app compatibility)
         komga::handlers::list_collections,
+        komga::handlers::get_collection,
+        komga::handlers::get_collection_series,
+        komga::handlers::get_collection_thumbnail,
+        komga::handlers::get_series_collections,
         komga::handlers::list_readlists,
+        komga::handlers::get_readlist,
+        komga::handlers::get_readlist_books,
+        komga::handlers::get_readlist_thumbnail,
+        komga::handlers::get_book_readlists,
         komga::handlers::list_genres,
         komga::handlers::list_tags,
         komga::handlers::list_authors_v2,

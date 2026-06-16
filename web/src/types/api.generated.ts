@@ -6521,6 +6521,23 @@ export interface paths {
         patch: operations["komga_update_progress"];
         trace?: never;
     };
+    "/{prefix}/api/v1/books/{book_id}/readlists": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the read lists that contain a book (Komga-compatible). */
+        get: operations["komga_get_book_readlists"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/{prefix}/api/v1/books/{book_id}/thumbnail": {
         parameters: {
             query?: never;
@@ -6556,20 +6573,59 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * List collections (stub - always returns empty)
-         * @description Komga collections are user-created groupings of series.
-         *     Codex doesn't support this feature, so we return empty results.
-         *
-         *     ## Endpoint
-         *     `GET /{prefix}/api/v1/collections`
-         *
-         *     ## Authentication
-         *     - Bearer token (JWT)
-         *     - Basic Auth
-         *     - API Key
-         */
+        /** List collections (Komga-compatible). */
         get: operations["komga_list_collections"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/{prefix}/api/v1/collections/{collection_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a collection (Komga-compatible). */
+        get: operations["komga_get_collection"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/{prefix}/api/v1/collections/{collection_id}/series": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get the series in a collection (Komga-compatible). */
+        get: operations["komga_get_collection_series"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/{prefix}/api/v1/collections/{collection_id}/thumbnail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a collection's thumbnail (redirects to the first visible member series). */
+        get: operations["komga_get_collection_thumbnail"];
         put?: never;
         post?: never;
         delete?: never;
@@ -6756,20 +6812,59 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * List read lists (stub - always returns empty)
-         * @description Komga read lists are user-created lists of books to read.
-         *     Codex doesn't support this feature, so we return empty results.
-         *
-         *     ## Endpoint
-         *     `GET /{prefix}/api/v1/readlists`
-         *
-         *     ## Authentication
-         *     - Bearer token (JWT)
-         *     - Basic Auth
-         *     - API Key
-         */
+        /** List read lists (Komga-compatible). */
         get: operations["komga_list_readlists"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/{prefix}/api/v1/readlists/{read_list_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a read list (Komga-compatible). */
+        get: operations["komga_get_readlist"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/{prefix}/api/v1/readlists/{read_list_id}/books": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get the books in a read list (Komga-compatible). */
+        get: operations["komga_get_readlist_books"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/{prefix}/api/v1/readlists/{read_list_id}/thumbnail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a read list's thumbnail (redirects to the first visible member book). */
+        get: operations["komga_get_readlist_thumbnail"];
         put?: never;
         post?: never;
         delete?: never;
@@ -6996,6 +7091,23 @@ export interface paths {
          *     - API Key
          */
         get: operations["komga_get_series_books"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/{prefix}/api/v1/series/{series_id}/collections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the collections that contain a series (Komga-compatible). */
+        get: operations["komga_get_series_collections"];
         put?: never;
         post?: never;
         delete?: never;
@@ -34754,6 +34866,29 @@ export interface operations {
             };
         };
     };
+    komga_get_book_readlists: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Komga API prefix */
+                prefix: string;
+                book_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KomgaReadListDto"][];
+                };
+            };
+        };
+    };
     komga_get_book_thumbnail: {
         parameters: {
             query?: never;
@@ -34798,14 +34933,13 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Komga API prefix (default: komga) */
+                /** @description Komga API prefix */
                 prefix: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Empty list of collections */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -34814,8 +34948,92 @@ export interface operations {
                     "application/json": components["schemas"]["KomgaPage_KomgaCollectionDto"];
                 };
             };
-            /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    komga_get_collection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Komga API prefix */
+                prefix: string;
+                collection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KomgaCollectionDto"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    komga_get_collection_series: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Komga API prefix */
+                prefix: string;
+                collection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KomgaPage_KomgaSeriesDto"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    komga_get_collection_thumbnail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Komga API prefix */
+                prefix: string;
+                collection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            307: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -35026,14 +35244,13 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Komga API prefix (default: komga) */
+                /** @description Komga API prefix */
                 prefix: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Empty list of read lists */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -35042,8 +35259,92 @@ export interface operations {
                     "application/json": components["schemas"]["KomgaPage_KomgaReadListDto"];
                 };
             };
-            /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    komga_get_readlist: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Komga API prefix */
+                prefix: string;
+                read_list_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KomgaReadListDto"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    komga_get_readlist_books: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Komga API prefix */
+                prefix: string;
+                read_list_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KomgaPage_KomgaBookDto"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    komga_get_readlist_thumbnail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Komga API prefix */
+                prefix: string;
+                read_list_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            307: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -35335,6 +35636,29 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    komga_get_series_collections: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Komga API prefix */
+                prefix: string;
+                series_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KomgaCollectionDto"][];
+                };
             };
         };
     };

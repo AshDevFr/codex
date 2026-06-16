@@ -18974,6 +18974,57 @@
         ]
       }
     },
+    "/{prefix}/api/v1/books/{book_id}/readlists": {
+      "get": {
+        "tags": [
+          "Komga"
+        ],
+        "summary": "List the read lists that contain a book (Komga-compatible).",
+        "operationId": "komga_get_book_readlists",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Komga API prefix",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "book_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/KomgaReadListDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/{prefix}/api/v1/books/{book_id}/thumbnail": {
       "get": {
         "tags": [
@@ -19032,14 +19083,13 @@
         "tags": [
           "Komga"
         ],
-        "summary": "List collections (stub - always returns empty)",
-        "description": "Komga collections are user-created groupings of series.\nCodex doesn't support this feature, so we return empty results.\n\n## Endpoint\n`GET /{prefix}/api/v1/collections`\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
+        "summary": "List collections (Komga-compatible).",
         "operationId": "komga_list_collections",
         "parameters": [
           {
             "name": "prefix",
             "in": "path",
-            "description": "Komga API prefix (default: komga)",
+            "description": "Komga API prefix",
             "required": true,
             "schema": {
               "type": "string"
@@ -19048,7 +19098,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Empty list of collections",
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -19058,7 +19108,153 @@
             }
           },
           "401": {
-            "description": "Unauthorized"
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/{prefix}/api/v1/collections/{collection_id}": {
+      "get": {
+        "tags": [
+          "Komga"
+        ],
+        "summary": "Get a collection (Komga-compatible).",
+        "operationId": "komga_get_collection",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Komga API prefix",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "collection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KomgaCollectionDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/{prefix}/api/v1/collections/{collection_id}/series": {
+      "get": {
+        "tags": [
+          "Komga"
+        ],
+        "summary": "Get the series in a collection (Komga-compatible).",
+        "operationId": "komga_get_collection_series",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Komga API prefix",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "collection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KomgaPage_KomgaSeriesDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/{prefix}/api/v1/collections/{collection_id}/thumbnail": {
+      "get": {
+        "tags": [
+          "Komga"
+        ],
+        "summary": "Get a collection's thumbnail (redirects to the first visible member series).",
+        "operationId": "komga_get_collection_thumbnail",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Komga API prefix",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "collection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "307": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
           }
         },
         "security": [
@@ -19374,14 +19570,13 @@
         "tags": [
           "Komga"
         ],
-        "summary": "List read lists (stub - always returns empty)",
-        "description": "Komga read lists are user-created lists of books to read.\nCodex doesn't support this feature, so we return empty results.\n\n## Endpoint\n`GET /{prefix}/api/v1/readlists`\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
+        "summary": "List read lists (Komga-compatible).",
         "operationId": "komga_list_readlists",
         "parameters": [
           {
             "name": "prefix",
             "in": "path",
-            "description": "Komga API prefix (default: komga)",
+            "description": "Komga API prefix",
             "required": true,
             "schema": {
               "type": "string"
@@ -19390,7 +19585,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Empty list of read lists",
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -19400,7 +19595,153 @@
             }
           },
           "401": {
-            "description": "Unauthorized"
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/{prefix}/api/v1/readlists/{read_list_id}": {
+      "get": {
+        "tags": [
+          "Komga"
+        ],
+        "summary": "Get a read list (Komga-compatible).",
+        "operationId": "komga_get_readlist",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Komga API prefix",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "read_list_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KomgaReadListDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/{prefix}/api/v1/readlists/{read_list_id}/books": {
+      "get": {
+        "tags": [
+          "Komga"
+        ],
+        "summary": "Get the books in a read list (Komga-compatible).",
+        "operationId": "komga_get_readlist_books",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Komga API prefix",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "read_list_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KomgaPage_KomgaBookDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/{prefix}/api/v1/readlists/{read_list_id}/thumbnail": {
+      "get": {
+        "tags": [
+          "Komga"
+        ],
+        "summary": "Get a read list's thumbnail (redirects to the first visible member book).",
+        "operationId": "komga_get_readlist_thumbnail",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Komga API prefix",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "read_list_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "307": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
           }
         },
         "security": [
@@ -20033,6 +20374,57 @@
           },
           "404": {
             "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/{prefix}/api/v1/series/{series_id}/collections": {
+      "get": {
+        "tags": [
+          "Komga"
+        ],
+        "summary": "List the collections that contain a series (Komga-compatible).",
+        "operationId": "komga_get_series_collections",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Komga API prefix",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "series_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/KomgaCollectionDto"
+                  }
+                }
+              }
+            }
           }
         },
         "security": [

@@ -745,7 +745,7 @@ pub async fn get_series_books(
 // ============================================================================
 
 /// Build a KomgaSeriesDto from a series entity
-async fn build_series_dto(
+pub(crate) async fn build_series_dto(
     state: &Arc<AuthState>,
     series: &codex_db::entities::series::Model,
     user_id: Option<Uuid>,
