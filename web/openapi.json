@@ -5295,6 +5295,49 @@
         ]
       }
     },
+    "/api/v1/books/{book_id}/readlists": {
+      "get": {
+        "tags": [
+          "Read Lists"
+        ],
+        "summary": "List the read lists that contain a given book.",
+        "operationId": "get_book_readlists",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Read lists containing the book",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadListListResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/books/{book_id}/retry": {
       "post": {
         "tags": [
@@ -8683,6 +8726,461 @@
           },
           "403": {
             "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/readlists": {
+      "get": {
+        "tags": [
+          "Read Lists"
+        ],
+        "summary": "List all read lists.",
+        "operationId": "list_readlists",
+        "responses": {
+          "200": {
+            "description": "Read lists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadListListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Read Lists"
+        ],
+        "summary": "Create a read list.",
+        "operationId": "create_readlist",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateReadListRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadListDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid name"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "409": {
+            "description": "A read list with that name already exists"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/readlists/{read_list_id}": {
+      "get": {
+        "tags": [
+          "Read Lists"
+        ],
+        "summary": "Get a read list.",
+        "operationId": "get_readlist",
+        "parameters": [
+          {
+            "name": "read_list_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Read list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadListDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Read Lists"
+        ],
+        "summary": "Delete a read list.",
+        "operationId": "delete_readlist",
+        "parameters": [
+          {
+            "name": "read_list_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "Read Lists"
+        ],
+        "summary": "Update a read list (rename / edit summary / toggle ordered).",
+        "operationId": "update_readlist",
+        "parameters": [
+          {
+            "name": "read_list_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateReadListRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadListDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid name"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Name already in use"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/readlists/{read_list_id}/books": {
+      "get": {
+        "tags": [
+          "Read Lists"
+        ],
+        "summary": "Get the books in a read list (visibility-filtered, in stored order).",
+        "operationId": "get_readlist_books",
+        "parameters": [
+          {
+            "name": "read_list_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Member books",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/BookDto"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Read Lists"
+        ],
+        "summary": "Set the manual order of a read list's books.",
+        "operationId": "reorder_readlist_books",
+        "parameters": [
+          {
+            "name": "read_list_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReorderReadListBooksRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Reordered"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Read Lists"
+        ],
+        "summary": "Add one or more books to a read list.",
+        "operationId": "add_readlist_books",
+        "parameters": [
+          {
+            "name": "read_list_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddBooksToReadListRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Updated read list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadListDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Read list or book not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/readlists/{read_list_id}/books/{book_id}": {
+      "delete": {
+        "tags": [
+          "Read Lists"
+        ],
+        "summary": "Remove a book from a read list.",
+        "operationId": "remove_readlist_book",
+        "parameters": [
+          {
+            "name": "read_list_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "book_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Removed (or was not a member)"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/readlists/{read_list_id}/thumbnail": {
+      "get": {
+        "tags": [
+          "Read Lists"
+        ],
+        "summary": "Get a read list's thumbnail (the first visible member book's cover).",
+        "operationId": "get_readlist_thumbnail",
+        "parameters": [
+          {
+            "name": "read_list_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "307": {
+            "description": "Redirect to the first member book thumbnail"
+          },
+          "404": {
+            "description": "No visible member books"
           }
         },
         "security": [
@@ -20151,6 +20649,25 @@
           }
         }
       },
+      "AddBooksToReadListRequest": {
+        "type": "object",
+        "description": "Request to add one or more books to a read list.",
+        "required": [
+          "bookIds"
+        ],
+        "properties": {
+          "bookIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "example": [
+              "550e8400-e29b-41d4-a716-446655440001"
+            ]
+          }
+        }
+      },
       "AddSeriesGenreRequest": {
         "type": "object",
         "description": "Request to add a single genre to a series",
@@ -25322,6 +25839,30 @@
               "null"
             ],
             "description": "Working directory for the plugin process"
+          }
+        }
+      },
+      "CreateReadListRequest": {
+        "type": "object",
+        "description": "Request to create a read list.",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Civil War"
+          },
+          "ordered": {
+            "type": "boolean",
+            "description": "Defaults to `true` (manual reading order).",
+            "example": true
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
@@ -36238,6 +36779,77 @@
           }
         }
       },
+      "ReadListDto": {
+        "type": "object",
+        "description": "A read list.",
+        "required": [
+          "id",
+          "name",
+          "ordered",
+          "bookCount",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "bookCount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of member books visible to the requesting user.",
+            "example": 24,
+            "minimum": 0
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "name": {
+            "type": "string",
+            "example": "Civil War"
+          },
+          "ordered": {
+            "type": "boolean",
+            "description": "When true, members are kept in manual reading order; otherwise sorted by\nrelease date.",
+            "example": true
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional description (Komga read lists carry a summary)."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ReadListListResponse": {
+        "type": "object",
+        "description": "List of read lists.",
+        "required": [
+          "items",
+          "total"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadListDto"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "example": 3,
+            "minimum": 0
+          }
+        }
+      },
       "ReadProgressListResponse": {
         "type": "object",
         "description": "Response containing a list of reading progress records",
@@ -37134,6 +37746,26 @@
         ],
         "properties": {
           "seriesIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "example": [
+              "550e8400-e29b-41d4-a716-446655440002",
+              "550e8400-e29b-41d4-a716-446655440001"
+            ]
+          }
+        }
+      },
+      "ReorderReadListBooksRequest": {
+        "type": "object",
+        "description": "Request to set the manual order of a read list's books.",
+        "required": [
+          "bookIds"
+        ],
+        "properties": {
+          "bookIds": {
             "type": "array",
             "items": {
               "type": "string",
@@ -42833,6 +43465,31 @@
             "format": "double",
             "description": "Progress as a percentage (0.0-1.0), used for EPUB books with reflowable content",
             "example": 0.45
+          }
+        }
+      },
+      "UpdateReadListRequest": {
+        "type": "object",
+        "description": "Request to update a read list. Absent fields are left unchanged. To clear the\nsummary, send `summary: null` explicitly.",
+        "properties": {
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ordered": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`Some(Some(text))` sets it, `Some(None)` clears it, absent leaves it."
           }
         }
       },
