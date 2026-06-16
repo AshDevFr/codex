@@ -362,6 +362,19 @@ The following paths are exempt from rate limiting:
         v1::handlers::remove_want_to_read_series,
         v1::handlers::remove_want_to_read_book,
 
+        // Collections endpoints
+        v1::handlers::list_collections,
+        v1::handlers::create_collection,
+        v1::handlers::get_collection,
+        v1::handlers::update_collection,
+        v1::handlers::delete_collection,
+        v1::handlers::get_collection_series,
+        v1::handlers::add_collection_series,
+        v1::handlers::remove_collection_series,
+        v1::handlers::reorder_collection_series,
+        v1::handlers::get_collection_thumbnail,
+        v1::handlers::get_series_collections,
+
         // Bulk operations endpoints
         v1::handlers::bulk_mark_books_as_read,
         v1::handlers::bulk_mark_books_as_unread,
@@ -928,6 +941,14 @@ The following paths are exempt from rate limiting:
             v1::dto::WantToReadListResponse,
             v1::dto::AddWantToReadRequest,
             v1::dto::WantToReadItemType,
+
+            // Collections DTOs
+            v1::dto::CollectionDto,
+            v1::dto::CollectionListResponse,
+            v1::dto::CreateCollectionRequest,
+            v1::dto::UpdateCollectionRequest,
+            v1::dto::AddSeriesToCollectionRequest,
+            v1::dto::ReorderCollectionSeriesRequest,
 
             // Bulk operations DTOs
             v1::dto::BulkBooksRequest,

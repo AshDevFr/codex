@@ -1796,6 +1796,96 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/collections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List all collections. */
+        get: operations["list_collections"];
+        put?: never;
+        /** Create a collection. */
+        post: operations["create_collection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/collections/{collection_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a collection. */
+        get: operations["get_collection"];
+        put?: never;
+        post?: never;
+        /** Delete a collection. */
+        delete: operations["delete_collection"];
+        options?: never;
+        head?: never;
+        /** Update a collection (rename / toggle ordered). */
+        patch: operations["update_collection"];
+        trace?: never;
+    };
+    "/api/v1/collections/{collection_id}/series": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get the series in a collection (visibility-filtered, in stored order). */
+        get: operations["get_collection_series"];
+        /** Set the manual order of a collection's series. */
+        put: operations["reorder_collection_series"];
+        /** Add one or more series to a collection. */
+        post: operations["add_collection_series"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/collections/{collection_id}/series/{series_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a series from a collection. */
+        delete: operations["remove_collection_series"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/collections/{collection_id}/thumbnail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a collection's thumbnail (the first visible member series' cover). */
+        get: operations["get_collection_thumbnail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/duplicates": {
         parameters: {
             query?: never;
@@ -3943,6 +4033,23 @@ export interface paths {
         };
         /** Get books in a series */
         get: operations["get_series_books"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/series/{series_id}/collections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the collections that contain a given series. */
+        get: operations["get_series_collections"];
         put?: never;
         post?: never;
         delete?: never;
@@ -7183,6 +7290,15 @@ export interface components {
              */
             name: string;
         };
+        /** @description Request to add one or more series to a collection. */
+        AddSeriesToCollectionRequest: {
+            /**
+             * @example [
+             *       "550e8400-e29b-41d4-a716-446655440001"
+             *     ]
+             */
+            seriesIds: string[];
+        };
         /**
          * @description Request to add an entry to the queue. Exactly one of `series_id` / `book_id`
          *     must be provided.
@@ -9703,6 +9819,37 @@ export interface components {
              */
             thumbnailsDeleted: number;
         };
+        /** @description A collection of series. */
+        CollectionDto: {
+            /** Format: date-time */
+            createdAt: string;
+            /**
+             * Format: uuid
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
+            id: string;
+            /** @example Batman */
+            name: string;
+            /**
+             * @description When true, members are kept in manual order; otherwise sorted by title.
+             * @example false
+             */
+            ordered: boolean;
+            /**
+             * Format: int64
+             * @description Number of member series visible to the requesting user.
+             * @example 12
+             */
+            seriesCount: number;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        /** @description List of collections. */
+        CollectionListResponse: {
+            items: components["schemas"]["CollectionDto"][];
+            /** @example 3 */
+            total: number;
+        };
         /** @description Configuration field definition for documenting plugin config options */
         ConfigFieldDto: {
             /** @description Default value if not provided */
@@ -9843,6 +9990,16 @@ export interface components {
              * @example https://openlibrary.org/works/OL123W
              */
             url: string;
+        };
+        /** @description Request to create a collection. */
+        CreateCollectionRequest: {
+            /** @example Batman */
+            name: string;
+            /**
+             * @description Defaults to `false` (members sorted by title).
+             * @example false
+             */
+            ordered?: boolean;
         };
         /** @description Request to create or update an external link for a series */
         CreateExternalLinkRequest: {
@@ -16385,6 +16542,19 @@ export interface components {
             start: number;
         };
         /**
+         * @description Request to set the manual order of a collection's series. IDs not currently
+         *     members are ignored; omitted members keep their existing position.
+         */
+        ReorderCollectionSeriesRequest: {
+            /**
+             * @example [
+             *       "550e8400-e29b-41d4-a716-446655440002",
+             *       "550e8400-e29b-41d4-a716-446655440001"
+             *     ]
+             */
+            seriesIds: string[];
+        };
+        /**
          * @description PUT request for full replacement of book metadata
          *
          *     All metadata fields will be replaced with the values in this request.
@@ -19219,6 +19389,11 @@ export interface components {
             writerLock?: boolean | null;
             /** @description Whether to lock year */
             yearLock?: boolean | null;
+        };
+        /** @description Request to update a collection. Absent fields are left unchanged. */
+        UpdateCollectionRequest: {
+            name?: string | null;
+            ordered?: boolean | null;
         };
         /**
          * @description Request body for updating an existing filter preset.
@@ -24297,6 +24472,378 @@ export interface operations {
             };
         };
     };
+    list_collections: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Collections */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionListResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_collection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCollectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionDto"];
+                };
+            };
+            /** @description Invalid name */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A collection with that name already exists */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_collection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Collection */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionDto"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_collection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_collection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateCollectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionDto"];
+                };
+            };
+            /** @description Invalid name */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Name already in use */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_collection_series: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Member series */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesDto"][];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reorder_collection_series: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReorderCollectionSeriesRequest"];
+            };
+        };
+        responses: {
+            /** @description Reordered */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    add_collection_series: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddSeriesToCollectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated collection */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionDto"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Collection or series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    remove_collection_series: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: string;
+                series_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed (or was not a member) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_collection_thumbnail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Redirect to the first member series thumbnail */
+            307: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No visible member series */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     list_duplicates: {
         parameters: {
             query?: never;
@@ -28571,6 +29118,35 @@ export interface operations {
             };
             /** @description Series not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_series_collections: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                series_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Collections containing the series */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionListResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

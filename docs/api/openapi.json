@@ -5510,6 +5510,461 @@
         ]
       }
     },
+    "/api/v1/collections": {
+      "get": {
+        "tags": [
+          "Collections"
+        ],
+        "summary": "List all collections.",
+        "operationId": "list_collections",
+        "responses": {
+          "200": {
+            "description": "Collections",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Collections"
+        ],
+        "summary": "Create a collection.",
+        "operationId": "create_collection",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCollectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid name"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "409": {
+            "description": "A collection with that name already exists"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/collections/{collection_id}": {
+      "get": {
+        "tags": [
+          "Collections"
+        ],
+        "summary": "Get a collection.",
+        "operationId": "get_collection",
+        "parameters": [
+          {
+            "name": "collection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Collection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Collections"
+        ],
+        "summary": "Delete a collection.",
+        "operationId": "delete_collection",
+        "parameters": [
+          {
+            "name": "collection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "Collections"
+        ],
+        "summary": "Update a collection (rename / toggle ordered).",
+        "operationId": "update_collection",
+        "parameters": [
+          {
+            "name": "collection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCollectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid name"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Name already in use"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/collections/{collection_id}/series": {
+      "get": {
+        "tags": [
+          "Collections"
+        ],
+        "summary": "Get the series in a collection (visibility-filtered, in stored order).",
+        "operationId": "get_collection_series",
+        "parameters": [
+          {
+            "name": "collection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Member series",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SeriesDto"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Collections"
+        ],
+        "summary": "Set the manual order of a collection's series.",
+        "operationId": "reorder_collection_series",
+        "parameters": [
+          {
+            "name": "collection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReorderCollectionSeriesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Reordered"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Collections"
+        ],
+        "summary": "Add one or more series to a collection.",
+        "operationId": "add_collection_series",
+        "parameters": [
+          {
+            "name": "collection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddSeriesToCollectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Updated collection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Collection or series not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/collections/{collection_id}/series/{series_id}": {
+      "delete": {
+        "tags": [
+          "Collections"
+        ],
+        "summary": "Remove a series from a collection.",
+        "operationId": "remove_collection_series",
+        "parameters": [
+          {
+            "name": "collection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "series_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Removed (or was not a member)"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/collections/{collection_id}/thumbnail": {
+      "get": {
+        "tags": [
+          "Collections"
+        ],
+        "summary": "Get a collection's thumbnail (the first visible member series' cover).",
+        "operationId": "get_collection_thumbnail",
+        "parameters": [
+          {
+            "name": "collection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "307": {
+            "description": "Redirect to the first member series thumbnail"
+          },
+          "404": {
+            "description": "No visible member series"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/duplicates": {
       "get": {
         "tags": [
@@ -11416,6 +11871,49 @@
         "security": [
           {
             "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/series/{series_id}/collections": {
+      "get": {
+        "tags": [
+          "Collections"
+        ],
+        "summary": "List the collections that contain a given series.",
+        "operationId": "get_series_collections",
+        "parameters": [
+          {
+            "name": "series_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Collections containing the series",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionListResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
           },
           {
             "api_key": []
@@ -19681,6 +20179,25 @@
           }
         }
       },
+      "AddSeriesToCollectionRequest": {
+        "type": "object",
+        "description": "Request to add one or more series to a collection.",
+        "required": [
+          "seriesIds"
+        ],
+        "properties": {
+          "seriesIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "example": [
+              "550e8400-e29b-41d4-a716-446655440001"
+            ]
+          }
+        }
+      },
       "AddWantToReadRequest": {
         "type": "object",
         "description": "Request to add an entry to the queue. Exactly one of `series_id` / `book_id`\nmust be provided.",
@@ -24016,6 +24533,70 @@
           }
         }
       },
+      "CollectionDto": {
+        "type": "object",
+        "description": "A collection of series.",
+        "required": [
+          "id",
+          "name",
+          "ordered",
+          "seriesCount",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "name": {
+            "type": "string",
+            "example": "Batman"
+          },
+          "ordered": {
+            "type": "boolean",
+            "description": "When true, members are kept in manual order; otherwise sorted by title.",
+            "example": false
+          },
+          "seriesCount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of member series visible to the requesting user.",
+            "example": 12,
+            "minimum": 0
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CollectionListResponse": {
+        "type": "object",
+        "description": "List of collections.",
+        "required": [
+          "items",
+          "total"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CollectionDto"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "example": 3,
+            "minimum": 0
+          }
+        }
+      },
       "ConfigFieldDto": {
         "type": "object",
         "description": "Configuration field definition for documenting plugin config options",
@@ -24291,6 +24872,24 @@
             "type": "string",
             "description": "URL to the external site",
             "example": "https://openlibrary.org/works/OL123W"
+          }
+        }
+      },
+      "CreateCollectionRequest": {
+        "type": "object",
+        "description": "Request to create a collection.",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Batman"
+          },
+          "ordered": {
+            "type": "boolean",
+            "description": "Defaults to `false` (members sorted by title).",
+            "example": false
           }
         }
       },
@@ -36527,6 +37126,26 @@
           }
         }
       },
+      "ReorderCollectionSeriesRequest": {
+        "type": "object",
+        "description": "Request to set the manual order of a collection's series. IDs not currently\nmembers are ignored; omitted members keep their existing position.",
+        "required": [
+          "seriesIds"
+        ],
+        "properties": {
+          "seriesIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "example": [
+              "550e8400-e29b-41d4-a716-446655440002",
+              "550e8400-e29b-41d4-a716-446655440001"
+            ]
+          }
+        }
+      },
       "ReplaceBookMetadataRequest": {
         "type": "object",
         "description": "PUT request for full replacement of book metadata\n\nAll metadata fields will be replaced with the values in this request.\nOmitting a field (or setting it to null) will clear that field.",
@@ -41708,6 +42327,24 @@
               "null"
             ],
             "description": "Whether to lock year"
+          }
+        }
+      },
+      "UpdateCollectionRequest": {
+        "type": "object",
+        "description": "Request to update a collection. Absent fields are left unchanged.",
+        "properties": {
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ordered": {
+            "type": [
+              "boolean",
+              "null"
+            ]
           }
         }
       },

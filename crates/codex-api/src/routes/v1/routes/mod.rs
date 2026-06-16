@@ -6,6 +6,7 @@
 mod admin;
 mod auth;
 mod books;
+mod collections;
 mod libraries;
 mod misc;
 mod observability;
@@ -47,6 +48,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .merge(releases::routes(state.clone()))
         .merge(observability::routes(state.clone()))
         .merge(want_to_read::routes(state.clone()))
+        .merge(collections::routes(state.clone()))
         // Apply state to all routes
         .with_state(state)
 }

@@ -252,7 +252,7 @@ async fn series_to_dto(
 /// model using a single batched query per related table, rather than the
 /// per-row fan-out the single-row helper does. Order of `series_list` is
 /// preserved in the output.
-async fn series_to_dtos_batched(
+pub(crate) async fn series_to_dtos_batched(
     db: &DatabaseConnection,
     series_list: Vec<series::Model>,
     user_id: Option<Uuid>,
