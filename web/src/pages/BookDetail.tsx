@@ -59,6 +59,7 @@ import { BookMetadataEditModal } from "@/components/books/BookMetadataEditModal"
 import { ExternalIdEditModal, MetadataLabel } from "@/components/common";
 import { MetadataApplyFlow } from "@/components/metadata";
 import { DownloadButton } from "@/components/offline/DownloadButton";
+import { AddToReadListButton } from "@/components/readlists/AddToReadListButton";
 import {
   CustomMetadataDisplay,
   ExternalLinks,
@@ -117,6 +118,7 @@ export function BookDetail() {
   // Permission checks
   const { hasPermission } = usePermissions();
   const canEditBook = hasPermission(PERMISSIONS.BOOKS_WRITE);
+  const canManageReadLists = hasPermission(PERMISSIONS.READLISTS_WRITE);
 
   // Get cover update timestamp for cache-busting (forces image reload when cover changes)
   const coverTimestamp = useCoverUpdatesStore((state) =>
@@ -535,6 +537,9 @@ export function BookDetail() {
                     id={book.id}
                     wantToRead={book.wantToRead}
                   />
+                  {canManageReadLists && (
+                    <AddToReadListButton bookId={book.id} />
+                  )}
                   <Menu shadow="md" width={200} position="bottom-end">
                     <Menu.Target>
                       <ActionIcon variant="subtle" size="lg">
