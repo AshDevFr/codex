@@ -29,6 +29,7 @@ import {
   IconHome,
   IconLayoutGrid,
   IconLink,
+  IconList,
   IconLogout,
   IconPhoto,
   IconPlugConnected,
@@ -412,6 +413,14 @@ export function Sidebar({ onNavigate }: SidebarProps = {}) {
               label="Collections"
               leftSection={<IconLayoutGrid size={20} stroke={2} />}
               active={currentPath.startsWith("/collections")}
+              onClick={onNavigate}
+            />
+            <NavLink
+              component={Link}
+              to="/readlists"
+              label="Read Lists"
+              leftSection={<IconList size={20} stroke={2} />}
+              active={currentPath.startsWith("/readlists")}
               onClick={onNavigate}
             />
             {hasRecommendationPlugin && (

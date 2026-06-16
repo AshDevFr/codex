@@ -22,6 +22,8 @@ import { LibraryJobsPage } from "@/pages/LibraryJobs";
 import { Login } from "@/pages/Login";
 import { OidcComplete } from "@/pages/OidcComplete";
 import { Reader } from "@/pages/Reader";
+import { ReadListDetail } from "@/pages/ReadListDetail";
+import { ReadLists } from "@/pages/ReadLists";
 import { Recommendations } from "@/pages/Recommendations";
 import { Register } from "@/pages/Register";
 import { ReleasesInbox } from "@/pages/ReleasesInbox";
@@ -233,6 +235,28 @@ function App() {
             <ProtectedRoute>
               <AppLayout>
                 <CollectionDetail />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/readlists"
+          element={
+            <ProtectedRoute>
+              <AppLayout>
+                <ReadLists />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/readlists/:readListId"
+          element={
+            <ProtectedRoute>
+              <AppLayout>
+                <ReadListDetail />
               </AppLayout>
             </ProtectedRoute>
           }
