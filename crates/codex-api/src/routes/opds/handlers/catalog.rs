@@ -12,8 +12,9 @@ use axum::{
 };
 use chrono::Utc;
 use codex_db::repositories::{
-    BookMetadataRepository, BookRepository, LibraryRepository, ReadProgressRepository,
-    SeriesMetadataRepository, SeriesRepository, SettingsRepository,
+    BookMetadataRepository, BookRepository, CollectionRepository, LibraryRepository,
+    ReadListRepository, ReadProgressRepository, SeriesMetadataRepository, SeriesRepository,
+    SettingsRepository,
 };
 use serde::Deserialize;
 use std::sync::Arc;
@@ -130,6 +131,22 @@ pub async fn root_catalog(
             .add_link(OpdsLink::subsection_link(
                 format!("{}/recent", base_url),
                 "Recent Additions",
+            )),
+    )
+    .add_entry(
+        OpdsEntry::new("urn:uuid:codex-collections", "Collections", now)
+            .with_content("text", "Browse collections of series")
+            .add_link(OpdsLink::subsection_link(
+                format!("{}/collections", base_url),
+                "Collections",
+            )),
+    )
+    .add_entry(
+        OpdsEntry::new("urn:uuid:codex-readlists", "Read Lists", now)
+            .with_content("text", "Browse ordered reading lists")
+            .add_link(OpdsLink::subsection_link(
+                format!("{}/readlists", base_url),
+                "Read Lists",
             )),
     );
 
@@ -335,6 +352,343 @@ pub async fn library_series(
             series.id
         )));
 
+        feed = feed.add_entry(entry);
+    }
+
+    let xml = feed
+        .to_xml()
+        .map_err(|e| ApiError::Internal(format!("Failed to serialize OPDS feed: {}", e)))?;
+
+    Ok(OpdsResponse(xml))
+}
+
+/// List collections (navigation feed)
+#[utoipa::path(
+    get,
+    path = "/opds/collections",
+    responses(
+        (status = 200, description = "OPDS collections feed", content_type = "application/atom+xml"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(("jwt_bearer" = []), ("api_key" = [])),
+    tag = "OPDS"
+)]
+pub async fn list_collections(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+) -> Result<OpdsResponse, ApiError> {
+    require_permission!(auth, Permission::SeriesRead)?;
+
+    let now = Utc::now();
+    let base_url = "/opds";
+    let app_name = SettingsRepository::get_app_name(&state.db).await;
+
+    let collections = CollectionRepository::list_all(&state.db)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch collections: {}", e)))?;
+
+    let mut feed = OpdsFeed::with_author(
+        "urn:uuid:codex-collections",
+        "Collections",
+        now,
+        false,
+        &app_name,
+    )
+    .add_link(OpdsLink::self_link(format!("{}/collections", base_url)))
+    .add_link(OpdsLink::start_link(base_url.to_string()))
+    .add_link(OpdsLink::up_link(base_url.to_string(), "Home"));
+
+    for collection in collections {
+        let entry = OpdsEntry::new(
+            format!("urn:uuid:collection-{}", collection.id),
+            collection.name.clone(),
+            collection.updated_at,
+        )
+        .with_content("text", format!("Browse series in {}", collection.name))
+        .add_link(OpdsLink::subsection_link(
+            format!("{}/collections/{}", base_url, collection.id),
+            collection.name.clone(),
+        ))
+        .add_link(OpdsLink::thumbnail_link(format!(
+            "/api/v1/collections/{}/thumbnail",
+            collection.id
+        )))
+        .add_link(OpdsLink::cover_link(format!(
+            "/api/v1/collections/{}/thumbnail",
+            collection.id
+        )));
+        feed = feed.add_entry(entry);
+    }
+
+    let xml = feed
+        .to_xml()
+        .map_err(|e| ApiError::Internal(format!("Failed to serialize OPDS feed: {}", e)))?;
+
+    Ok(OpdsResponse(xml))
+}
+
+/// List the series in a collection (navigation feed)
+#[utoipa::path(
+    get,
+    path = "/opds/collections/{collection_id}",
+    params(("collection_id" = Uuid, Path, description = "Collection ID")),
+    responses(
+        (status = 200, description = "OPDS collection series feed", content_type = "application/atom+xml"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Collection not found"),
+    ),
+    security(("jwt_bearer" = []), ("api_key" = [])),
+    tag = "OPDS"
+)]
+pub async fn collection_series(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(collection_id): Path<Uuid>,
+) -> Result<OpdsResponse, ApiError> {
+    require_permission!(auth, Permission::SeriesRead)?;
+
+    let now = Utc::now();
+    let base_url = "/opds";
+    let app_name = SettingsRepository::get_app_name(&state.db).await;
+
+    let collection = CollectionRepository::get_by_id(&state.db, collection_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch collection: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Collection not found".to_string()))?;
+
+    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+    let visibility = content_filter.to_visibility();
+
+    let series_list =
+        CollectionRepository::get_series(&state.db, collection_id, visibility.as_ref())
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to fetch collection series: {}", e)))?;
+
+    let mut feed = OpdsFeed::with_author(
+        format!("urn:uuid:collection-{}", collection_id),
+        format!("{} - Series", collection.name),
+        now,
+        false,
+        &app_name,
+    )
+    .add_link(OpdsLink::self_link(format!(
+        "{}/collections/{}",
+        base_url, collection_id
+    )))
+    .add_link(OpdsLink::start_link(base_url.to_string()))
+    .add_link(OpdsLink::up_link(
+        format!("{}/collections", base_url),
+        "Collections",
+    ));
+
+    for series in series_list {
+        let series_name = SeriesMetadataRepository::get_by_series_id(&state.db, series.id)
+            .await
+            .ok()
+            .flatten()
+            .map(|m| m.title)
+            .unwrap_or_else(|| "Unknown Series".to_string());
+
+        let entry = OpdsEntry::new(
+            format!("urn:uuid:series-{}", series.id),
+            series_name.clone(),
+            series.updated_at,
+        )
+        .add_link(OpdsLink::subsection_link(
+            format!("{}/series/{}", base_url, series.id),
+            series_name.clone(),
+        ))
+        .add_link(OpdsLink::thumbnail_link(format!(
+            "/api/v1/series/{}/thumbnail",
+            series.id
+        )))
+        .add_link(OpdsLink::cover_link(format!(
+            "/api/v1/series/{}/thumbnail",
+            series.id
+        )));
+        feed = feed.add_entry(entry);
+    }
+
+    let xml = feed
+        .to_xml()
+        .map_err(|e| ApiError::Internal(format!("Failed to serialize OPDS feed: {}", e)))?;
+
+    Ok(OpdsResponse(xml))
+}
+
+/// List read lists (navigation feed)
+#[utoipa::path(
+    get,
+    path = "/opds/readlists",
+    responses(
+        (status = 200, description = "OPDS read lists feed", content_type = "application/atom+xml"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(("jwt_bearer" = []), ("api_key" = [])),
+    tag = "OPDS"
+)]
+pub async fn list_readlists(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+) -> Result<OpdsResponse, ApiError> {
+    require_permission!(auth, Permission::BooksRead)?;
+
+    let now = Utc::now();
+    let base_url = "/opds";
+    let app_name = SettingsRepository::get_app_name(&state.db).await;
+
+    let read_lists = ReadListRepository::list_all(&state.db)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch read lists: {}", e)))?;
+
+    let mut feed = OpdsFeed::with_author(
+        "urn:uuid:codex-readlists",
+        "Read Lists",
+        now,
+        false,
+        &app_name,
+    )
+    .add_link(OpdsLink::self_link(format!("{}/readlists", base_url)))
+    .add_link(OpdsLink::start_link(base_url.to_string()))
+    .add_link(OpdsLink::up_link(base_url.to_string(), "Home"));
+
+    for read_list in read_lists {
+        let entry = OpdsEntry::new(
+            format!("urn:uuid:readlist-{}", read_list.id),
+            read_list.name.clone(),
+            read_list.updated_at,
+        )
+        .with_content(
+            "text",
+            read_list
+                .summary
+                .clone()
+                .unwrap_or_else(|| format!("Books in {}", read_list.name)),
+        )
+        .add_link(OpdsLink::subsection_link(
+            format!("{}/readlists/{}", base_url, read_list.id),
+            read_list.name.clone(),
+        ))
+        .add_link(OpdsLink::thumbnail_link(format!(
+            "/api/v1/readlists/{}/thumbnail",
+            read_list.id
+        )))
+        .add_link(OpdsLink::cover_link(format!(
+            "/api/v1/readlists/{}/thumbnail",
+            read_list.id
+        )));
+        feed = feed.add_entry(entry);
+    }
+
+    let xml = feed
+        .to_xml()
+        .map_err(|e| ApiError::Internal(format!("Failed to serialize OPDS feed: {}", e)))?;
+
+    Ok(OpdsResponse(xml))
+}
+
+/// List the books in a read list (acquisition feed)
+#[utoipa::path(
+    get,
+    path = "/opds/readlists/{read_list_id}",
+    params(("read_list_id" = Uuid, Path, description = "Read list ID")),
+    responses(
+        (status = 200, description = "OPDS read list books feed", content_type = "application/atom+xml"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Read list not found"),
+    ),
+    security(("jwt_bearer" = []), ("api_key" = [])),
+    tag = "OPDS"
+)]
+pub async fn readlist_books(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(read_list_id): Path<Uuid>,
+) -> Result<OpdsResponse, ApiError> {
+    require_permission!(auth, Permission::BooksRead)?;
+
+    let now = Utc::now();
+    let base_url = "/opds";
+    let app_name = SettingsRepository::get_app_name(&state.db).await;
+
+    let read_list = ReadListRepository::get_by_id(&state.db, read_list_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch read list: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Read list not found".to_string()))?;
+
+    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+    let visibility = content_filter.to_visibility();
+
+    let books = ReadListRepository::get_books(&state.db, read_list_id, visibility.as_ref())
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch read list books: {}", e)))?;
+
+    let mut feed = OpdsFeed::with_author(
+        format!("urn:uuid:readlist-{}", read_list_id),
+        format!("{} - Books", read_list.name),
+        now,
+        true, // Include PSE namespace
+        &app_name,
+    )
+    .add_link(OpdsLink::self_link(format!(
+        "{}/readlists/{}",
+        base_url, read_list_id
+    )))
+    .add_link(OpdsLink::start_link(base_url.to_string()))
+    .add_link(OpdsLink::up_link(
+        format!("{}/readlists", base_url),
+        "Read Lists",
+    ));
+
+    for book in books {
+        let title = BookMetadataRepository::get_by_book_id(&state.db, book.id)
+            .await
+            .ok()
+            .flatten()
+            .and_then(|m| m.title)
+            .unwrap_or_else(|| "Untitled".to_string());
+
+        let mime_type = match book.format.as_str() {
+            "cbz" | "zip" => "application/zip",
+            "cbr" | "rar" => "application/x-rar-compressed",
+            "epub" => "application/epub+zip",
+            "pdf" => "application/pdf",
+            _ => "application/octet-stream",
+        };
+
+        let last_read =
+            ReadProgressRepository::get_by_user_and_book(&state.db, auth.user_id, book.id)
+                .await
+                .ok()
+                .flatten()
+                .map(|progress| progress.current_page as u32);
+
+        let entry = OpdsEntry::new(
+            format!("urn:uuid:book-{}", book.id),
+            title.clone(),
+            book.updated_at,
+        )
+        .add_link(OpdsLink::acquisition_link(
+            format!("/api/v1/books/{}/file", book.id),
+            mime_type,
+        ))
+        .add_link(OpdsLink::pse_stream_link(
+            format!("{}/books/{}/pages", base_url, book.id),
+            book.page_count as u32,
+            last_read,
+        ))
+        .add_link(OpdsLink::thumbnail_link(format!(
+            "/api/v1/books/{}/thumbnail",
+            book.id
+        )))
+        .add_link(OpdsLink::cover_link(format!(
+            "/api/v1/books/{}/thumbnail",
+            book.id
+        )));
         feed = feed.add_entry(entry);
     }
 

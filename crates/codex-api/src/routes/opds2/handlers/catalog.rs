@@ -16,8 +16,9 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use codex_db::repositories::{
-    BookMetadataRepository, BookRepository, LibraryRepository, ReadProgressRepository,
-    SeriesMetadataRepository, SeriesRepository, SettingsRepository,
+    BookMetadataRepository, BookRepository, CollectionRepository, LibraryRepository,
+    ReadListRepository, ReadProgressRepository, SeriesMetadataRepository, SeriesRepository,
+    SettingsRepository,
 };
 use std::sync::Arc;
 use uuid::Uuid;
@@ -78,6 +79,8 @@ pub async fn root(
         vec![
             Opds2Link::navigation_link(format!("{}/libraries", base_url), "All Libraries"),
             Opds2Link::new_link(format!("{}/recent", base_url), "Recent Additions"),
+            Opds2Link::navigation_link(format!("{}/collections", base_url), "Collections"),
+            Opds2Link::navigation_link(format!("{}/readlists", base_url), "Read Lists"),
         ],
     )
     .with_subtitle("Digital library server for comics, manga, and ebooks");
@@ -490,6 +493,253 @@ pub async fn recent(
         publications,
     )
     .with_pagination(total, pagination.page_size as i32, pagination.page as i32);
+
+    Ok(Opds2Response(feed))
+}
+
+/// List collections (OPDS 2.0 navigation feed)
+#[utoipa::path(
+    get,
+    path = "/opds/v2/collections",
+    responses(
+        (status = 200, description = "OPDS 2.0 collections feed", content_type = "application/opds+json", body = Opds2Feed),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(("jwt_bearer" = []), ("api_key" = [])),
+    tag = "OPDS 2.0"
+)]
+pub async fn list_collections(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+) -> Result<Opds2Response, ApiError> {
+    require_permission!(auth, Permission::SeriesRead)?;
+    let base_url = "/opds/v2";
+
+    let collections = CollectionRepository::list_all(&state.db)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch collections: {}", e)))?;
+
+    let nav_links: Vec<Opds2Link> = collections
+        .iter()
+        .map(|c| {
+            Opds2Link::navigation_link(format!("{}/collections/{}", base_url, c.id), c.name.clone())
+        })
+        .collect();
+
+    let feed = Opds2Feed::navigation(
+        "Collections",
+        vec![
+            Opds2Link::self_link(format!("{}/collections", base_url)),
+            Opds2Link::start_link(base_url),
+            Opds2Link::up_link(base_url, "Home"),
+        ],
+        nav_links,
+    );
+
+    Ok(Opds2Response(feed))
+}
+
+/// List the series in a collection (OPDS 2.0 navigation feed)
+#[utoipa::path(
+    get,
+    path = "/opds/v2/collections/{collection_id}",
+    params(("collection_id" = Uuid, Path, description = "Collection ID")),
+    responses(
+        (status = 200, description = "OPDS 2.0 collection series feed", content_type = "application/opds+json", body = Opds2Feed),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Collection not found"),
+    ),
+    security(("jwt_bearer" = []), ("api_key" = [])),
+    tag = "OPDS 2.0"
+)]
+pub async fn collection_series(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(collection_id): Path<Uuid>,
+) -> Result<Opds2Response, ApiError> {
+    require_permission!(auth, Permission::SeriesRead)?;
+    let base_url = "/opds/v2";
+
+    let collection = CollectionRepository::get_by_id(&state.db, collection_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch collection: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Collection not found".to_string()))?;
+
+    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+    let visibility = content_filter.to_visibility();
+
+    let series_list =
+        CollectionRepository::get_series(&state.db, collection_id, visibility.as_ref())
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to fetch collection series: {}", e)))?;
+
+    let mut nav_links = Vec::with_capacity(series_list.len());
+    for series in &series_list {
+        let series_name = SeriesMetadataRepository::get_by_series_id(&state.db, series.id)
+            .await
+            .ok()
+            .flatten()
+            .map(|m| m.title)
+            .unwrap_or_else(|| "Unknown Series".to_string());
+        nav_links.push(Opds2Link::navigation_link(
+            format!("{}/series/{}", base_url, series.id),
+            series_name,
+        ));
+    }
+
+    let feed = Opds2Feed::navigation(
+        format!("{} - Series", collection.name),
+        vec![
+            Opds2Link::self_link(format!("{}/collections/{}", base_url, collection_id)),
+            Opds2Link::start_link(base_url),
+            Opds2Link::up_link(format!("{}/collections", base_url), "Collections"),
+        ],
+        nav_links,
+    );
+
+    Ok(Opds2Response(feed))
+}
+
+/// List read lists (OPDS 2.0 navigation feed)
+#[utoipa::path(
+    get,
+    path = "/opds/v2/readlists",
+    responses(
+        (status = 200, description = "OPDS 2.0 read lists feed", content_type = "application/opds+json", body = Opds2Feed),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(("jwt_bearer" = []), ("api_key" = [])),
+    tag = "OPDS 2.0"
+)]
+pub async fn list_readlists(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+) -> Result<Opds2Response, ApiError> {
+    require_permission!(auth, Permission::BooksRead)?;
+    let base_url = "/opds/v2";
+
+    let read_lists = ReadListRepository::list_all(&state.db)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch read lists: {}", e)))?;
+
+    let nav_links: Vec<Opds2Link> = read_lists
+        .iter()
+        .map(|r| {
+            Opds2Link::navigation_link(format!("{}/readlists/{}", base_url, r.id), r.name.clone())
+        })
+        .collect();
+
+    let feed = Opds2Feed::navigation(
+        "Read Lists",
+        vec![
+            Opds2Link::self_link(format!("{}/readlists", base_url)),
+            Opds2Link::start_link(base_url),
+            Opds2Link::up_link(base_url, "Home"),
+        ],
+        nav_links,
+    );
+
+    Ok(Opds2Response(feed))
+}
+
+/// List the books in a read list (OPDS 2.0 publications feed)
+#[utoipa::path(
+    get,
+    path = "/opds/v2/readlists/{read_list_id}",
+    params(("read_list_id" = Uuid, Path, description = "Read list ID")),
+    responses(
+        (status = 200, description = "OPDS 2.0 read list books feed", content_type = "application/opds+json", body = Opds2Feed),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Read list not found"),
+    ),
+    security(("jwt_bearer" = []), ("api_key" = [])),
+    tag = "OPDS 2.0"
+)]
+pub async fn readlist_books(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(read_list_id): Path<Uuid>,
+) -> Result<Opds2Response, ApiError> {
+    require_permission!(auth, Permission::BooksRead)?;
+    let base_url = "/opds/v2";
+
+    let read_list = ReadListRepository::get_by_id(&state.db, read_list_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch read list: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Read list not found".to_string()))?;
+
+    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+    let visibility = content_filter.to_visibility();
+
+    let books = ReadListRepository::get_books(&state.db, read_list_id, visibility.as_ref())
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch read list books: {}", e)))?;
+
+    let user_id = auth.user_id;
+    let mut publications: Vec<Publication> = Vec::with_capacity(books.len());
+    for book in &books {
+        let book_meta = BookMetadataRepository::get_by_book_id(&state.db, book.id)
+            .await
+            .ok()
+            .flatten();
+        let title = book_meta
+            .as_ref()
+            .and_then(|m| m.title.clone())
+            .unwrap_or_else(|| "Untitled".to_string());
+
+        let mime_type = match book.format.as_str() {
+            "cbz" | "zip" => "application/zip",
+            "cbr" | "rar" => "application/x-rar-compressed",
+            "epub" => "application/epub+zip",
+            "pdf" => "application/pdf",
+            _ => "application/octet-stream",
+        };
+
+        let metadata = PublicationMetadata::new(title)
+            .with_identifier(format!("urn:uuid:{}", book.id))
+            .with_modified(book.updated_at)
+            .with_page_count(book.page_count);
+
+        let mut publication = Publication::new(metadata)
+            .add_link(Opds2Link::acquisition_link(
+                format!("/api/v1/books/{}/file", book.id),
+                mime_type,
+            ))
+            .add_image(ImageLink::thumbnail(format!(
+                "/api/v1/books/{}/thumbnail",
+                book.id
+            )));
+
+        if let Ok(Some(progress)) =
+            ReadProgressRepository::get_by_user_and_book(&state.db, user_id, book.id).await
+        {
+            publication = publication.with_reading_progress(ReadingProgress::new(
+                progress.current_page,
+                book.page_count,
+                progress.completed,
+                Some(progress.updated_at),
+            ));
+        }
+
+        publications.push(publication);
+    }
+
+    let total = publications.len() as i64;
+
+    let feed = Opds2Feed::publications(
+        format!("{} - Books", read_list.name),
+        vec![
+            Opds2Link::self_link(format!("{}/readlists/{}", base_url, read_list_id)),
+            Opds2Link::start_link(base_url),
+            Opds2Link::up_link(format!("{}/readlists", base_url), "Read Lists"),
+        ],
+        publications,
+    )
+    .with_pagination(total, total as i32, 1);
 
     Ok(Opds2Response(feed))
 }

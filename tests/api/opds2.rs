@@ -948,3 +948,133 @@ async fn create_test_book_with_metadata(
 
     created
 }
+
+// ============================================================================
+// Collections / Read Lists feeds (OPDS 2.0)
+// ============================================================================
+
+async fn opds2_token(
+    db: &sea_orm::DatabaseConnection,
+    state: &codex::api::extractors::AuthState,
+) -> String {
+    let password_hash = password::hash_password("password").unwrap();
+    let user = create_test_user("opds2cl", "opds2cl@example.com", &password_hash, true);
+    let created = UserRepository::create(db, &user).await.unwrap();
+    state
+        .jwt_service
+        .generate_token(created.id, created.username.clone(), created.get_role())
+        .unwrap()
+}
+
+fn opds2_get(uri: &str, token: &str) -> hyper::Request<String> {
+    hyper::Request::builder()
+        .method("GET")
+        .uri(uri)
+        .header("Authorization", format!("Bearer {}", token))
+        .body(String::new())
+        .unwrap()
+}
+
+#[tokio::test]
+async fn test_opds2_collections_feed() {
+    use codex::db::repositories::CollectionRepository;
+    let (db, _temp_dir) = setup_test_db().await;
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Batman", None)
+        .await
+        .unwrap();
+    let coll = CollectionRepository::create(&db, "Batman Collection", true)
+        .await
+        .unwrap();
+    CollectionRepository::add_series(&db, coll.id, series.id)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db).await;
+    let token = opds2_token(&state.db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Collections navigation feed.
+    let (status, feed): (StatusCode, Option<Opds2Feed>) =
+        make_json_request(app.clone(), opds2_get("/opds/v2/collections", &token)).await;
+    assert_eq!(status, StatusCode::OK);
+    let nav = feed.unwrap().navigation.unwrap();
+    let link = nav
+        .iter()
+        .find(|l| l.title == Some("Batman Collection".to_string()))
+        .expect("collection nav link");
+    assert!(
+        link.href
+            .contains(&format!("/opds/v2/collections/{}", coll.id))
+    );
+
+    // Collection detail navigation feed lists the member series.
+    let (status, feed): (StatusCode, Option<Opds2Feed>) = make_json_request(
+        app,
+        opds2_get(&format!("/opds/v2/collections/{}", coll.id), &token),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let nav = feed.unwrap().navigation.unwrap();
+    assert!(
+        nav.iter()
+            .any(|l| l.href.contains(&format!("/opds/v2/series/{}", series.id)))
+    );
+}
+
+#[tokio::test]
+async fn test_opds2_readlists_feed() {
+    use codex::db::repositories::ReadListRepository;
+    let (db, _temp_dir) = setup_test_db().await;
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Spider-Man", None)
+        .await
+        .unwrap();
+    let book = create_test_book_with_metadata(
+        &db,
+        series.id,
+        library.id,
+        "Civil War #1",
+        "/cw1.cbz",
+        1,
+        20,
+    )
+    .await;
+    let rl = ReadListRepository::create(&db, "Civil War", Some("Crossover"), true)
+        .await
+        .unwrap();
+    ReadListRepository::add_book(&db, rl.id, book.id)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db).await;
+    let token = opds2_token(&state.db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Read lists navigation feed.
+    let (status, feed): (StatusCode, Option<Opds2Feed>) =
+        make_json_request(app.clone(), opds2_get("/opds/v2/readlists", &token)).await;
+    assert_eq!(status, StatusCode::OK);
+    let nav = feed.unwrap().navigation.unwrap();
+    assert!(nav.iter().any(|l| l.title == Some("Civil War".to_string())));
+
+    // Read list detail is a publications feed with the member book.
+    let (status, feed): (StatusCode, Option<Opds2Feed>) = make_json_request(
+        app,
+        opds2_get(&format!("/opds/v2/readlists/{}", rl.id), &token),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let publications = feed.unwrap().publications.unwrap();
+    assert_eq!(publications.len(), 1);
+    assert!(
+        publications[0]
+            .links
+            .iter()
+            .any(|l| l.href.contains(&format!("/api/v1/books/{}/file", book.id)))
+    );
+}
