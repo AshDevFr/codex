@@ -1,10 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createBook,
   createReadProgress,
   createSeries,
 } from "@/mocks/data/factories";
+import { useAuthStore } from "@/store/authStore";
 import { renderWithProviders, screen, userEvent } from "@/test/utils";
+import type { User } from "@/types";
 import { MediaCard } from "./MediaCard";
 
 const mockNavigate = vi.fn();
@@ -35,6 +37,30 @@ vi.mock("@/api/series", () => ({
     markAsUnread: vi.fn(),
   },
 }));
+
+vi.mock("@/api/collections", () => ({
+  collectionsApi: {
+    list: vi.fn().mockResolvedValue([{ id: "col-1", name: "My Collection" }]),
+    forSeries: vi.fn().mockResolvedValue([]),
+    addSeries: vi.fn(),
+    removeSeries: vi.fn(),
+  },
+}));
+
+vi.mock("@/api/readlists", () => ({
+  readListsApi: {
+    list: vi.fn().mockResolvedValue([{ id: "rl-1", name: "My Read List" }]),
+    forBook: vi.fn().mockResolvedValue([]),
+    addBooks: vi.fn(),
+    removeBook: vi.fn(),
+  },
+}));
+
+const adminUser = {
+  id: "u1",
+  role: "admin",
+  permissions: [],
+} as unknown as User;
 
 describe("MediaCard", () => {
   describe("book display", () => {
@@ -521,6 +547,52 @@ describe("MediaCard", () => {
 
       const card = document.querySelector(".mantine-Card-root");
       expect(card).toHaveClass("media-card--disabled");
+    });
+  });
+
+  describe("collection / read list membership", () => {
+    afterEach(() => {
+      // Clear the admin user primed in these tests so other suites keep the
+      // unauthenticated default (which hides the management menu entries).
+      useAuthStore.setState({ user: null });
+    });
+
+    it("offers 'Add to collection' on a series card for users with collections-write", async () => {
+      const user = userEvent.setup();
+      useAuthStore.setState({ user: adminUser });
+      const series = createSeries({ unreadCount: 2 });
+
+      renderWithProviders(<MediaCard type="series" data={series} />);
+
+      await user.click(screen.getByRole("button", { name: "Card actions" }));
+
+      expect(await screen.findByText("Add to collection")).toBeInTheDocument();
+    });
+
+    it("offers 'Add to read list' on a book card for users with readlists-write", async () => {
+      const user = userEvent.setup();
+      useAuthStore.setState({ user: adminUser });
+      const book = createBook();
+
+      renderWithProviders(<MediaCard type="book" data={book} />);
+
+      await user.click(screen.getByRole("button", { name: "Card actions" }));
+
+      expect(await screen.findByText("Add to read list")).toBeInTheDocument();
+    });
+
+    it("hides membership entries when the user lacks write permission", async () => {
+      const user = userEvent.setup();
+      // No user primed -> usePermissions denies everything.
+      const series = createSeries({ unreadCount: 2 });
+
+      renderWithProviders(<MediaCard type="series" data={series} />);
+
+      await user.click(screen.getByRole("button", { name: "Card actions" }));
+
+      // The reading action still renders, but the membership submenu does not.
+      expect(await screen.findByText("Mark as Read")).toBeInTheDocument();
+      expect(screen.queryByText("Add to collection")).not.toBeInTheDocument();
     });
   });
 });
