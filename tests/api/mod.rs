@@ -12,6 +12,7 @@ mod auth;
 mod books;
 mod bulk_metadata;
 mod bulk_operations;
+mod collections;
 mod covers;
 mod current_user;
 mod duplicates;

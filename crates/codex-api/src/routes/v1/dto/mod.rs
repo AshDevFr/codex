@@ -8,6 +8,7 @@ pub mod auth;
 pub mod book;
 pub mod bulk_metadata;
 pub mod cleanup;
+pub mod collection;
 pub mod common;
 pub mod duplicates;
 pub mod filter;
@@ -46,6 +47,7 @@ pub use book::*;
 #[allow(unused_imports)]
 pub use bulk_metadata::*;
 pub use cleanup::*;
+pub use collection::*;
 pub use common::*;
 pub use duplicates::*;
 pub use filter::*;
