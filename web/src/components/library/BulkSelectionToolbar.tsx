@@ -30,8 +30,14 @@ import { booksApi } from "@/api/books";
 import { pluginActionsApi, pluginsApi } from "@/api/plugins";
 import { seriesApi } from "@/api/series";
 import { fetchTaskById, subscribeToTaskCompletion } from "@/api/tasks";
+import { BulkAddToCollectionSub } from "@/components/collections/BulkAddToCollectionSub";
+import { CollectionFormModal } from "@/components/collections/CollectionFormModal";
 import { BulkMetadataEditModal } from "@/components/library/BulkMetadataEditModal";
+import { BulkAddToReadListSub } from "@/components/readlists/BulkAddToReadListSub";
+import { ReadListFormModal } from "@/components/readlists/ReadListFormModal";
+import { useAddSeriesToCollection } from "@/hooks/useCollections";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useAddBooksToReadList } from "@/hooks/useReadLists";
 import { useReleaseTrackingApplicability } from "@/hooks/useReleaseTrackingApplicability";
 import {
   selectPageItems,
@@ -59,6 +65,8 @@ export function BulkSelectionToolbar() {
   const canWriteBooks = hasPermission(PERMISSIONS.BOOKS_WRITE);
   const canWriteSeries = hasPermission(PERMISSIONS.SERIES_WRITE);
   const canWriteTasks = hasPermission(PERMISSIONS.TASKS_WRITE);
+  const canManageCollections = hasPermission(PERMISSIONS.COLLECTIONS_WRITE);
+  const canManageReadLists = hasPermission(PERMISSIONS.READLISTS_WRITE);
 
   // Selection state
   const count = useBulkSelectionStore(selectSelectionCount);
@@ -539,6 +547,16 @@ export function BulkSelectionToolbar() {
   // Bulk metadata edit modal state
   const [metadataEditOpened, setMetadataEditOpened] = useState(false);
 
+  // Inline-create modal state for the membership submenus. Rendered outside the
+  // "More" menu so they survive the menu closing on item click.
+  const [createCollectionOpen, setCreateCollectionOpen] = useState(false);
+  const [createReadListOpen, setCreateReadListOpen] = useState(false);
+
+  // Membership mutations. The shared hooks accept an array of ids, so the same
+  // call adds every selected item at once.
+  const addSeriesToCollection = useAddSeriesToCollection();
+  const addBooksToReadList = useAddBooksToReadList();
+
   // Keyboard shortcut: Escape to clear selection
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -580,8 +598,10 @@ export function BulkSelectionToolbar() {
     bulkSetTrackedMutation.isPending;
 
   // Determine if the "More" menu should be shown based on permissions
-  const showBooksMoreMenu = isBooks && (canWriteBooks || canWriteTasks);
-  const showSeriesMoreMenu = !isBooks && (canWriteSeries || canWriteTasks);
+  const showBooksMoreMenu =
+    isBooks && (canWriteBooks || canWriteTasks || canManageReadLists);
+  const showSeriesMoreMenu =
+    !isBooks && (canWriteSeries || canWriteTasks || canManageCollections);
 
   // Get available plugin actions based on selection type
   const pluginActions = isBooks
@@ -678,6 +698,41 @@ export function BulkSelectionToolbar() {
 
   const handleResetMetadata = () => {
     bulkResetMetadataMutation.mutate(selectedIds);
+  };
+
+  // Add every selected series to a collection (existing or freshly created),
+  // then clear the selection like the other bulk actions.
+  const addSelectedToCollection = (collectionId: string) => {
+    addSeriesToCollection.mutate(
+      { collectionId, seriesIds: selectedIds },
+      {
+        onSuccess: () => {
+          notifications.show({
+            title: "Added to collection",
+            message: `Added ${count} series to the collection.`,
+            color: "green",
+          });
+          clearSelection();
+        },
+      },
+    );
+  };
+
+  // Add every selected book to a read list (existing or freshly created).
+  const addSelectedToReadList = (readListId: string) => {
+    addBooksToReadList.mutate(
+      { readListId, bookIds: selectedIds },
+      {
+        onSuccess: () => {
+          notifications.show({
+            title: "Added to read list",
+            message: `Added ${count} books to the read list.`,
+            color: "green",
+          });
+          clearSelection();
+        },
+      },
+    );
   };
 
   const itemLabel = isBooks
@@ -831,6 +886,18 @@ export function BulkSelectionToolbar() {
                   </Menu.Item>
                 </>
               )}
+
+              {canManageReadLists && (
+                <>
+                  {(canWriteBooks || canWriteTasks) && <Menu.Divider />}
+                  <Menu.Label>Read Lists</Menu.Label>
+                  <BulkAddToReadListSub
+                    onSelect={addSelectedToReadList}
+                    onRequestCreate={() => setCreateReadListOpen(true)}
+                    disabled={isAnyPending}
+                  />
+                </>
+              )}
             </Menu.Dropdown>
           </Menu>
         )}
@@ -967,6 +1034,18 @@ export function BulkSelectionToolbar() {
                   </Menu.Item>
                 </>
               )}
+
+              {canManageCollections && (
+                <>
+                  {(canWriteSeries || canWriteTasks) && <Menu.Divider />}
+                  <Menu.Label>Collections</Menu.Label>
+                  <BulkAddToCollectionSub
+                    onSelect={addSelectedToCollection}
+                    onRequestCreate={() => setCreateCollectionOpen(true)}
+                    disabled={isAnyPending}
+                  />
+                </>
+              )}
             </Menu.Dropdown>
           </Menu>
         )}
@@ -1050,6 +1129,25 @@ export function BulkSelectionToolbar() {
           clearSelection();
         }}
       />
+
+      {/* Inline-create modals for the bulk membership submenus. A freshly
+          created collection / read list immediately receives all selected
+          items. Rendered here, outside the "More" menu, so they survive the
+          menu closing on item click. */}
+      {!isBooks && canManageCollections && (
+        <CollectionFormModal
+          opened={createCollectionOpen}
+          onClose={() => setCreateCollectionOpen(false)}
+          onCreated={(c) => addSelectedToCollection(c.id)}
+        />
+      )}
+      {isBooks && canManageReadLists && (
+        <ReadListFormModal
+          opened={createReadListOpen}
+          onClose={() => setCreateReadListOpen(false)}
+          onCreated={(r) => addSelectedToReadList(r.id)}
+        />
+      )}
     </Group>
   );
 }
