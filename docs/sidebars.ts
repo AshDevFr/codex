@@ -39,6 +39,7 @@ const sidebars: SidebarsConfig = {
         "book-metadata",
         "series-metadata",
         "series-management",
+        "collections-readlists",
         "custom-metadata",
         "release-tracking",
         "tsundoku",

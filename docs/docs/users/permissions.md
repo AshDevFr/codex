@@ -31,6 +31,7 @@ The default role for new users. Readers can:
 - Browse libraries, series, and books
 - Read books and view pages
 - Track reading progress
+- Browse collections and read lists
 - Manage their own API keys
 - Check system health
 
@@ -46,6 +47,7 @@ For users who manage content but not system settings. Maintainers can do everyth
 - Create and modify libraries (but not delete them)
 - Full series management (create, edit, delete)
 - Full book management (create, edit, delete)
+- Create, edit, and delete collections and read lists
 - View and manage background tasks
 
 **Additional Permissions (7 more, 15 total):**
@@ -93,6 +95,19 @@ Full system access for server administrators. Admins can do everything Maintaine
 | `BooksRead` | View books, metadata, and reading progress |
 | `BooksWrite` | Update book metadata, mark as read |
 | `BooksDelete` | Delete books |
+
+### Collection & Read List Permissions
+
+Shared groupings of series (collections) and books (read lists). See [Collections & Read Lists](../collections-readlists.md). Read is part of the Reader role; write/delete are part of Maintainer.
+
+| Permission | Description |
+|------------|-------------|
+| `CollectionsRead` | Browse collections |
+| `CollectionsWrite` | Create, rename, and manage collection members |
+| `CollectionsDelete` | Delete collections |
+| `ReadListsRead` | Browse read lists |
+| `ReadListsWrite` | Create, edit, and manage read list members |
+| `ReadListsDelete` | Delete read lists |
 
 ### Page Permissions
 
