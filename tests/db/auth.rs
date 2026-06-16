@@ -164,7 +164,7 @@ async fn test_permission_sets() {
     assert!(ADMIN_PERMISSIONS.contains(&Permission::SystemAdmin));
     assert!(ADMIN_PERMISSIONS.contains(&Permission::UsersWrite));
     assert!(ADMIN_PERMISSIONS.contains(&Permission::LibrariesDelete));
-    assert_eq!(ADMIN_PERMISSIONS.len(), 23);
+    assert_eq!(ADMIN_PERMISSIONS.len(), 29);
 
     // Test permission serialization roundtrip
     let perms = READONLY_PERMISSIONS.clone();
@@ -219,7 +219,7 @@ async fn test_user_with_multiple_api_keys() {
         if key.name == "Mobile App" {
             assert_eq!(perms.len(), 7); // READONLY
         } else if key.name == "Admin Tool" {
-            assert_eq!(perms.len(), 23); // ADMIN
+            assert_eq!(perms.len(), 29); // ADMIN
         } else if key.name == "CI/CD" {
             assert_eq!(perms.len(), 1);
             assert!(perms.contains(&Permission::BooksRead));
