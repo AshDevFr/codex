@@ -49,6 +49,7 @@ import { seriesMetadataApi } from "@/api/seriesMetadata";
 import { settingsApi } from "@/api/settings";
 import { sharingTagsApi } from "@/api/sharingTags";
 import { AuthorsList } from "@/components/book/AuthorsList";
+import { AddToCollectionButton } from "@/components/collections/AddToCollectionButton";
 import { ExternalIdEditModal, MetadataLabel } from "@/components/common";
 import { BulkSelectionToolbar } from "@/components/library/BulkSelectionToolbar";
 import { MetadataApplyFlow } from "@/components/metadata";
@@ -105,6 +106,7 @@ export function SeriesDetail() {
   const queryClient = useQueryClient();
   const { isAdmin, hasPermission } = usePermissions();
   const canEditSeries = hasPermission(PERMISSIONS.SERIES_WRITE);
+  const canManageCollections = hasPermission(PERMISSIONS.COLLECTIONS_WRITE);
   const [summaryOpened, { toggle: toggleSummary }] = useDisclosure(false);
   const [editModalOpened, { open: openEditModal, close: closeEditModal }] =
     useDisclosure(false);
@@ -641,6 +643,9 @@ export function SeriesDetail() {
                     id={series.id}
                     wantToRead={series.wantToRead}
                   />
+                  {canManageCollections && (
+                    <AddToCollectionButton seriesId={series.id} />
+                  )}
                   <Menu shadow="md" width={240} position="bottom-end">
                     <Menu.Target>
                       <ActionIcon variant="subtle" size="lg">

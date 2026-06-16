@@ -27,6 +27,7 @@ import {
   IconFileExport,
   IconFileTypePdf,
   IconHome,
+  IconLayoutGrid,
   IconLink,
   IconLogout,
   IconPhoto,
@@ -403,6 +404,14 @@ export function Sidebar({ onNavigate }: SidebarProps = {}) {
               label="Want to Read"
               leftSection={<IconBookmark size={20} stroke={2} />}
               active={currentPath === "/want-to-read"}
+              onClick={onNavigate}
+            />
+            <NavLink
+              component={Link}
+              to="/collections"
+              label="Collections"
+              leftSection={<IconLayoutGrid size={20} stroke={2} />}
+              active={currentPath.startsWith("/collections")}
               onClick={onNavigate}
             />
             {hasRecommendationPlugin && (

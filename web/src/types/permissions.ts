@@ -18,6 +18,16 @@ export const PERMISSIONS = {
   BOOKS_WRITE: "books-write",
   BOOKS_DELETE: "books-delete",
 
+  // Collections (shared groupings of series)
+  COLLECTIONS_READ: "collections-read",
+  COLLECTIONS_WRITE: "collections-write",
+  COLLECTIONS_DELETE: "collections-delete",
+
+  // Read lists (shared groupings of books)
+  READLISTS_READ: "readlists-read",
+  READLISTS_WRITE: "readlists-write",
+  READLISTS_DELETE: "readlists-delete",
+
   // Pages (image serving)
   PAGES_READ: "pages-read",
 
@@ -89,6 +99,16 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
         label: "Read Pages",
         description: "View book pages/images",
       },
+      {
+        value: PERMISSIONS.COLLECTIONS_READ,
+        label: "Read Collections",
+        description: "Browse collections",
+      },
+      {
+        value: PERMISSIONS.READLISTS_READ,
+        label: "Read Read Lists",
+        description: "Browse read lists",
+      },
     ],
   },
   {
@@ -140,6 +160,26 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
         value: PERMISSIONS.BOOKS_DELETE,
         label: "Delete Books",
         description: "Delete books",
+      },
+      {
+        value: PERMISSIONS.COLLECTIONS_WRITE,
+        label: "Write Collections",
+        description: "Create and modify collections",
+      },
+      {
+        value: PERMISSIONS.COLLECTIONS_DELETE,
+        label: "Delete Collections",
+        description: "Delete collections",
+      },
+      {
+        value: PERMISSIONS.READLISTS_WRITE,
+        label: "Write Read Lists",
+        description: "Create and modify read lists",
+      },
+      {
+        value: PERMISSIONS.READLISTS_DELETE,
+        label: "Delete Read Lists",
+        description: "Delete read lists",
       },
     ],
   },
@@ -230,6 +270,8 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     PERMISSIONS.PAGES_READ,
     PERMISSIONS.PROGRESS_READ,
     PERMISSIONS.PROGRESS_WRITE,
+    PERMISSIONS.COLLECTIONS_READ,
+    PERMISSIONS.READLISTS_READ,
     PERMISSIONS.API_KEYS_READ,
     PERMISSIONS.API_KEYS_WRITE,
     PERMISSIONS.API_KEYS_DELETE,
@@ -243,6 +285,8 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     PERMISSIONS.PAGES_READ,
     PERMISSIONS.PROGRESS_READ,
     PERMISSIONS.PROGRESS_WRITE,
+    PERMISSIONS.COLLECTIONS_READ,
+    PERMISSIONS.READLISTS_READ,
     PERMISSIONS.API_KEYS_READ,
     PERMISSIONS.API_KEYS_WRITE,
     PERMISSIONS.API_KEYS_DELETE,
@@ -253,6 +297,10 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     PERMISSIONS.SERIES_DELETE,
     PERMISSIONS.BOOKS_WRITE,
     PERMISSIONS.BOOKS_DELETE,
+    PERMISSIONS.COLLECTIONS_WRITE,
+    PERMISSIONS.COLLECTIONS_DELETE,
+    PERMISSIONS.READLISTS_WRITE,
+    PERMISSIONS.READLISTS_DELETE,
     PERMISSIONS.TASKS_READ,
     PERMISSIONS.TASKS_WRITE,
   ],
