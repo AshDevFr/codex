@@ -97,6 +97,7 @@ export type SeriesCondition =
   | { hasExternalSourceId: BoolOperator }
   | { hasUserRating: BoolOperator }
   | { isTracked: BoolOperator }
+  | { inCollection: BoolOperator }
   | { year: NumberOperator }
   | { author: FieldOperator }
   | { path: FieldOperator }
@@ -117,6 +118,7 @@ export type BookCondition =
   | { titleSort: FieldOperator }
   | { readStatus: FieldOperator }
   | { hasError: BoolOperator }
+  | { inReadList: BoolOperator }
   | { bookType: FieldOperator }
   | { path: FieldOperator }
   | { format: FieldOperator }
@@ -178,6 +180,7 @@ export interface SeriesFilterState {
   hasExternalSourceId: TriState;
   hasUserRating: TriState;
   isTracked: TriState;
+  inCollection: TriState;
 }
 
 /**
@@ -189,6 +192,7 @@ export interface BookFilterState {
   readStatus: FilterGroupState;
   bookType: FilterGroupState;
   hasError: TriState;
+  inReadList: TriState;
 }
 
 // =============================================================================
@@ -221,6 +225,7 @@ export function createEmptySeriesFilterState(): SeriesFilterState {
     hasExternalSourceId: "neutral",
     hasUserRating: "neutral",
     isTracked: "neutral",
+    inCollection: "neutral",
   };
 }
 
@@ -234,6 +239,7 @@ export function createEmptyBookFilterState(): BookFilterState {
     readStatus: createEmptyFilterGroup(),
     bookType: createEmptyFilterGroup(),
     hasError: "neutral",
+    inReadList: "neutral",
   };
 }
 
@@ -394,6 +400,13 @@ export function seriesFilterStateToCondition(
     allConditions.push({ isTracked: { operator: "isFalse" } });
   }
 
+  // Add inCollection condition
+  if (state.inCollection === "include") {
+    allConditions.push({ inCollection: { operator: "isTrue" } });
+  } else if (state.inCollection === "exclude") {
+    allConditions.push({ inCollection: { operator: "isFalse" } });
+  }
+
   // Return combined condition
   if (allConditions.length === 0) {
     return undefined;
@@ -473,6 +486,13 @@ export function bookFilterStateToCondition(
     allConditions.push({ hasError: { operator: "isFalse" } });
   }
 
+  // Add inReadList condition
+  if (state.inReadList === "include") {
+    allConditions.push({ inReadList: { operator: "isTrue" } });
+  } else if (state.inReadList === "exclude") {
+    allConditions.push({ inReadList: { operator: "isFalse" } });
+  }
+
   // Return combined condition
   if (allConditions.length === 0) {
     return undefined;
@@ -504,7 +524,11 @@ const SERIES_FIELD_GROUPS: Record<
   string,
   keyof Omit<
     SeriesFilterState,
-    "completion" | "hasExternalSourceId" | "hasUserRating" | "isTracked"
+    | "completion"
+    | "hasExternalSourceId"
+    | "hasUserRating"
+    | "isTracked"
+    | "inCollection"
   >
 > = {
   genre: "genres",
@@ -521,6 +545,7 @@ const SERIES_BOOL_FIELDS = new Set([
   "hasExternalSourceId",
   "hasUserRating",
   "isTracked",
+  "inCollection",
 ]);
 
 function applySeriesLeaf(
@@ -656,7 +681,7 @@ export function conditionToSeriesFilterState(
 
 const BOOK_FIELD_GROUPS: Record<
   string,
-  keyof Omit<BookFilterState, "hasError">
+  keyof Omit<BookFilterState, "hasError" | "inReadList">
 > = {
   genre: "genres",
   tag: "tags",
@@ -684,6 +709,18 @@ function applyBookLeaf(
     }
     if (op.operator === "isFalse") {
       state.hasError = "exclude";
+      return true;
+    }
+    return false;
+  }
+
+  if (field === "inReadList") {
+    if (op.operator === "isTrue") {
+      state.inReadList = "include";
+      return true;
+    }
+    if (op.operator === "isFalse") {
+      state.inReadList = "exclude";
       return true;
     }
     return false;
@@ -773,6 +810,7 @@ export function countBookActiveFilters(state: BookFilterState): number {
   count += countActiveFilters(state.readStatus);
   count += countActiveFilters(state.bookType);
   if (state.hasError !== "neutral") count++;
+  if (state.inReadList !== "neutral") count++;
   return count;
 }
 
@@ -869,6 +907,7 @@ export const FILTER_PARAM_KEYS = {
   hasExternalSourceId: "esf",
   hasUserRating: "urf",
   isTracked: "trf",
+  inCollection: "icf",
 } as const;
 
 /**
@@ -921,6 +960,10 @@ export function serializeSeriesFilters(
     params.set(FILTER_PARAM_KEYS.isTracked, state.isTracked);
   }
 
+  if (state.inCollection !== "neutral") {
+    params.set(FILTER_PARAM_KEYS.inCollection, state.inCollection);
+  }
+
   return params;
 }
 
@@ -934,6 +977,7 @@ export function parseSeriesFilters(params: URLSearchParams): SeriesFilterState {
   );
   const hasUserRatingParam = params.get(FILTER_PARAM_KEYS.hasUserRating);
   const isTrackedParam = params.get(FILTER_PARAM_KEYS.isTracked);
+  const inCollectionParam = params.get(FILTER_PARAM_KEYS.inCollection);
   return {
     genres: parseFilterGroup(params.get(FILTER_PARAM_KEYS.genres)),
     tags: parseFilterGroup(params.get(FILTER_PARAM_KEYS.tags)),
@@ -959,6 +1003,10 @@ export function parseSeriesFilters(params: URLSearchParams): SeriesFilterState {
       isTrackedParam === "include" || isTrackedParam === "exclude"
         ? isTrackedParam
         : "neutral",
+    inCollection:
+      inCollectionParam === "include" || inCollectionParam === "exclude"
+        ? inCollectionParam
+        : "neutral",
   };
 }
 
@@ -971,6 +1019,7 @@ export const BOOK_FILTER_PARAM_KEYS = {
   readStatus: "brf",
   bookType: "bbt",
   hasError: "bef",
+  inReadList: "brlf",
 } as const;
 
 /**
@@ -996,6 +1045,10 @@ export function serializeBookFilters(state: BookFilterState): URLSearchParams {
     params.set(BOOK_FILTER_PARAM_KEYS.hasError, state.hasError);
   }
 
+  if (state.inReadList !== "neutral") {
+    params.set(BOOK_FILTER_PARAM_KEYS.inReadList, state.inReadList);
+  }
+
   return params;
 }
 
@@ -1004,6 +1057,7 @@ export function serializeBookFilters(state: BookFilterState): URLSearchParams {
  */
 export function parseBookFilters(params: URLSearchParams): BookFilterState {
   const hasErrorParam = params.get(BOOK_FILTER_PARAM_KEYS.hasError);
+  const inReadListParam = params.get(BOOK_FILTER_PARAM_KEYS.inReadList);
   return {
     genres: parseFilterGroup(params.get(BOOK_FILTER_PARAM_KEYS.genres)),
     tags: parseFilterGroup(params.get(BOOK_FILTER_PARAM_KEYS.tags)),
@@ -1012,6 +1066,10 @@ export function parseBookFilters(params: URLSearchParams): BookFilterState {
     hasError:
       hasErrorParam === "include" || hasErrorParam === "exclude"
         ? hasErrorParam
+        : "neutral",
+    inReadList:
+      inReadListParam === "include" || inReadListParam === "exclude"
+        ? inReadListParam
         : "neutral",
   };
 }

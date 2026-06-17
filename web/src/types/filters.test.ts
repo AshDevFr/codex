@@ -9,6 +9,7 @@ import {
   conditionToBookFilterState,
   conditionToSeriesFilterState,
   countActiveFilters,
+  countBookActiveFilters,
   createEmptyBookFilterState,
   createEmptyFilterGroup,
   createEmptySeriesFilterState,
@@ -16,8 +17,10 @@ import {
   getExcludedValues,
   getIncludedValues,
   hasActiveFilters,
+  parseBookFilters,
   parseFilterGroup,
   parseSeriesFilters,
+  serializeBookFilters,
   serializeFilterGroup,
   serializeSeriesFilters,
   seriesFilterStateToCondition,
@@ -553,6 +556,7 @@ describe("Filter Types - Condition → UI state", () => {
       original.status.values.set("ongoing", "include");
       original.completion = "include";
       original.hasUserRating = "exclude";
+      original.inCollection = "exclude";
       const condition = seriesFilterStateToCondition(original);
 
       const restored = conditionToSeriesFilterState(condition);
@@ -564,6 +568,7 @@ describe("Filter Types - Condition → UI state", () => {
       expect(restored?.status.values.get("ongoing")).toBe("include");
       expect(restored?.completion).toBe("include");
       expect(restored?.hasUserRating).toBe("exclude");
+      expect(restored?.inCollection).toBe("exclude");
     });
 
     it("preserves allOf mode on multi-value groups", () => {
@@ -618,6 +623,7 @@ describe("Filter Types - Condition → UI state", () => {
       original.bookType.values.set("comic", "include");
       original.readStatus.values.set("unread", "include");
       original.hasError = "exclude";
+      original.inReadList = "include";
       const condition = bookFilterStateToCondition(original);
 
       const restored = conditionToBookFilterState(condition);
@@ -628,6 +634,7 @@ describe("Filter Types - Condition → UI state", () => {
       expect(restored?.bookType.values.get("comic")).toBe("include");
       expect(restored?.readStatus.values.get("unread")).toBe("include");
       expect(restored?.hasError).toBe("exclude");
+      expect(restored?.inReadList).toBe("include");
     });
 
     it("returns null when the condition uses an unknown field", () => {
@@ -635,6 +642,115 @@ describe("Filter Types - Condition → UI state", () => {
         path: { operator: "contains", value: "/manga/" },
       };
       expect(conditionToBookFilterState(condition)).toBeNull();
+    });
+  });
+});
+
+describe("Filter Types - Membership filters (inCollection / inReadList)", () => {
+  describe("inCollection (series)", () => {
+    it("maps include to inCollection isTrue", () => {
+      const state = createEmptySeriesFilterState();
+      state.inCollection = "include";
+      expect(seriesFilterStateToCondition(state)).toEqual({
+        inCollection: { operator: "isTrue" },
+      });
+    });
+
+    it("maps exclude to inCollection isFalse", () => {
+      const state = createEmptySeriesFilterState();
+      state.inCollection = "exclude";
+      expect(seriesFilterStateToCondition(state)).toEqual({
+        inCollection: { operator: "isFalse" },
+      });
+    });
+
+    it("omits the condition when neutral", () => {
+      const state = createEmptySeriesFilterState();
+      expect(seriesFilterStateToCondition(state)).toBeUndefined();
+    });
+
+    it("round-trips through the URL (icf key)", () => {
+      const state = createEmptySeriesFilterState();
+      state.inCollection = "include";
+
+      const params = serializeSeriesFilters(state);
+      expect(params.get("icf")).toBe("include");
+      expect(parseSeriesFilters(params).inCollection).toBe("include");
+    });
+
+    it("does not serialize a neutral inCollection", () => {
+      const params = serializeSeriesFilters(createEmptySeriesFilterState());
+      expect(params.has("icf")).toBe(false);
+    });
+
+    it("defaults to neutral for a missing or invalid icf param", () => {
+      expect(parseSeriesFilters(new URLSearchParams()).inCollection).toBe(
+        "neutral",
+      );
+      expect(
+        parseSeriesFilters(new URLSearchParams("icf=bogus")).inCollection,
+      ).toBe("neutral");
+    });
+
+    it("round-trips through condition converters", () => {
+      const original = createEmptySeriesFilterState();
+      original.inCollection = "include";
+      const restored = conditionToSeriesFilterState(
+        seriesFilterStateToCondition(original),
+      );
+      expect(restored?.inCollection).toBe("include");
+    });
+  });
+
+  describe("inReadList (books)", () => {
+    it("maps include to inReadList isTrue", () => {
+      const state = createEmptyBookFilterState();
+      state.inReadList = "include";
+      expect(bookFilterStateToCondition(state)).toEqual({
+        inReadList: { operator: "isTrue" },
+      });
+    });
+
+    it("maps exclude to inReadList isFalse", () => {
+      const state = createEmptyBookFilterState();
+      state.inReadList = "exclude";
+      expect(bookFilterStateToCondition(state)).toEqual({
+        inReadList: { operator: "isFalse" },
+      });
+    });
+
+    it("round-trips through the URL (brlf key)", () => {
+      const state = createEmptyBookFilterState();
+      state.inReadList = "exclude";
+
+      const params = serializeBookFilters(state);
+      expect(params.get("brlf")).toBe("exclude");
+      expect(parseBookFilters(params).inReadList).toBe("exclude");
+    });
+
+    it("defaults to neutral for a missing or invalid brlf param", () => {
+      expect(parseBookFilters(new URLSearchParams()).inReadList).toBe(
+        "neutral",
+      );
+      expect(
+        parseBookFilters(new URLSearchParams("brlf=bogus")).inReadList,
+      ).toBe("neutral");
+    });
+
+    it("counts as an active filter", () => {
+      const state = createEmptyBookFilterState();
+      expect(countBookActiveFilters(state)).toBe(0);
+      state.inReadList = "include";
+      expect(countBookActiveFilters(state)).toBe(1);
+    });
+
+    it("round-trips through condition converters", () => {
+      const original = createEmptyBookFilterState();
+      original.inReadList = "exclude";
+      const restored = conditionToBookFilterState(
+        bookFilterStateToCondition(original),
+      );
+      expect(restored?.inReadList).toBe("exclude");
     });
   });
 });
