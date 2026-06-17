@@ -34,7 +34,7 @@ observability = ["codex-api/observability", "codex-cli-common/observability"]
 [workspace.package]
 # Single source of truth for crate versions. `release-prepare` rewrites this
 # line; every workspace member inherits via `version.workspace = true`.
-version = "1.39.0"
+version = "1.39.1"
 edition = "2024"
 
 [workspace]

@@ -2,6 +2,23 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.39.1] - 2026-06-17
+
+### 🚀 Features
+
+- *(web)* Add multi-select and bulk actions to advanced search
+- *(web)* Add Want to Read toggle to card menu
+- *(want-to-read)* Add bulk add endpoint and toolbar action
+- *(filter)* Add collection and read-list membership filters
+- *(web)* Wire collection and read-list membership filters
+- *(web)* Add collection and read-list filter panel controls
+- *(web)* Show collection and read-list filters as active chips
+- *(web)* Make the search bulk bar sticky between filters and tabs
+
+### 🧪 Testing
+
+- *(web)* Cover shift-click range selection in advanced search
+
 ## [1.39.0] - 2026-06-16
 
 ### 🚀 Features
