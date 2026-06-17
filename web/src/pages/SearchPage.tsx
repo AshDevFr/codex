@@ -23,11 +23,12 @@ import {
   IconSearch,
 } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { booksApi } from "@/api/books";
 import { seriesApi } from "@/api/series";
 import { settingsApi } from "@/api/settings";
+import { BulkSelectionToolbar } from "@/components/library/BulkSelectionToolbar";
 import { MediaCard } from "@/components/library/MediaCard";
 import {
   type Condition,
@@ -36,6 +37,11 @@ import {
 import { FilterBuilder } from "@/components/search/filterBuilder/FilterBuilder";
 import { PresetsMenu } from "@/components/search/PresetsMenu";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import {
+  selectCanSelectType,
+  selectIsSelectionMode,
+  useBulkSelectionStore,
+} from "@/store/bulkSelectionStore";
 import type { Book, Series } from "@/types";
 import type { BookCondition, SeriesCondition } from "@/types/filters";
 import {
@@ -238,6 +244,8 @@ export function SearchPage() {
   const seriesCount = seriesQuery.data?.total ?? 0;
   const booksCount = booksQuery.data?.total ?? 0;
 
+  const clearSelection = useBulkSelectionStore((s) => s.clearSelection);
+
   const [builderOpened, builderHandlers] = useDisclosure(true);
 
   const activeSortOptions =
@@ -253,6 +261,8 @@ export function SearchPage() {
 
   return (
     <Container size="xl" py="xl">
+      {/* Bulk selection toolbar - renders nothing until results are selected */}
+      <BulkSelectionToolbar />
       <Stack gap="md">
         <Group justify="space-between" align="flex-end">
           <Title order={1}>Search</Title>
@@ -376,6 +386,9 @@ export function SearchPage() {
           value={state.tab}
           onChange={(value) => {
             if (value === "series" || value === "books") {
+              // Selection is type-locked (series XOR books); clear on tab
+              // switch so the toolbar always matches the visible tab.
+              clearSelection();
               updateState({ tab: value, page: 1 });
             }
           }}
@@ -412,6 +425,7 @@ export function SearchPage() {
                     pageSize={DEFAULT_SEARCH_PAGE_SIZE}
                     onPageChange={(p) => updateState({ page: p })}
                     type="series"
+                    active={state.tab === "series"}
                   />
                 ) : (
                   <FilterOnlyForOtherTab type="series" />
@@ -429,6 +443,7 @@ export function SearchPage() {
                     pageSize={DEFAULT_SEARCH_PAGE_SIZE}
                     onPageChange={(p) => updateState({ page: p })}
                     type="book"
+                    active={state.tab === "books"}
                   />
                 ) : (
                   <FilterOnlyForOtherTab type="books" />
@@ -463,6 +478,10 @@ interface ResultsGridProps {
   pageSize: number;
   onPageChange: (page: number) => void;
   type: "series" | "book";
+  // Both tabs stay mounted (Mantine keeps inactive panels in the DOM), so only
+  // the active grid registers page items and drives Select All to avoid the
+  // two grids racing on the shared store.
+  active: boolean;
 }
 
 function ResultsGrid({
@@ -474,7 +493,66 @@ function ResultsGrid({
   pageSize,
   onPageChange,
   type,
+  active,
 }: ResultsGridProps) {
+  // Bulk selection state - stable selectors to minimize re-renders.
+  const isSelectionMode = useBulkSelectionStore(selectIsSelectionMode);
+  const canSelect = useBulkSelectionStore(selectCanSelectType(type));
+  const selectedIds = useBulkSelectionStore((s) => s.selectedIds);
+  const toggleSelection = useBulkSelectionStore((s) => s.toggleSelection);
+  const selectRange = useBulkSelectionStore((s) => s.selectRange);
+  const getLastSelectedIndex = useBulkSelectionStore(
+    (s) => s.getLastSelectedIndex,
+  );
+  const setPageItems = useBulkSelectionStore((s) => s.setPageItems);
+
+  const gridId = `search-${type}`;
+
+  // Ref holding current page data for range selection (avoids re-creating
+  // handleSelect on every data change).
+  const dataRef = useRef<(Book | Series)[]>([]);
+  dataRef.current = data;
+
+  // Register visible page items for Select All - only the active tab, so the
+  // inactive (but still mounted) grid never clobbers the registration.
+  useEffect(() => {
+    if (!active) return;
+    if (data.length > 0) {
+      setPageItems({ ids: data.map((d) => d.id), type });
+    } else {
+      setPageItems(null);
+    }
+    return () => setPageItems(null);
+  }, [active, data, type, setPageItems]);
+
+  // Handle selection with shift+click range support. Stable across data
+  // changes because it reads page data from a ref.
+  const handleSelect = useCallback(
+    (id: string, shiftKey: boolean, index?: number) => {
+      if (shiftKey && isSelectionMode && index !== undefined) {
+        const lastIndex = getLastSelectedIndex(gridId);
+        if (lastIndex !== undefined && lastIndex !== index) {
+          const start = Math.min(lastIndex, index);
+          const end = Math.max(lastIndex, index);
+          const rangeIds = dataRef.current
+            .slice(start, end + 1)
+            .map((item) => item.id);
+          selectRange(rangeIds, type);
+          return;
+        }
+      }
+      toggleSelection(id, type, gridId, index);
+    },
+    [
+      toggleSelection,
+      selectRange,
+      getLastSelectedIndex,
+      gridId,
+      type,
+      isSelectionMode,
+    ],
+  );
+
   if (error) {
     return (
       <Alert color="red" icon={<IconAlertTriangle size={16} />}>
@@ -526,7 +604,16 @@ function ResultsGrid({
         }}
       >
         {data.map((item, idx) => (
-          <MediaCard key={item.id} type={type} data={item} index={idx} />
+          <MediaCard
+            key={item.id}
+            type={type}
+            data={item}
+            index={idx}
+            onSelect={handleSelect}
+            isSelected={selectedIds.has(item.id)}
+            isSelectionMode={isSelectionMode}
+            canBeSelected={canSelect}
+          />
         ))}
       </div>
       {showPagination && (

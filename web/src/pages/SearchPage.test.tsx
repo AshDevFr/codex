@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { booksApi } from "@/api/books";
 import { seriesApi } from "@/api/series";
+import { useBulkSelectionStore } from "@/store/bulkSelectionStore";
 import { renderWithProviders } from "@/test/utils";
 import { SearchPage } from "./SearchPage";
 
@@ -57,13 +58,63 @@ vi.mock("@/hooks/useAppName", () => ({
   DEFAULT_APP_NAME: "Codex",
 }));
 
+// Stub MediaCard but surface the selection props so wiring can be asserted.
+// Clicking the card invokes onSelect, exercising the store wiring.
 vi.mock("@/components/library/MediaCard", () => ({
-  MediaCard: () => <div data-testid="media-card" />,
+  MediaCard: ({
+    type,
+    data,
+    index,
+    onSelect,
+    isSelected,
+    isSelectionMode,
+    canBeSelected,
+  }: {
+    type: "series" | "book";
+    data: { id: string };
+    index?: number;
+    onSelect?: (id: string, shiftKey: boolean, index?: number) => void;
+    isSelected?: boolean;
+    isSelectionMode?: boolean;
+    canBeSelected?: boolean;
+  }) => (
+    <button
+      type="button"
+      data-testid="media-card"
+      data-card-type={type}
+      data-selected={isSelected ? "true" : "false"}
+      data-selection-mode={isSelectionMode ? "true" : "false"}
+      data-can-select={canBeSelected ? "true" : "false"}
+      onClick={(e) => onSelect?.(data.id, e.shiftKey, index)}
+    >
+      {data.id}
+    </button>
+  ),
 }));
+
+// The real toolbar pulls in permissions, plugin, and membership hooks; its
+// behavior is covered by BulkSelectionToolbar.test.tsx. Here we only need to
+// confirm SearchPage mounts a toolbar wired to the same selection store.
+vi.mock("@/components/library/BulkSelectionToolbar", async () => {
+  const { useBulkSelectionStore: useStore } = await import(
+    "@/store/bulkSelectionStore"
+  );
+  return {
+    BulkSelectionToolbar: () => {
+      const count = useStore((s) => s.selectedIds.size);
+      return count > 0 ? (
+        <div data-testid="bulk-toolbar">{count} selected</div>
+      ) : null;
+    },
+  };
+});
 
 describe("SearchPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // The selection store is a global singleton; reset it between tests.
+    useBulkSelectionStore.getState().clearSelection();
+    useBulkSelectionStore.getState().setPageItems(null);
   });
 
   it("renders the search heading", () => {
@@ -180,5 +231,92 @@ describe("SearchPage", () => {
     expect(seriesCall[1].condition).toEqual(expectedLeaf);
     const booksCall = vi.mocked(booksApi.search).mock.calls[0];
     expect(booksCall[1].condition).toEqual(expectedLeaf);
+  });
+
+  describe("bulk selection", () => {
+    const seriesResult = (ids: string[]) => ({
+      data: ids.map((id) => ({ id })),
+      total: ids.length,
+      page: 1,
+      pageSize: 50,
+      totalPages: 1,
+    });
+
+    it("passes selection props to result cards and registers active-tab page items", async () => {
+      vi.mocked(seriesApi.search).mockResolvedValue(
+        seriesResult(["s1", "s2"]) as never,
+      );
+      vi.mocked(booksApi.search).mockResolvedValue(
+        seriesResult(["b1"]) as never,
+      );
+
+      renderWithProviders(<SearchPage />, {
+        initialEntries: ["/search?q=batman"],
+      });
+
+      const cards = await screen.findAllByTestId("media-card");
+      const seriesCards = cards.filter(
+        (c) => c.getAttribute("data-card-type") === "series",
+      );
+      expect(seriesCards).toHaveLength(2);
+      // No selection yet: not in selection mode, series are selectable.
+      expect(seriesCards[0]).toHaveAttribute("data-selection-mode", "false");
+      expect(seriesCards[0]).toHaveAttribute("data-can-select", "true");
+
+      // Only the active (series) tab registers page items.
+      const pageItems = useBulkSelectionStore.getState().pageItems;
+      expect(pageItems).toEqual({ ids: ["s1", "s2"], type: "series" });
+    });
+
+    it("toggles store selection when a result card is clicked", async () => {
+      const user = userEvent.setup();
+      vi.mocked(seriesApi.search).mockResolvedValue(
+        seriesResult(["s1", "s2"]) as never,
+      );
+
+      renderWithProviders(<SearchPage />, {
+        initialEntries: ["/search?q=batman"],
+      });
+
+      const cards = await screen.findAllByTestId("media-card");
+      const seriesCards = cards.filter(
+        (c) => c.getAttribute("data-card-type") === "series",
+      );
+      await user.click(seriesCards[0]);
+
+      const state = useBulkSelectionStore.getState();
+      expect(state.selectedIds.has("s1")).toBe(true);
+      expect(state.selectionType).toBe("series");
+      expect(state.isSelectionMode).toBe(true);
+
+      // The mounted toolbar reflects the live selection count.
+      expect(await screen.findByTestId("bulk-toolbar")).toHaveTextContent(
+        "1 selected",
+      );
+    });
+
+    it("clears the selection when switching tabs", async () => {
+      const user = userEvent.setup();
+      vi.mocked(seriesApi.search).mockResolvedValue(
+        seriesResult(["s1"]) as never,
+      );
+
+      renderWithProviders(<SearchPage />, {
+        initialEntries: ["/search?q=batman"],
+      });
+
+      const cards = await screen.findAllByTestId("media-card");
+      await user.click(
+        cards.filter((c) => c.getAttribute("data-card-type") === "series")[0],
+      );
+      expect(useBulkSelectionStore.getState().selectedIds.size).toBe(1);
+
+      await user.click(screen.getByRole("tab", { name: /books/i }));
+
+      const state = useBulkSelectionStore.getState();
+      expect(state.selectedIds.size).toBe(0);
+      expect(state.selectionType).toBeNull();
+      expect(state.isSelectionMode).toBe(false);
+    });
   });
 });
