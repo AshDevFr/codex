@@ -192,6 +192,10 @@ impl FilterService {
                     Self::filter_by_is_tracked(db, is_tracked, candidate_ids).await
                 }
 
+                SeriesCondition::InCollection { in_collection } => {
+                    Self::filter_by_in_collection(db, in_collection, candidate_ids).await
+                }
+
                 SeriesCondition::Year { year } => {
                     Self::filter_by_year(db, year, candidate_ids).await
                 }
@@ -1025,6 +1029,56 @@ impl FilterService {
         }
     }
 
+    /// Filter series by collection membership.
+    ///
+    /// `IsTrue` returns series that belong to at least one collection.
+    /// `IsFalse` returns the complement, including series that belong to no
+    /// collection at all (mirrors `filter_by_is_tracked`).
+    async fn filter_by_in_collection(
+        db: &DatabaseConnection,
+        operator: &BoolOperator,
+        candidate_ids: Option<&HashSet<Uuid>>,
+    ) -> Result<HashSet<Uuid>> {
+        use codex_db::entities::series;
+        use codex_db::repositories::CollectionRepository;
+        use sea_orm::{EntityTrait, QuerySelect};
+
+        let member_series = CollectionRepository::all_member_series_ids(db).await?;
+
+        match operator {
+            BoolOperator::IsTrue => {
+                if let Some(candidates) = candidate_ids {
+                    Ok(member_series.intersection(candidates).cloned().collect())
+                } else {
+                    Ok(member_series)
+                }
+            }
+            BoolOperator::IsFalse => {
+                if let Some(candidates) = candidate_ids {
+                    Ok(candidates
+                        .iter()
+                        .filter(|id| !member_series.contains(id))
+                        .cloned()
+                        .collect())
+                } else {
+                    let all_series: HashSet<Uuid> = series::Entity::find()
+                        .select_only()
+                        .column(series::Column::Id)
+                        .into_tuple()
+                        .all(db)
+                        .await?
+                        .into_iter()
+                        .collect();
+
+                    Ok(all_series
+                        .into_iter()
+                        .filter(|id| !member_series.contains(id))
+                        .collect())
+                }
+            }
+        }
+    }
+
     async fn filter_by_status(
         db: &DatabaseConnection,
         operator: &FieldOperator,
@@ -1804,6 +1858,10 @@ impl FilterService {
                     Self::filter_books_by_error(db, has_error, candidate_ids).await
                 }
 
+                BookCondition::InReadList { in_read_list } => {
+                    Self::filter_books_by_in_read_list(db, in_read_list, candidate_ids).await
+                }
+
                 BookCondition::BookType { book_type } => {
                     Self::filter_books_by_book_type(db, book_type, candidate_ids).await
                 }
@@ -2231,6 +2289,56 @@ impl FilterService {
         };
 
         Ok(result)
+    }
+
+    /// Filter books by read list membership.
+    ///
+    /// `IsTrue` returns books that belong to at least one read list.
+    /// `IsFalse` returns the complement, including books that belong to no read
+    /// list at all (mirrors `filter_by_in_collection`).
+    async fn filter_books_by_in_read_list(
+        db: &DatabaseConnection,
+        operator: &BoolOperator,
+        candidate_ids: Option<&HashSet<Uuid>>,
+    ) -> Result<HashSet<Uuid>> {
+        use codex_db::entities::books;
+        use codex_db::repositories::ReadListRepository;
+        use sea_orm::{EntityTrait, QuerySelect};
+
+        let member_books = ReadListRepository::all_member_book_ids(db).await?;
+
+        match operator {
+            BoolOperator::IsTrue => {
+                if let Some(candidates) = candidate_ids {
+                    Ok(member_books.intersection(candidates).cloned().collect())
+                } else {
+                    Ok(member_books)
+                }
+            }
+            BoolOperator::IsFalse => {
+                if let Some(candidates) = candidate_ids {
+                    Ok(candidates
+                        .iter()
+                        .filter(|id| !member_books.contains(id))
+                        .cloned()
+                        .collect())
+                } else {
+                    let all_books: HashSet<Uuid> = books::Entity::find()
+                        .select_only()
+                        .column(books::Column::Id)
+                        .into_tuple()
+                        .all(db)
+                        .await?
+                        .into_iter()
+                        .collect();
+
+                    Ok(all_books
+                        .into_iter()
+                        .filter(|id| !member_books.contains(id))
+                        .collect())
+                }
+            }
+        }
     }
 
     async fn filter_books_by_book_type(
@@ -2995,6 +3103,213 @@ mod tests {
                 assert!(matches!(is_tracked, BoolOperator::IsFalse));
             }
             _ => panic!("Expected IsTracked condition"),
+        }
+    }
+
+    #[test]
+    fn test_series_condition_in_collection() {
+        let condition = SeriesCondition::InCollection {
+            in_collection: BoolOperator::IsTrue,
+        };
+
+        match condition {
+            SeriesCondition::InCollection { in_collection } => {
+                assert!(matches!(in_collection, BoolOperator::IsTrue));
+            }
+            _ => panic!("Expected InCollection condition"),
+        }
+    }
+
+    #[test]
+    fn test_book_condition_in_read_list() {
+        let condition = BookCondition::InReadList {
+            in_read_list: BoolOperator::IsFalse,
+        };
+
+        match condition {
+            BookCondition::InReadList { in_read_list } => {
+                assert!(matches!(in_read_list, BoolOperator::IsFalse));
+            }
+            _ => panic!("Expected InReadList condition"),
+        }
+    }
+
+    // ---- DB-backed membership filter tests ----
+
+    mod db {
+        use super::*;
+        use chrono::Utc;
+        use codex_db::entities::books;
+        use codex_db::repositories::{
+            BookRepository, CollectionRepository, LibraryRepository, ReadListRepository,
+            SeriesRepository,
+        };
+        use codex_db::test_helpers::setup_test_db;
+        use codex_models::ScanningStrategy;
+
+        /// Create a library with `n` series and return (library_id, series_ids).
+        async fn lib_with_series(db: &DatabaseConnection, n: usize) -> (Uuid, Vec<Uuid>) {
+            let library = LibraryRepository::create(
+                db,
+                &format!("Lib {}", Uuid::new_v4()),
+                &format!("/lib/{}", Uuid::new_v4()),
+                ScanningStrategy::Default,
+            )
+            .await
+            .unwrap();
+            let mut series_ids = Vec::new();
+            for i in 0..n {
+                let s = SeriesRepository::create(db, library.id, &format!("Series {i}"), None)
+                    .await
+                    .unwrap();
+                series_ids.push(s.id);
+            }
+            (library.id, series_ids)
+        }
+
+        async fn make_book(db: &DatabaseConnection, series_id: Uuid, library_id: Uuid) -> Uuid {
+            let book = books::Model {
+                id: Uuid::new_v4(),
+                series_id,
+                library_id,
+                path: format!("/test/{}.cbz", Uuid::new_v4()),
+                file_name: "book.cbz".to_string(),
+                file_size: 1024,
+                file_hash: format!("hash_{}", Uuid::new_v4()),
+                partial_hash: String::new(),
+                format: "cbz".to_string(),
+                page_count: 10,
+                deleted: false,
+                analyzed: false,
+                analysis_error: None,
+                analysis_errors: None,
+                modified_at: Utc::now(),
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
+                thumbnail_path: None,
+                thumbnail_generated_at: None,
+                koreader_hash: None,
+                epub_positions: None,
+                epub_spine_items: None,
+            };
+            BookRepository::create(db, &book, None).await.unwrap().id
+        }
+
+        #[tokio::test]
+        async fn test_in_collection_filter() {
+            let db = setup_test_db().await;
+            let (_lib, series) = lib_with_series(&db, 3).await;
+
+            // Only series[0] is in a collection.
+            let coll = CollectionRepository::create(&db, "Coll", false)
+                .await
+                .unwrap();
+            CollectionRepository::add_series(&db, coll.id, series[0])
+                .await
+                .unwrap();
+
+            // IsTrue => only the member series.
+            let matched = FilterService::get_matching_series(
+                &db,
+                &SeriesCondition::InCollection {
+                    in_collection: BoolOperator::IsTrue,
+                },
+                None,
+            )
+            .await
+            .unwrap();
+            assert_eq!(matched, HashSet::from([series[0]]));
+
+            // IsFalse => everything else, including series with no membership row.
+            let matched = FilterService::get_matching_series(
+                &db,
+                &SeriesCondition::InCollection {
+                    in_collection: BoolOperator::IsFalse,
+                },
+                None,
+            )
+            .await
+            .unwrap();
+            assert_eq!(matched, HashSet::from([series[1], series[2]]));
+        }
+
+        #[tokio::test]
+        async fn test_in_collection_filter_respects_candidates() {
+            let db = setup_test_db().await;
+            let (_lib, series) = lib_with_series(&db, 3).await;
+
+            let coll = CollectionRepository::create(&db, "Coll", false)
+                .await
+                .unwrap();
+            CollectionRepository::add_series(&db, coll.id, series[0])
+                .await
+                .unwrap();
+            CollectionRepository::add_series(&db, coll.id, series[1])
+                .await
+                .unwrap();
+
+            // Restrict candidates to series[1] and series[2].
+            let candidates = HashSet::from([series[1], series[2]]);
+
+            let matched = FilterService::get_matching_series(
+                &db,
+                &SeriesCondition::InCollection {
+                    in_collection: BoolOperator::IsTrue,
+                },
+                Some(&candidates),
+            )
+            .await
+            .unwrap();
+            assert_eq!(matched, HashSet::from([series[1]]));
+
+            let matched = FilterService::get_matching_series(
+                &db,
+                &SeriesCondition::InCollection {
+                    in_collection: BoolOperator::IsFalse,
+                },
+                Some(&candidates),
+            )
+            .await
+            .unwrap();
+            assert_eq!(matched, HashSet::from([series[2]]));
+        }
+
+        #[tokio::test]
+        async fn test_in_read_list_filter() {
+            let db = setup_test_db().await;
+            let (lib, series) = lib_with_series(&db, 1).await;
+            let b0 = make_book(&db, series[0], lib).await;
+            let b1 = make_book(&db, series[0], lib).await;
+            let b2 = make_book(&db, series[0], lib).await;
+
+            // Only b0 is in a read list.
+            let rl = ReadListRepository::create(&db, "List", None, false)
+                .await
+                .unwrap();
+            ReadListRepository::add_book(&db, rl.id, b0).await.unwrap();
+
+            let matched = FilterService::get_matching_books(
+                &db,
+                &BookCondition::InReadList {
+                    in_read_list: BoolOperator::IsTrue,
+                },
+                None,
+            )
+            .await
+            .unwrap();
+            assert_eq!(matched, HashSet::from([b0]));
+
+            // IsFalse => everything else, including books with no membership row.
+            let matched = FilterService::get_matching_books(
+                &db,
+                &BookCondition::InReadList {
+                    in_read_list: BoolOperator::IsFalse,
+                },
+                None,
+            )
+            .await
+            .unwrap();
+            assert_eq!(matched, HashSet::from([b1, b2]));
         }
     }
 }

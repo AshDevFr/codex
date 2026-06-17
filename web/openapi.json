@@ -22128,6 +22128,18 @@
           },
           {
             "type": "object",
+            "description": "Filter by whether the book belongs to at least one read list.\n\n`IsTrue` returns only books that appear in one or more\n`read_list_books` rows. `IsFalse` returns everything else, including\nbooks that belong to no read list at all (the common case).",
+            "required": [
+              "inReadList"
+            ],
+            "properties": {
+              "inReadList": {
+                "$ref": "#/components/schemas/BoolOperator"
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "Filter by book type (comic, manga, novel, etc.)",
             "required": [
               "bookType"
@@ -39824,6 +39836,18 @@
             ],
             "properties": {
               "isTracked": {
+                "$ref": "#/components/schemas/BoolOperator"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Filter by whether the series belongs to at least one collection.\n\n`IsTrue` returns only series that appear in one or more\n`collection_series` rows. `IsFalse` returns everything else, including\nseries that belong to no collection at all (the common case).",
+            "required": [
+              "inCollection"
+            ],
+            "properties": {
+              "inCollection": {
                 "$ref": "#/components/schemas/BoolOperator"
               }
             }

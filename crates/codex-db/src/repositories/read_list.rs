@@ -13,7 +13,7 @@ use anyhow::Result;
 use chrono::Utc;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, IntoActiveModel,
-    PaginatorTrait, QueryFilter, QueryOrder, Set,
+    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set,
 };
 use uuid::Uuid;
 
@@ -55,6 +55,23 @@ impl ReadListRepository {
     /// Total number of read lists.
     pub async fn count(db: &DatabaseConnection) -> Result<u64> {
         Ok(ReadLists::find().count(db).await?)
+    }
+
+    /// Get the set of book IDs that belong to at least one read list.
+    ///
+    /// Used by the filter service to evaluate the "in read list" membership
+    /// filter. Returns distinct book IDs across all read lists.
+    pub async fn all_member_book_ids(
+        db: &DatabaseConnection,
+    ) -> Result<std::collections::HashSet<Uuid>> {
+        let ids: Vec<Uuid> = ReadListBooks::find()
+            .select_only()
+            .column(read_list_books::Column::BookId)
+            .distinct()
+            .into_tuple()
+            .all(db)
+            .await?;
+        Ok(ids.into_iter().collect())
     }
 
     /// Create a new read list. Fails if the (normalized) name already exists.
@@ -342,6 +359,42 @@ mod tests {
         assert!(!updated.ordered);
 
         assert!(ReadListRepository::delete(conn, rl.id).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_all_member_book_ids() {
+        let (db, _t) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let (_series, books) = setup(conn).await;
+
+        // No read lists yet => empty set.
+        let members = ReadListRepository::all_member_book_ids(conn).await.unwrap();
+        assert!(members.is_empty());
+
+        // Two read lists, with one book shared between them.
+        let rl_a = ReadListRepository::create(conn, "A", None, false)
+            .await
+            .unwrap();
+        let rl_b = ReadListRepository::create(conn, "B", None, false)
+            .await
+            .unwrap();
+        ReadListRepository::add_book(conn, rl_a.id, books[0].id)
+            .await
+            .unwrap();
+        ReadListRepository::add_book(conn, rl_a.id, books[1].id)
+            .await
+            .unwrap();
+        // books[1] also belongs to B => must be de-duplicated.
+        ReadListRepository::add_book(conn, rl_b.id, books[1].id)
+            .await
+            .unwrap();
+
+        let members = ReadListRepository::all_member_book_ids(conn).await.unwrap();
+        assert_eq!(members.len(), 2);
+        assert!(members.contains(&books[0].id));
+        assert!(members.contains(&books[1].id));
+        // books[2] is in no read list.
+        assert!(!members.contains(&books[2].id));
     }
 
     #[tokio::test]

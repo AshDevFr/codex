@@ -182,6 +182,15 @@ pub enum SeriesCondition {
         #[serde(rename = "isTracked")]
         is_tracked: BoolOperator,
     },
+    /// Filter by whether the series belongs to at least one collection.
+    ///
+    /// `IsTrue` returns only series that appear in one or more
+    /// `collection_series` rows. `IsFalse` returns everything else, including
+    /// series that belong to no collection at all (the common case).
+    InCollection {
+        #[serde(rename = "inCollection")]
+        in_collection: BoolOperator,
+    },
     /// Filter by release year (from `series_metadata.year`).
     Year { year: NumberOperator },
     /// Filter by author (substring match on `series_metadata.authors_json`).
@@ -249,6 +258,15 @@ pub enum BookCondition {
     HasError {
         #[serde(rename = "hasError")]
         has_error: BoolOperator,
+    },
+    /// Filter by whether the book belongs to at least one read list.
+    ///
+    /// `IsTrue` returns only books that appear in one or more
+    /// `read_list_books` rows. `IsFalse` returns everything else, including
+    /// books that belong to no read list at all (the common case).
+    InReadList {
+        #[serde(rename = "inReadList")]
+        in_read_list: BoolOperator,
     },
     /// Filter by book type (comic, manga, novel, etc.)
     BookType {

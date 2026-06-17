@@ -13,7 +13,7 @@ use anyhow::Result;
 use chrono::Utc;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, IntoActiveModel,
-    PaginatorTrait, QueryFilter, QueryOrder, Set,
+    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set,
 };
 use uuid::Uuid;
 
@@ -58,6 +58,23 @@ impl CollectionRepository {
     /// Total number of collections.
     pub async fn count(db: &DatabaseConnection) -> Result<u64> {
         Ok(Collections::find().count(db).await?)
+    }
+
+    /// Get the set of series IDs that belong to at least one collection.
+    ///
+    /// Used by the filter service to evaluate the "in collection" membership
+    /// filter. Returns distinct series IDs across all collections.
+    pub async fn all_member_series_ids(
+        db: &DatabaseConnection,
+    ) -> Result<std::collections::HashSet<Uuid>> {
+        let ids: Vec<Uuid> = CollectionSeries::find()
+            .select_only()
+            .column(collection_series::Column::SeriesId)
+            .distinct()
+            .into_tuple()
+            .all(db)
+            .await?;
+        Ok(ids.into_iter().collect())
     }
 
     /// Create a new collection. Fails if the (normalized) name already exists.
@@ -376,6 +393,46 @@ mod tests {
                 .unwrap(),
             2
         );
+    }
+
+    #[tokio::test]
+    async fn test_all_member_series_ids() {
+        let (db, _t) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let (_lib, series) = lib_and_series(conn).await;
+
+        // No collections yet => empty set.
+        let members = CollectionRepository::all_member_series_ids(conn)
+            .await
+            .unwrap();
+        assert!(members.is_empty());
+
+        // Two collections, with one series shared between them.
+        let coll_a = CollectionRepository::create(conn, "A", false)
+            .await
+            .unwrap();
+        let coll_b = CollectionRepository::create(conn, "B", false)
+            .await
+            .unwrap();
+        CollectionRepository::add_series(conn, coll_a.id, series[0].id)
+            .await
+            .unwrap();
+        CollectionRepository::add_series(conn, coll_a.id, series[1].id)
+            .await
+            .unwrap();
+        // series[1] also belongs to B => must be de-duplicated.
+        CollectionRepository::add_series(conn, coll_b.id, series[1].id)
+            .await
+            .unwrap();
+
+        let members = CollectionRepository::all_member_series_ids(conn)
+            .await
+            .unwrap();
+        assert_eq!(members.len(), 2);
+        assert!(members.contains(&series[0].id));
+        assert!(members.contains(&series[1].id));
+        // series[2] is in no collection.
+        assert!(!members.contains(&series[2].id));
     }
 
     #[tokio::test]

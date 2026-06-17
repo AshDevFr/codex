@@ -8035,6 +8035,8 @@ export interface components {
         } | {
             hasError: components["schemas"]["BoolOperator"];
         } | {
+            inReadList: components["schemas"]["BoolOperator"];
+        } | {
             bookType: components["schemas"]["FieldOperator"];
         } | {
             path: components["schemas"]["FieldOperator"];
@@ -17729,6 +17731,8 @@ export interface components {
             hasUserRating: components["schemas"]["BoolOperator"];
         } | {
             isTracked: components["schemas"]["BoolOperator"];
+        } | {
+            inCollection: components["schemas"]["BoolOperator"];
         } | {
             year: components["schemas"]["NumberOperator"];
         } | {
