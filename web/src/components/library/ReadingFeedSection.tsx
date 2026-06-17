@@ -88,6 +88,11 @@ export function ReadingFeedSection({
     queryFn: () => config.fetchPage(libraryId, { page, pageSize }),
     staleTime: 30000,
     refetchOnMount: true,
+    // Both feeds (in-progress / on-deck) are driven by reading progress, which
+    // is not broadcast over SSE. Refetch on focus so progress made on another
+    // device (e.g. the phone) shows up when the user returns to this tab,
+    // rather than requiring a manual reload.
+    refetchOnWindowFocus: true,
   });
 
   // Gate the skeleton on a 150ms delay so fast loads stay flash-free.

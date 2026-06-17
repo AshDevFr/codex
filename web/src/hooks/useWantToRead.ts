@@ -5,6 +5,10 @@ import {
   type WantToReadSort,
   wantToReadApi,
 } from "@/api/wantToRead";
+import {
+  BOOKS_LIST_SECTIONS,
+  SERIES_LIST_SECTIONS,
+} from "@/hooks/listSections";
 
 const QUEUE_KEY = "want-to-read";
 
@@ -22,17 +26,27 @@ export function useWantToReadQueue(sort: WantToReadSort = "newest") {
 }
 
 /**
- * Invalidate the queue plus the changed series/book detail query so its
- * `wantToRead` flag refreshes. Query-key invalidation is prefix-based, so
- * `["series", id]` matches `["series", id, "full"]` etc.
+ * Invalidate everything that renders the changed item's `wantToRead` flag:
+ *
+ *  - the queue (`["want-to-read"]`);
+ *  - the entity's detail query — prefix-based, so `["series", id]` matches
+ *    `["series", id, "full"]`, which drives the detail-page toggle;
+ *  - the LIST/grid/home sections. Cards source `wantToRead` from list queries
+ *    keyed `["series"/"books", <section>, ...]`, whose slot 2 is a section
+ *    string, not an id — so the detail-id prefix above never reaches them.
+ *    Without this, toggling from a card never flips the button until reload.
  */
 function useInvalidateAfterChange() {
   const queryClient = useQueryClient();
   return ({ itemType, id }: WantToReadTarget) => {
     queryClient.invalidateQueries({ queryKey: [QUEUE_KEY] });
-    queryClient.invalidateQueries({
-      queryKey: [itemType === "series" ? "series" : "books", id],
-    });
+    const root = itemType === "series" ? "series" : "books";
+    queryClient.invalidateQueries({ queryKey: [root, id] });
+    const sections =
+      itemType === "series" ? SERIES_LIST_SECTIONS : BOOKS_LIST_SECTIONS;
+    for (const section of sections) {
+      queryClient.invalidateQueries({ queryKey: [root, section] });
+    }
   };
 }
 

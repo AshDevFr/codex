@@ -49,10 +49,19 @@ export function RecommendedSection({ libraryId }: RecommendedSectionProps) {
     [toggleSelection],
   );
 
+  // Reading-progress-driven sections (Keep Reading / On Deck / Recently Read)
+  // refetch on window focus. Unlike scan-driven sections, reading progress is
+  // not broadcast over SSE, so a session on another device (e.g. the phone)
+  // leaves this stale; refocusing the tab is the only signal we get that it may
+  // have changed. The global default keeps refetch-on-focus off to avoid
+  // multi-tab refetch storms on the heavier scan-driven lists.
+  const refetchProgressOnFocus = true;
+
   // Fetch books with reading progress (Keep Reading)
   const { data: inProgressBooks, isLoading: loadingInProgress } = useQuery({
     queryKey: ["books", "in-progress", libraryId],
     queryFn: () => booksApi.getInProgress(libraryId),
+    refetchOnWindowFocus: refetchProgressOnFocus,
   });
 
   // Fetch recently added books
@@ -65,6 +74,7 @@ export function RecommendedSection({ libraryId }: RecommendedSectionProps) {
   const { data: onDeckResponse, isLoading: loadingOnDeck } = useQuery({
     queryKey: ["books", "on-deck", libraryId],
     queryFn: () => booksApi.getOnDeck(libraryId),
+    refetchOnWindowFocus: refetchProgressOnFocus,
   });
 
   // Fetch recently added series
@@ -89,6 +99,7 @@ export function RecommendedSection({ libraryId }: RecommendedSectionProps) {
   const { data: recentlyReadBooks, isLoading: loadingRecentlyRead } = useQuery({
     queryKey: ["books", "recently-read", libraryId],
     queryFn: () => booksApi.getRecentlyRead(libraryId, MAX_ITEMS_PER_SECTION),
+    refetchOnWindowFocus: refetchProgressOnFocus,
   });
 
   const onDeckBooks = (onDeckResponse?.data ?? []).slice(

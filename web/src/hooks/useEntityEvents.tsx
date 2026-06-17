@@ -4,6 +4,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { throttle } from "es-toolkit";
 import { useEffect, useState } from "react";
 import { eventsApi } from "@/api/events";
+import {
+  BOOKS_LIST_SECTIONS,
+  SERIES_LIST_SECTIONS,
+} from "@/hooks/listSections";
 import { navigationService } from "@/services/navigation";
 import { useAuthStore } from "@/store/authStore";
 import { useCoverUpdatesStore } from "@/store/coverUpdatesStore";
@@ -15,28 +19,6 @@ import { createDevLog } from "@/utils/devLog";
 type ConnectionState = "connecting" | "connected" | "disconnected" | "failed";
 
 const log = createDevLog("[SSE]");
-
-/** Second key segment of every series LIST/grid/home-section query (see
- * SeriesSection / SeriesSection home rows). Detail queries are keyed
- * ["series", <id>, ...] instead, so invalidating these prefixes refreshes the
- * lists without touching open detail tabs. Keep in sync with the query keys in
- * the components that own these lists. */
-const SERIES_LIST_SECTIONS = [
-  "search",
-  "alphabetical-groups",
-  "recently-added",
-  "recently-updated",
-] as const;
-
-/** Second key segment of every book LIST/home-section query (see Recommended
- * section rows + the books grid). Detail queries are ["books", <id>, ...]. */
-const BOOKS_LIST_SECTIONS = [
-  "search",
-  "in-progress",
-  "on-deck",
-  "recently-added",
-  "recently-read",
-] as const;
 
 /** Per-series state for the aggregated release toast. Lives at module scope
  * so a burst of `release_announced` events for the same series collapses
