@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.39.2] - 2026-06-17
+
+### 🐛 Bug Fixes
+
+- *(web)* Refresh want-to-read cards and reading feeds without reload
+
 ## [1.39.1] - 2026-06-17
 
 ### 🚀 Features
