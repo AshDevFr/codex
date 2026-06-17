@@ -43,7 +43,9 @@ interface UseBookFilterStateReturn {
 
   // Bulk actions
   clearAll: () => void;
-  clearGroup: (group: keyof Omit<BookFilterState, "hasError">) => void;
+  clearGroup: (
+    group: keyof Omit<BookFilterState, "hasError" | "inReadList">,
+  ) => void;
 
   // Computed values
   hasActiveFilters: boolean;
@@ -111,7 +113,7 @@ export function useBookFilterState(): UseBookFilterStateReturn {
   // Helper to update a single group
   const updateGroup = useCallback(
     (
-      group: keyof Omit<BookFilterState, "hasError">,
+      group: keyof Omit<BookFilterState, "hasError" | "inReadList">,
       updater: (current: FilterGroupState) => FilterGroupState,
     ) => {
       const newFilters = { ...filters };
@@ -236,7 +238,7 @@ export function useBookFilterState(): UseBookFilterStateReturn {
 
   // Clear a specific group
   const clearGroup = useCallback(
-    (group: keyof Omit<BookFilterState, "hasError">) => {
+    (group: keyof Omit<BookFilterState, "hasError" | "inReadList">) => {
       updateGroup(group, (current) => ({
         ...current,
         values: new Map(),

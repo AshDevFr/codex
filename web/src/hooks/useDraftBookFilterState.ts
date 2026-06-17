@@ -41,7 +41,9 @@ interface UseDraftBookFilterStateReturn {
 
   // Bulk actions on draft
   clearAllDraft: () => void;
-  clearGroupDraft: (group: keyof Omit<BookFilterState, "hasError">) => void;
+  clearGroupDraft: (
+    group: keyof Omit<BookFilterState, "hasError" | "inReadList">,
+  ) => void;
   clearAllAndApply: () => void;
 
   // Commit/discard actions
@@ -91,7 +93,7 @@ function bookFilterStatesEqual(
   a: BookFilterState,
   b: BookFilterState,
 ): boolean {
-  const groups: (keyof Omit<BookFilterState, "hasError">)[] = [
+  const groups: (keyof Omit<BookFilterState, "hasError" | "inReadList">)[] = [
     "genres",
     "tags",
     "readStatus",
@@ -163,7 +165,7 @@ export function useDraftBookFilterState(): UseDraftBookFilterStateReturn {
   // Helper to update a single group in draft
   const updateGroup = useCallback(
     (
-      group: keyof Omit<BookFilterState, "hasError">,
+      group: keyof Omit<BookFilterState, "hasError" | "inReadList">,
       updater: (current: FilterGroupState) => FilterGroupState,
     ) => {
       updateDraft((current) => ({
@@ -327,7 +329,7 @@ export function useDraftBookFilterState(): UseDraftBookFilterStateReturn {
 
   // Clear a specific group in draft
   const clearGroupDraft = useCallback(
-    (group: keyof Omit<BookFilterState, "hasError">) => {
+    (group: keyof Omit<BookFilterState, "hasError" | "inReadList">) => {
       setDraftFilters((current) => ({
         ...current,
         [group]: { ...current[group], values: new Map() },

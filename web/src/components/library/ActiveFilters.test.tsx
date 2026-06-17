@@ -294,4 +294,38 @@ describe("ActiveFilters", () => {
     });
     expect(removeButton).toBeInTheDocument();
   });
+
+  it("should render inCollection include filter chip", () => {
+    render(
+      <TestWrapper initialRoute="/?icf=include">
+        <ActiveFilters />
+      </TestWrapper>,
+    );
+
+    expect(screen.getByText("Filters:")).toBeInTheDocument();
+    expect(screen.getByText("In Collection")).toBeInTheDocument();
+  });
+
+  it("should render inCollection exclude filter chip with NOT prefix", () => {
+    render(
+      <TestWrapper initialRoute="/?icf=exclude">
+        <ActiveFilters />
+      </TestWrapper>,
+    );
+
+    expect(screen.getByText(/NOT In Collection/)).toBeInTheDocument();
+  });
+
+  it("should have remove button on inCollection chip", () => {
+    render(
+      <TestWrapper initialRoute="/?icf=include">
+        <ActiveFilters />
+      </TestWrapper>,
+    );
+
+    const removeButton = screen.getByRole("button", {
+      name: /Remove in collection filter/i,
+    });
+    expect(removeButton).toBeInTheDocument();
+  });
 });

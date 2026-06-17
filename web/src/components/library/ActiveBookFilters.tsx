@@ -20,6 +20,7 @@ export function ActiveBookFilters() {
     setReadStatusState,
     setBookTypeState,
     setHasErrorState,
+    setInReadListState,
     clearAll,
   } = useBookFilterState();
 
@@ -97,6 +98,35 @@ export function ActiveBookFilters() {
     ];
   };
 
+  // Render inReadList chip
+  const renderInReadListChip = () => {
+    if (filters.inReadList === "neutral") return [];
+
+    const isExclude = filters.inReadList === "exclude";
+    return [
+      <Badge
+        key="inReadList"
+        variant="filled"
+        color={isExclude ? "red" : "blue"}
+        size="md"
+        className={styles.chip}
+        rightSection={
+          <ActionIcon
+            size="xs"
+            variant="transparent"
+            color="white"
+            onClick={() => setInReadListState("neutral")}
+            aria-label="Remove in read list filter"
+          >
+            <IconX size={12} />
+          </ActionIcon>
+        }
+      >
+        {isExclude ? "NOT In Read List" : "In Read List"}
+      </Badge>,
+    ];
+  };
+
   const allChips = [
     ...renderGroupChips(filters.genres, "genres", "Genre", setGenreState),
     ...renderGroupChips(filters.tags, "tags", "Tag", setTagState),
@@ -108,6 +138,7 @@ export function ActiveBookFilters() {
     ),
     ...renderGroupChips(filters.bookType, "bookType", "Type", setBookTypeState),
     ...renderHasErrorChip(),
+    ...renderInReadListChip(),
   ];
 
   return (

@@ -26,6 +26,7 @@ export function ActiveFilters() {
     setHasExternalSourceIdState,
     setHasUserRatingState,
     setIsTrackedState,
+    setInCollectionState,
     clearAll,
   } = useSeriesFilterState();
 
@@ -108,7 +109,12 @@ export function ActiveFilters() {
   // display can't drift from the set of filters the panel exposes: adding a new
   // boolean filter here is all it takes for it to appear (and be removable).
   const triStateChips: {
-    key: "completion" | "hasExternalSourceId" | "hasUserRating" | "isTracked";
+    key:
+      | "completion"
+      | "hasExternalSourceId"
+      | "hasUserRating"
+      | "isTracked"
+      | "inCollection";
     label: string;
     ariaLabel: string;
     onRemove: () => void;
@@ -136,6 +142,12 @@ export function ActiveFilters() {
       label: "Tracked",
       ariaLabel: "Remove tracking filter",
       onRemove: () => setIsTrackedState("neutral"),
+    },
+    {
+      key: "inCollection",
+      label: "In Collection",
+      ariaLabel: "Remove in collection filter",
+      onRemove: () => setInCollectionState("neutral"),
     },
   ];
 

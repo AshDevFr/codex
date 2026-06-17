@@ -97,4 +97,39 @@ describe("ActiveBookFilters", () => {
     });
     expect(removeButton).toBeInTheDocument();
   });
+
+  it("should render inReadList include filter chip", () => {
+    // Book in-read-list param key is brlf
+    render(
+      <TestWrapper initialRoute="/?brlf=include">
+        <ActiveBookFilters />
+      </TestWrapper>,
+    );
+
+    expect(screen.getByText("Filters:")).toBeInTheDocument();
+    expect(screen.getByText("In Read List")).toBeInTheDocument();
+  });
+
+  it("should render inReadList exclude filter chip with NOT prefix", () => {
+    render(
+      <TestWrapper initialRoute="/?brlf=exclude">
+        <ActiveBookFilters />
+      </TestWrapper>,
+    );
+
+    expect(screen.getByText(/NOT In Read List/)).toBeInTheDocument();
+  });
+
+  it("should have remove button on inReadList chip", () => {
+    render(
+      <TestWrapper initialRoute="/?brlf=include">
+        <ActiveBookFilters />
+      </TestWrapper>,
+    );
+
+    const removeButton = screen.getByRole("button", {
+      name: /Remove in read list filter/i,
+    });
+    expect(removeButton).toBeInTheDocument();
+  });
 });
