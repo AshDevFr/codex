@@ -3,7 +3,8 @@ mod common;
 
 use codex::api::error::ErrorResponse;
 use codex::api::routes::v1::dto::{
-    SeriesDto, WantToReadEntryDto, WantToReadItemType, WantToReadListResponse,
+    BulkAddWantToReadResponse, SeriesDto, WantToReadEntryDto, WantToReadItemType,
+    WantToReadListResponse,
 };
 use codex::db::ScanningStrategy;
 use codex::db::repositories::{
@@ -126,6 +127,100 @@ async fn test_add_series_and_book_to_queue() {
     let list = list.unwrap();
     assert_eq!(list.total, 2);
     assert_eq!(list.items.len(), 2);
+}
+
+#[tokio::test]
+async fn test_bulk_add_series_counts_added_and_already_present() {
+    let (db, _t) = setup_test_db().await;
+    let library = LibraryRepository::create(&db, "Lib", "/test", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let s1 = SeriesRepository::create(&db, library.id, "S1", None)
+        .await
+        .unwrap();
+    let s2 = SeriesRepository::create(&db, library.id, "S2", None)
+        .await
+        .unwrap();
+    let s3 = SeriesRepository::create(&db, library.id, "S3", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let (_uid, token) = user_and_token(&db, &state, "alice", false).await;
+    let app = create_test_router(state).await;
+
+    // Pre-flag s1 so the bulk call sees it as already present.
+    let req = post_json_request_with_auth(
+        "/api/v1/want-to-read",
+        &serde_json::json!({ "seriesId": s1.id }),
+        &token,
+    );
+    let _: (StatusCode, Option<WantToReadEntryDto>) = make_json_request(app.clone(), req).await;
+
+    // Bulk add: s1 (already present), s2 twice (deduped), s3 (new), plus a
+    // phantom id that should be silently skipped.
+    let phantom = uuid::Uuid::new_v4();
+    let req = post_json_request_with_auth(
+        "/api/v1/want-to-read/bulk",
+        &serde_json::json!({ "seriesIds": [s1.id, s2.id, s2.id, s3.id, phantom] }),
+        &token,
+    );
+    let (status, resp): (StatusCode, Option<BulkAddWantToReadResponse>) =
+        make_json_request(app.clone(), req).await;
+    assert_eq!(status, StatusCode::OK);
+    let resp = resp.unwrap();
+    assert_eq!(resp.added, 2); // s2, s3
+    assert_eq!(resp.already_present, 1); // s1
+
+    // Queue now holds s1, s2, s3.
+    let req = get_request_with_auth("/api/v1/want-to-read", &token);
+    let (_s, list): (StatusCode, Option<WantToReadListResponse>) =
+        make_json_request(app, req).await;
+    assert_eq!(list.unwrap().total, 3);
+}
+
+#[tokio::test]
+async fn test_bulk_add_books_and_mixed() {
+    let (db, _t) = setup_test_db().await;
+    let (_library, series) = library_and_series(&db).await;
+    let b1 = a_book(&db, series.id, series.library_id).await;
+    let b2 = a_book(&db, series.id, series.library_id).await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let (_uid, token) = user_and_token(&db, &state, "alice", false).await;
+    let app = create_test_router(state).await;
+
+    // A single bulk call carrying both series and books.
+    let req = post_json_request_with_auth(
+        "/api/v1/want-to-read/bulk",
+        &serde_json::json!({ "seriesIds": [series.id], "bookIds": [b1.id, b2.id] }),
+        &token,
+    );
+    let (status, resp): (StatusCode, Option<BulkAddWantToReadResponse>) =
+        make_json_request(app.clone(), req).await;
+    assert_eq!(status, StatusCode::OK);
+    let resp = resp.unwrap();
+    assert_eq!(resp.added, 3);
+    assert_eq!(resp.already_present, 0);
+
+    let req = get_request_with_auth("/api/v1/want-to-read", &token);
+    let (_s, list): (StatusCode, Option<WantToReadListResponse>) =
+        make_json_request(app, req).await;
+    assert_eq!(list.unwrap().total, 3);
+}
+
+#[tokio::test]
+async fn test_bulk_add_requires_authentication() {
+    let (db, _t) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let app = create_test_router(state).await;
+
+    let req = post_json_request(
+        "/api/v1/want-to-read/bulk",
+        &serde_json::json!({ "seriesIds": [uuid::Uuid::new_v4()] }),
+    );
+    let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
 }
 
 #[tokio::test]

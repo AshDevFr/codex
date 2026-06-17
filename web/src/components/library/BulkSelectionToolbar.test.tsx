@@ -46,6 +46,13 @@ vi.mock("@/api/series", () => ({
   },
 }));
 
+vi.mock("@/api/wantToRead", () => ({
+  wantToReadApi: {
+    bulkAddSeries: vi.fn().mockResolvedValue({ added: 1, alreadyPresent: 0 }),
+    bulkAddBooks: vi.fn().mockResolvedValue({ added: 1, alreadyPresent: 0 }),
+  },
+}));
+
 // Stub the task API helpers used by the bulk-tracking mutation. The unit
 // tests don't drive the SSE stream — they just need the call sites to be
 // reachable. `subscribeToTaskCompletion` returns a no-op cleanup so the
@@ -501,6 +508,67 @@ describe("BulkSelectionToolbar", () => {
     });
   });
 
+  describe("want to read bulk actions", () => {
+    it("calls bulkAddBooks with all selected books", async () => {
+      const { wantToReadApi } = await import("@/api/wantToRead");
+      const user = userEvent.setup();
+
+      useBulkSelectionStore.getState().toggleSelection("book-1", "book");
+      useBulkSelectionStore.getState().toggleSelection("book-2", "book");
+
+      renderWithProviders(<BulkSelectionToolbar />);
+
+      await user.click(screen.getByRole("button", { name: /more actions/i }));
+      await waitFor(() => {
+        expect(screen.getByText("Add to Want to Read")).toBeInTheDocument();
+      });
+      await user.click(screen.getByText("Add to Want to Read"));
+
+      await waitFor(() => {
+        expect(wantToReadApi.bulkAddBooks).toHaveBeenCalledWith([
+          "book-1",
+          "book-2",
+        ]);
+      });
+    });
+
+    it("calls bulkAddSeries with all selected series", async () => {
+      const { wantToReadApi } = await import("@/api/wantToRead");
+      const user = userEvent.setup();
+
+      useBulkSelectionStore.getState().toggleSelection("series-1", "series");
+
+      renderWithProviders(<BulkSelectionToolbar />);
+
+      await user.click(screen.getByRole("button", { name: /more actions/i }));
+      await waitFor(() => {
+        expect(screen.getByText("Add to Want to Read")).toBeInTheDocument();
+      });
+      await user.click(screen.getByText("Add to Want to Read"));
+
+      await waitFor(() => {
+        expect(wantToReadApi.bulkAddSeries).toHaveBeenCalledWith(["series-1"]);
+      });
+    });
+
+    it("clears the selection after adding to Want to Read", async () => {
+      const user = userEvent.setup();
+      useBulkSelectionStore.getState().toggleSelection("book-1", "book");
+
+      renderWithProviders(<BulkSelectionToolbar />);
+
+      await user.click(screen.getByRole("button", { name: /more actions/i }));
+      await waitFor(() => {
+        expect(screen.getByText("Add to Want to Read")).toBeInTheDocument();
+      });
+      await user.click(screen.getByText("Add to Want to Read"));
+
+      await waitFor(() => {
+        expect(useBulkSelectionStore.getState().selectedIds.size).toBe(0);
+      });
+    });
+  });
+
   describe("selection clearing after action", () => {
     it("should clear selection after successful Mark Read action", async () => {
       const user = userEvent.setup();
@@ -673,7 +741,11 @@ describe("BulkSelectionToolbar", () => {
       mockPermissionsReader();
     });
 
-    it("should not show More button for reader users selecting books", () => {
+    // The More menu still renders for readers because it carries the ungated
+    // "Add to Want to Read" action, but the permission-gated entries (Analyze,
+    // etc.) must not appear.
+    it("shows a More menu with only Want to Read for reader users selecting books", async () => {
+      const user = userEvent.setup();
       useBulkSelectionStore.getState().toggleSelection("book-1", "book");
 
       renderWithProviders(<BulkSelectionToolbar />);
@@ -682,12 +754,17 @@ describe("BulkSelectionToolbar", () => {
       expect(
         screen.getByRole("button", { name: /mark read/i }),
       ).toBeInTheDocument();
-      expect(
-        screen.queryByRole("button", { name: /more actions/i }),
-      ).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: /more actions/i }));
+      await waitFor(() => {
+        expect(screen.getByText("Add to Want to Read")).toBeInTheDocument();
+      });
+      // Permission-gated actions stay hidden.
+      expect(screen.queryByText("Analyze")).not.toBeInTheDocument();
     });
 
-    it("should not show More button for reader users selecting series", () => {
+    it("shows a More menu with only Want to Read for reader users selecting series", async () => {
+      const user = userEvent.setup();
       useBulkSelectionStore.getState().toggleSelection("series-1", "series");
 
       renderWithProviders(<BulkSelectionToolbar />);
@@ -696,9 +773,12 @@ describe("BulkSelectionToolbar", () => {
       expect(
         screen.getByRole("button", { name: /mark read/i }),
       ).toBeInTheDocument();
-      expect(
-        screen.queryByRole("button", { name: /more actions/i }),
-      ).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: /more actions/i }));
+      await waitFor(() => {
+        expect(screen.getByText("Add to Want to Read")).toBeInTheDocument();
+      });
+      expect(screen.queryByText("Analyze")).not.toBeInTheDocument();
     });
 
     it("should not show Plugins button for reader users", async () => {

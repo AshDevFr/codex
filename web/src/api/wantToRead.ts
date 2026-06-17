@@ -9,6 +9,9 @@ export type WantToReadItemType = components["schemas"]["WantToReadItemType"];
 /** Sort direction for the queue, by add time. */
 export type WantToReadSort = "newest" | "oldest";
 
+export type BulkAddWantToReadResponse =
+  components["schemas"]["BulkAddWantToReadResponse"];
+
 export const wantToReadApi = {
   /**
    * List the current user's want-to-read queue.
@@ -35,6 +38,31 @@ export const wantToReadApi = {
     const response = await api.post<WantToReadEntry>("/want-to-read", {
       bookId,
     });
+    return response.data;
+  },
+
+  /**
+   * Add many series to the queue in one call. Idempotent: items already queued
+   * are reported via `alreadyPresent`; unknown ids are skipped.
+   */
+  bulkAddSeries: async (
+    seriesIds: string[],
+  ): Promise<BulkAddWantToReadResponse> => {
+    const response = await api.post<BulkAddWantToReadResponse>(
+      "/want-to-read/bulk",
+      { seriesIds },
+    );
+    return response.data;
+  },
+
+  /** Add many books to the queue in one call. Idempotent. */
+  bulkAddBooks: async (
+    bookIds: string[],
+  ): Promise<BulkAddWantToReadResponse> => {
+    const response = await api.post<BulkAddWantToReadResponse>(
+      "/want-to-read/bulk",
+      { bookIds },
+    );
     return response.data;
   },
 

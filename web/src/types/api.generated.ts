@@ -5822,6 +5822,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/want-to-read/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add many series and/or books to the authenticated user's queue in one call.
+         * @description Idempotent and tolerant: items already queued are reported as
+         *     `alreadyPresent`, and unknown IDs are silently skipped (a bulk grid
+         *     selection shouldn't fail wholesale because one item was deleted
+         *     concurrently). Returns the counts so the caller can surface an accurate
+         *     toast.
+         */
+        post: operations["bulk_add_want_to_read"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/want-to-read/series/{series_id}": {
         parameters: {
             query?: never;
@@ -9725,6 +9749,43 @@ export interface components {
              * @example codex-web
              */
             serviceName: string;
+        };
+        /**
+         * @description Request to add many entries to the queue in one call. Provide series IDs,
+         *     book IDs, or both; each list is added independently. Unknown IDs are skipped
+         *     rather than failing the batch.
+         */
+        BulkAddWantToReadRequest: {
+            /**
+             * @description Books to flag.
+             * @example [
+             *       "550e8400-e29b-41d4-a716-446655440002"
+             *     ]
+             */
+            bookIds?: string[];
+            /**
+             * @description Series to flag.
+             * @example [
+             *       "550e8400-e29b-41d4-a716-446655440001"
+             *     ]
+             */
+            seriesIds?: string[];
+        };
+        /**
+         * @description Outcome of a bulk add: how many entries were newly added versus already in
+         *     the queue (existing IDs that were skipped).
+         */
+        BulkAddWantToReadResponse: {
+            /**
+             * @description Number of entries newly inserted into the queue.
+             * @example 3
+             */
+            added: number;
+            /**
+             * @description Number of provided (existing) items that were already in the queue.
+             * @example 1
+             */
+            alreadyPresent: number;
         };
         /** @description Request to perform bulk analyze operations on multiple books */
         BulkAnalyzeBooksRequest: {
@@ -34018,6 +34079,37 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    bulk_add_want_to_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkAddWantToReadRequest"];
+            };
+        };
+        responses: {
+            /** @description Entries added */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkAddWantToReadResponse"];
+                };
             };
             /** @description Unauthorized */
             401: {

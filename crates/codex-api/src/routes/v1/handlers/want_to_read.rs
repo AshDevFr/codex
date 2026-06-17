@@ -5,8 +5,8 @@
 //! their own queue.
 
 use super::super::dto::{
-    AddWantToReadRequest, WantToReadEntryDto, WantToReadItemType, WantToReadListQuery,
-    WantToReadListResponse,
+    AddWantToReadRequest, BulkAddWantToReadRequest, BulkAddWantToReadResponse, WantToReadEntryDto,
+    WantToReadItemType, WantToReadListQuery, WantToReadListResponse,
 };
 use crate::{AppState, error::ApiError, extractors::AuthContext};
 use axum::{
@@ -24,6 +24,7 @@ use uuid::Uuid;
     paths(
         list_want_to_read,
         add_want_to_read,
+        bulk_add_want_to_read,
         remove_want_to_read_series,
         remove_want_to_read_book,
     ),
@@ -31,6 +32,8 @@ use uuid::Uuid;
         WantToReadEntryDto,
         WantToReadListResponse,
         AddWantToReadRequest,
+        BulkAddWantToReadRequest,
+        BulkAddWantToReadResponse,
         WantToReadItemType,
     )),
     tags(
@@ -121,6 +124,80 @@ pub async fn add_want_to_read(
     };
 
     Ok((StatusCode::CREATED, Json(entry.into())))
+}
+
+/// Add many series and/or books to the authenticated user's queue in one call.
+///
+/// Idempotent and tolerant: items already queued are reported as
+/// `alreadyPresent`, and unknown IDs are silently skipped (a bulk grid
+/// selection shouldn't fail wholesale because one item was deleted
+/// concurrently). Returns the counts so the caller can surface an accurate
+/// toast.
+#[utoipa::path(
+    post,
+    path = "/api/v1/want-to-read/bulk",
+    request_body = BulkAddWantToReadRequest,
+    responses(
+        (status = 200, description = "Entries added", body = BulkAddWantToReadResponse),
+        (status = 401, description = "Unauthorized"),
+    ),
+    security(
+        ("bearer_auth" = []),
+        ("api_key" = [])
+    ),
+    tag = "Want to Read"
+)]
+pub async fn bulk_add_want_to_read(
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+    Json(request): Json<BulkAddWantToReadRequest>,
+) -> Result<Json<BulkAddWantToReadResponse>, ApiError> {
+    let mut added = 0;
+    let mut already_present = 0;
+
+    if !request.series_ids.is_empty() {
+        // Filter to series that actually exist so phantom IDs don't violate the
+        // foreign key and fail the batch. Dedup so the "already present" count
+        // is honest.
+        let existing = SeriesRepository::get_existing_ids(&state.db, &request.series_ids)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to look up series: {e}")))?;
+        let mut seen = std::collections::HashSet::new();
+        let valid: Vec<Uuid> = request
+            .series_ids
+            .iter()
+            .copied()
+            .filter(|id| existing.contains(id) && seen.insert(*id))
+            .collect();
+        let inserted = WantToReadRepository::add_series_bulk(&state.db, auth.user_id, &valid)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to add series: {e}")))?;
+        added += inserted;
+        already_present += valid.len() - inserted;
+    }
+
+    if !request.book_ids.is_empty() {
+        let existing = BookRepository::get_existing_ids(&state.db, &request.book_ids)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to look up books: {e}")))?;
+        let mut seen = std::collections::HashSet::new();
+        let valid: Vec<Uuid> = request
+            .book_ids
+            .iter()
+            .copied()
+            .filter(|id| existing.contains(id) && seen.insert(*id))
+            .collect();
+        let inserted = WantToReadRepository::add_books_bulk(&state.db, auth.user_id, &valid)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to add books: {e}")))?;
+        added += inserted;
+        already_present += valid.len() - inserted;
+    }
+
+    Ok(Json(BulkAddWantToReadResponse {
+        added,
+        already_present,
+    }))
 }
 
 /// Remove a series from the authenticated user's queue.

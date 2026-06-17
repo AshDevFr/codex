@@ -53,6 +53,39 @@ export function useAddToWantToRead() {
   });
 }
 
+/**
+ * Add many series or books to the queue in a single request. Used by the bulk
+ * selection toolbar. Invalidates the queue and the relevant list queries so the
+ * grid's `wantToRead` flags refresh.
+ */
+export function useBulkAddToWantToRead() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      itemType,
+      ids,
+    }: {
+      itemType: "series" | "book";
+      ids: string[];
+    }) =>
+      itemType === "series"
+        ? wantToReadApi.bulkAddSeries(ids)
+        : wantToReadApi.bulkAddBooks(ids),
+    onSuccess: (_data, { itemType }) => {
+      queryClient.invalidateQueries({ queryKey: [QUEUE_KEY] });
+      queryClient.invalidateQueries({
+        queryKey: [itemType === "series" ? "series" : "books"],
+      });
+    },
+    onError: (error: Error) =>
+      notifications.show({
+        title: "Failed to add to Want to Read",
+        message: error.message || "Unknown error",
+        color: "red",
+      }),
+  });
+}
+
 export function useRemoveFromWantToRead() {
   const invalidate = useInvalidateAfterChange();
   return useMutation({

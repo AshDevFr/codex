@@ -16,6 +16,7 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
     Router::new()
         .route("/want-to-read", get(handlers::list_want_to_read))
         .route("/want-to-read", post(handlers::add_want_to_read))
+        .route("/want-to-read/bulk", post(handlers::bulk_add_want_to_read))
         .route(
             "/want-to-read/series/{series_id}",
             delete(handlers::remove_want_to_read_series),

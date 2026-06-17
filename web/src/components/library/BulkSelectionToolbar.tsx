@@ -14,6 +14,7 @@ import {
   IconBell,
   IconBellOff,
   IconBook,
+  IconBookmark,
   IconBookOff,
   IconChevronDown,
   IconEdit,
@@ -39,6 +40,7 @@ import { useAddSeriesToCollection } from "@/hooks/useCollections";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useAddBooksToReadList } from "@/hooks/useReadLists";
 import { useReleaseTrackingApplicability } from "@/hooks/useReleaseTrackingApplicability";
+import { useBulkAddToWantToRead } from "@/hooks/useWantToRead";
 import {
   selectPageItems,
   selectSelectionCount,
@@ -556,6 +558,9 @@ export function BulkSelectionToolbar() {
   // call adds every selected item at once.
   const addSeriesToCollection = useAddSeriesToCollection();
   const addBooksToReadList = useAddBooksToReadList();
+  // Want-to-read is per-user and ungated, so it adds every selected item at once
+  // via the bulk endpoint regardless of write permissions.
+  const bulkAddToWantToRead = useBulkAddToWantToRead();
 
   // Keyboard shortcut: Escape to clear selection
   useEffect(() => {
@@ -595,13 +600,18 @@ export function BulkSelectionToolbar() {
     bulkReprocessTitlesMutation.isPending ||
     bulkRenumberSeriesMutation.isPending ||
     bulkResetMetadataMutation.isPending ||
-    bulkSetTrackedMutation.isPending;
+    bulkSetTrackedMutation.isPending ||
+    bulkAddToWantToRead.isPending;
 
-  // Determine if the "More" menu should be shown based on permissions
-  const showBooksMoreMenu =
-    isBooks && (canWriteBooks || canWriteTasks || canManageReadLists);
-  const showSeriesMoreMenu =
-    !isBooks && (canWriteSeries || canWriteTasks || canManageCollections);
+  // The "More" menu always renders: even with no write permissions it carries
+  // the ungated "Add to Want to Read" action. These flags gate the
+  // permission-restricted sections within each menu.
+  const showBooksMoreMenu = isBooks;
+  const showSeriesMoreMenu = !isBooks;
+  const hasGatedBookSections =
+    canWriteBooks || canWriteTasks || canManageReadLists;
+  const hasGatedSeriesSections =
+    canWriteSeries || canWriteTasks || canManageCollections;
 
   // Get available plugin actions based on selection type
   const pluginActions = isBooks
@@ -727,6 +737,26 @@ export function BulkSelectionToolbar() {
           notifications.show({
             title: "Added to read list",
             message: `Added ${count} books to the read list.`,
+            color: "green",
+          });
+          clearSelection();
+        },
+      },
+    );
+  };
+
+  // Add every selected series/book to the per-user want-to-read queue.
+  const addSelectedToWantToRead = () => {
+    bulkAddToWantToRead.mutate(
+      { itemType: isBooks ? "book" : "series", ids: selectedIds },
+      {
+        onSuccess: ({ added, alreadyPresent }) => {
+          notifications.show({
+            title: "Added to Want to Read",
+            message:
+              alreadyPresent > 0
+                ? `Added ${added} ${itemLabel} (${alreadyPresent} already in your queue).`
+                : `Added ${added} ${itemLabel} to Want to Read.`,
             color: "green",
           });
           clearSelection();
@@ -898,6 +928,17 @@ export function BulkSelectionToolbar() {
                   />
                 </>
               )}
+
+              {/* Want to Read is per-user and ungated, so it always appears. */}
+              {hasGatedBookSections && <Menu.Divider />}
+              <Menu.Label>Want to Read</Menu.Label>
+              <Menu.Item
+                leftSection={<IconBookmark size={16} />}
+                onClick={addSelectedToWantToRead}
+                disabled={isAnyPending}
+              >
+                Add to Want to Read
+              </Menu.Item>
             </Menu.Dropdown>
           </Menu>
         )}
@@ -1046,6 +1087,17 @@ export function BulkSelectionToolbar() {
                   />
                 </>
               )}
+
+              {/* Want to Read is per-user and ungated, so it always appears. */}
+              {hasGatedSeriesSections && <Menu.Divider />}
+              <Menu.Label>Want to Read</Menu.Label>
+              <Menu.Item
+                leftSection={<IconBookmark size={16} />}
+                onClick={addSelectedToWantToRead}
+                disabled={isAnyPending}
+              >
+                Add to Want to Read
+              </Menu.Item>
             </Menu.Dropdown>
           </Menu>
         )}

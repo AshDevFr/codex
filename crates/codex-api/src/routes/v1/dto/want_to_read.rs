@@ -75,6 +75,35 @@ pub struct AddWantToReadRequest {
     pub book_id: Option<Uuid>,
 }
 
+/// Request to add many entries to the queue in one call. Provide series IDs,
+/// book IDs, or both; each list is added independently. Unknown IDs are skipped
+/// rather than failing the batch.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkAddWantToReadRequest {
+    /// Series to flag.
+    #[serde(default)]
+    #[schema(example = json!(["550e8400-e29b-41d4-a716-446655440001"]))]
+    pub series_ids: Vec<Uuid>,
+    /// Books to flag.
+    #[serde(default)]
+    #[schema(example = json!(["550e8400-e29b-41d4-a716-446655440002"]))]
+    pub book_ids: Vec<Uuid>,
+}
+
+/// Outcome of a bulk add: how many entries were newly added versus already in
+/// the queue (existing IDs that were skipped).
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkAddWantToReadResponse {
+    /// Number of entries newly inserted into the queue.
+    #[schema(example = 3)]
+    pub added: usize,
+    /// Number of provided (existing) items that were already in the queue.
+    #[schema(example = 1)]
+    pub already_present: usize,
+}
+
 /// Query parameters for listing the queue.
 #[derive(Debug, Default, Deserialize, IntoParams)]
 #[serde(rename_all = "camelCase")]

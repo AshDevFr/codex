@@ -17552,6 +17552,49 @@
         ]
       }
     },
+    "/api/v1/want-to-read/bulk": {
+      "post": {
+        "tags": [
+          "Want to Read"
+        ],
+        "summary": "Add many series and/or books to the authenticated user's queue in one call.",
+        "description": "Idempotent and tolerant: items already queued are reported as\n`alreadyPresent`, and unknown IDs are silently skipped (a bulk grid\nselection shouldn't fail wholesale because one item was deleted\nconcurrently). Returns the counts so the caller can surface an accurate\ntoast.",
+        "operationId": "bulk_add_want_to_read",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkAddWantToReadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Entries added",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkAddWantToReadResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/want-to-read/series/{series_id}": {
       "delete": {
         "tags": [
@@ -24832,6 +24875,56 @@
             "type": "string",
             "description": "`service.name` resource attribute the browser SDK should set on\nevery span (matches the backend service name unless the operator\noverrode it specifically for the browser).",
             "example": "codex-web"
+          }
+        }
+      },
+      "BulkAddWantToReadRequest": {
+        "type": "object",
+        "description": "Request to add many entries to the queue in one call. Provide series IDs,\nbook IDs, or both; each list is added independently. Unknown IDs are skipped\nrather than failing the batch.",
+        "properties": {
+          "bookIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Books to flag.",
+            "example": [
+              "550e8400-e29b-41d4-a716-446655440002"
+            ]
+          },
+          "seriesIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Series to flag.",
+            "example": [
+              "550e8400-e29b-41d4-a716-446655440001"
+            ]
+          }
+        }
+      },
+      "BulkAddWantToReadResponse": {
+        "type": "object",
+        "description": "Outcome of a bulk add: how many entries were newly added versus already in\nthe queue (existing IDs that were skipped).",
+        "required": [
+          "added",
+          "alreadyPresent"
+        ],
+        "properties": {
+          "added": {
+            "type": "integer",
+            "description": "Number of entries newly inserted into the queue.",
+            "example": 3,
+            "minimum": 0
+          },
+          "alreadyPresent": {
+            "type": "integer",
+            "description": "Number of provided (existing) items that were already in the queue.",
+            "example": 1,
+            "minimum": 0
           }
         }
       },

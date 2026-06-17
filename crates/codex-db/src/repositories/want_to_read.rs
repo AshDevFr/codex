@@ -69,6 +69,75 @@ impl WantToReadRepository {
         Ok(model.insert(db).await?)
     }
 
+    /// Flag many series for a user in one batch. Idempotent: series already in
+    /// the queue are skipped. Returns the number of rows newly inserted.
+    ///
+    /// Callers are responsible for ensuring the IDs reference existing series;
+    /// invalid IDs would violate the foreign key and fail the whole batch.
+    pub async fn add_series_bulk(
+        db: &DatabaseConnection,
+        user_id: Uuid,
+        series_ids: &[Uuid],
+    ) -> Result<usize> {
+        if series_ids.is_empty() {
+            return Ok(0);
+        }
+        let already = Self::series_ids_in_queue(db, user_id, series_ids).await?;
+        let now = Utc::now();
+        let mut seen = HashSet::new();
+        let models: Vec<want_to_read::ActiveModel> = series_ids
+            .iter()
+            .copied()
+            .filter(|id| !already.contains(id) && seen.insert(*id))
+            .map(|series_id| want_to_read::ActiveModel {
+                id: Set(Uuid::new_v4()),
+                user_id: Set(user_id),
+                series_id: Set(Some(series_id)),
+                book_id: Set(None),
+                added_at: Set(now),
+            })
+            .collect();
+        let added = models.len();
+        if added > 0 {
+            WantToRead::insert_many(models).exec(db).await?;
+        }
+        Ok(added)
+    }
+
+    /// Flag many books for a user in one batch. Idempotent: books already in the
+    /// queue are skipped. Returns the number of rows newly inserted.
+    ///
+    /// Callers are responsible for ensuring the IDs reference existing books.
+    pub async fn add_books_bulk(
+        db: &DatabaseConnection,
+        user_id: Uuid,
+        book_ids: &[Uuid],
+    ) -> Result<usize> {
+        if book_ids.is_empty() {
+            return Ok(0);
+        }
+        let already = Self::book_ids_in_queue(db, user_id, book_ids).await?;
+        let now = Utc::now();
+        let mut seen = HashSet::new();
+        let models: Vec<want_to_read::ActiveModel> = book_ids
+            .iter()
+            .copied()
+            .filter(|id| !already.contains(id) && seen.insert(*id))
+            .map(|book_id| want_to_read::ActiveModel {
+                id: Set(Uuid::new_v4()),
+                user_id: Set(user_id),
+                series_id: Set(None),
+                book_id: Set(Some(book_id)),
+                added_at: Set(now),
+            })
+            .collect();
+        let added = models.len();
+        if added > 0 {
+            WantToRead::insert_many(models).exec(db).await?;
+        }
+        Ok(added)
+    }
+
     /// Remove a series from a user's queue. Returns whether a row was removed.
     pub async fn remove_series(
         db: &DatabaseConnection,
@@ -295,6 +364,83 @@ mod tests {
                 .len(),
             1
         );
+    }
+
+    #[tokio::test]
+    async fn test_add_series_bulk_inserts_new_and_skips_duplicates() {
+        let (db, _t) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let user = make_user(conn, "alice").await;
+        let library = LibraryRepository::create(conn, "Lib", "/lib", ScanningStrategy::Default)
+            .await
+            .unwrap();
+        let s1 = SeriesRepository::create(conn, library.id, "S1", None)
+            .await
+            .unwrap()
+            .id;
+        let s2 = SeriesRepository::create(conn, library.id, "S2", None)
+            .await
+            .unwrap()
+            .id;
+        let s3 = SeriesRepository::create(conn, library.id, "S3", None)
+            .await
+            .unwrap()
+            .id;
+
+        // s1 is already queued; the batch carries a duplicate of s2.
+        WantToReadRepository::add_series(conn, user.id, s1)
+            .await
+            .unwrap();
+
+        let added = WantToReadRepository::add_series_bulk(conn, user.id, &[s1, s2, s2, s3])
+            .await
+            .unwrap();
+        // s1 already present, s2 deduped to one insert, s3 new -> 2 newly added.
+        assert_eq!(added, 2);
+        assert_eq!(
+            WantToReadRepository::list(conn, user.id, false)
+                .await
+                .unwrap()
+                .len(),
+            3
+        );
+
+        // Re-running the same batch adds nothing.
+        let again = WantToReadRepository::add_series_bulk(conn, user.id, &[s1, s2, s3])
+            .await
+            .unwrap();
+        assert_eq!(again, 0);
+
+        // Empty input is a no-op.
+        assert_eq!(
+            WantToReadRepository::add_series_bulk(conn, user.id, &[])
+                .await
+                .unwrap(),
+            0
+        );
+    }
+
+    #[tokio::test]
+    async fn test_add_books_bulk_inserts_new_and_skips_duplicates() {
+        let (db, _t) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let user = make_user(conn, "alice").await;
+        let (_series_id, book_id) = make_series_and_book(conn).await;
+
+        let added = WantToReadRepository::add_books_bulk(conn, user.id, &[book_id, book_id])
+            .await
+            .unwrap();
+        assert_eq!(added, 1);
+        assert!(
+            WantToReadRepository::is_book_in_queue(conn, user.id, book_id)
+                .await
+                .unwrap()
+        );
+
+        let again = WantToReadRepository::add_books_bulk(conn, user.id, &[book_id])
+            .await
+            .unwrap();
+        assert_eq!(again, 0);
     }
 
     #[tokio::test]
