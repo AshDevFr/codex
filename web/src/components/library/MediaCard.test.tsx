@@ -56,6 +56,18 @@ vi.mock("@/api/readlists", () => ({
   },
 }));
 
+const wantToReadApiMock = vi.hoisted(() => ({
+  list: vi.fn().mockResolvedValue([]),
+  addSeries: vi.fn().mockResolvedValue({}),
+  addBook: vi.fn().mockResolvedValue({}),
+  removeSeries: vi.fn().mockResolvedValue(undefined),
+  removeBook: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("@/api/wantToRead", () => ({
+  wantToReadApi: wantToReadApiMock,
+}));
+
 const adminUser = {
   id: "u1",
   role: "admin",
@@ -593,6 +605,65 @@ describe("MediaCard", () => {
       // The reading action still renders, but the membership submenu does not.
       expect(await screen.findByText("Mark as Read")).toBeInTheDocument();
       expect(screen.queryByText("Add to collection")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("want to read", () => {
+    beforeEach(() => {
+      wantToReadApiMock.addBook.mockClear();
+      wantToReadApiMock.addSeries.mockClear();
+      wantToReadApiMock.removeBook.mockClear();
+      wantToReadApiMock.removeSeries.mockClear();
+    });
+
+    it("offers 'Add to Want to Read' on a book not in the queue", async () => {
+      const user = userEvent.setup();
+      const book = createBook({ wantToRead: false });
+
+      renderWithProviders(<MediaCard type="book" data={book} />);
+
+      await user.click(screen.getByRole("button", { name: "Card actions" }));
+
+      expect(
+        await screen.findByText("Add to Want to Read"),
+      ).toBeInTheDocument();
+    });
+
+    it("offers 'Remove from Want to Read' on a book already in the queue", async () => {
+      const user = userEvent.setup();
+      const book = createBook({ wantToRead: true });
+
+      renderWithProviders(<MediaCard type="book" data={book} />);
+
+      await user.click(screen.getByRole("button", { name: "Card actions" }));
+
+      expect(
+        await screen.findByText("Remove from Want to Read"),
+      ).toBeInTheDocument();
+    });
+
+    it("adds a book to the queue when the entry is clicked", async () => {
+      const user = userEvent.setup();
+      const book = createBook({ id: "book-wtr", wantToRead: false });
+
+      renderWithProviders(<MediaCard type="book" data={book} />);
+
+      await user.click(screen.getByRole("button", { name: "Card actions" }));
+      await user.click(await screen.findByText("Add to Want to Read"));
+
+      expect(wantToReadApiMock.addBook).toHaveBeenCalledWith("book-wtr");
+    });
+
+    it("removes a series from the queue when the entry is clicked", async () => {
+      const user = userEvent.setup();
+      const series = createSeries({ id: "series-wtr", wantToRead: true });
+
+      renderWithProviders(<MediaCard type="series" data={series} />);
+
+      await user.click(screen.getByRole("button", { name: "Card actions" }));
+      await user.click(await screen.findByText("Remove from Want to Read"));
+
+      expect(wantToReadApiMock.removeSeries).toHaveBeenCalledWith("series-wtr");
     });
   });
 });

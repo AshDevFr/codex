@@ -18,6 +18,8 @@ import {
   IconBellOff,
   IconBellRinging,
   IconBook,
+  IconBookmark,
+  IconBookmarkFilled,
   IconBookOff,
   IconCheck,
   IconDotsVertical,
@@ -37,6 +39,10 @@ import { ReadListMembershipSub } from "@/components/readlists/ReadListMembership
 import { useAddSeriesToCollection } from "@/hooks/useCollections";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useAddBooksToReadList } from "@/hooks/useReadLists";
+import {
+  useAddToWantToRead,
+  useRemoveFromWantToRead,
+} from "@/hooks/useWantToRead";
 import { useCoverUpdatesStore } from "@/store/coverUpdatesStore";
 import type { Book, Series } from "@/types";
 import { PERMISSIONS } from "@/types/permissions";
@@ -84,6 +90,22 @@ export const MediaCard = memo(function MediaCard({
   // the submenus own their own add/remove for toggling existing memberships.
   const addSeriesToCollection = useAddSeriesToCollection();
   const addBooksToReadList = useAddBooksToReadList();
+  // Want-to-read queue is per-user (no permission gate) and is a single boolean
+  // on the DTO, so the menu shows a plain add/remove toggle rather than a submenu.
+  const addToWantToRead = useAddToWantToRead();
+  const removeFromWantToRead = useRemoveFromWantToRead();
+  const wantToReadPending =
+    addToWantToRead.isPending || removeFromWantToRead.isPending;
+  const toggleWantToRead = useCallback(
+    (itemType: "book" | "series", id: string, active: boolean) => {
+      if (active) {
+        removeFromWantToRead.mutate({ itemType, id });
+      } else {
+        addToWantToRead.mutate({ itemType, id });
+      }
+    },
+    [addToWantToRead, removeFromWantToRead],
+  );
 
   // Get cover update timestamp for cache-busting (forces image reload when cover is regenerated)
   const coverTimestamp = useCoverUpdatesStore(
@@ -751,6 +773,33 @@ export const MediaCard = memo(function MediaCard({
                           </Menu.Item>
                         </>
                       )}
+                      {book && (
+                        <>
+                          <Menu.Divider />
+                          <Menu.Item
+                            leftSection={
+                              book.wantToRead ? (
+                                <IconBookmarkFilled size={14} />
+                              ) : (
+                                <IconBookmark size={14} />
+                              )
+                            }
+                            onClick={(e: React.MouseEvent) => {
+                              e.stopPropagation();
+                              toggleWantToRead(
+                                "book",
+                                book.id,
+                                Boolean(book.wantToRead),
+                              );
+                            }}
+                            disabled={wantToReadPending}
+                          >
+                            {book.wantToRead
+                              ? "Remove from Want to Read"
+                              : "Add to Want to Read"}
+                          </Menu.Item>
+                        </>
+                      )}
                       {canManageReadLists && book && (
                         <>
                           <Menu.Divider />
@@ -843,11 +892,38 @@ export const MediaCard = memo(function MediaCard({
                           </Menu.Item>
                         </>
                       )}
-                      {canManageCollections && series && (
+                      {series && (
                         <>
                           {(seriesHasReadingActions || canWriteSeries) && (
                             <Menu.Divider />
                           )}
+                          <Menu.Item
+                            leftSection={
+                              series.wantToRead ? (
+                                <IconBookmarkFilled size={14} />
+                              ) : (
+                                <IconBookmark size={14} />
+                              )
+                            }
+                            onClick={(e: React.MouseEvent) => {
+                              e.stopPropagation();
+                              toggleWantToRead(
+                                "series",
+                                series.id,
+                                Boolean(series.wantToRead),
+                              );
+                            }}
+                            disabled={wantToReadPending}
+                          >
+                            {series.wantToRead
+                              ? "Remove from Want to Read"
+                              : "Add to Want to Read"}
+                          </Menu.Item>
+                        </>
+                      )}
+                      {canManageCollections && series && (
+                        <>
+                          <Menu.Divider />
                           <CollectionMembershipSub
                             seriesId={series.id}
                             onRequestCreate={() =>
