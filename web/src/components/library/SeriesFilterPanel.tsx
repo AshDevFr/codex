@@ -150,6 +150,7 @@ export function SeriesFilterPanel({ libraryId }: SeriesFilterPanelProps = {}) {
       "esf",
       "urf",
       "trf",
+      "icf",
     ]) {
       newParams.delete(key);
     }
@@ -315,7 +316,7 @@ export function SeriesFilterPanel({ libraryId }: SeriesFilterPanelProps = {}) {
       />
 
       <FilterGroup
-        title="Collection"
+        title="Completeness"
         options={[{ value: "complete", label: "Complete" }]}
         state={{
           mode: "allOf",
@@ -361,6 +362,26 @@ export function SeriesFilterPanel({ libraryId }: SeriesFilterPanelProps = {}) {
               : new Map(),
         }}
         onValueChange={(_value, state) => draftState.setIsTrackedState(state)}
+        onModeChange={() => {}}
+        showModeToggle={false}
+        variant="neutral"
+      />
+
+      <FilterGroup
+        title="Collections"
+        options={[{ value: "inCollection", label: "In Collection" }]}
+        state={{
+          mode: "allOf",
+          values:
+            draftState.draftFilters.inCollection !== "neutral"
+              ? new Map([
+                  ["inCollection", draftState.draftFilters.inCollection],
+                ])
+              : new Map(),
+        }}
+        onValueChange={(_value, state) =>
+          draftState.setInCollectionState(state)
+        }
         onModeChange={() => {}}
         showModeToggle={false}
         variant="neutral"

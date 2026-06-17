@@ -21,6 +21,7 @@ import {
   IconAlertTriangle,
   IconBookmark,
   IconCategory,
+  IconList,
   IconTag,
   IconX,
   type TablerIcon,
@@ -138,6 +139,7 @@ export function BookFilterPanel({ libraryId }: BookFilterPanelProps = {}) {
     newParams.delete(BOOK_FILTER_PARAM_KEYS.readStatus);
     newParams.delete(BOOK_FILTER_PARAM_KEYS.bookType);
     newParams.delete(BOOK_FILTER_PARAM_KEYS.hasError);
+    newParams.delete(BOOK_FILTER_PARAM_KEYS.inReadList);
     for (const [key, value] of filterParams) {
       newParams.set(key, value);
     }
@@ -297,6 +299,26 @@ export function BookFilterPanel({ libraryId }: BookFilterPanelProps = {}) {
           color="red"
         />
       </Group>
+
+      <Divider my={4} />
+
+      <SectionHeader icon={IconList}>Read Lists</SectionHeader>
+
+      <FilterGroup
+        title="Read Lists"
+        options={[{ value: "inReadList", label: "In Read List" }]}
+        state={{
+          mode: "allOf",
+          values:
+            draftState.draftFilters.inReadList !== "neutral"
+              ? new Map([["inReadList", draftState.draftFilters.inReadList]])
+              : new Map(),
+        }}
+        onValueChange={(_value, state) => draftState.setInReadListState(state)}
+        onModeChange={() => {}}
+        showModeToggle={false}
+        variant="neutral"
+      />
 
       <Divider my={4} />
 

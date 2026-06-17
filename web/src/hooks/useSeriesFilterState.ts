@@ -57,6 +57,9 @@ interface UseSeriesFilterStateReturn {
   // Actions for isTracked filter
   setIsTrackedState: (state: TriState) => void;
 
+  // Actions for inCollection filter
+  setInCollectionState: (state: TriState) => void;
+
   // Bulk actions
   clearAll: () => void;
   clearGroup: (group: keyof SeriesFilterState) => void;
@@ -111,6 +114,7 @@ export function useSeriesFilterState(): UseSeriesFilterStateReturn {
       newParams.delete("esf");
       newParams.delete("urf");
       newParams.delete("trf");
+      newParams.delete("icf");
       // Add new filter params
       for (const [key, value] of filterParams) {
         newParams.set(key, value);
@@ -129,7 +133,11 @@ export function useSeriesFilterState(): UseSeriesFilterStateReturn {
     (
       group: keyof Omit<
         SeriesFilterState,
-        "completion" | "hasExternalSourceId" | "hasUserRating" | "isTracked"
+        | "completion"
+        | "hasExternalSourceId"
+        | "hasUserRating"
+        | "isTracked"
+        | "inCollection"
       >,
       updater: (current: FilterGroupState) => FilterGroupState,
     ) => {
@@ -337,6 +345,15 @@ export function useSeriesFilterState(): UseSeriesFilterStateReturn {
     [filters, updateFilters],
   );
 
+  // InCollection actions
+  const setInCollectionState = useCallback(
+    (state: TriState) => {
+      const newFilters = { ...filters, inCollection: state };
+      updateFilters(newFilters);
+    },
+    [filters, updateFilters],
+  );
+
   // Clear all filters
   const clearAll = useCallback(() => {
     updateFilters(createEmptySeriesFilterState());
@@ -366,6 +383,12 @@ export function useSeriesFilterState(): UseSeriesFilterStateReturn {
           isTracked: "neutral" as const,
         };
         updateFilters(newFilters);
+      } else if (group === "inCollection") {
+        const newFilters = {
+          ...filters,
+          inCollection: "neutral" as const,
+        };
+        updateFilters(newFilters);
       } else {
         updateGroup(group, (current) => ({
           ...current,
@@ -390,6 +413,7 @@ export function useSeriesFilterState(): UseSeriesFilterStateReturn {
       hasExternalSourceId: filters.hasExternalSourceId !== "neutral" ? 1 : 0,
       hasUserRating: filters.hasUserRating !== "neutral" ? 1 : 0,
       isTracked: filters.isTracked !== "neutral" ? 1 : 0,
+      inCollection: filters.inCollection !== "neutral" ? 1 : 0,
     }),
     [filters],
   );
@@ -425,6 +449,7 @@ export function useSeriesFilterState(): UseSeriesFilterStateReturn {
     setHasExternalSourceIdState,
     setHasUserRatingState,
     setIsTrackedState,
+    setInCollectionState,
     clearAll,
     clearGroup,
     hasActiveFilters,

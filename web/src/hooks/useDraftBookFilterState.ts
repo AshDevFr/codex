@@ -36,6 +36,9 @@ interface UseDraftBookFilterStateReturn {
   // Actions for hasError filter
   setHasErrorState: (state: TriState) => void;
 
+  // Actions for inReadList filter
+  setInReadListState: (state: TriState) => void;
+
   // Bulk actions on draft
   clearAllDraft: () => void;
   clearGroupDraft: (group: keyof Omit<BookFilterState, "hasError">) => void;
@@ -54,6 +57,7 @@ interface UseDraftBookFilterStateReturn {
     readStatus: number;
     bookType: number;
     hasError: number;
+    inReadList: number;
   };
 
   // Track if there are uncommitted changes
@@ -76,6 +80,7 @@ function cloneBookFilterState(state: BookFilterState): BookFilterState {
       values: new Map(state.bookType.values),
     },
     hasError: state.hasError,
+    inReadList: state.inReadList,
   };
 }
 
@@ -102,6 +107,7 @@ function bookFilterStatesEqual(
   }
 
   if (a.hasError !== b.hasError) return false;
+  if (a.inReadList !== b.inReadList) return false;
 
   return true;
 }
@@ -268,6 +274,14 @@ export function useDraftBookFilterState(): UseDraftBookFilterStateReturn {
     [updateDraft],
   );
 
+  // InReadList action
+  const setInReadListState = useCallback(
+    (state: TriState) => {
+      updateDraft((current) => ({ ...current, inReadList: state }));
+    },
+    [updateDraft],
+  );
+
   // Clear all draft filters
   const clearAllDraft = useCallback(() => {
     setDraftFilters(createEmptyBookFilterState());
@@ -290,6 +304,7 @@ export function useDraftBookFilterState(): UseDraftBookFilterStateReturn {
     newParams.delete(BOOK_FILTER_PARAM_KEYS.readStatus);
     newParams.delete(BOOK_FILTER_PARAM_KEYS.bookType);
     newParams.delete(BOOK_FILTER_PARAM_KEYS.hasError);
+    newParams.delete(BOOK_FILTER_PARAM_KEYS.inReadList);
 
     // Add new filter params (will be empty for cleared filters)
     for (const [key, value] of filterParams) {
@@ -334,6 +349,7 @@ export function useDraftBookFilterState(): UseDraftBookFilterStateReturn {
     newParams.delete(BOOK_FILTER_PARAM_KEYS.readStatus);
     newParams.delete(BOOK_FILTER_PARAM_KEYS.bookType);
     newParams.delete(BOOK_FILTER_PARAM_KEYS.hasError);
+    newParams.delete(BOOK_FILTER_PARAM_KEYS.inReadList);
 
     // Add new filter params
     for (const [key, value] of filterParams) {
@@ -359,6 +375,7 @@ export function useDraftBookFilterState(): UseDraftBookFilterStateReturn {
       readStatus: countActiveFilters(draftFilters.readStatus),
       bookType: countActiveFilters(draftFilters.bookType),
       hasError: draftFilters.hasError !== "neutral" ? 1 : 0,
+      inReadList: draftFilters.inReadList !== "neutral" ? 1 : 0,
     }),
     [draftFilters],
   );
@@ -385,6 +402,7 @@ export function useDraftBookFilterState(): UseDraftBookFilterStateReturn {
     setBookTypeState,
     setBookTypeMode,
     setHasErrorState,
+    setInReadListState,
     clearAllDraft,
     clearGroupDraft,
     clearAllAndApply,

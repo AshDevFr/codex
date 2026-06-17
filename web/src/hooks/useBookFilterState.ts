@@ -38,6 +38,9 @@ interface UseBookFilterStateReturn {
   // Actions for hasError filter
   setHasErrorState: (state: TriState) => void;
 
+  // Actions for inReadList filter
+  setInReadListState: (state: TriState) => void;
+
   // Bulk actions
   clearAll: () => void;
   clearGroup: (group: keyof Omit<BookFilterState, "hasError">) => void;
@@ -51,6 +54,7 @@ interface UseBookFilterStateReturn {
     readStatus: number;
     bookType: number;
     hasError: number;
+    inReadList: number;
   };
 
   // API-ready condition
@@ -89,6 +93,7 @@ export function useBookFilterState(): UseBookFilterStateReturn {
       newParams.delete(BOOK_FILTER_PARAM_KEYS.readStatus);
       newParams.delete(BOOK_FILTER_PARAM_KEYS.bookType);
       newParams.delete(BOOK_FILTER_PARAM_KEYS.hasError);
+      newParams.delete(BOOK_FILTER_PARAM_KEYS.inReadList);
 
       // Add new filter params
       for (const [key, value] of filterParams) {
@@ -216,6 +221,14 @@ export function useBookFilterState(): UseBookFilterStateReturn {
     [filters, updateFilters],
   );
 
+  // InReadList action
+  const setInReadListState = useCallback(
+    (state: TriState) => {
+      updateFilters({ ...filters, inReadList: state });
+    },
+    [filters, updateFilters],
+  );
+
   // Clear all filters
   const clearAll = useCallback(() => {
     updateFilters(createEmptyBookFilterState());
@@ -240,6 +253,7 @@ export function useBookFilterState(): UseBookFilterStateReturn {
       readStatus: countActiveFilters(filters.readStatus),
       bookType: countActiveFilters(filters.bookType),
       hasError: filters.hasError !== "neutral" ? 1 : 0,
+      inReadList: filters.inReadList !== "neutral" ? 1 : 0,
     }),
     [filters],
   );
@@ -262,6 +276,7 @@ export function useBookFilterState(): UseBookFilterStateReturn {
     setBookTypeState,
     setBookTypeMode,
     setHasErrorState,
+    setInReadListState,
     clearAll,
     clearGroup,
     hasActiveFilters,
