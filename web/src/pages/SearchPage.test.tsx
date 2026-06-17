@@ -295,6 +295,31 @@ describe("SearchPage", () => {
       );
     });
 
+    it("selects a contiguous range on shift-click", async () => {
+      const user = userEvent.setup();
+      vi.mocked(seriesApi.search).mockResolvedValue(
+        seriesResult(["s1", "s2", "s3"]) as never,
+      );
+
+      renderWithProviders(<SearchPage />, {
+        initialEntries: ["/search?q=batman"],
+      });
+
+      const cards = await screen.findAllByTestId("media-card");
+      const seriesCards = cards.filter(
+        (c) => c.getAttribute("data-card-type") === "series",
+      );
+
+      // Anchor on the first card, then shift-click the third.
+      await user.click(seriesCards[0]);
+      await user.keyboard("{Shift>}");
+      await user.click(seriesCards[2]);
+      await user.keyboard("{/Shift}");
+
+      const state = useBulkSelectionStore.getState();
+      expect([...state.selectedIds].sort()).toEqual(["s1", "s2", "s3"]);
+    });
+
     it("clears the selection when switching tabs", async () => {
       const user = userEvent.setup();
       vi.mocked(seriesApi.search).mockResolvedValue(
