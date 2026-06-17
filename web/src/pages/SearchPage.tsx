@@ -1,6 +1,7 @@
 import {
   Alert,
   Badge,
+  Box,
   Button,
   Card,
   Collapse,
@@ -245,6 +246,7 @@ export function SearchPage() {
   const booksCount = booksQuery.data?.total ?? 0;
 
   const clearSelection = useBulkSelectionStore((s) => s.clearSelection);
+  const isSelectionMode = useBulkSelectionStore(selectIsSelectionMode);
 
   const [builderOpened, builderHandlers] = useDisclosure(true);
 
@@ -261,8 +263,6 @@ export function SearchPage() {
 
   return (
     <Container size="xl" py="xl">
-      {/* Bulk selection toolbar - renders nothing until results are selected */}
-      <BulkSelectionToolbar />
       <Stack gap="md">
         <Group justify="space-between" align="flex-end">
           <Title order={1}>Search</Title>
@@ -380,6 +380,25 @@ export function SearchPage() {
             Your filter is too complex to share via URL. Save it as a preset
             from the sidebar to reload it later without losing state.
           </Alert>
+        )}
+
+        {/* Bulk selection toolbar - sits between the filters and the tabs and
+            sticks below the app header so it stays reachable while scrolling
+            through results. Only mounted while a selection is active so it
+            never leaves an empty band. The body background hides result cards
+            scrolling under the rounded bar. */}
+        {isSelectionMode && (
+          <Box
+            style={{
+              position: "sticky",
+              top: "var(--app-shell-header-height, 64px)",
+              zIndex: 3,
+              backgroundColor: "var(--mantine-color-body)",
+              paddingBottom: "var(--mantine-spacing-xs)",
+            }}
+          >
+            <BulkSelectionToolbar />
+          </Box>
         )}
 
         <Tabs

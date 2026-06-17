@@ -133,8 +133,10 @@ describe("DownloadsSettings: list rendering", () => {
 
     expect(await screen.findByText(/Storage used/i)).toBeInTheDocument();
     // 500 MB / 1 GB rounds to 47.68 MB usage, 953.67 MB available with the
-    // helper's formatting; just check the slash format is rendered.
-    expect(screen.getByText(/available/i)).toBeInTheDocument();
+    // helper's formatting; just check the slash format is rendered. Wait for
+    // the async quota estimate to resolve (the "Storage used" label is static
+    // and paints before refreshQuota() updates state).
+    expect(await screen.findByText(/available/i)).toBeInTheDocument();
   });
 
   it("surfaces the persistence indicator when persist() resolves true", async () => {
