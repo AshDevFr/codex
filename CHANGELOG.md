@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.39.3] - 2026-06-18
+
+### 🚀 Features
+
+- *(web)* Add detail hover cards to series and book cards
+
 ## [1.39.2] - 2026-06-17
 
 ### 🐛 Bug Fixes
