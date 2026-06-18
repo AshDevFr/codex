@@ -284,6 +284,7 @@ pub async fn books_to_dtos(
             // Volume / chapter classification from book_metadata
             let volume = book_meta.and_then(|m| m.volume);
             let chapter = book_meta.and_then(|m| m.chapter);
+            let summary = book_meta.and_then(|m| m.summary.clone());
 
             let read_progress = progress_map.get(&book.id).cloned();
 
@@ -317,6 +318,7 @@ pub async fn books_to_dtos(
                 reading_direction,
                 volume,
                 chapter,
+                summary,
                 want_to_read: Some(want_to_read_ids.contains(&book.id)),
             }
         })

@@ -668,6 +668,7 @@ export const createBook = (overrides: Partial<BookDto> = {}): BookDto => {
     number,
     volume,
     chapter,
+    summary: bookInfo?.summary ?? null,
     createdAt: faker.date.past().toISOString(),
     updatedAt: faker.date.recent().toISOString(),
     readProgress: null,

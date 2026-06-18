@@ -608,6 +608,51 @@ describe("MediaCard", () => {
     });
   });
 
+  describe("hover card", () => {
+    it("reveals a panel with the series summary and local counts on hover", async () => {
+      const user = userEvent.setup();
+      const series = createSeries({
+        title: "Berserk",
+        summary: "Guts, a lone mercenary, wanders a brutal medieval world.",
+        bookCount: 41,
+        localMaxVolume: 41,
+        localMaxChapter: 364.5,
+      });
+
+      renderWithProviders(<MediaCard type="series" data={series} />);
+
+      // The dropdown is lazy: nothing is rendered until the cover is hovered.
+      expect(
+        screen.queryByText(/Guts, a lone mercenary/),
+      ).not.toBeInTheDocument();
+
+      const cover = document.querySelector(".media-card-cover");
+      expect(cover).not.toBeNull();
+      await user.hover(cover as Element);
+
+      expect(
+        await screen.findByText(/Guts, a lone mercenary/),
+      ).toBeInTheDocument();
+      expect(await screen.findByText("41 vol · 364.5 ch")).toBeInTheDocument();
+    });
+
+    it("reveals a panel with book metadata on hover", async () => {
+      const user = userEvent.setup();
+      const book = createBook({
+        title: "Volume 3",
+        volume: 3,
+        deleted: false,
+      });
+
+      renderWithProviders(<MediaCard type="book" data={book} />);
+
+      const cover = document.querySelector(".media-card-cover");
+      await user.hover(cover as Element);
+
+      expect(await screen.findByText(/Vol 3/)).toBeInTheDocument();
+    });
+  });
+
   describe("want to read", () => {
     beforeEach(() => {
       wantToReadApiMock.addBook.mockClear();

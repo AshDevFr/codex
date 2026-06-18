@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { formatChapterCount, formatSeriesCounts } from "./seriesCounts";
+import {
+  formatChapterCount,
+  formatLocalSeriesCounts,
+  formatSeriesCounts,
+} from "./seriesCounts";
 
 describe("formatChapterCount", () => {
   it("renders integers without a decimal", () => {
@@ -158,5 +162,74 @@ describe("formatSeriesCounts", () => {
         localMaxChapter: 137.5,
       }),
     ).toBe("137.5/158 ch");
+  });
+});
+
+describe("formatLocalSeriesCounts", () => {
+  it("renders both axes when both local maxima are known", () => {
+    expect(
+      formatLocalSeriesCounts({
+        bookCount: 20,
+        localMaxVolume: 14,
+        localMaxChapter: 109.5,
+      }),
+    ).toBe("14 vol · 109.5 ch");
+  });
+
+  it("renders volumes only when no chapter max is present", () => {
+    expect(
+      formatLocalSeriesCounts({
+        bookCount: 14,
+        localMaxVolume: 14,
+        localMaxChapter: null,
+      }),
+    ).toBe("14 vol");
+  });
+
+  it("renders chapters only when no volume max is present", () => {
+    expect(
+      formatLocalSeriesCounts({
+        bookCount: 60,
+        localMaxVolume: null,
+        localMaxChapter: 109.5,
+      }),
+    ).toBe("109.5 ch");
+  });
+
+  it("drops the trailing decimal on integer chapter maxima", () => {
+    expect(
+      formatLocalSeriesCounts({
+        bookCount: 60,
+        localMaxChapter: 109,
+      }),
+    ).toBe("109 ch");
+  });
+
+  it("falls back to a pluralized book count when no maxima are known", () => {
+    expect(
+      formatLocalSeriesCounts({
+        bookCount: 15,
+        localMaxVolume: null,
+        localMaxChapter: null,
+      }),
+    ).toBe("15 books");
+  });
+
+  it("uses the singular 'book' for a single-book series", () => {
+    expect(formatLocalSeriesCounts({ bookCount: 1 })).toBe("1 book");
+  });
+
+  it("treats a zero book count as a real count, not as missing", () => {
+    expect(formatLocalSeriesCounts({ bookCount: 0 })).toBe("0 books");
+  });
+
+  it("returns null when there is nothing to show", () => {
+    expect(
+      formatLocalSeriesCounts({
+        bookCount: null,
+        localMaxVolume: null,
+        localMaxChapter: null,
+      }),
+    ).toBeNull();
   });
 });

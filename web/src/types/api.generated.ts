@@ -8291,6 +8291,13 @@ export interface components {
              */
             seriesName: string;
             /**
+             * @description Book summary/description from book_metadata (ComicInfo `<Summary>` or
+             *     EPUB description). Surfaced on the list response so cards can show it on
+             *     hover without fetching the full detail payload.
+             * @example Bruce Wayne returns to Gotham to begin his war on crime.
+             */
+            summary?: string | null;
+            /**
              * @description Book title
              * @example Batman: Year One #1
              */
@@ -14368,6 +14375,13 @@ export interface components {
                  * @example Batman: Year One
                  */
                 seriesName: string;
+                /**
+                 * @description Book summary/description from book_metadata (ComicInfo `<Summary>` or
+                 *     EPUB description). Surfaced on the list response so cards can show it on
+                 *     hover without fetching the full detail payload.
+                 * @example Bruce Wayne returns to Gotham to begin his war on crime.
+                 */
+                summary?: string | null;
                 /**
                  * @description Book title
                  * @example Batman: Year One #1

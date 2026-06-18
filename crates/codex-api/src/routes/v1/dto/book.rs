@@ -513,6 +513,13 @@ pub struct BookDto {
     #[schema(example = 42.5)]
     pub chapter: Option<f32>,
 
+    /// Book summary/description from book_metadata (ComicInfo `<Summary>` or
+    /// EPUB description). Surfaced on the list response so cards can show it on
+    /// hover without fetching the full detail payload.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "Bruce Wayne returns to Gotham to begin his war on crime.")]
+    pub summary: Option<String>,
+
     /// Whether the requesting user has this book in their want-to-read queue.
     ///
     /// `None` when not computed for this response; populated on book list and

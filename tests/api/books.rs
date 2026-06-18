@@ -136,6 +136,61 @@ async fn test_list_all_books() {
 }
 
 #[tokio::test]
+async fn test_list_books_includes_summary_from_metadata() {
+    use codex::db::repositories::{BookMetadataRepository, BookRepository};
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    let book = create_test_book_model(
+        series.id,
+        library.id,
+        "/test/book1.cbz",
+        "book1.cbz",
+        Some("Book 1".to_string()),
+    );
+    let created = BookRepository::create(&db, &book, None).await.unwrap();
+
+    // Populate the book's summary (as ComicInfo/EPUB parsing would).
+    let mut meta = BookMetadataRepository::create_with_title_and_number(
+        &db,
+        created.id,
+        Some("Book 1".to_string()),
+        None,
+    )
+    .await
+    .unwrap();
+    meta.summary = Some("A thrilling tale of heroism.".to_string());
+    BookMetadataRepository::update(&db, &meta).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request = get_request_with_auth("/api/v1/books", &token);
+    let (status, response): (StatusCode, Option<BookListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let book_list = response.unwrap();
+    let dto = book_list
+        .data
+        .iter()
+        .find(|b| b.id == created.id)
+        .expect("created book should be in the list");
+    // The list DTO must surface the book-level summary so cards can show it
+    // without fetching the full detail response.
+    assert_eq!(dto.summary.as_deref(), Some("A thrilling tale of heroism."));
+}
+
+#[tokio::test]
 async fn test_list_all_books_with_pagination() {
     let (db, _temp_dir) = setup_test_db().await;
 

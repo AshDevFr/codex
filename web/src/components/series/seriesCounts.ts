@@ -117,3 +117,52 @@ export function formatSeriesCounts(inputs: SeriesCountInputs): string | null {
 
   return null;
 }
+
+/**
+ * Inputs for {@link formatLocalSeriesCounts} — only the fields the series
+ * *list* response carries (no upstream totals).
+ */
+export interface LocalSeriesCountInputs {
+  /** `series.bookCount` — files on disk for this series. */
+  bookCount: number | null | undefined;
+  /** Highest `book_metadata.volume`, or null when none is populated. */
+  localMaxVolume?: number | null | undefined;
+  /** Highest `book_metadata.chapter` (may be fractional), or null. */
+  localMaxChapter?: number | null | undefined;
+}
+
+/**
+ * Build a compact count string from list-only series fields, for the card
+ * hover panel where upstream totals (`totalVolumeCount`/`totalChapterCount`)
+ * aren't fetched.
+ *
+ * Unlike {@link formatSeriesCounts}, the local maxima drive the display
+ * directly (there is no `/total` denominator to anchor them to):
+ *  - both maxima:  `14 vol · 109.5 ch`
+ *  - volume only:  `14 vol`
+ *  - chapter only: `109.5 ch` (trailing `.0` dropped)
+ *  - neither:      `15 books` / `1 book`
+ *  - nothing:      `null` (caller hides the line)
+ */
+export function formatLocalSeriesCounts(
+  inputs: LocalSeriesCountInputs,
+): string | null {
+  const { bookCount, localMaxVolume, localMaxChapter } = inputs;
+
+  const hasVolume = typeof localMaxVolume === "number";
+  const hasChapter = typeof localMaxChapter === "number";
+
+  if (hasVolume && hasChapter) {
+    return `${localMaxVolume} vol · ${formatChapterCount(localMaxChapter as number)} ch`;
+  }
+  if (hasVolume) {
+    return `${localMaxVolume} vol`;
+  }
+  if (hasChapter) {
+    return `${formatChapterCount(localMaxChapter as number)} ch`;
+  }
+  if (typeof bookCount === "number") {
+    return `${bookCount} book${bookCount === 1 ? "" : "s"}`;
+  }
+  return null;
+}

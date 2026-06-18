@@ -22544,6 +22544,14 @@
             "description": "Name of the series",
             "example": "Batman: Year One"
           },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Book summary/description from book_metadata (ComicInfo `<Summary>` or\nEPUB description). Surfaced on the list response so cards can show it on\nhover without fetching the full detail payload.",
+            "example": "Bruce Wayne returns to Gotham to begin his war on crime."
+          },
           "title": {
             "type": "string",
             "description": "Book title",
@@ -34024,6 +34032,14 @@
                   "type": "string",
                   "description": "Name of the series",
                   "example": "Batman: Year One"
+                },
+                "summary": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Book summary/description from book_metadata (ComicInfo `<Summary>` or\nEPUB description). Surfaced on the list response so cards can show it on\nhover without fetching the full detail payload.",
+                  "example": "Bruce Wayne returns to Gotham to begin his war on crime."
                 },
                 "title": {
                   "type": "string",
