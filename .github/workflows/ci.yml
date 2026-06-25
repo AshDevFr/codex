@@ -103,9 +103,7 @@ jobs:
           node-version: "22"
       - name: Install dependencies
         working-directory: web
-        run: |
-          rm -rf node_modules package-lock.json
-          npm install
+        run: npm ci
       - name: Lint check
         working-directory: web
         run: npm run lint

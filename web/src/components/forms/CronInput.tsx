@@ -14,34 +14,30 @@ export interface CronInputProps
   showNextRun?: boolean;
 }
 
+// Normalize a cron expression's step syntax. Older cron-parser releases
+// tolerated a bare `/n` step (e.g. `0 /2 * * *`), but 5.6+ rejects it, as does
+// cronstrue, both of which require the `*/n` form. We accept the lenient input
+// for UX and rewrite it before handing it to either library.
+function normalizeCron(expression: string): string {
+  const parts = expression.trim().split(/\s+/);
+  if (parts.length !== 5) return expression;
+
+  // Convert a leading-slash step like `/2` into `*/2` in each field.
+  return parts
+    .map((part) => (part.startsWith("/") ? `*${part}` : part))
+    .join(" ");
+}
+
 // Validate cron expression using the parser
 function isValidCron(expression: string): boolean {
   if (!expression.trim()) return false;
 
   try {
-    CronExpressionParser.parse(expression);
+    CronExpressionParser.parse(normalizeCron(expression));
     return true;
   } catch {
     return false;
   }
-}
-
-// Normalize cron expression for cronstrue compatibility
-// cronstrue expects */n format, but cron-parser accepts /n as well
-function normalizeForCronstrue(expression: string): string {
-  const parts = expression.trim().split(/\s+/);
-  if (parts.length !== 5) return expression;
-
-  // Convert /n to */n in each field for cronstrue compatibility
-  return parts
-    .map((part) => {
-      // If part starts with / (like /2), convert to */2
-      if (part.startsWith("/")) {
-        return `*${part}`;
-      }
-      return part;
-    })
-    .join(" ");
 }
 
 // Get human-readable description of cron expression
@@ -49,10 +45,9 @@ function getCronDescription(expression: string): string | null {
   if (!expression.trim()) return null;
 
   try {
-    // Validate first with parser
-    CronExpressionParser.parse(expression);
-    // Normalize for cronstrue (converts /n to */n)
-    const normalized = normalizeForCronstrue(expression);
+    // Normalize (converts /n to */n) so both the parser and cronstrue accept it.
+    const normalized = normalizeCron(expression);
+    CronExpressionParser.parse(normalized);
     return cronToString(normalized, {
       throwExceptionOnParseError: false,
       verbose: true,
@@ -67,7 +62,7 @@ function getNextRunTime(expression: string): Date | null {
   if (!expression.trim()) return null;
 
   try {
-    const interval = CronExpressionParser.parse(expression);
+    const interval = CronExpressionParser.parse(normalizeCron(expression));
     const nextDate = interval.next();
     return nextDate.toDate();
   } catch {
