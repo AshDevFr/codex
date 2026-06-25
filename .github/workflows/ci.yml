@@ -148,14 +148,11 @@ jobs:
         if: matrix.plugin != 'sdk-typescript'
         working-directory: plugins/sdk-typescript
         run: |
-          rm -rf node_modules package-lock.json
-          npm install
+          npm ci
           npm run build
       - name: Install dependencies
         working-directory: plugins/${{ matrix.plugin }}
-        run: |
-          rm -rf node_modules package-lock.json
-          npm install
+        run: npm ci
       - name: Lint
         working-directory: plugins/${{ matrix.plugin }}
         run: npm run lint
