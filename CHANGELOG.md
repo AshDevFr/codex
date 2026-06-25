@@ -2,6 +2,13 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.39.5] - 2026-06-25
+
+### 🐛 Bug Fixes
+
+- *(ci)* Use npm ci for web job and harden cron /n parsing
+- *(ci)* Use npm ci across web and plugin jobs, harden cron /n parsing
+
 ## [1.39.4] - 2026-06-25
 
 ### 🐛 Bug Fixes

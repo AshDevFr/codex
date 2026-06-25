@@ -7,7 +7,7 @@
       "name": "MIT",
       "url": "https://opensource.org/licenses/MIT"
     },
-    "version": "1.39.4"
+    "version": "1.39.5"
   },
   "paths": {
     "/api/v1/access-groups": {
