@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.39.4] - 2026-06-25
+
+### 🐛 Bug Fixes
+
+- *(tasks)* Renew task lock via heartbeat to prevent duplicate scan execution
+
 ## [1.39.3] - 2026-06-18
 
 ### 🚀 Features
