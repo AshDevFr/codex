@@ -1323,6 +1323,42 @@ impl TaskRepository {
 
         Ok(recovered)
     }
+
+    /// Renew (extend) the lock on a task currently being processed by
+    /// `worker_id`.
+    ///
+    /// Called periodically by the worker's heartbeat while a handler runs so a
+    /// long-running task (e.g. a library scan on a slow machine) keeps its lock
+    /// fresh and is **not** re-claimed and re-executed by another worker via
+    /// [`Self::claim_next`].
+    ///
+    /// The update is scoped to `id = task_id AND locked_by = worker_id AND
+    /// status = 'processing'`, so it becomes a no-op once the task has been
+    /// completed, failed, or stolen. The returned `bool` reports whether the
+    /// lock was actually renewed (`true`) so the caller can stop heartbeating a
+    /// task it no longer owns.
+    pub async fn renew_lock(
+        db: &DatabaseConnection,
+        task_id: Uuid,
+        worker_id: &str,
+        lock_duration_secs: i64,
+    ) -> Result<bool> {
+        let lock_expires = Utc::now() + Duration::seconds(lock_duration_secs);
+
+        let result = Tasks::update_many()
+            .col_expr(
+                tasks::Column::LockedUntil,
+                sea_orm::sea_query::Expr::value(lock_expires),
+            )
+            .filter(tasks::Column::Id.eq(task_id))
+            .filter(tasks::Column::LockedBy.eq(worker_id))
+            .filter(tasks::Column::Status.eq("processing"))
+            .exec(db)
+            .await
+            .context("Failed to renew task lock")?;
+
+        Ok(result.rows_affected > 0)
+    }
 }
 
 #[cfg(test)]
@@ -1372,5 +1408,60 @@ mod tests {
             .unwrap()
             .expect("task exists");
         assert!(task.result.is_none());
+    }
+
+    /// The lock owner can extend its own lock; `renew_lock` pushes
+    /// `locked_until` further into the future.
+    #[tokio::test]
+    async fn renew_lock_extends_lock_for_owner() {
+        let db = setup_test_db().await;
+        TaskRepository::enqueue(&db, TaskType::FindDuplicates, None)
+            .await
+            .unwrap();
+
+        let claimed = TaskRepository::claim_next(&db, "owner", 1)
+            .await
+            .unwrap()
+            .expect("a task to claim");
+        let original_lock = claimed.locked_until.expect("claimed task is locked");
+
+        // Renew with a much longer window; locked_until must move forward.
+        let renewed = TaskRepository::renew_lock(&db, claimed.id, "owner", 3600)
+            .await
+            .unwrap();
+        assert!(renewed, "owner should be able to renew its own lock");
+
+        let after = TaskRepository::get_by_id(&db, claimed.id)
+            .await
+            .unwrap()
+            .expect("task exists");
+        assert!(
+            after.locked_until.expect("still locked") > original_lock,
+            "renew_lock must push locked_until further into the future"
+        );
+    }
+
+    /// A worker that does not own the lock cannot renew it. This keeps the
+    /// heartbeat scoped to the owning worker so it can't resurrect a lock on a
+    /// task that has since been completed or stolen.
+    #[tokio::test]
+    async fn renew_lock_is_noop_for_non_owner() {
+        let db = setup_test_db().await;
+        TaskRepository::enqueue(&db, TaskType::FindDuplicates, None)
+            .await
+            .unwrap();
+
+        let claimed = TaskRepository::claim_next(&db, "owner", 60)
+            .await
+            .unwrap()
+            .expect("a task to claim");
+
+        let renewed = TaskRepository::renew_lock(&db, claimed.id, "someone-else", 3600)
+            .await
+            .unwrap();
+        assert!(
+            !renewed,
+            "a non-owning worker must not be able to renew the lock"
+        );
     }
 }

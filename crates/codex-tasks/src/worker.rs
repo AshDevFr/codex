@@ -57,12 +57,70 @@ impl Drop for InFlightGuard {
     }
 }
 
+/// RAII guard that runs a background heartbeat renewing a claimed task's lock,
+/// and aborts that heartbeat on drop (when the handler finishes, fails, or the
+/// function returns early).
+///
+/// Without this, a task that runs longer than its lock window
+/// (`lock_duration_secs`) has its lock lapse and gets re-claimed and
+/// re-executed by another concurrent worker — the cause of library scans
+/// appearing to "run multiple times" on slow machines. The heartbeat keeps the
+/// lock fresh for as long as this worker is alive and processing; a genuinely
+/// dead worker stops renewing, so the lock still lapses and the task is
+/// recovered.
+struct HeartbeatGuard {
+    handle: tokio::task::JoinHandle<()>,
+}
+
+impl HeartbeatGuard {
+    fn spawn(
+        db: DatabaseConnection,
+        task_id: Uuid,
+        worker_id: String,
+        lock_duration_secs: i64,
+    ) -> Self {
+        // Renew at roughly one third of the lock window so a single delayed or
+        // failed renewal can't let a live task's lock lapse. Floored at 200ms
+        // to keep very short lock windows (used in tests) responsive without
+        // hammering the database for production-sized windows.
+        let interval =
+            Duration::from_millis((((lock_duration_secs.max(1) * 1000) / 3) as u64).max(200));
+
+        let handle = tokio::spawn(async move {
+            loop {
+                sleep(interval).await;
+                match TaskRepository::renew_lock(&db, task_id, &worker_id, lock_duration_secs).await
+                {
+                    Ok(true) => {}
+                    // We no longer own the task (completed/failed/stolen): stop.
+                    Ok(false) => break,
+                    Err(e) => warn!("Failed to renew lock for task {}: {}", task_id, e),
+                }
+            }
+        });
+
+        Self { handle }
+    }
+}
+
+impl Drop for HeartbeatGuard {
+    fn drop(&mut self) {
+        self.handle.abort();
+    }
+}
+
 /// Task worker that processes tasks from the queue
 pub struct TaskWorker {
     db: DatabaseConnection,
     handlers: HashMap<String, Arc<dyn TaskHandler>>,
     worker_id: String,
     poll_interval: Duration,
+    /// How long a claimed task is locked for, in seconds. A background
+    /// heartbeat renews this lock while the handler runs so that a task which
+    /// legitimately runs longer than the lock window is not re-claimed (and
+    /// re-executed) by another worker. Only a genuinely dead worker stops
+    /// renewing, letting the lock lapse so the task can be recovered.
+    lock_duration_secs: i64,
     event_broadcaster: Option<Arc<EventBroadcaster>>,
     settings_service: Option<Arc<SettingsService>>,
     thumbnail_service: Option<Arc<ThumbnailService>>,
@@ -152,6 +210,7 @@ impl TaskWorker {
             handlers,
             worker_id,
             poll_interval: Duration::from_secs(5),
+            lock_duration_secs: 300,
             event_broadcaster: None,
             settings_service: None,
             thumbnail_service: None,
@@ -173,6 +232,15 @@ impl TaskWorker {
     /// Set the poll interval
     pub fn with_poll_interval(mut self, interval: Duration) -> Self {
         self.poll_interval = interval;
+        self
+    }
+
+    /// Set the task lock duration in seconds. The worker's heartbeat renews the
+    /// lock on this cadence while a handler runs. Primarily used by tests to
+    /// drive short lock windows; production reads `task.lock_duration_seconds`
+    /// from settings in [`Self::run`].
+    pub fn with_lock_duration_secs(mut self, secs: i64) -> Self {
+        self.lock_duration_secs = secs.max(1);
         self
     }
 
@@ -490,6 +558,27 @@ impl TaskWorker {
             cleanup_interval_secs
         );
 
+        // Resolve the task lock duration from settings (default 300s). The
+        // heartbeat in `process_next_task` renews the lock on this cadence; a
+        // task that outlives one window without a heartbeat (dead worker) is
+        // reclaimed by `claim_next` once the lock lapses.
+        if let Some(ref settings) = self.settings_service {
+            let secs = settings
+                .get_uint("task.lock_duration_seconds", 300)
+                .await
+                .unwrap_or(300);
+            self.lock_duration_secs = (secs as i64).max(1);
+        }
+        info!(
+            "Task worker using lock duration: {} seconds",
+            self.lock_duration_secs
+        );
+
+        // Recover tasks whose lock lapsed without a heartbeat (dead worker).
+        // Use 2x the lock duration so a live worker's in-flight renewals never
+        // trip false-positive recovery.
+        let stale_threshold_secs = (self.lock_duration_secs * 2).max(600);
+
         // Spawn background cleanup task for completed tasks
         let db_clone = self.db.clone();
         let settings_clone = self.settings_service.clone();
@@ -534,9 +623,10 @@ impl TaskWorker {
             loop {
                 tokio::select! {
                     _ = sleep(Duration::from_secs(60)) => {
-                        // Recover tasks locked for more than 10 minutes (600 seconds)
-                        // This is 2x the normal lock duration to avoid false positives
-                        match TaskRepository::recover_stale_tasks(&db_clone_stale, 600).await {
+                        // Recover tasks whose lock lapsed without a heartbeat
+                        // (dead worker). Threshold is 2x the lock duration to
+                        // avoid reclaiming tasks a live worker is still renewing.
+                        match TaskRepository::recover_stale_tasks(&db_clone_stale, stale_threshold_secs).await {
                             Ok(count) if count > 0 => {
                                 warn!("Recovered {} stale tasks from dead workers", count);
                             }
@@ -617,22 +707,35 @@ impl TaskWorker {
         // Note: claim_next can fail due to race conditions (multiple workers competing
         // for the same task). This is expected behavior, not an error - treat it as
         // "no task available" and retry on the next poll interval.
-        let task = match TaskRepository::claim_next(&self.db, &self.worker_id, 300).await {
-            Ok(Some(t)) => t,
-            Ok(None) => return Ok(false), // No tasks available
-            Err(e) => {
-                // Race condition or transient DB error - log at debug level and retry
-                debug!(
-                    "Worker {} failed to claim task (likely race condition): {}",
-                    self.worker_id, e
-                );
-                return Ok(false);
-            }
-        };
+        let task =
+            match TaskRepository::claim_next(&self.db, &self.worker_id, self.lock_duration_secs)
+                .await
+            {
+                Ok(Some(t)) => t,
+                Ok(None) => return Ok(false), // No tasks available
+                Err(e) => {
+                    // Race condition or transient DB error - log at debug level and retry
+                    debug!(
+                        "Worker {} failed to claim task (likely race condition): {}",
+                        self.worker_id, e
+                    );
+                    return Ok(false);
+                }
+            };
 
         // RAII guard for the OTel in-flight task gauge: increments on claim,
         // decrements on every exit path (success, failure, error propagation).
         let _in_flight = InFlightGuard::new();
+
+        // RAII heartbeat: keep renewing this task's lock while the handler runs
+        // so a long task isn't re-claimed by another worker. Aborts on drop
+        // (every exit path below, including the distributed-mode early return).
+        let _heartbeat = HeartbeatGuard::spawn(
+            self.db.clone(),
+            task.id,
+            self.worker_id.clone(),
+            self.lock_duration_secs,
+        );
 
         let started_at = Utc::now();
 
@@ -1049,6 +1152,88 @@ mod tests {
             let r = self.result.clone();
             Box::pin(async move { Ok(r) })
         }
+    }
+
+    /// Handler that sleeps for a fixed duration before succeeding, to simulate
+    /// a task (like a library scan) that runs longer than the lock window.
+    struct SleepyHandler {
+        sleep: Duration,
+    }
+
+    impl TaskHandler for SleepyHandler {
+        fn handle<'a>(
+            &'a self,
+            _task: &'a codex_db::entities::tasks::Model,
+            _db: &'a sea_orm::DatabaseConnection,
+            _event_broadcaster: Option<&'a Arc<EventBroadcaster>>,
+        ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<TaskResult>> + Send + 'a>>
+        {
+            let dur = self.sleep;
+            Box::pin(async move {
+                sleep(dur).await;
+                Ok(TaskResult::success("slept"))
+            })
+        }
+    }
+
+    /// Regression: a task whose handler runs longer than the lock duration must
+    /// keep its lock renewed (via the worker heartbeat) so that a *different*
+    /// worker cannot re-claim and re-execute the same task while it is still in
+    /// progress. This reproduces the "scan runs multiple times on a slow
+    /// machine" bug, where a scan exceeding the 300s lock was picked up again
+    /// by one of the other concurrent workers.
+    #[tokio::test]
+    async fn in_progress_task_is_not_reclaimed_while_handler_still_running() {
+        let (test_db, _temp) = create_test_db().await;
+        let db = test_db.sea_orm_connection().clone();
+        let task_id = TaskRepository::enqueue(&db, TaskType::FindDuplicates, None)
+            .await
+            .expect("enqueue");
+
+        // Handler sleeps far longer than the 1s lock window.
+        let handler = Arc::new(SleepyHandler {
+            sleep: Duration::from_secs(3),
+        });
+        let worker = TaskWorker::new(db.clone())
+            .with_handler("find_duplicates", handler)
+            .with_worker_id("worker-A")
+            .with_lock_duration_secs(1);
+
+        // Process the task in the background; it stays "processing" for ~3s.
+        let worker_db = db.clone();
+        let proc = tokio::spawn(async move { worker.process_once().await });
+
+        // Wait until the task is actually claimed (status flips to processing).
+        let mut claimed = false;
+        for _ in 0..100 {
+            if let Some(t) = TaskRepository::get_by_id(&worker_db, task_id)
+                .await
+                .expect("get_by_id")
+                && t.status == "processing"
+            {
+                claimed = true;
+                break;
+            }
+            sleep(Duration::from_millis(20)).await;
+        }
+        assert!(claimed, "task should have been claimed and be processing");
+
+        // Wait past the original 1s lock window, but well before the 3s handler
+        // finishes. Without a heartbeat the lock has now expired.
+        sleep(Duration::from_millis(1600)).await;
+
+        // Another worker attempts to claim work. The in-progress task must NOT
+        // be handed to it.
+        let stolen = TaskRepository::claim_next(&worker_db, "worker-B", 1)
+            .await
+            .expect("claim_next");
+        assert!(
+            stolen.is_none(),
+            "an in-progress task must not be re-claimed by another worker while its handler is still running"
+        );
+
+        // Let the original handler finish cleanly.
+        let _ = proc.await.expect("worker task join");
     }
 
     /// Regression: a handler returning `Ok(TaskResult::failure(...))` must
