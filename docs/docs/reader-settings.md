@@ -216,9 +216,13 @@ These settings apply across all reader types:
 
 When enabled, the toolbar automatically hides after a period of inactivity. Move your mouse or tap the screen to reveal it.
 
+### End-of-Book Transition
+
+When you reach the end of a book in a series (comics and PDFs), a **Next Chapter** panel appears with the next book's cover and a **Continue Reading** button. In webtoon and continuous-scroll modes you scroll into it after the last page; in paginated modes it appears when you page past the last page. A matching **Previous Chapter** panel appears at the very beginning. Reaching the end panel also marks the current book as read.
+
 ### Auto-advance to Next Book
 
-Automatically continue to the next book in a series when you finish the current one. Useful for binge-reading manga or comic series.
+When enabled, the **Next Chapter** panel starts a short countdown (about 10 seconds) and then continues to the next book automatically, with a **Cancel** link if you'd rather stay. When disabled, the panel waits for you to tap **Continue Reading**. Useful for binge-reading manga or comic series.
 
 ### Preload Pages
 
