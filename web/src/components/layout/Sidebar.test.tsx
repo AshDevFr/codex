@@ -827,6 +827,87 @@ describe("Sidebar Component (via AppLayout)", () => {
     });
   });
 
+  describe("Mobile navbar scroll lock", () => {
+    const mockUser: User = {
+      id: "1",
+      username: "testuser",
+      email: "test@example.com",
+      role: "reader",
+      emailVerified: true,
+      permissions: [],
+    };
+
+    function authenticate() {
+      useAuthStore.setState({
+        user: mockUser,
+        token: "token",
+        isAuthenticated: true,
+      });
+    }
+
+    // Force the navbar's overlay breakpoint (max-width queries) to match so the
+    // burger drawer behaves as the fixed mobile overlay.
+    function forceMobileViewport() {
+      const original = window.matchMedia;
+      window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+        matches: query.includes("max-width"),
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      }));
+      return () => {
+        window.matchMedia = original;
+      };
+    }
+
+    it("does not lock page scroll on desktop viewports", () => {
+      // Default matchMedia mock returns matches:false (desktop).
+      authenticate();
+      renderWithProviders(
+        <AppLayout>
+          <div>Content</div>
+        </AppLayout>,
+      );
+
+      expect(document.body.hasAttribute("data-scroll-locked")).toBe(false);
+    });
+
+    it("locks page scroll while the mobile menu is open and releases it on close", async () => {
+      const restore = forceMobileViewport();
+      try {
+        authenticate();
+        const user = userEvent.setup();
+        renderWithProviders(
+          <AppLayout>
+            <div>Content</div>
+          </AppLayout>,
+        );
+
+        // Closed by default: nothing locked.
+        expect(document.body.hasAttribute("data-scroll-locked")).toBe(false);
+
+        // Open the burger drawer -> page scroll is locked so swipes inside the
+        // menu can't bleed through to the content underneath.
+        await user.click(screen.getByLabelText("Open navigation"));
+        await waitFor(() => {
+          expect(document.body.hasAttribute("data-scroll-locked")).toBe(true);
+        });
+
+        // Closing the drawer releases the lock.
+        await user.click(screen.getByLabelText("Close navigation"));
+        await waitFor(() => {
+          expect(document.body.hasAttribute("data-scroll-locked")).toBe(false);
+        });
+      } finally {
+        restore();
+      }
+    });
+  });
+
   describe("Phase 8 info-design", () => {
     const mockAdmin: User = {
       id: "1",

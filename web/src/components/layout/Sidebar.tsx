@@ -8,6 +8,7 @@ import {
   Menu,
   Modal,
   NavLink,
+  RemoveScroll,
   Stack,
   Text,
 } from "@mantine/core";
@@ -70,9 +71,17 @@ import classes from "./Sidebar.module.css";
 interface SidebarProps {
   /** Called when the user taps a navigation link, so the mobile drawer can auto-close. */
   onNavigate?: () => void;
+  /**
+   * When true, lock page scroll while the navbar is open as a mobile overlay,
+   * so swipes inside the menu don't bleed through to the content underneath.
+   */
+  scrollLocked?: boolean;
 }
 
-export function Sidebar({ onNavigate }: SidebarProps = {}) {
+export function Sidebar({
+  onNavigate,
+  scrollLocked = false,
+}: SidebarProps = {}) {
   const appName = useAppName();
   const { data: appInfo } = useAppInfo();
   const navigate = useNavigate();
@@ -384,496 +393,504 @@ export function Sidebar({ onNavigate }: SidebarProps = {}) {
 
   return (
     <>
-      <AppShell.Navbar p="md">
-        <AppShell.Section
-          grow
-          ref={navSectionRef}
-          className={classes.navSection}
-        >
-          <Stack gap="xs" className={classes.navStack}>
-            <NavLink
-              component={Link}
-              to="/"
-              label="Home"
-              leftSection={<IconHome size={20} stroke={2} />}
-              active={currentPath === "/"}
-              onClick={onNavigate}
-            />
-            <NavLink
-              component={Link}
-              to="/want-to-read"
-              label="Want to Read"
-              leftSection={<IconBookmark size={20} stroke={2} />}
-              active={currentPath === "/want-to-read"}
-              onClick={onNavigate}
-            />
-            <NavLink
-              component={Link}
-              to="/collections"
-              label="Collections"
-              leftSection={<IconLayoutGrid size={20} stroke={2} />}
-              active={currentPath.startsWith("/collections")}
-              onClick={onNavigate}
-            />
-            <NavLink
-              component={Link}
-              to="/readlists"
-              label="Read Lists"
-              leftSection={<IconList size={20} stroke={2} />}
-              active={currentPath.startsWith("/readlists")}
-              onClick={onNavigate}
-            />
-            {hasRecommendationPlugin && (
+      {/* `forwardProps` attaches RemoveScroll's scroll/wheel/touch capture
+          handlers directly to the navbar (no extra wrapper div, no class/style
+          override), letting the menu scroll internally while the page behind it
+          stays locked. Enabled only while the navbar is an open mobile overlay. */}
+      <RemoveScroll enabled={scrollLocked} forwardProps>
+        <AppShell.Navbar p="md">
+          <AppShell.Section
+            grow
+            ref={navSectionRef}
+            className={classes.navSection}
+          >
+            <Stack gap="xs" className={classes.navStack}>
               <NavLink
                 component={Link}
-                to="/recommendations"
-                label="Recommendations"
-                leftSection={<IconSparkles size={20} stroke={2} />}
-                active={currentPath === "/recommendations"}
+                to="/"
+                label="Home"
+                leftSection={<IconHome size={20} stroke={2} />}
+                active={currentPath === "/"}
                 onClick={onNavigate}
               />
-            )}
-            {hasReleasePlugin && (
               <NavLink
                 component={Link}
-                to="/releases"
-                label="Releases"
-                leftSection={<IconRss size={20} stroke={2} />}
-                active={currentPath.startsWith("/releases")}
-                rightSection={<ReleasesNavBadge />}
+                to="/want-to-read"
+                label="Want to Read"
+                leftSection={<IconBookmark size={20} stroke={2} />}
+                active={currentPath === "/want-to-read"}
                 onClick={onNavigate}
               />
-            )}
-            <NavLink
-              component={Link}
-              to={`/libraries/all/${getLastTab("all") || "series"}`}
-              label="Libraries"
-              leftSection={<IconBooks size={20} stroke={2} />}
-              active={currentPath.startsWith("/libraries/all")}
-              onClick={onNavigate}
-              data-section-break="true"
-              rightSection={
-                canEditLibrary && (
-                  <Group gap={4}>
-                    <ActionIcon
-                      variant="subtle"
-                      size="sm"
-                      onClick={(e: React.MouseEvent) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setAddLibraryOpened(true);
-                      }}
-                      title="Add Library"
-                    >
-                      <IconPlus size={16} />
-                    </ActionIcon>
-                    <Menu shadow="md" width={200} position="bottom-end">
-                      <Menu.Target>
-                        <ActionIcon
-                          variant="subtle"
-                          size="sm"
-                          onClick={(e: React.MouseEvent) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                          }}
-                          title="Options"
-                        >
-                          <IconDotsVertical size={16} />
-                        </ActionIcon>
-                      </Menu.Target>
-
-                      <Menu.Dropdown>
-                        <Menu.Item
-                          leftSection={<IconScan size={16} />}
-                          onClick={(e: React.MouseEvent) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            handleScanAll("normal");
-                          }}
-                        >
-                          Scan All Libraries
-                        </Menu.Item>
-                        <Menu.Item
-                          leftSection={<IconRadar size={16} />}
-                          onClick={(e: React.MouseEvent) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            handleScanAll("deep");
-                          }}
-                        >
-                          Scan All Libraries (Deep)
-                        </Menu.Item>
-                        {canWriteTasks && (
-                          <>
-                            <Menu.Divider />
-                            <Menu.Label>Book Thumbnails</Menu.Label>
-                            <Menu.Item
-                              leftSection={<IconPhoto size={16} />}
-                              onClick={(e: React.MouseEvent) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                handleGenerateAllMissingThumbnails();
-                              }}
-                              disabled={
-                                generateMissingThumbnailsAllMutation.isPending
-                              }
-                            >
-                              Generate Missing
-                            </Menu.Item>
-                            <Menu.Item
-                              leftSection={<IconPhoto size={16} />}
-                              onClick={(e: React.MouseEvent) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                handleRegenerateAllThumbnails();
-                              }}
-                              disabled={
-                                regenerateAllThumbnailsAllMutation.isPending
-                              }
-                            >
-                              Regenerate All
-                            </Menu.Item>
-                            <Menu.Divider />
-                            <Menu.Label>Series Thumbnails</Menu.Label>
-                            <Menu.Item
-                              leftSection={<IconPhoto size={16} />}
-                              onClick={(e: React.MouseEvent) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                handleGenerateAllMissingSeriesThumbnails();
-                              }}
-                              disabled={
-                                generateMissingSeriesThumbnailsAllMutation.isPending
-                              }
-                            >
-                              Generate Missing
-                            </Menu.Item>
-                            <Menu.Item
-                              leftSection={<IconPhoto size={16} />}
-                              onClick={(e: React.MouseEvent) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                handleRegenerateAllSeriesThumbnails();
-                              }}
-                              disabled={
-                                regenerateAllSeriesThumbnailsAllMutation.isPending
-                              }
-                            >
-                              Regenerate All
-                            </Menu.Item>
-                            <Menu.Divider />
-                            <Menu.Item
-                              leftSection={<IconTrashX size={16} />}
-                              color="orange"
-                              onClick={(e: React.MouseEvent) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                handlePurgeAllDeleted();
-                              }}
-                            >
-                              Purge All Deleted Books
-                            </Menu.Item>
-                          </>
-                        )}
-                      </Menu.Dropdown>
-                    </Menu>
-                  </Group>
-                )
-              }
-            />
-            {libraries && libraries.length > 0 ? (
-              libraries.map((library) => (
+              <NavLink
+                component={Link}
+                to="/collections"
+                label="Collections"
+                leftSection={<IconLayoutGrid size={20} stroke={2} />}
+                active={currentPath.startsWith("/collections")}
+                onClick={onNavigate}
+              />
+              <NavLink
+                component={Link}
+                to="/readlists"
+                label="Read Lists"
+                leftSection={<IconList size={20} stroke={2} />}
+                active={currentPath.startsWith("/readlists")}
+                onClick={onNavigate}
+              />
+              {hasRecommendationPlugin && (
                 <NavLink
-                  key={library.id}
                   component={Link}
-                  to={`/libraries/${library.id}/${getLastTab(library.id) || "recommended"}`}
-                  label={library.name}
-                  active={currentPath.startsWith(`/libraries/${library.id}/`)}
+                  to="/recommendations"
+                  label="Recommendations"
+                  leftSection={<IconSparkles size={20} stroke={2} />}
+                  active={currentPath === "/recommendations"}
                   onClick={onNavigate}
-                  data-no-accent="true"
-                  styles={{
-                    root: { paddingLeft: 48 },
-                    label: { textTransform: "capitalize" },
-                  }}
-                  rightSection={
-                    (canEditLibrary || canDeleteLibrary) && (
-                      <Menu shadow="md" width={200} position="right-start">
+                />
+              )}
+              {hasReleasePlugin && (
+                <NavLink
+                  component={Link}
+                  to="/releases"
+                  label="Releases"
+                  leftSection={<IconRss size={20} stroke={2} />}
+                  active={currentPath.startsWith("/releases")}
+                  rightSection={<ReleasesNavBadge />}
+                  onClick={onNavigate}
+                />
+              )}
+              <NavLink
+                component={Link}
+                to={`/libraries/all/${getLastTab("all") || "series"}`}
+                label="Libraries"
+                leftSection={<IconBooks size={20} stroke={2} />}
+                active={currentPath.startsWith("/libraries/all")}
+                onClick={onNavigate}
+                data-section-break="true"
+                rightSection={
+                  canEditLibrary && (
+                    <Group gap={4}>
+                      <ActionIcon
+                        variant="subtle"
+                        size="sm"
+                        onClick={(e: React.MouseEvent) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setAddLibraryOpened(true);
+                        }}
+                        title="Add Library"
+                      >
+                        <IconPlus size={16} />
+                      </ActionIcon>
+                      <Menu shadow="md" width={200} position="bottom-end">
                         <Menu.Target>
                           <ActionIcon
                             variant="subtle"
-                            size="xs"
+                            size="sm"
                             onClick={(e: React.MouseEvent) => {
                               e.preventDefault();
                               e.stopPropagation();
                             }}
-                            title="Library options"
+                            title="Options"
                           >
-                            <IconDotsVertical size={14} />
+                            <IconDotsVertical size={16} />
                           </ActionIcon>
                         </Menu.Target>
-                        <LibraryActionsMenu
-                          library={library}
-                          onEdit={() => handleEditLibrary(library)}
-                          onDelete={() => handleDeleteLibrary(library)}
-                          onPurge={() => handlePurgeDeleted(library)}
-                        />
+
+                        <Menu.Dropdown>
+                          <Menu.Item
+                            leftSection={<IconScan size={16} />}
+                            onClick={(e: React.MouseEvent) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleScanAll("normal");
+                            }}
+                          >
+                            Scan All Libraries
+                          </Menu.Item>
+                          <Menu.Item
+                            leftSection={<IconRadar size={16} />}
+                            onClick={(e: React.MouseEvent) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleScanAll("deep");
+                            }}
+                          >
+                            Scan All Libraries (Deep)
+                          </Menu.Item>
+                          {canWriteTasks && (
+                            <>
+                              <Menu.Divider />
+                              <Menu.Label>Book Thumbnails</Menu.Label>
+                              <Menu.Item
+                                leftSection={<IconPhoto size={16} />}
+                                onClick={(e: React.MouseEvent) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleGenerateAllMissingThumbnails();
+                                }}
+                                disabled={
+                                  generateMissingThumbnailsAllMutation.isPending
+                                }
+                              >
+                                Generate Missing
+                              </Menu.Item>
+                              <Menu.Item
+                                leftSection={<IconPhoto size={16} />}
+                                onClick={(e: React.MouseEvent) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleRegenerateAllThumbnails();
+                                }}
+                                disabled={
+                                  regenerateAllThumbnailsAllMutation.isPending
+                                }
+                              >
+                                Regenerate All
+                              </Menu.Item>
+                              <Menu.Divider />
+                              <Menu.Label>Series Thumbnails</Menu.Label>
+                              <Menu.Item
+                                leftSection={<IconPhoto size={16} />}
+                                onClick={(e: React.MouseEvent) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleGenerateAllMissingSeriesThumbnails();
+                                }}
+                                disabled={
+                                  generateMissingSeriesThumbnailsAllMutation.isPending
+                                }
+                              >
+                                Generate Missing
+                              </Menu.Item>
+                              <Menu.Item
+                                leftSection={<IconPhoto size={16} />}
+                                onClick={(e: React.MouseEvent) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleRegenerateAllSeriesThumbnails();
+                                }}
+                                disabled={
+                                  regenerateAllSeriesThumbnailsAllMutation.isPending
+                                }
+                              >
+                                Regenerate All
+                              </Menu.Item>
+                              <Menu.Divider />
+                              <Menu.Item
+                                leftSection={<IconTrashX size={16} />}
+                                color="orange"
+                                onClick={(e: React.MouseEvent) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handlePurgeAllDeleted();
+                                }}
+                              >
+                                Purge All Deleted Books
+                              </Menu.Item>
+                            </>
+                          )}
+                        </Menu.Dropdown>
                       </Menu>
-                    )
-                  }
-                />
-              ))
-            ) : (
-              <NavLink
-                label="No libraries"
-                disabled
-                data-no-accent="true"
-                styles={{ root: { paddingLeft: 32 } }}
+                    </Group>
+                  )
+                }
               />
-            )}
-
-            <NavLink
-              label="Settings"
-              leftSection={<IconSettings size={20} stroke={2} />}
-              opened={settingsOpened}
-              onChange={setSettingsOpened}
-              childrenOffset={32}
-              active={currentPath.startsWith("/settings")}
-              data-section-break="true"
-            >
-              {isAdmin && (
-                <>
-                  {/* System Section */}
-                  <Divider
-                    label="System"
-                    labelPosition="left"
-                    my="xs"
-                    styles={{ label: { fontSize: 11, fontWeight: 600 } }}
-                  />
+              {libraries && libraries.length > 0 ? (
+                libraries.map((library) => (
                   <NavLink
+                    key={library.id}
                     component={Link}
-                    to="/settings/server"
-                    label="Server"
-                    leftSection={<IconServer size={16} stroke={1.5} />}
-                    active={currentPath.startsWith("/settings/server")}
+                    to={`/libraries/${library.id}/${getLastTab(library.id) || "recommended"}`}
+                    label={library.name}
+                    active={currentPath.startsWith(`/libraries/${library.id}/`)}
                     onClick={onNavigate}
+                    data-no-accent="true"
+                    styles={{
+                      root: { paddingLeft: 48 },
+                      label: { textTransform: "capitalize" },
+                    }}
+                    rightSection={
+                      (canEditLibrary || canDeleteLibrary) && (
+                        <Menu shadow="md" width={200} position="right-start">
+                          <Menu.Target>
+                            <ActionIcon
+                              variant="subtle"
+                              size="xs"
+                              onClick={(e: React.MouseEvent) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                              }}
+                              title="Library options"
+                            >
+                              <IconDotsVertical size={14} />
+                            </ActionIcon>
+                          </Menu.Target>
+                          <LibraryActionsMenu
+                            library={library}
+                            onEdit={() => handleEditLibrary(library)}
+                            onDelete={() => handleDeleteLibrary(library)}
+                            onPurge={() => handlePurgeDeleted(library)}
+                          />
+                        </Menu>
+                      )
+                    }
                   />
-                  <NavLink
-                    component={Link}
-                    to="/settings/tasks"
-                    label="Tasks"
-                    leftSection={<IconClipboardList size={16} stroke={1.5} />}
-                    active={currentPath.startsWith("/settings/tasks")}
-                    onClick={onNavigate}
-                    rightSection={<TaskNotificationBadge variant="compact" />}
-                  />
-                  <NavLink
-                    component={Link}
-                    to="/settings/metrics"
-                    label="Metrics"
-                    leftSection={<IconChartBar size={16} stroke={1.5} />}
-                    active={currentPath.startsWith("/settings/metrics")}
-                    onClick={onNavigate}
-                  />
-                  <NavLink
-                    component={Link}
-                    to="/settings/plugins"
-                    label="Plugins"
-                    leftSection={<IconPlugConnected size={16} stroke={1.5} />}
-                    active={currentPath.startsWith("/settings/plugins")}
-                    onClick={onNavigate}
-                  />
-                  <NavLink
-                    component={Link}
-                    to="/settings/release-tracking"
-                    label="Release Tracking"
-                    leftSection={<IconRss size={16} stroke={1.5} />}
-                    active={currentPath.startsWith(
-                      "/settings/release-tracking",
-                    )}
-                    onClick={onNavigate}
-                  />
-
-                  {/* Access Section */}
-                  <Divider
-                    label="Access"
-                    labelPosition="left"
-                    my="xs"
-                    styles={{ label: { fontSize: 11, fontWeight: 600 } }}
-                  />
-                  <NavLink
-                    component={Link}
-                    to="/settings/users"
-                    label="Users"
-                    leftSection={<IconUsers size={16} stroke={1.5} />}
-                    active={currentPath.startsWith("/settings/users")}
-                    onClick={onNavigate}
-                  />
-                  <NavLink
-                    component={Link}
-                    to="/settings/sharing-tags"
-                    label="Sharing Tags"
-                    leftSection={<IconShare size={16} stroke={1.5} />}
-                    active={currentPath.startsWith("/settings/sharing-tags")}
-                    onClick={onNavigate}
-                  />
-                  <NavLink
-                    component={Link}
-                    to="/settings/access-groups"
-                    label="Access Groups"
-                    leftSection={<IconShieldCheck size={16} stroke={1.5} />}
-                    active={currentPath.startsWith("/settings/access-groups")}
-                    onClick={onNavigate}
-                  />
-
-                  {/* Library Health Section */}
-                  <Divider
-                    label="Library Health"
-                    labelPosition="left"
-                    my="xs"
-                    styles={{ label: { fontSize: 11, fontWeight: 600 } }}
-                  />
-                  <NavLink
-                    component={Link}
-                    to="/settings/duplicates"
-                    label="Duplicates"
-                    leftSection={<IconCopy size={16} stroke={1.5} />}
-                    active={currentPath.startsWith("/settings/duplicates")}
-                    onClick={onNavigate}
-                  />
-                  <NavLink
-                    component={Link}
-                    to="/settings/book-errors"
-                    label="Book Errors"
-                    leftSection={<IconAlertTriangle size={16} stroke={1.5} />}
-                    active={currentPath.startsWith("/settings/book-errors")}
-                    onClick={onNavigate}
-                  />
-
-                  {/* Storage Section */}
-                  <Divider
-                    label="Storage"
-                    labelPosition="left"
-                    my="xs"
-                    styles={{ label: { fontSize: 11, fontWeight: 600 } }}
-                  />
-                  <NavLink
-                    component={Link}
-                    to="/settings/cleanup"
-                    label="Thumbnails"
-                    leftSection={<IconBrush size={16} stroke={1.5} />}
-                    active={currentPath.startsWith("/settings/cleanup")}
-                    onClick={onNavigate}
-                  />
-                  <NavLink
-                    component={Link}
-                    to="/settings/pdf-cache"
-                    label="Page Cache"
-                    leftSection={<IconFileTypePdf size={16} stroke={1.5} />}
-                    active={currentPath.startsWith("/settings/pdf-cache")}
-                    onClick={onNavigate}
-                  />
-                  <NavLink
-                    component={Link}
-                    to="/settings/plugin-storage"
-                    label="Plugin Storage"
-                    leftSection={<IconDatabase size={16} stroke={1.5} />}
-                    active={currentPath.startsWith("/settings/plugin-storage")}
-                    onClick={onNavigate}
-                  />
-
-                  {/* Data Export Section */}
-                  <Divider
-                    label="Data"
-                    labelPosition="left"
-                    my="xs"
-                    styles={{ label: { fontSize: 11, fontWeight: 600 } }}
-                  />
-                  <NavLink
-                    component={Link}
-                    to="/settings/exports"
-                    label="Data Exports"
-                    leftSection={<IconFileExport size={16} stroke={1.5} />}
-                    active={currentPath.startsWith("/settings/exports")}
-                    onClick={onNavigate}
-                  />
-
-                  {/* Account Section */}
-                  <Divider
-                    label="Account"
-                    labelPosition="left"
-                    my="xs"
-                    styles={{ label: { fontSize: 11, fontWeight: 600 } }}
-                  />
-                </>
+                ))
+              ) : (
+                <NavLink
+                  label="No libraries"
+                  disabled
+                  data-no-accent="true"
+                  styles={{ root: { paddingLeft: 32 } }}
+                />
               )}
 
               <NavLink
-                component={Link}
-                to="/settings/downloads"
-                label="Offline Downloads"
-                leftSection={<IconCloudDownload size={16} stroke={1.5} />}
-                active={currentPath.startsWith("/settings/downloads")}
-                onClick={onNavigate}
-              />
-              <NavLink
-                component={Link}
-                to="/settings/integrations"
-                label="Integrations"
-                leftSection={<IconLink size={16} stroke={1.5} />}
-                active={currentPath.startsWith("/settings/integrations")}
-                onClick={onNavigate}
-              />
-              <NavLink
-                component={Link}
-                to="/settings/profile"
-                label="Profile"
-                leftSection={<IconUser size={16} stroke={1.5} />}
-                active={currentPath.startsWith("/settings/profile")}
-                onClick={onNavigate}
-              />
-            </NavLink>
-          </Stack>
-        </AppShell.Section>
+                label="Settings"
+                leftSection={<IconSettings size={20} stroke={2} />}
+                opened={settingsOpened}
+                onChange={setSettingsOpened}
+                childrenOffset={32}
+                active={currentPath.startsWith("/settings")}
+                data-section-break="true"
+              >
+                {isAdmin && (
+                  <>
+                    {/* System Section */}
+                    <Divider
+                      label="System"
+                      labelPosition="left"
+                      my="xs"
+                      styles={{ label: { fontSize: 11, fontWeight: 600 } }}
+                    />
+                    <NavLink
+                      component={Link}
+                      to="/settings/server"
+                      label="Server"
+                      leftSection={<IconServer size={16} stroke={1.5} />}
+                      active={currentPath.startsWith("/settings/server")}
+                      onClick={onNavigate}
+                    />
+                    <NavLink
+                      component={Link}
+                      to="/settings/tasks"
+                      label="Tasks"
+                      leftSection={<IconClipboardList size={16} stroke={1.5} />}
+                      active={currentPath.startsWith("/settings/tasks")}
+                      onClick={onNavigate}
+                      rightSection={<TaskNotificationBadge variant="compact" />}
+                    />
+                    <NavLink
+                      component={Link}
+                      to="/settings/metrics"
+                      label="Metrics"
+                      leftSection={<IconChartBar size={16} stroke={1.5} />}
+                      active={currentPath.startsWith("/settings/metrics")}
+                      onClick={onNavigate}
+                    />
+                    <NavLink
+                      component={Link}
+                      to="/settings/plugins"
+                      label="Plugins"
+                      leftSection={<IconPlugConnected size={16} stroke={1.5} />}
+                      active={currentPath.startsWith("/settings/plugins")}
+                      onClick={onNavigate}
+                    />
+                    <NavLink
+                      component={Link}
+                      to="/settings/release-tracking"
+                      label="Release Tracking"
+                      leftSection={<IconRss size={16} stroke={1.5} />}
+                      active={currentPath.startsWith(
+                        "/settings/release-tracking",
+                      )}
+                      onClick={onNavigate}
+                    />
 
-        {/* U4: bottom fade cue indicating the nav scrolls (mobile only, when
+                    {/* Access Section */}
+                    <Divider
+                      label="Access"
+                      labelPosition="left"
+                      my="xs"
+                      styles={{ label: { fontSize: 11, fontWeight: 600 } }}
+                    />
+                    <NavLink
+                      component={Link}
+                      to="/settings/users"
+                      label="Users"
+                      leftSection={<IconUsers size={16} stroke={1.5} />}
+                      active={currentPath.startsWith("/settings/users")}
+                      onClick={onNavigate}
+                    />
+                    <NavLink
+                      component={Link}
+                      to="/settings/sharing-tags"
+                      label="Sharing Tags"
+                      leftSection={<IconShare size={16} stroke={1.5} />}
+                      active={currentPath.startsWith("/settings/sharing-tags")}
+                      onClick={onNavigate}
+                    />
+                    <NavLink
+                      component={Link}
+                      to="/settings/access-groups"
+                      label="Access Groups"
+                      leftSection={<IconShieldCheck size={16} stroke={1.5} />}
+                      active={currentPath.startsWith("/settings/access-groups")}
+                      onClick={onNavigate}
+                    />
+
+                    {/* Library Health Section */}
+                    <Divider
+                      label="Library Health"
+                      labelPosition="left"
+                      my="xs"
+                      styles={{ label: { fontSize: 11, fontWeight: 600 } }}
+                    />
+                    <NavLink
+                      component={Link}
+                      to="/settings/duplicates"
+                      label="Duplicates"
+                      leftSection={<IconCopy size={16} stroke={1.5} />}
+                      active={currentPath.startsWith("/settings/duplicates")}
+                      onClick={onNavigate}
+                    />
+                    <NavLink
+                      component={Link}
+                      to="/settings/book-errors"
+                      label="Book Errors"
+                      leftSection={<IconAlertTriangle size={16} stroke={1.5} />}
+                      active={currentPath.startsWith("/settings/book-errors")}
+                      onClick={onNavigate}
+                    />
+
+                    {/* Storage Section */}
+                    <Divider
+                      label="Storage"
+                      labelPosition="left"
+                      my="xs"
+                      styles={{ label: { fontSize: 11, fontWeight: 600 } }}
+                    />
+                    <NavLink
+                      component={Link}
+                      to="/settings/cleanup"
+                      label="Thumbnails"
+                      leftSection={<IconBrush size={16} stroke={1.5} />}
+                      active={currentPath.startsWith("/settings/cleanup")}
+                      onClick={onNavigate}
+                    />
+                    <NavLink
+                      component={Link}
+                      to="/settings/pdf-cache"
+                      label="Page Cache"
+                      leftSection={<IconFileTypePdf size={16} stroke={1.5} />}
+                      active={currentPath.startsWith("/settings/pdf-cache")}
+                      onClick={onNavigate}
+                    />
+                    <NavLink
+                      component={Link}
+                      to="/settings/plugin-storage"
+                      label="Plugin Storage"
+                      leftSection={<IconDatabase size={16} stroke={1.5} />}
+                      active={currentPath.startsWith(
+                        "/settings/plugin-storage",
+                      )}
+                      onClick={onNavigate}
+                    />
+
+                    {/* Data Export Section */}
+                    <Divider
+                      label="Data"
+                      labelPosition="left"
+                      my="xs"
+                      styles={{ label: { fontSize: 11, fontWeight: 600 } }}
+                    />
+                    <NavLink
+                      component={Link}
+                      to="/settings/exports"
+                      label="Data Exports"
+                      leftSection={<IconFileExport size={16} stroke={1.5} />}
+                      active={currentPath.startsWith("/settings/exports")}
+                      onClick={onNavigate}
+                    />
+
+                    {/* Account Section */}
+                    <Divider
+                      label="Account"
+                      labelPosition="left"
+                      my="xs"
+                      styles={{ label: { fontSize: 11, fontWeight: 600 } }}
+                    />
+                  </>
+                )}
+
+                <NavLink
+                  component={Link}
+                  to="/settings/downloads"
+                  label="Offline Downloads"
+                  leftSection={<IconCloudDownload size={16} stroke={1.5} />}
+                  active={currentPath.startsWith("/settings/downloads")}
+                  onClick={onNavigate}
+                />
+                <NavLink
+                  component={Link}
+                  to="/settings/integrations"
+                  label="Integrations"
+                  leftSection={<IconLink size={16} stroke={1.5} />}
+                  active={currentPath.startsWith("/settings/integrations")}
+                  onClick={onNavigate}
+                />
+                <NavLink
+                  component={Link}
+                  to="/settings/profile"
+                  label="Profile"
+                  leftSection={<IconUser size={16} stroke={1.5} />}
+                  active={currentPath.startsWith("/settings/profile")}
+                  onClick={onNavigate}
+                />
+              </NavLink>
+            </Stack>
+          </AppShell.Section>
+
+          {/* U4: bottom fade cue indicating the nav scrolls (mobile only, when
             overflowing and not at the bottom). Sits between the grow section
             and the pinned footer so it visually trails the scrollable area. */}
-        {showScrollCue && (
-          <Box
-            aria-hidden="true"
-            data-testid="sidebar-scroll-cue"
-            style={{
-              position: "sticky",
-              bottom: 0,
-              height: 24,
-              marginTop: -24,
-              marginLeft: "calc(var(--mantine-spacing-md) * -1)",
-              marginRight: "calc(var(--mantine-spacing-md) * -1)",
-              background:
-                "linear-gradient(to top, var(--mantine-color-body), transparent)",
-              pointerEvents: "none",
-              flexShrink: 0,
-              zIndex: 1,
-            }}
-          />
-        )}
-
-        <AppShell.Section>
-          <footer className={classes.footer} data-testid="sidebar-footer">
-            <NavLink
-              label="Logout"
-              leftSection={<IconLogout size={20} stroke={2} />}
-              onClick={handleLogout}
-              color="red"
+          {showScrollCue && (
+            <Box
+              aria-hidden="true"
+              data-testid="sidebar-scroll-cue"
+              style={{
+                position: "sticky",
+                bottom: 0,
+                height: 24,
+                marginTop: -24,
+                marginLeft: "calc(var(--mantine-spacing-md) * -1)",
+                marginRight: "calc(var(--mantine-spacing-md) * -1)",
+                background:
+                  "linear-gradient(to top, var(--mantine-color-body), transparent)",
+                pointerEvents: "none",
+                flexShrink: 0,
+                zIndex: 1,
+              }}
             />
-            {appInfo?.version && (
-              <Text size="xs" c="dimmed" ta="center" fw={400}>
-                v{appInfo.version}
-              </Text>
-            )}
-          </footer>
-        </AppShell.Section>
-      </AppShell.Navbar>
+          )}
+
+          <AppShell.Section>
+            <footer className={classes.footer} data-testid="sidebar-footer">
+              <NavLink
+                label="Logout"
+                leftSection={<IconLogout size={20} stroke={2} />}
+                onClick={handleLogout}
+                color="red"
+              />
+              {appInfo?.version && (
+                <Text size="xs" c="dimmed" ta="center" fw={400}>
+                  v{appInfo.version}
+                </Text>
+              )}
+            </footer>
+          </AppShell.Section>
+        </AppShell.Navbar>
+      </RemoveScroll>
 
       <LibraryModal
         opened={addLibraryOpened}
