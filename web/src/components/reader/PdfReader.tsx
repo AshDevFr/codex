@@ -12,8 +12,12 @@ import {
 import { Document, Page, pdfjs } from "react-pdf";
 import { booksApi } from "@/api/books";
 import { MOBILE_MEDIA_QUERY } from "@/components/ui";
-import { useReaderStore } from "@/store/readerStore";
+import {
+  selectEffectiveReadingDirection,
+  useReaderStore,
+} from "@/store/readerStore";
 import { BoundaryNotification } from "./BoundaryNotification";
+import { ChapterTransitionPanel } from "./ChapterTransitionPanel";
 import {
   useAdjacentBooks,
   useBoundaryNotification,
@@ -89,6 +93,10 @@ export function PdfReader({
   const [numPages, setNumPages] = useState<number>(0);
   const [pageError, setPageError] = useState<string | null>(null);
   const [settingsOpened, setSettingsOpened] = useState(false);
+  // Whether the user scrolled to the trailing "Next Chapter" panel in
+  // continuous mode. Gates the auto-advance countdown so it only runs once the
+  // panel is actually on screen.
+  const [trailingReached, setTrailingReached] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchText, setSearchText] = useState("");
   const [debouncedSearchText] = useDebouncedValue(searchText, 300);
@@ -167,9 +175,15 @@ export function PdfReader({
   );
   const adjacentBooks = useReaderStore((state) => state.adjacentBooks);
   const boundaryState = useReaderStore((state) => state.boundaryState);
+  const boundaryView = useReaderStore((state) => state.boundaryView);
+  const autoAdvanceToNextBook = useReaderStore(
+    (state) => state.settings.autoAdvanceToNextBook,
+  );
+  const readingDirection = useReaderStore(selectEffectiveReadingDirection);
 
   // Reader store actions
   const initializeReader = useReaderStore((state) => state.initializeReader);
+  const setBoundaryView = useReaderStore((state) => state.setBoundaryView);
   const correctTotalPages = useReaderStore((state) => state.correctTotalPages);
   const setToolbarVisible = useReaderStore((state) => state.setToolbarVisible);
   const setFullscreen = useReaderStore((state) => state.setFullscreen);
@@ -230,11 +244,72 @@ export function PdfReader({
 
   // Read progress hook (use numPages from PDF if available, disabled in incognito mode)
   const effectiveTotalPages = numPages > 0 ? numPages : _backendTotalPages;
-  const { initialPage, isLoading: progressLoading } = useReadProgress({
+  const {
+    initialPage,
+    isLoading: progressLoading,
+    saveProgress,
+  } = useReadProgress({
     bookId,
     totalPages: effectiveTotalPages,
     enabled: !incognito,
   });
+
+  // Paginated boundary navigation (single/double). Replaces the two-press
+  // toast: paging past the last page raises the "Next Chapter" overlay (and
+  // marks the book read); paging before page 1 raises "Previous Chapter". While
+  // the overlay is up, "next"/"prev" either continue to the adjacent book or
+  // dismiss the overlay. Continuous mode uses in-flow panels instead.
+  const isDoublePaginated = pdfSpreadMode !== "single" && !pdfContinuousScroll;
+  const handlePaginatedNext = useCallback(() => {
+    const view = useReaderStore.getState().boundaryView;
+    if (view !== "none") {
+      if (view === "at-end") goToNextBook();
+      else setBoundaryView("none");
+      return;
+    }
+    const page = useReaderStore.getState().currentPage;
+    const atEnd = isDoublePaginated
+      ? page >= effectiveTotalPages - 1
+      : page >= effectiveTotalPages;
+    if (atEnd) {
+      setBoundaryView("at-end");
+      if (!incognito) saveProgress(effectiveTotalPages);
+      return;
+    }
+    handleNextPage();
+  }, [
+    isDoublePaginated,
+    effectiveTotalPages,
+    incognito,
+    saveProgress,
+    goToNextBook,
+    setBoundaryView,
+    handleNextPage,
+  ]);
+
+  const handlePaginatedPrev = useCallback(() => {
+    const view = useReaderStore.getState().boundaryView;
+    if (view !== "none") {
+      if (view === "at-start") goToPrevBook();
+      else setBoundaryView("none");
+      return;
+    }
+    const page = useReaderStore.getState().currentPage;
+    if (page <= 1) {
+      setBoundaryView("at-start");
+      return;
+    }
+    handlePrevPage();
+  }, [goToPrevBook, setBoundaryView, handlePrevPage]);
+
+  // Reset the trailing-panel reached flag when the book changes (render-phase
+  // pattern, per the React docs) in case the reader is reused across a
+  // navigation rather than remounted.
+  const [prevBookId, setPrevBookId] = useState(bookId);
+  if (bookId !== prevBookId) {
+    setPrevBookId(bookId);
+    setTrailingReached(false);
+  }
 
   // Calculate page dimensions based on zoom level
   // Note: PDF scale 1.0 = 72 DPI, which is small on modern displays
@@ -417,18 +492,25 @@ export function PdfReader({
     }
   }, [isFullscreen, setFullscreen]);
 
-  // Auto-hide toolbar
+  // Auto-hide toolbar. Suppressed while a paginated transition overlay is up so
+  // the toolbar (close/settings) and bottom nav bar stay reachable.
   const resetHideTimeout = useCallback(() => {
     if (hideTimeoutRef.current) {
       clearTimeout(hideTimeoutRef.current);
     }
 
-    if (autoHideToolbar && toolbarVisible) {
+    if (autoHideToolbar && toolbarVisible && boundaryView === "none") {
       hideTimeoutRef.current = setTimeout(() => {
         setToolbarVisible(false);
       }, toolbarHideDelay);
     }
-  }, [autoHideToolbar, toolbarVisible, toolbarHideDelay, setToolbarVisible]);
+  }, [
+    autoHideToolbar,
+    toolbarVisible,
+    toolbarHideDelay,
+    setToolbarVisible,
+    boundaryView,
+  ]);
 
   useEffect(() => {
     resetHideTimeout();
@@ -438,6 +520,35 @@ export function PdfReader({
       }
     };
   }, [resetHideTimeout]);
+
+  // Reveal the toolbar whenever the paginated transition overlay appears.
+  useEffect(() => {
+    if (boundaryView !== "none") {
+      setToolbarVisible(true);
+    }
+  }, [boundaryView, setToolbarVisible]);
+
+  // Chapter-transition panels. Continuous mode mounts them in-flow (leading
+  // before page 1, trailing after the last page); paginated mode renders one as
+  // an overlay driven by boundaryView. Same component, both modes.
+  const panelReadingDirection = readingDirection === "rtl" ? "rtl" : "ltr";
+  const continuousLeadingPanel = (
+    <ChapterTransitionPanel
+      direction="prev"
+      book={adjacentBooks?.prev ?? null}
+      onContinue={goToPrevBook}
+      readingDirection={panelReadingDirection}
+    />
+  );
+  const continuousTrailingPanel = (
+    <ChapterTransitionPanel
+      direction="next"
+      book={adjacentBooks?.next ?? null}
+      onContinue={goToNextBook}
+      autoAdvance={autoAdvanceToNextBook && trailingReached}
+      readingDirection={panelReadingDirection}
+    />
+  );
 
   // Show toolbar on mouse / pen move. Skip touch — synthetic mouse events
   // fire after every tap on touch devices, which would pop the toolbar open
@@ -457,8 +568,8 @@ export function PdfReader({
   useKeyboardNav({
     enabled: !settingsOpened && !searchOpen,
     onEscape: searchOpen ? () => setSearchOpen(false) : onClose,
-    onNextPage: handleNextPage,
-    onPrevPage: handlePrevPage,
+    onNextPage: handlePaginatedNext,
+    onPrevPage: handlePaginatedPrev,
   });
 
   // Touch/tap navigation for mobile devices.
@@ -469,8 +580,8 @@ export function PdfReader({
   const { touchRef } = useTouchNav({
     enabled: !settingsOpened && !searchOpen,
     tapZones: !pdfContinuousScroll,
-    onNextPage: handleNextPage,
-    onPrevPage: handlePrevPage,
+    onNextPage: handlePaginatedNext,
+    onPrevPage: handlePaginatedPrev,
     onTap: toggleToolbar,
   });
 
@@ -719,8 +830,8 @@ export function PdfReader({
       {!pdfContinuousScroll && (
         <MobileReaderBottomBar
           visible={toolbarVisible}
-          onPrevPage={handlePrevPage}
-          onNextPage={handleNextPage}
+          onPrevPage={handlePaginatedPrev}
+          onNextPage={handlePaginatedNext}
         />
       )}
 
@@ -798,6 +909,9 @@ export function PdfReader({
             onDocumentLoadSuccess={handleDocumentLoadSuccess}
             onDocumentLoadError={handleDocumentLoadError}
             tapRef={touchRef}
+            leadingSlot={continuousLeadingPanel}
+            trailingSlot={continuousTrailingPanel}
+            onTrailingReachedChange={setTrailingReached}
           />
         </Box>
       ) : (
@@ -945,6 +1059,24 @@ export function PdfReader({
               </Document>
             </Box>
           )}
+        </Box>
+      )}
+
+      {/* Chapter-transition overlay for paginated PDF modes. Continuous mode
+          uses in-flow panels instead, so this only applies to single/double. */}
+      {!pdfContinuousScroll && boundaryView !== "none" && (
+        <Box style={{ position: "absolute", inset: 0, zIndex: 50 }}>
+          <ChapterTransitionPanel
+            direction={boundaryView === "at-end" ? "next" : "prev"}
+            book={
+              boundaryView === "at-end"
+                ? (adjacentBooks?.next ?? null)
+                : (adjacentBooks?.prev ?? null)
+            }
+            onContinue={boundaryView === "at-end" ? goToNextBook : goToPrevBook}
+            autoAdvance={boundaryView === "at-end" && autoAdvanceToNextBook}
+            readingDirection={panelReadingDirection}
+          />
         </Box>
       )}
 

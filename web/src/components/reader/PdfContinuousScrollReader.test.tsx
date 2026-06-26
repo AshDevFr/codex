@@ -539,4 +539,95 @@ describe("PdfContinuousScrollReader", () => {
       expect(placeholder).toHaveStyle({ height: "800px" });
     });
   });
+
+  describe("Transition panels", () => {
+    function setScrollMetrics(
+      el: HTMLElement,
+      { scrollTop, clientHeight, scrollHeight }: Record<string, number>,
+    ) {
+      Object.defineProperty(el, "scrollHeight", {
+        configurable: true,
+        value: scrollHeight,
+      });
+      Object.defineProperty(el, "clientHeight", {
+        configurable: true,
+        value: clientHeight,
+      });
+      Object.defineProperty(el, "scrollTop", {
+        configurable: true,
+        writable: true,
+        value: scrollTop,
+      });
+    }
+
+    it("renders the leading and trailing slots", async () => {
+      renderWithProviders(
+        <PdfContinuousScrollReader
+          {...defaultProps}
+          zoomLevel="100%"
+          leadingSlot={<div>prev-panel</div>}
+          trailingSlot={<div>next-panel</div>}
+        />,
+      );
+
+      expect(
+        await screen.findByTestId("pdf-continuous-leading-slot"),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByTestId("pdf-continuous-trailing-slot"),
+      ).toBeInTheDocument();
+    });
+
+    it("reports the final page and fires trailing-reached at the bottom", async () => {
+      const onTrailingReachedChange = vi.fn();
+      renderWithProviders(
+        <PdfContinuousScrollReader
+          {...defaultProps}
+          zoomLevel="100%"
+          totalPages={10}
+          trailingSlot={<div>next-panel</div>}
+          onTrailingReachedChange={onTrailingReachedChange}
+        />,
+      );
+      await screen.findByTestId("pdf-continuous-trailing-slot");
+
+      const container = screen.getByTestId("pdf-continuous-scroll-container");
+      setScrollMetrics(container, {
+        scrollTop: 1200,
+        clientHeight: 800,
+        scrollHeight: 2000,
+      });
+      container.dispatchEvent(new Event("scroll"));
+
+      await waitFor(() =>
+        expect(onTrailingReachedChange).toHaveBeenCalledWith(true),
+      );
+      expect(useReaderStore.getState().currentPage).toBe(10);
+    });
+
+    it("does not report the final page when not at the bottom", async () => {
+      const onTrailingReachedChange = vi.fn();
+      renderWithProviders(
+        <PdfContinuousScrollReader
+          {...defaultProps}
+          zoomLevel="100%"
+          totalPages={10}
+          trailingSlot={<div>next-panel</div>}
+          onTrailingReachedChange={onTrailingReachedChange}
+        />,
+      );
+      await screen.findByTestId("pdf-continuous-trailing-slot");
+
+      const container = screen.getByTestId("pdf-continuous-scroll-container");
+      setScrollMetrics(container, {
+        scrollTop: 100,
+        clientHeight: 800,
+        scrollHeight: 2000,
+      });
+      container.dispatchEvent(new Event("scroll"));
+
+      await new Promise((r) => setTimeout(r, 150));
+      expect(onTrailingReachedChange).not.toHaveBeenCalledWith(true);
+    });
+  });
 });

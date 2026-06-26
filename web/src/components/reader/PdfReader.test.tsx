@@ -1,4 +1,6 @@
+import { act } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { AdjacentBook } from "@/store/readerStore";
 import { useReaderStore } from "@/store/readerStore";
 import { fireEvent, renderWithProviders, screen, waitFor } from "@/test/utils";
 
@@ -83,6 +85,7 @@ vi.mock("./hooks", () => ({
 }));
 
 // Import component after mocks
+import { useKeyboardNav, useReadProgress, useSeriesNavigation } from "./hooks";
 import { PdfReader } from "./PdfReader";
 
 // Mock ResizeObserver - needed for container dimension measurement
@@ -267,6 +270,118 @@ describe("PdfReader", () => {
       await waitFor(() => {
         expect(screen.getByTestId("pdf-page")).toBeInTheDocument();
       });
+    });
+  });
+
+  describe("chapter transition overlay (paginated)", () => {
+    const nextBook: AdjacentBook = {
+      id: "book-next",
+      title: "Next One",
+      pageCount: 12,
+      seriesName: "My Series",
+      number: 4,
+      volume: 1,
+      chapter: 4,
+    };
+    const prevBook: AdjacentBook = {
+      id: "book-prev",
+      title: "Prev One",
+      pageCount: 8,
+      seriesName: "My Series",
+      number: 2,
+      volume: 1,
+      chapter: 2,
+    };
+
+    function setupNav(overrides: Record<string, unknown> = {}) {
+      const nav = {
+        handleNextPage: vi.fn(),
+        handlePrevPage: vi.fn(),
+        goToNextBook: vi.fn(),
+        goToPrevBook: vi.fn(),
+        canGoNextBook: true,
+        canGoPrevBook: true,
+        isSeriesEnd: false,
+        isSeriesStart: false,
+        ...overrides,
+      };
+      vi.mocked(useSeriesNavigation).mockReturnValue(nav as never);
+      return nav;
+    }
+
+    function renderAt(
+      page: number,
+      adjacent: { prev: AdjacentBook | null; next: AdjacentBook | null },
+    ) {
+      const saveProgress = vi.fn();
+      vi.mocked(useReadProgress).mockReturnValue({
+        initialPage: page,
+        isLoading: false,
+        saveProgress,
+        cancelPendingSave: vi.fn(),
+      } as never);
+      useReaderStore.setState({
+        currentPage: page,
+        totalPages: 10,
+        adjacentBooks: adjacent,
+      });
+      renderWithProviders(<PdfReader {...defaultProps} />);
+      const calls = vi.mocked(useKeyboardNav).mock.calls;
+      const opts = calls[calls.length - 1][0] as {
+        onNextPage: () => void;
+        onPrevPage: () => void;
+      };
+      return { ...opts, saveProgress };
+    }
+
+    it("opens the Next Chapter overlay and marks read at the last page", () => {
+      setupNav();
+      const { onNextPage, saveProgress } = renderAt(10, {
+        prev: null,
+        next: nextBook,
+      });
+
+      act(() => onNextPage());
+
+      expect(useReaderStore.getState().boundaryView).toBe("at-end");
+      expect(saveProgress).toHaveBeenCalledWith(10);
+      expect(screen.getByText("Next Chapter")).toBeInTheDocument();
+    });
+
+    it("continues to the next book from the overlay", async () => {
+      const nav = setupNav();
+      const { onNextPage } = renderAt(10, { prev: null, next: nextBook });
+
+      act(() => onNextPage());
+      fireEvent.click(
+        screen.getByRole("button", { name: /continue reading/i }),
+      );
+
+      expect(nav.goToNextBook).toHaveBeenCalledTimes(1);
+    });
+
+    it("opens the Previous Chapter overlay at page 1", () => {
+      setupNav();
+      const { onPrevPage } = renderAt(1, { prev: prevBook, next: null });
+
+      act(() => onPrevPage());
+
+      expect(useReaderStore.getState().boundaryView).toBe("at-start");
+      expect(screen.getByText("Previous Chapter")).toBeInTheDocument();
+    });
+
+    it("dismisses the overlay when paging back from at-end", () => {
+      setupNav();
+      const { onNextPage, onPrevPage } = renderAt(10, {
+        prev: prevBook,
+        next: nextBook,
+      });
+
+      act(() => onNextPage());
+      expect(useReaderStore.getState().boundaryView).toBe("at-end");
+
+      act(() => onPrevPage());
+      expect(useReaderStore.getState().boundaryView).toBe("none");
     });
   });
 });
