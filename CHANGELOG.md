@@ -2,6 +2,17 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.39.7] - 2026-06-26
+
+### 🚀 Features
+
+- *(reader)* Make auto-advance countdown configurable and fix webtoon loop
+
+### 🐛 Bug Fixes
+
+- *(web)* Lock page scroll while the mobile nav menu is open
+- *(reader)* Keep webtoon scroll restore from drifting backward on reload
+
 ## [1.39.6] - 2026-06-26
 
 ### 🚀 Features
