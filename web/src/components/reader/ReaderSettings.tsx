@@ -105,6 +105,9 @@ export function ReaderSettings({
   const setAutoAdvanceSeconds = useReaderStore(
     (state) => state.setAutoAdvanceSeconds,
   );
+  const setSwipeNavigation = useReaderStore(
+    (state) => state.setSwipeNavigation,
+  );
 
   // Global setters for reading direction override (used when updating series metadata)
   const setReadingDirectionOverride = useReaderStore(
@@ -336,6 +339,23 @@ export function ReaderSettings({
             size="sm"
             checked={globalSettings.autoHideToolbar}
             onChange={(e) => setAutoHideToolbar(e.currentTarget.checked)}
+          />
+        </Group>
+
+        <Group justify="space-between">
+          <Box>
+            <Text size="sm" fw={500}>
+              Swipe to turn pages
+            </Text>
+            <Text size="xs" c="dimmed">
+              Drag the page sideways on touch devices (paged comic modes)
+            </Text>
+          </Box>
+          <Switch
+            size="sm"
+            aria-label="Swipe to turn pages"
+            checked={globalSettings.swipeNavigation}
+            onChange={(e) => setSwipeNavigation(e.currentTarget.checked)}
           />
         </Group>
 

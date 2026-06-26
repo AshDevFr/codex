@@ -216,6 +216,14 @@ These settings apply across all reader types:
 
 When enabled, the toolbar automatically hides after a period of inactivity. Move your mouse or tap the screen to reveal it.
 
+### Swipe to Turn Pages
+
+On touch devices, drag a page sideways to turn it: the page follows your finger and snaps to the next or previous page when you release (based on how far you dragged or how fast you flicked). Reading direction is respected, so in right-to-left (manga) mode the gesture is mirrored, and double-page spreads move as a unit. Tap-zone navigation (tap the left/right edge) and the center-tap toolbar toggle keep working alongside it.
+
+The gesture only applies to **paged comic modes** (single and double page); webtoon and continuous-scroll modes navigate by scrolling. It also yields to the browser when the page is zoomed in or a fit mode makes the page wider than the screen, so you can pinch-zoom and pan without accidentally turning the page.
+
+Enabled by default. Turn it off to use tap-only navigation.
+
 ### End-of-Book Transition
 
 When you reach the end of a book in a series (comics and PDFs), a **Next Chapter** panel appears with the next book's cover and a **Continue Reading** button. In webtoon and continuous-scroll modes you scroll into it after the last page; in paginated modes it appears when you page past the last page. A matching **Previous Chapter** panel appears at the very beginning. Reaching the end panel also marks the current book as read.

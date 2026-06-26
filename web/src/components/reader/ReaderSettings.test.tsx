@@ -249,4 +249,32 @@ describe("ReaderSettings", () => {
       expect(screen.queryByText("Reader Settings")).not.toBeInTheDocument();
     });
   });
+
+  describe("Swipe to turn pages toggle", () => {
+    it("reflects the swipeNavigation setting and toggles it", async () => {
+      const user = userEvent.setup();
+      useReaderStore.setState({
+        settings: {
+          ...useReaderStore.getState().settings,
+          swipeNavigation: true,
+        },
+      });
+
+      renderWithProviders(
+        <ReaderSettings opened={true} onClose={vi.fn()} format="CBZ" />,
+      );
+
+      const toggle = screen.getByRole("switch", {
+        name: "Swipe to turn pages",
+      });
+      expect(toggle).toBeChecked();
+
+      await user.click(toggle);
+
+      await waitFor(() => {
+        expect(useReaderStore.getState().settings.swipeNavigation).toBe(false);
+      });
+      expect(toggle).not.toBeChecked();
+    });
+  });
 });
