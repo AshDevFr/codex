@@ -9,11 +9,6 @@ import {
   formatTransitionLabels,
 } from "./ChapterTransitionPanel";
 
-// Avoid the authenticated blob fetch in component tests.
-vi.mock("@/hooks/useAuthenticatedImage", () => ({
-  useAuthenticatedImage: () => null,
-}));
-
 function wrapper({ children }: { children: ReactNode }) {
   return <MantineProvider>{children}</MantineProvider>;
 }
@@ -101,6 +96,36 @@ describe("ChapterTransitionPanel", () => {
       { wrapper },
     );
     expect(screen.getByText("Previous Chapter")).toBeInTheDocument();
+  });
+
+  it("points the next arrow right in LTR and left in RTL", () => {
+    const { container, rerender } = render(
+      <ChapterTransitionPanel
+        direction="next"
+        book={nextBook}
+        onContinue={vi.fn()}
+        readingDirection="ltr"
+      />,
+      { wrapper },
+    );
+    expect(
+      container.querySelector(".tabler-icon-arrow-right"),
+    ).toBeInTheDocument();
+
+    rerender(
+      <ChapterTransitionPanel
+        direction="next"
+        book={nextBook}
+        onContinue={vi.fn()}
+        readingDirection="rtl"
+      />,
+    );
+    expect(
+      container.querySelector(".tabler-icon-arrow-left"),
+    ).toBeInTheDocument();
+    expect(
+      container.querySelector(".tabler-icon-arrow-right"),
+    ).not.toBeInTheDocument();
   });
 
   it("calls onContinue when the button is clicked", async () => {

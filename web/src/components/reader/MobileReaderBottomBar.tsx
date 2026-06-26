@@ -81,6 +81,15 @@ export function MobileReaderBottomBar({
   const totalPages = useReaderStore((state) => state.totalPages);
   const progressPercent = useReaderStore(selectProgressPercent);
   const readingDirection = useReaderStore(selectEffectiveReadingDirection);
+  // Whether there's an adjacent book to step into past this boundary. When
+  // there is, keep the boundary chevron enabled so it can open the chapter
+  // transition overlay instead of dead-ending at the first/last page.
+  const hasNextBook = useReaderStore(
+    (state) => state.adjacentBooks?.next != null,
+  );
+  const hasPrevBook = useReaderStore(
+    (state) => state.adjacentBooks?.prev != null,
+  );
   const setPage = useReaderStore((state) => state.setPage);
   const storeNextPage = useReaderStore((state) => state.nextPage);
   const storePrevPage = useReaderStore((state) => state.prevPage);
@@ -103,13 +112,13 @@ export function MobileReaderBottomBar({
   const leftDisabled = isEpub
     ? false
     : isRtl
-      ? currentPage >= totalPages
-      : currentPage <= 1;
+      ? currentPage >= totalPages && !hasNextBook
+      : currentPage <= 1 && !hasPrevBook;
   const rightDisabled = isEpub
     ? false
     : isRtl
-      ? currentPage <= 1
-      : currentPage >= totalPages;
+      ? currentPage <= 1 && !hasPrevBook
+      : currentPage >= totalPages && !hasNextBook;
 
   const [jumpOpened, jumpHandlers] = useDisclosure(false);
   const [jumpValue, setJumpValue] = useState<number>(currentPage);

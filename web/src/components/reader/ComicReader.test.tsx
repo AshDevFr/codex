@@ -1,7 +1,11 @@
+import { act } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { AdjacentBook } from "@/store/readerStore";
 import { useReaderStore } from "@/store/readerStore";
 import { renderWithProviders, screen, waitFor } from "@/test/utils";
 import { ComicReader } from "./ComicReader";
+import { useKeyboardNav } from "./hooks";
 
 // Store the mock implementations so we can change them per test
 let mockUseReadProgress = vi.fn(() => ({
@@ -103,6 +107,7 @@ const defaultSessionState = {
   readingDirectionOverride: null,
   adjacentBooks: null,
   boundaryState: "none" as const,
+  boundaryView: "none" as const,
   pageOrientations: {},
   lastNavigationDirection: null,
   preloadedImages: new Set<string>(),
@@ -124,6 +129,8 @@ describe("ComicReader", () => {
     mockUseReadProgress = vi.fn(() => ({
       initialPage: 1,
       isLoading: false,
+      saveProgress: vi.fn(),
+      cancelPendingSave: vi.fn(),
     }));
     mockUseSeriesNavigation = vi.fn(() => ({
       handleNextPage: vi.fn(),
@@ -563,6 +570,148 @@ describe("ComicReader", () => {
       // Reader should render without error - backgroundColor is passed to child components
       const container = document.querySelector('[style*="100vw"]');
       expect(container).toBeInTheDocument();
+    });
+  });
+
+  describe("chapter transition overlay (paginated)", () => {
+    const nextBook: AdjacentBook = {
+      id: "book-next",
+      title: "Next One",
+      pageCount: 12,
+      seriesName: "My Series",
+      number: 4,
+      volume: 1,
+      chapter: 4,
+    };
+    const prevBook: AdjacentBook = {
+      id: "book-prev",
+      title: "Prev One",
+      pageCount: 8,
+      seriesName: "My Series",
+      number: 2,
+      volume: 1,
+      chapter: 2,
+    };
+
+    function setupNav(overrides: Record<string, unknown> = {}) {
+      const nav = {
+        handleNextPage: vi.fn(),
+        handlePrevPage: vi.fn(),
+        goToNextBook: vi.fn(),
+        goToPrevBook: vi.fn(),
+        canGoNextBook: true,
+        canGoPrevBook: true,
+        ...overrides,
+      };
+      mockUseSeriesNavigation = vi.fn(() => nav);
+      return nav;
+    }
+
+    // The real paginated navigation triggers (keyboard/touch/bottom bar) are all
+    // mocked or media-query-gated in jsdom, so capture the page handlers
+    // ComicReader hands to useKeyboardNav and drive them directly.
+    function renderAt(
+      page: number,
+      adjacent: typeof defaultSessionState.adjacentBooks,
+    ) {
+      const saveProgress = vi.fn();
+      mockUseReadProgress = vi.fn(() => ({
+        initialPage: page,
+        isLoading: false,
+        saveProgress,
+        cancelPendingSave: vi.fn(),
+      }));
+      useReaderStore.setState({
+        currentBookId: "book-123",
+        currentPage: page,
+        totalPages: 10,
+        adjacentBooks: adjacent,
+      });
+      renderWithProviders(<ComicReader {...defaultProps} />);
+      const calls = vi.mocked(useKeyboardNav).mock.calls;
+      const opts = calls[calls.length - 1][0] as {
+        onNextPage: () => void;
+        onPrevPage: () => void;
+      };
+      return { ...opts, saveProgress };
+    }
+
+    it("opens the Next Chapter overlay and marks the book read at the last page", () => {
+      setupNav();
+      const { onNextPage, saveProgress } = renderAt(10, {
+        prev: null,
+        next: nextBook,
+      });
+
+      act(() => onNextPage());
+
+      expect(useReaderStore.getState().boundaryView).toBe("at-end");
+      expect(saveProgress).toHaveBeenCalledWith(10);
+      expect(screen.getByTestId("chapter-transition-next")).toBeInTheDocument();
+      expect(screen.getByText("Next Chapter")).toBeInTheDocument();
+    });
+
+    it("continues to the next book from the overlay", async () => {
+      const user = userEvent.setup();
+      const nav = setupNav();
+      const { onNextPage } = renderAt(10, { prev: null, next: nextBook });
+
+      act(() => onNextPage());
+      await user.click(
+        screen.getByRole("button", { name: /continue reading/i }),
+      );
+
+      expect(nav.goToNextBook).toHaveBeenCalledTimes(1);
+    });
+
+    it("opens the Previous Chapter overlay at page 1 and continues back", async () => {
+      const user = userEvent.setup();
+      const nav = setupNav();
+      const { onPrevPage } = renderAt(1, { prev: prevBook, next: null });
+
+      act(() => onPrevPage());
+
+      expect(useReaderStore.getState().boundaryView).toBe("at-start");
+      expect(screen.getByText("Previous Chapter")).toBeInTheDocument();
+
+      await user.click(
+        screen.getByRole("button", { name: /continue reading/i }),
+      );
+      expect(nav.goToPrevBook).toHaveBeenCalledTimes(1);
+    });
+
+    it("shows End of series with no Continue button on the last book", () => {
+      setupNav({ canGoNextBook: false });
+      const { onNextPage, saveProgress } = renderAt(10, {
+        prev: null,
+        next: null,
+      });
+
+      act(() => onNextPage());
+
+      expect(useReaderStore.getState().boundaryView).toBe("at-end");
+      expect(saveProgress).toHaveBeenCalledWith(10);
+      expect(screen.getByText("End of series")).toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: /continue reading/i }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("dismisses the overlay when paging back from at-end", () => {
+      setupNav();
+      const { onNextPage, onPrevPage } = renderAt(10, {
+        prev: prevBook,
+        next: nextBook,
+      });
+
+      act(() => onNextPage());
+      expect(useReaderStore.getState().boundaryView).toBe("at-end");
+
+      act(() => onPrevPage());
+      expect(useReaderStore.getState().boundaryView).toBe("none");
+      expect(
+        screen.queryByTestId("chapter-transition-next"),
+      ).not.toBeInTheDocument();
     });
   });
 });

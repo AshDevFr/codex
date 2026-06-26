@@ -154,6 +154,7 @@ export function ComicReader({
 
   const adjacentBooks = useReaderStore((state) => state.adjacentBooks);
   const boundaryState = useReaderStore((state) => state.boundaryState);
+  const boundaryView = useReaderStore((state) => state.boundaryView);
   const pageTransition = useReaderStore(
     (state) => state.settings.pageTransition,
   );
@@ -185,6 +186,7 @@ export function ComicReader({
     (state) => state.setPageOrientation,
   );
   const goToPage = useReaderStore((state) => state.goToPage);
+  const setBoundaryView = useReaderStore((state) => state.setBoundaryView);
   const correctTotalPages = useReaderStore((state) => state.correctTotalPages);
   const setLastNavigationDirection = useReaderStore(
     (state) => state.setLastNavigationDirection,
@@ -282,6 +284,7 @@ export function ComicReader({
     initialPage,
     isLoading: progressLoading,
     cancelPendingSave,
+    saveProgress,
   } = useReadProgress({
     bookId,
     totalPages,
@@ -391,18 +394,33 @@ export function ComicReader({
     }
   }, [isFullscreen, setFullscreen]);
 
-  // Auto-hide toolbar
+  // Auto-hide toolbar. Suppressed while a paginated transition overlay is up so
+  // the toolbar (close/settings) and bottom nav bar stay reachable — otherwise
+  // an "End of series" overlay (no Continue button) could trap the user.
   const resetHideTimeout = useCallback(() => {
     if (hideTimeoutRef.current) {
       clearTimeout(hideTimeoutRef.current);
     }
 
-    if (autoHideToolbar && toolbarVisible) {
+    if (autoHideToolbar && toolbarVisible && boundaryView === "none") {
       hideTimeoutRef.current = setTimeout(() => {
         setToolbarVisible(false);
       }, toolbarHideDelay);
     }
-  }, [autoHideToolbar, toolbarVisible, toolbarHideDelay, setToolbarVisible]);
+  }, [
+    autoHideToolbar,
+    toolbarVisible,
+    toolbarHideDelay,
+    setToolbarVisible,
+    boundaryView,
+  ]);
+
+  // Reveal the toolbar whenever the paginated transition overlay appears.
+  useEffect(() => {
+    if (boundaryView !== "none") {
+      setToolbarVisible(true);
+    }
+  }, [boundaryView, setToolbarVisible]);
 
   useEffect(() => {
     resetHideTimeout();
@@ -426,17 +444,6 @@ export function ComicReader({
     },
     [toolbarVisible, setToolbarVisible, resetHideTimeout],
   );
-
-  // Wrapped handlers for single-page mode that set navigation direction
-  const handleNextPageWithDirection = useCallback(() => {
-    setLastNavigationDirection("next");
-    handleNextPage();
-  }, [setLastNavigationDirection, handleNextPage]);
-
-  const handlePrevPageWithDirection = useCallback(() => {
-    setLastNavigationDirection("prev");
-    handlePrevPage();
-  }, [setLastNavigationDirection, handlePrevPage]);
 
   // Cycle fit mode - respects series settings if override exists
   // In webtoon mode, cycles between "width" and "original" only
@@ -622,6 +629,81 @@ export function ComicReader({
     setLastNavigationDirection,
   ]);
 
+  // Paginated boundary navigation (single/double/ttb). Replaces the old
+  // two-press toast: paging past the last page raises the "Next Chapter"
+  // overlay (and marks the book read); paging before page 1 raises the
+  // "Previous Chapter" overlay. While the overlay is up, "next"/"prev" either
+  // continue to the adjacent book or dismiss the overlay back to the page.
+  const handlePaginatedNext = useCallback(() => {
+    const view = useReaderStore.getState().boundaryView;
+    if (view !== "none") {
+      if (view === "at-end") {
+        goToNextBook();
+      } else {
+        setBoundaryView("none");
+      }
+      return;
+    }
+
+    const atEnd =
+      pageLayout === "double"
+        ? getNextSpreadPage(currentPage, spreadConfig) === null
+        : currentPage >= totalPages;
+    if (atEnd) {
+      setLastNavigationDirection("next");
+      setBoundaryView("at-end");
+      // Reaching the end marks the book complete (also fixes double-page
+      // spreads whose last spread leaves currentPage short of totalPages).
+      if (!incognito) saveProgress(totalPages);
+      return;
+    }
+
+    handleSpreadNextPage();
+  }, [
+    pageLayout,
+    currentPage,
+    totalPages,
+    spreadConfig,
+    incognito,
+    saveProgress,
+    goToNextBook,
+    setBoundaryView,
+    setLastNavigationDirection,
+    handleSpreadNextPage,
+  ]);
+
+  const handlePaginatedPrev = useCallback(() => {
+    const view = useReaderStore.getState().boundaryView;
+    if (view !== "none") {
+      if (view === "at-start") {
+        goToPrevBook();
+      } else {
+        setBoundaryView("none");
+      }
+      return;
+    }
+
+    const atStart =
+      pageLayout === "double"
+        ? getPrevSpreadPage(currentPage, spreadConfig) === null
+        : currentPage <= 1;
+    if (atStart) {
+      setLastNavigationDirection("prev");
+      setBoundaryView("at-start");
+      return;
+    }
+
+    handleSpreadPrevPage();
+  }, [
+    pageLayout,
+    currentPage,
+    spreadConfig,
+    goToPrevBook,
+    setBoundaryView,
+    setLastNavigationDirection,
+    handleSpreadPrevPage,
+  ]);
+
   // Keyboard navigation with series navigation support
   // In continuous/webtoon mode, scroll keys are left to the browser;
   // in double-page mode, use spread-aware navigation;
@@ -632,14 +714,8 @@ export function ComicReader({
     enabled: !settingsOpened,
     onEscape: onClose,
     scrollContainerRef: isContinuousScroll ? scrollContainerRef : undefined,
-    onNextPage:
-      pageLayout === "double"
-        ? handleSpreadNextPage
-        : handleNextPageWithDirection,
-    onPrevPage:
-      pageLayout === "double"
-        ? handleSpreadPrevPage
-        : handlePrevPageWithDirection,
+    onNextPage: handlePaginatedNext,
+    onPrevPage: handlePaginatedPrev,
     onBoundaryEnd: isContinuousScroll ? handleScrollReachedEnd : undefined,
     onBoundaryStart: isContinuousScroll ? handleScrollReachedStart : undefined,
   });
@@ -652,14 +728,8 @@ export function ComicReader({
   const { touchRef } = useTouchNav({
     enabled: !settingsOpened,
     tapZones: !isContinuousScroll,
-    onNextPage:
-      pageLayout === "double"
-        ? handleSpreadNextPage
-        : handleNextPageWithDirection,
-    onPrevPage:
-      pageLayout === "double"
-        ? handleSpreadPrevPage
-        : handlePrevPageWithDirection,
+    onNextPage: handlePaginatedNext,
+    onPrevPage: handlePaginatedPrev,
     onTap: toggleToolbar,
   });
 
@@ -774,11 +844,13 @@ export function ComicReader({
   // Webtoon/continuous transition panels: a "Previous Chapter" panel above the
   // first page and a "Next Chapter" panel after the last. The countdown only
   // runs once the user has actually scrolled the trailing panel into view.
+  const panelReadingDirection = readingDirection === "rtl" ? "rtl" : "ltr";
   const webtoonLeadingPanel = (
     <ChapterTransitionPanel
       direction="prev"
       book={adjacentBooks?.prev ?? null}
       onContinue={goToPrevBook}
+      readingDirection={panelReadingDirection}
     />
   );
   const webtoonTrailingPanel = (
@@ -787,6 +859,7 @@ export function ComicReader({
       book={adjacentBooks?.next ?? null}
       onContinue={goToNextBook}
       autoAdvance={autoAdvanceToNextBook && trailingReached}
+      readingDirection={panelReadingDirection}
     />
   );
 
@@ -825,16 +898,8 @@ export function ComicReader({
       {!isContinuousScroll && (
         <MobileReaderBottomBar
           visible={toolbarVisible}
-          onPrevPage={
-            pageLayout === "double"
-              ? handleSpreadPrevPage
-              : handlePrevPageWithDirection
-          }
-          onNextPage={
-            pageLayout === "double"
-              ? handleSpreadNextPage
-              : handleNextPageWithDirection
-          }
+          onPrevPage={handlePaginatedPrev}
+          onNextPage={handlePaginatedNext}
         />
       )}
 
@@ -908,6 +973,26 @@ export function ComicReader({
               />
             )}
           </PageTransitionWrapper>
+        </Box>
+      )}
+
+      {/* Chapter-transition overlay for paginated modes. Rendered above the
+          page view (its own surface captures taps) when the user pages past a
+          book boundary. The webtoon/continuous mode uses in-flow panels
+          instead, so this only applies to single/double/ttb. */}
+      {!isContinuousScroll && boundaryView !== "none" && (
+        <Box style={{ position: "absolute", inset: 0, zIndex: 50 }}>
+          <ChapterTransitionPanel
+            direction={boundaryView === "at-end" ? "next" : "prev"}
+            book={
+              boundaryView === "at-end"
+                ? (adjacentBooks?.next ?? null)
+                : (adjacentBooks?.prev ?? null)
+            }
+            onContinue={boundaryView === "at-end" ? goToNextBook : goToPrevBook}
+            autoAdvance={boundaryView === "at-end" && autoAdvanceToNextBook}
+            readingDirection={panelReadingDirection}
+          />
         </Box>
       )}
 

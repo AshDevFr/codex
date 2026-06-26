@@ -1,6 +1,5 @@
 import { Anchor, Box, Button, Image, Loader, Stack, Text } from "@mantine/core";
 import { IconArrowLeft, IconArrowRight } from "@tabler/icons-react";
-import { useAuthenticatedImage } from "@/hooks/useAuthenticatedImage";
 import type { AdjacentBook } from "@/store/readerStore";
 import { useAutoAdvanceCountdown } from "./hooks/useAutoAdvanceCountdown";
 import { bookCoverUrl } from "./utils/coverUrl";
@@ -18,6 +17,8 @@ interface ChapterTransitionPanelProps {
   onCancelAutoAdvance?: () => void;
   /** Countdown length override (seconds); primarily for tests. */
   countdownSeconds?: number;
+  /** Reading direction; only "rtl" mirrors the continue arrow. */
+  readingDirection?: "ltr" | "rtl";
 }
 
 interface TransitionLabels {
@@ -69,11 +70,15 @@ export function ChapterTransitionPanel({
   autoAdvance = false,
   onCancelAutoAdvance,
   countdownSeconds,
+  readingDirection = "ltr",
 }: ChapterTransitionPanelProps) {
   const isNext = direction === "next";
   const heading = isNext ? "Next Chapter" : "Previous Chapter";
 
-  const coverSrc = useAuthenticatedImage(book ? bookCoverUrl(book.id) : null);
+  // The arrow points in the direction of travel. RTL mirrors it: "next" goes
+  // left, "prev" goes right.
+  const isRtl = readingDirection === "rtl";
+  const pointsRight = isNext !== isRtl;
 
   const countdownActive = isNext && autoAdvance && book != null;
   const { remaining, cancel, cancelled } = useAutoAdvanceCountdown({
@@ -107,7 +112,7 @@ export function ChapterTransitionPanel({
         </Text>
 
         {book ? (
-          <TransitionCard book={book} coverSrc={coverSrc} />
+          <TransitionCard book={book} />
         ) : (
           <Text c="dimmed" ta="center">
             {isNext
@@ -127,7 +132,7 @@ export function ChapterTransitionPanel({
               showCountdown ? <Loader size="xs" color="dark" /> : null
             }
             rightSection={
-              isNext ? (
+              pointsRight ? (
                 <IconArrowRight size={18} />
               ) : (
                 <IconArrowLeft size={18} />
@@ -161,13 +166,7 @@ export function ChapterTransitionPanel({
   );
 }
 
-function TransitionCard({
-  book,
-  coverSrc,
-}: {
-  book: AdjacentBook;
-  coverSrc: string | null;
-}) {
+function TransitionCard({ book }: { book: AdjacentBook }) {
   const { series, primary, secondary } = formatTransitionLabels(book);
 
   return (
@@ -184,17 +183,16 @@ function TransitionCard({
           justifyContent: "center",
         }}
       >
-        {coverSrc ? (
-          <Image
-            src={coverSrc}
-            alt={`Cover of ${book.title}`}
-            w="100%"
-            h="100%"
-            fit="cover"
-          />
-        ) : (
-          <Loader size="sm" color="gray" />
-        )}
+        {/* Plain <img> like the rest of the app (MediaCard, BookDetail): the
+            thumbnail endpoint is fetched directly, not through the API client
+            whose baseURL would double the /api/v1 prefix. */}
+        <Image
+          src={bookCoverUrl(book.id)}
+          alt={`Cover of ${book.title}`}
+          w="100%"
+          h="100%"
+          fit="cover"
+        />
       </Box>
 
       <Stack align="center" gap={2}>

@@ -288,8 +288,14 @@ export interface ReaderState {
     prev: AdjacentBook | null;
     next: AdjacentBook | null;
   } | null;
-  /** Current boundary state for series navigation */
+  /** Current boundary state for series navigation (two-press toast flow) */
   boundaryState: BoundaryState;
+  /**
+   * Which chapter-transition overlay panel is showing in paginated modes:
+   * "at-end" shows the "Next Chapter" panel past the last page, "at-start" the
+   * "Previous Chapter" panel before page 1, "none" hides it.
+   */
+  boundaryView: BoundaryState;
   /** Page orientations detected from image dimensions (lazily populated) */
   pageOrientations: Record<number, PageOrientation>;
   /** Last navigation direction for transition animations */
@@ -363,6 +369,8 @@ export interface ReaderState {
   ) => void;
   setBoundaryState: (state: BoundaryState) => void;
   clearBoundaryState: () => void;
+  /** Set which chapter-transition overlay panel is showing (paginated modes) */
+  setBoundaryView: (view: BoundaryState) => void;
 
   // ==========================================================================
   // Actions - Page Orientation
@@ -447,6 +455,7 @@ export const useReaderStore = create<ReaderState>()(
         readingDirectionOverride: null,
         adjacentBooks: null,
         boundaryState: "none" as BoundaryState,
+        boundaryView: "none" as BoundaryState,
         pageOrientations: {} as Record<number, PageOrientation>,
         lastNavigationDirection: null as NavigationDirection,
         preloadedImages: new Set<string>(),
@@ -662,6 +671,8 @@ export const useReaderStore = create<ReaderState>()(
             state.currentPage = Math.min(Math.max(1, startPage), totalPages);
             state.isLoading = false;
             state.toolbarVisible = true;
+            // New book: hide any transition overlay carried over from the last.
+            state.boundaryView = "none";
           }),
 
         correctTotalPages: (actualTotal) =>
@@ -715,6 +726,7 @@ export const useReaderStore = create<ReaderState>()(
             state.readingDirectionOverride = null;
             state.adjacentBooks = null;
             state.boundaryState = "none";
+            state.boundaryView = "none";
             state.pageOrientations = {};
             state.lastNavigationDirection = null;
             state.preloadedImages = new Set<string>();
@@ -737,6 +749,11 @@ export const useReaderStore = create<ReaderState>()(
         clearBoundaryState: () =>
           set((state) => {
             state.boundaryState = "none";
+          }),
+
+        setBoundaryView: (view) =>
+          set((state) => {
+            state.boundaryView = view;
           }),
 
         // ==========================================================================

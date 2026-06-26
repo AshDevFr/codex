@@ -57,6 +57,7 @@ describe("readerStore", () => {
       readingDirectionOverride: null,
       adjacentBooks: null,
       boundaryState: "none",
+      boundaryView: "none",
       pageOrientations: {},
       lastNavigationDirection: null,
     });
@@ -441,6 +442,7 @@ describe("readerStore", () => {
           next: { id: "book-2", title: "Next", pageCount: 100 },
         },
         boundaryState: "at-end",
+        boundaryView: "at-end",
         settings: {
           ...useReaderStore.getState().settings,
           fitMode: "width",
@@ -461,8 +463,32 @@ describe("readerStore", () => {
       expect(state.readingDirectionOverride).toBeNull();
       expect(state.adjacentBooks).toBeNull();
       expect(state.boundaryState).toBe("none");
+      expect(state.boundaryView).toBe("none");
       // Settings should be preserved
       expect(state.settings.fitMode).toBe("width");
+    });
+  });
+
+  describe("boundaryView", () => {
+    it("defaults to none", () => {
+      expect(useReaderStore.getState().boundaryView).toBe("none");
+    });
+
+    it("setBoundaryView updates the overlay state", () => {
+      useReaderStore.getState().setBoundaryView("at-end");
+      expect(useReaderStore.getState().boundaryView).toBe("at-end");
+
+      useReaderStore.getState().setBoundaryView("at-start");
+      expect(useReaderStore.getState().boundaryView).toBe("at-start");
+
+      useReaderStore.getState().setBoundaryView("none");
+      expect(useReaderStore.getState().boundaryView).toBe("none");
+    });
+
+    it("initializeReader clears a carried-over overlay", () => {
+      useReaderStore.getState().setBoundaryView("at-end");
+      useReaderStore.getState().initializeReader("book-9", 20, 1);
+      expect(useReaderStore.getState().boundaryView).toBe("none");
     });
   });
 
