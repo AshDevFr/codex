@@ -713,5 +713,30 @@ describe("ComicReader", () => {
         screen.queryByTestId("chapter-transition-next"),
       ).not.toBeInTheDocument();
     });
+
+    it("webtoon keyboard at the bottom continues to the next book", () => {
+      const nav = setupNav();
+      useReaderStore.setState({
+        currentBookId: "book-123",
+        currentPage: 10,
+        totalPages: 10,
+        adjacentBooks: { prev: prevBook, next: nextBook },
+        readingDirectionOverride: "webtoon",
+      });
+      renderWithProviders(
+        <ComicReader {...defaultProps} readingDirectionOverride="webtoon" />,
+      );
+      const calls = vi.mocked(useKeyboardNav).mock.calls;
+      const opts = calls[calls.length - 1][0] as {
+        onBoundaryEnd?: () => void;
+        onBoundaryStart?: () => void;
+      };
+
+      act(() => opts.onBoundaryEnd?.());
+      expect(nav.goToNextBook).toHaveBeenCalledTimes(1);
+
+      act(() => opts.onBoundaryStart?.());
+      expect(nav.goToPrevBook).toHaveBeenCalledTimes(1);
+    });
   });
 });

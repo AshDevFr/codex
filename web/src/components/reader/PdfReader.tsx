@@ -16,11 +16,9 @@ import {
   selectEffectiveReadingDirection,
   useReaderStore,
 } from "@/store/readerStore";
-import { BoundaryNotification } from "./BoundaryNotification";
 import { ChapterTransitionPanel } from "./ChapterTransitionPanel";
 import {
   useAdjacentBooks,
-  useBoundaryNotification,
   useKeyboardNav,
   useReadProgress,
   useSeriesNavigation,
@@ -100,11 +98,6 @@ export function PdfReader({
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchText, setSearchText] = useState("");
   const [debouncedSearchText] = useDebouncedValue(searchText, 300);
-  const {
-    message: boundaryNotification,
-    onBoundaryChange,
-    clearNotification,
-  } = useBoundaryNotification();
   const [containerDimensions, setContainerDimensions] = useState({
     width: 0,
     height: 0,
@@ -174,7 +167,6 @@ export function PdfReader({
     (state) => state.settings.pdfContinuousScroll,
   );
   const adjacentBooks = useReaderStore((state) => state.adjacentBooks);
-  const boundaryState = useReaderStore((state) => state.boundaryState);
   const boundaryView = useReaderStore((state) => state.boundaryView);
   const autoAdvanceToNextBook = useReaderStore(
     (state) => state.settings.autoAdvanceToNextBook,
@@ -192,7 +184,9 @@ export function PdfReader({
   // Fetch adjacent books for series navigation
   useAdjacentBooks({ bookId, enabled: true });
 
-  // Series navigation with boundary detection
+  // Series navigation. The transition panels (in-flow for continuous, overlay
+  // for paginated) replace the two-press boundary toast, so this no longer
+  // consumes onBoundaryChange / handleEndBoundary.
   const {
     handleNextPage: baseNextPage,
     handlePrevPage: basePrevPage,
@@ -200,11 +194,7 @@ export function PdfReader({
     goToPrevBook,
     canGoNextBook,
     canGoPrevBook,
-    isSeriesEnd,
-    isSeriesStart,
   } = useSeriesNavigation({
-    onBoundaryChange,
-    clearNotification,
     onBeforeNavigateToNext: incognito
       ? undefined
       : () => {
@@ -267,17 +257,22 @@ export function PdfReader({
       else setBoundaryView("none");
       return;
     }
-    const page = useReaderStore.getState().currentPage;
-    const atEnd = isDoublePaginated
-      ? page >= effectiveTotalPages - 1
-      : page >= effectiveTotalPages;
-    if (atEnd) {
-      setBoundaryView("at-end");
-      if (!incognito) saveProgress(effectiveTotalPages);
-      return;
+    // Continuous mode uses in-flow panels reached by scrolling, not the
+    // overlay; keep keyboard paging there from raising a stale boundaryView.
+    if (!pdfContinuousScroll) {
+      const page = useReaderStore.getState().currentPage;
+      const atEnd = isDoublePaginated
+        ? page >= effectiveTotalPages - 1
+        : page >= effectiveTotalPages;
+      if (atEnd) {
+        setBoundaryView("at-end");
+        if (!incognito) saveProgress(effectiveTotalPages);
+        return;
+      }
     }
     handleNextPage();
   }, [
+    pdfContinuousScroll,
     isDoublePaginated,
     effectiveTotalPages,
     incognito,
@@ -294,13 +289,15 @@ export function PdfReader({
       else setBoundaryView("none");
       return;
     }
-    const page = useReaderStore.getState().currentPage;
-    if (page <= 1) {
-      setBoundaryView("at-start");
-      return;
+    if (!pdfContinuousScroll) {
+      const page = useReaderStore.getState().currentPage;
+      if (page <= 1) {
+        setBoundaryView("at-start");
+        return;
+      }
     }
     handlePrevPage();
-  }, [goToPrevBook, setBoundaryView, handlePrevPage]);
+  }, [pdfContinuousScroll, goToPrevBook, setBoundaryView, handlePrevPage]);
 
   // Reset the trailing-panel reached flag when the book changes (render-phase
   // pattern, per the React docs) in case the reader is reused across a
@@ -838,14 +835,6 @@ export function PdfReader({
       {/* First-run hint: teaches phone users that center-tap reveals the
           toolbar. Once per session across all reader formats. */}
       <ReaderFirstRunHint />
-
-      {/* Boundary notification */}
-      <BoundaryNotification
-        message={boundaryNotification}
-        visible={boundaryState !== "none"}
-        type={boundaryState}
-        isSeriesEnd={isSeriesEnd || isSeriesStart}
-      />
 
       {/* Search bar (when open) */}
       {searchOpen && (

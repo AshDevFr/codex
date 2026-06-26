@@ -15,14 +15,12 @@ import {
   useReaderStore,
   type WebtoonFitMode,
 } from "@/store/readerStore";
-import { BoundaryNotification } from "./BoundaryNotification";
 import { ChapterTransitionPanel } from "./ChapterTransitionPanel";
 import { ComicReaderPage } from "./ComicReaderPage";
 import { ContinuousScrollReader } from "./ContinuousScrollReader";
 import { DoublePageSpread } from "./DoublePageSpread";
 import {
   useAdjacentBooks,
-  useBoundaryNotification,
   useKeyboardNav,
   useReadProgress,
   useSeriesNavigation,
@@ -109,11 +107,6 @@ export function ComicReader({
   // once the panel is actually on screen (the panel is always in the scroll
   // content, far below the last page, until then).
   const [trailingReached, setTrailingReached] = useState(false);
-  const {
-    message: boundaryNotification,
-    onBoundaryChange,
-    clearNotification,
-  } = useBoundaryNotification();
 
   // Per-series settings (forkable settings with series overrides)
   const {
@@ -153,7 +146,6 @@ export function ComicReader({
   const fitMode: FitMode = isWebtoon ? webtoonFitMode : comicFitMode;
 
   const adjacentBooks = useReaderStore((state) => state.adjacentBooks);
-  const boundaryState = useReaderStore((state) => state.boundaryState);
   const boundaryView = useReaderStore((state) => state.boundaryView);
   const pageTransition = useReaderStore(
     (state) => state.settings.pageTransition,
@@ -256,21 +248,17 @@ export function ComicReader({
     setTrailingReached(false);
   }
 
-  // Series navigation with boundary detection
+  // Series navigation. The transition panels (in-flow for webtoon, overlay for
+  // paginated) replace the old two-press boundary toast, so this no longer
+  // consumes onBoundaryChange / handleEndBoundary.
   const {
     handleNextPage,
     handlePrevPage,
-    handleEndBoundary,
-    handleStartBoundary,
     goToNextBook,
     goToPrevBook,
     canGoNextBook,
     canGoPrevBook,
-    isSeriesEnd,
-    isSeriesStart,
   } = useSeriesNavigation({
-    onBoundaryChange,
-    clearNotification,
     onBeforeNavigateToNext: incognito
       ? undefined
       : () => {
@@ -487,16 +475,17 @@ export function ComicReader({
     }
   }, [pageLayout, hasSeriesOverride, updateSeriesSetting, setGlobalPageLayout]);
 
-  // Scroll boundary callbacks for continuous scroll mode.
-  // These read fresh boundaryState from the store to integrate with
-  // the two-press confirmation workflow in useSeriesNavigation.
+  // Webtoon keyboard boundary callbacks. A scroll-down key at the very bottom
+  // (the trailing "Next Chapter" panel is fully in view) advances to the next
+  // book; a scroll-up key at the very top goes to the previous book. This makes
+  // the keyboard match the panel's button.
   const handleScrollReachedEnd = useCallback(() => {
-    handleEndBoundary(useReaderStore.getState().boundaryState);
-  }, [handleEndBoundary]);
+    if (canGoNextBook) goToNextBook();
+  }, [canGoNextBook, goToNextBook]);
 
   const handleScrollReachedStart = useCallback(() => {
-    handleStartBoundary(useReaderStore.getState().boundaryState);
-  }, [handleStartBoundary]);
+    if (canGoPrevBook) goToPrevBook();
+  }, [canGoPrevBook, goToPrevBook]);
 
   // Generate page URL
   const getPageUrl = useCallback(
@@ -906,15 +895,6 @@ export function ComicReader({
       {/* First-run hint teaches phone users that center-tap reveals the
           toolbar (CBZ tap zones are left/center/right). Once per session. */}
       <ReaderFirstRunHint />
-
-      {/* Boundary notification */}
-      <BoundaryNotification
-        message={boundaryNotification}
-        visible={boundaryState !== "none"}
-        type={boundaryState}
-        readingDirection={readingDirection === "rtl" ? "rtl" : "ltr"}
-        isSeriesEnd={isSeriesEnd || isSeriesStart}
-      />
 
       {/* Page display - use continuous scroll when pageLayout is continuous OR reading direction is webtoon */}
       {pageLayout === "continuous" || readingDirection === "webtoon" ? (
