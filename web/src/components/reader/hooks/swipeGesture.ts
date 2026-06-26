@@ -87,7 +87,7 @@ export function classifyTapZone(
 }
 
 // =============================================================================
-// Swipe paging (Komic-style finger-drag navigation)
+// Swipe paging (finger-drag page navigation)
 //
 // These helpers are pure and input-agnostic (numbers in, decision out), mirroring
 // `isTap` / `classifyTapZone`. They drive the `SwipePager` filmstrip: when to arm a
@@ -116,6 +116,17 @@ export const SWIPE_VELOCITY_THRESHOLD = 0.4;
 
 /** Above this zoom scale we treat the page as pinch-zoomed (and thus pannable). */
 const ZOOM_EPSILON = 0.01;
+
+/**
+ * True when the visual viewport is pinch-zoomed in (scale meaningfully above 1).
+ * A small epsilon absorbs sub-pixel zoom jitter reported by some browsers.
+ */
+export function isPinchZoomed(
+  visualViewportScale: number,
+  epsilon: number = ZOOM_EPSILON,
+): boolean {
+  return visualViewportScale > 1 + epsilon;
+}
 
 /**
  * True when a pointer drag should be treated as a horizontal swipe: it has moved
@@ -152,7 +163,7 @@ export function isHorizontallyPannable({
   contentWidth,
   viewportWidth,
 }: HorizontallyPannableInput): boolean {
-  if (visualViewportScale > 1 + ZOOM_EPSILON) return true;
+  if (isPinchZoomed(visualViewportScale)) return true;
   if (contentWidth > viewportWidth + 1) return true;
   return false;
 }

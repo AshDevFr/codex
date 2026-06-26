@@ -4,6 +4,7 @@ import {
   decideSnap,
   isHorizontalDrag,
   isHorizontallyPannable,
+  isPinchZoomed,
   isTap,
   rubberBand,
   SWIPE_ACTIVATION_PX,
@@ -117,6 +118,21 @@ describe("isHorizontalDrag", () => {
   it("honors a custom activation threshold", () => {
     expect(isHorizontalDrag(15, 0)).toBe(true);
     expect(isHorizontalDrag(15, 0, 20)).toBe(false);
+  });
+});
+
+describe("isPinchZoomed", () => {
+  it("is false at scale 1", () => {
+    expect(isPinchZoomed(1)).toBe(false);
+  });
+
+  it("ignores sub-epsilon jitter just above 1", () => {
+    expect(isPinchZoomed(1.005)).toBe(false);
+  });
+
+  it("is true when zoomed in past the epsilon", () => {
+    expect(isPinchZoomed(1.5)).toBe(true);
+    expect(isPinchZoomed(2)).toBe(true);
   });
 });
 

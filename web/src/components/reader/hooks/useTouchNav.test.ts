@@ -43,7 +43,7 @@ describe("useTouchNav", () => {
   // jsdom doesn't ship a PointerEvent constructor; build one from MouseEvent
   // and add the pointer fields the hook reads.
   const createPointerEvent = (
-    type: "pointerdown" | "pointerup" | "pointercancel",
+    type: "pointerdown" | "pointermove" | "pointerup" | "pointercancel",
     x: number,
     y: number,
     init: PointerInit = {},
@@ -101,6 +101,147 @@ describe("useTouchNav", () => {
       );
     });
   };
+
+  const dispatch = async (
+    type: "pointerdown" | "pointermove" | "pointerup" | "pointercancel",
+    x: number,
+    y: number,
+    t: number,
+    init: PointerInit = {},
+  ) => {
+    await act(async () => {
+      element.dispatchEvent(
+        createPointerEvent(type, x, y, { ...init, timeStamp: t }),
+      );
+    });
+  };
+
+  describe("swipe (live drag) plumbing", () => {
+    const makeSwipe = () => ({
+      enabled: true,
+      onStart: vi.fn(() => true),
+      onMove: vi.fn(),
+      onEnd: vi.fn(),
+      onCancel: vi.fn(),
+    });
+
+    const mountSwipe = (swipe: ReturnType<typeof makeSwipe>) => {
+      const { result } = renderHook(() =>
+        useTouchNav({
+          enabled: true,
+          onNextPage: mockNextPage,
+          onPrevPage: mockPrevPage,
+          onTap: mockTap,
+          swipe,
+        }),
+      );
+      act(() => {
+        result.current.touchRef(element);
+      });
+    };
+
+    it("arms on a horizontal drag and reports move + release velocity", async () => {
+      const swipe = makeSwipe();
+      mountSwipe(swipe);
+
+      await dispatch("pointerdown", 200, 300, 0);
+      await dispatch("pointermove", 230, 305, 50);
+      await dispatch("pointermove", 260, 305, 100);
+      await dispatch("pointerup", 260, 305, 100);
+
+      expect(swipe.onStart).toHaveBeenCalledTimes(1);
+      expect(swipe.onMove).toHaveBeenCalled();
+      // Final move offset is +60 horizontally.
+      expect(swipe.onMove).toHaveBeenLastCalledWith(60, 5);
+      expect(swipe.onEnd).toHaveBeenCalledTimes(1);
+      const [dragPx, , velocity] = swipe.onEnd.mock.calls[0];
+      expect(dragPx).toBe(60);
+      // (260-230)/(100-50) = 0.6 px/ms.
+      expect(velocity).toBeCloseTo(0.6);
+
+      // A drag must not also trigger tap/zone navigation.
+      expect(mockTap).not.toHaveBeenCalled();
+      expect(mockNextPage).not.toHaveBeenCalled();
+      expect(mockPrevPage).not.toHaveBeenCalled();
+    });
+
+    it("does not arm when onStart vetoes (pannable/zoomed)", async () => {
+      const swipe = makeSwipe();
+      swipe.onStart.mockReturnValue(false);
+      mountSwipe(swipe);
+
+      await dispatch("pointerdown", 200, 300, 0);
+      await dispatch("pointermove", 260, 300, 50);
+      await dispatch("pointerup", 260, 300, 100);
+
+      expect(swipe.onStart).toHaveBeenCalledTimes(1);
+      expect(swipe.onMove).not.toHaveBeenCalled();
+      expect(swipe.onEnd).not.toHaveBeenCalled();
+      expect(mockTap).not.toHaveBeenCalled();
+    });
+
+    it("never arms on a vertical-dominant drag (native scroll)", async () => {
+      const swipe = makeSwipe();
+      mountSwipe(swipe);
+
+      await dispatch("pointerdown", 200, 100, 0);
+      await dispatch("pointermove", 210, 200, 50);
+      await dispatch("pointerup", 210, 200, 100);
+
+      expect(swipe.onStart).not.toHaveBeenCalled();
+      expect(swipe.onEnd).not.toHaveBeenCalled();
+    });
+
+    it("treats a sub-threshold press as a tap, not a swipe", async () => {
+      const swipe = makeSwipe();
+      vi.spyOn(element, "getBoundingClientRect").mockReturnValue({
+        left: 0,
+        top: 0,
+        right: 900,
+        bottom: 600,
+        width: 900,
+        height: 600,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      });
+      mountSwipe(swipe);
+
+      await dispatch("pointerdown", 450, 300, 0);
+      await dispatch("pointermove", 452, 301, 50);
+      await dispatch("pointerup", 452, 301, 100);
+
+      expect(swipe.onStart).not.toHaveBeenCalled();
+      expect(swipe.onEnd).not.toHaveBeenCalled();
+      expect(mockTap).toHaveBeenCalledTimes(1);
+    });
+
+    it("calls onCancel when an armed drag is cancelled", async () => {
+      const swipe = makeSwipe();
+      mountSwipe(swipe);
+
+      await dispatch("pointerdown", 200, 300, 0);
+      await dispatch("pointermove", 260, 300, 50);
+      await dispatch("pointercancel", 260, 300, 60);
+
+      expect(swipe.onCancel).toHaveBeenCalledTimes(1);
+      expect(swipe.onEnd).not.toHaveBeenCalled();
+    });
+
+    it("is inert when the swipe block is disabled", async () => {
+      const swipe = makeSwipe();
+      swipe.enabled = false;
+      mountSwipe(swipe);
+
+      await dispatch("pointerdown", 200, 300, 0);
+      await dispatch("pointermove", 260, 300, 50);
+      await dispatch("pointerup", 260, 300, 100);
+
+      expect(swipe.onStart).not.toHaveBeenCalled();
+      expect(swipe.onMove).not.toHaveBeenCalled();
+      expect(swipe.onEnd).not.toHaveBeenCalled();
+    });
+  });
 
   describe("click-only navigation (no swipe)", () => {
     it("ignores horizontal drags / swipes", async () => {

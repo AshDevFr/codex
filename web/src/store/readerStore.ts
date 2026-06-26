@@ -266,7 +266,7 @@ export interface ReaderSettings {
   /** Countdown duration (seconds) before auto-advancing to the next book */
   autoAdvanceSeconds: number;
   /**
-   * Komic-style swipe-to-turn paging on touch devices (paged comic modes).
+   * Swipe-to-turn (finger-drag) paging on touch devices (paged comic modes).
    * When off, paging is tap-only. Global because it's an input preference, not
    * a content characteristic (unlike reading direction or page layout). Default: on.
    */
