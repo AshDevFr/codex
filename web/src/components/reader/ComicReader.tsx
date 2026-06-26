@@ -12,6 +12,7 @@ import {
   type FitMode,
   type PageOrientation,
   selectEffectiveReadingDirection,
+  selectSwipeNavigation,
   useReaderStore,
   type WebtoonFitMode,
 } from "@/store/readerStore";
@@ -32,6 +33,7 @@ import { PageTransitionWrapper } from "./PageTransitionWrapper";
 import { ReaderFirstRunHint } from "./ReaderFirstRunHint";
 import { ReaderSettings } from "./ReaderSettings";
 import { ReaderToolbar } from "./ReaderToolbar";
+import { SwipePager } from "./SwipePager";
 import {
   detectPageOrientation,
   getDisplayOrder,
@@ -140,6 +142,7 @@ export function ComicReader({
   const preloadPages = useReaderStore((state) => state.settings.preloadPages);
   const pageOrientations = useReaderStore((state) => state.pageOrientations);
   const readingDirection = useReaderStore(selectEffectiveReadingDirection);
+  const swipeNavigation = useReaderStore(selectSwipeNavigation);
 
   // Resolve the active fit mode based on reading direction
   const isWebtoon = readingDirection === "webtoon";
@@ -579,6 +582,44 @@ export function ComicReader({
     getPageUrl,
   ]);
 
+  // Display-ordered pages for the spread anchored at `anchorPage`, used to render
+  // the previous/next slides of the swipe filmstrip without mutating navigation
+  // state. Returns null when there is no such spread (book boundary).
+  const buildAdjacentSpread = useCallback(
+    (anchorPage: number | null) => {
+      if (anchorPage === null) return null;
+      if (pageLayout !== "double") {
+        return [{ pageNumber: anchorPage, src: getPageUrl(anchorPage) }];
+      }
+      const spread = getSpreadPages(anchorPage, spreadConfig);
+      return getDisplayOrder(spread.pages, readingDirection).map((pageNum) => ({
+        pageNumber: pageNum,
+        src: getPageUrl(pageNum),
+      }));
+    },
+    [pageLayout, spreadConfig, readingDirection, getPageUrl],
+  );
+
+  const prevSpreadPages = useMemo(() => {
+    const anchor =
+      pageLayout === "double"
+        ? getPrevSpreadPage(currentPage, spreadConfig)
+        : currentPage > 1
+          ? currentPage - 1
+          : null;
+    return buildAdjacentSpread(anchor);
+  }, [pageLayout, currentPage, spreadConfig, buildAdjacentSpread]);
+
+  const nextSpreadPages = useMemo(() => {
+    const anchor =
+      pageLayout === "double"
+        ? getNextSpreadPage(currentPage, spreadConfig)
+        : currentPage < totalPages
+          ? currentPage + 1
+          : null;
+    return buildAdjacentSpread(anchor);
+  }, [pageLayout, currentPage, totalPages, spreadConfig, buildAdjacentSpread]);
+
   // Handle page orientation detection callback
   const handlePageOrientationDetected = useCallback(
     (pageNumber: number, orientation: PageOrientation) => {
@@ -716,6 +757,58 @@ export function ComicReader({
   // in single-page mode, use wrapped handlers that set navigation direction.
   const isContinuousScroll =
     pageLayout === "continuous" || readingDirection === "webtoon";
+
+  // Swipe (finger-drag) paging applies to horizontal paged modes only. TTB pages
+  // vertically, so the horizontal filmstrip doesn't fit; webtoon/continuous scroll.
+  const useSwipePager =
+    swipeNavigation &&
+    !isContinuousScroll &&
+    (readingDirection === "ltr" || readingDirection === "rtl");
+
+  // Fit modes that can render a page wider than the viewport, where a horizontal
+  // drag must pan the page instead of turning it. Pinch-zoom is handled separately
+  // inside SwipePager. (screen/width/width-shrink never overflow horizontally.)
+  const isContentHorizontallyPannable = useCallback(
+    () => fitMode === "original" || fitMode === "height",
+    [fitMode],
+  );
+
+  // Identity of the current spread, shared by the transition wrapper and the
+  // swipe filmstrip so a committed turn re-centers cleanly.
+  const pagedKey =
+    pageLayout === "double"
+      ? displayPages.map((p) => p.pageNumber).join("-")
+      : String(currentPage);
+
+  // Render the page content for one filmstrip slide (single page or double spread).
+  const renderSpreadSlide = useCallback(
+    (slidePages: { pageNumber: number; src: string }[]) =>
+      pageLayout === "double" ? (
+        <DoublePageSpread
+          pages={slidePages}
+          fitMode={fitMode}
+          backgroundColor={backgroundColor}
+          onPageOrientationDetected={handlePageOrientationDetected}
+        />
+      ) : (
+        <ComicReaderPage
+          src={slidePages[0].src}
+          alt={`Page ${slidePages[0].pageNumber} of ${title}`}
+          fitMode={fitMode}
+          backgroundColor={backgroundColor}
+          onError={handlePageError}
+        />
+      ),
+    [
+      pageLayout,
+      fitMode,
+      backgroundColor,
+      handlePageOrientationDetected,
+      handlePageError,
+      title,
+    ],
+  );
+
   useKeyboardNav({
     enabled: !settingsOpened,
     onEscape: onClose,
@@ -915,7 +1008,7 @@ export function ComicReader({
       <ReaderFirstRunHint />
 
       {/* Page display - use continuous scroll when pageLayout is continuous OR reading direction is webtoon */}
-      {pageLayout === "continuous" || readingDirection === "webtoon" ? (
+      {isContinuousScroll ? (
         <ContinuousScrollReader
           bookId={bookId}
           totalPages={totalPages}
@@ -932,6 +1025,23 @@ export function ComicReader({
           trailingSlot={webtoonTrailingPanel}
           onTrailingReachedChange={setTrailingReached}
         />
+      ) : useSwipePager ? (
+        // Finger-drag filmstrip owns its own pointer input (tap zones + swipe),
+        // so the page renders inside it instead of the PageTransitionWrapper —
+        // the strip's snap is the transition, avoiding a double animation.
+        <SwipePager
+          current={renderSpreadSlide(displayPages)}
+          prev={prevSpreadPages ? renderSpreadSlide(prevSpreadPages) : null}
+          next={nextSpreadPages ? renderSpreadSlide(nextSpreadPages) : null}
+          pageKey={pagedKey}
+          readingDirection={readingDirection}
+          onNext={handlePaginatedNext}
+          onPrev={handlePaginatedPrev}
+          onTap={toggleToolbar}
+          enabled={!settingsOpened}
+          duration={transitionDuration}
+          isContentPannable={isContentHorizontallyPannable}
+        />
       ) : (
         <Box
           ref={touchRef}
@@ -945,11 +1055,7 @@ export function ComicReader({
           }}
         >
           <PageTransitionWrapper
-            pageKey={
-              pageLayout === "double"
-                ? displayPages.map((p) => p.pageNumber).join("-")
-                : String(currentPage)
-            }
+            pageKey={pagedKey}
             transition={pageTransition}
             duration={transitionDuration}
             navigationDirection={lastNavigationDirection}

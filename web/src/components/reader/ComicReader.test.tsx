@@ -739,4 +739,60 @@ describe("ComicReader", () => {
       expect(nav.goToPrevBook).toHaveBeenCalledTimes(1);
     });
   });
+
+  describe("swipe navigation", () => {
+    // src ends with /pages/<n>; page numbers here are <= 10 so no prefix overlap.
+    const pageImg = (n: number) =>
+      document.querySelector(`img[src$="/pages/${n}"]`);
+
+    const renderMidBook = (over?: {
+      settings?: Partial<typeof defaultSettings> & {
+        swipeNavigation?: boolean;
+        readingDirection?: string;
+      };
+    }) => {
+      mockUseReadProgress = vi.fn(() => ({
+        initialPage: 5,
+        isLoading: false,
+        saveProgress: vi.fn(),
+        cancelPendingSave: vi.fn(),
+      }));
+      useReaderStore.setState({
+        settings: {
+          ...defaultSettings,
+          swipeNavigation: true,
+          ...over?.settings,
+        },
+        ...defaultSessionState,
+        currentPage: 5,
+        totalPages: 10,
+      });
+      return renderWithProviders(<ComicReader {...defaultProps} />);
+    };
+
+    it("renders prev/current/next slides when swipe is enabled (single page)", () => {
+      renderMidBook();
+
+      // The filmstrip mounts all three spreads side by side.
+      expect(pageImg(4)).toBeInTheDocument();
+      expect(pageImg(5)).toBeInTheDocument();
+      expect(pageImg(6)).toBeInTheDocument();
+    });
+
+    it("falls back to the single-page view when swipe is disabled", () => {
+      renderMidBook({ settings: { swipeNavigation: false } });
+
+      expect(pageImg(5)).toBeInTheDocument();
+      expect(pageImg(4)).not.toBeInTheDocument();
+      expect(pageImg(6)).not.toBeInTheDocument();
+    });
+
+    it("does not use the filmstrip for TTB reading", () => {
+      renderMidBook({ settings: { readingDirection: "ttb" } });
+
+      expect(pageImg(5)).toBeInTheDocument();
+      expect(pageImg(4)).not.toBeInTheDocument();
+      expect(pageImg(6)).not.toBeInTheDocument();
+    });
+  });
 });
