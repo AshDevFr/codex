@@ -1,6 +1,6 @@
 {
   "name": "@ashdev/codex-plugin-sync-echo",
-  "version": "1.39.5",
+  "version": "1.39.6",
   "description": "Echo sync plugin for testing and debugging the Codex plugin sync protocol",
   "main": "dist/index.js",
   "bin": "dist/index.js",

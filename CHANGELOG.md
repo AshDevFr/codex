@@ -2,6 +2,30 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.39.6] - 2026-06-26
+
+### 🚀 Features
+
+- *(web)* Enrich adjacent-book data for chapter-transition panels
+- *(web)* Add chapter-transition panel and auto-advance countdown
+- *(web)* Show chapter-transition panels in the webtoon reader
+- *(web)* Add chapter-transition overlay to paginated comic reader
+- *(web)* Bring chapter-transition panels to the PDF reader
+
+### 🐛 Bug Fixes
+
+- *(reader)* Prevent webtoon scroll jump by reserving exact page heights
+- *(reader)* Reserve exact PDF page heights to prevent scroll jumps
+- *(web)* Rework mobile series/book detail header layout
+
+### 🚜 Refactor
+
+- *(web)* Drop two-press boundary toast from comic and PDF readers
+
+### 📚 Documentation
+
+- Document the end-of-book transition panel and auto-advance countdown
+
 ## [1.39.5] - 2026-06-25
 
 ### 🐛 Bug Fixes
