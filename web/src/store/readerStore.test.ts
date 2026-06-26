@@ -15,6 +15,7 @@ import {
   selectLastNavigationDirection,
   selectPageTransition,
   selectProgressPercent,
+  selectSwipeNavigation,
   selectTransitionDuration,
   useReaderStore,
 } from "./readerStore";
@@ -48,6 +49,7 @@ describe("readerStore", () => {
         webtoonPageGap: 0,
         autoAdvanceToNextBook: false,
         autoAdvanceSeconds: 5,
+        swipeNavigation: true,
       },
       currentPage: 1,
       totalPages: 0,
@@ -1624,6 +1626,24 @@ describe("readerStore", () => {
 
         expect(isSeriesReaderOverride(override)).toBe(true);
       });
+    });
+  });
+
+  describe("swipeNavigation setting", () => {
+    it("defaults to enabled", () => {
+      expect(useReaderStore.getState().settings.swipeNavigation).toBe(true);
+      expect(selectSwipeNavigation(useReaderStore.getState())).toBe(true);
+    });
+
+    it("can be toggled off and on", () => {
+      const { setSwipeNavigation } = useReaderStore.getState();
+
+      setSwipeNavigation(false);
+      expect(useReaderStore.getState().settings.swipeNavigation).toBe(false);
+      expect(selectSwipeNavigation(useReaderStore.getState())).toBe(false);
+
+      setSwipeNavigation(true);
+      expect(useReaderStore.getState().settings.swipeNavigation).toBe(true);
     });
   });
 });

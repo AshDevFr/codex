@@ -85,3 +85,135 @@ export function classifyTapZone(
   if (x > 2 * third) return "next";
   return "center";
 }
+
+// =============================================================================
+// Swipe paging (Komic-style finger-drag navigation)
+//
+// These helpers are pure and input-agnostic (numbers in, decision out), mirroring
+// `isTap` / `classifyTapZone`. They drive the `SwipePager` filmstrip: when to arm a
+// horizontal drag, when the drag must yield to native panning, how to resist past an
+// edge, and whether a release commits a page turn.
+// =============================================================================
+
+/**
+ * Minimum horizontal movement (px) before a pointer drag is treated as a swipe
+ * rather than a tap. Larger than {@link TAP_TOLERANCE} is unnecessary: the drag
+ * only *arms* here; the commit decision happens at release in {@link decideSnap}.
+ */
+export const SWIPE_ACTIVATION_PX = 8;
+
+/**
+ * Fraction of the viewport width a drag must cover to commit a page turn on
+ * release (when not flicked fast). 0.25 = a quarter-screen drag turns the page.
+ */
+export const SWIPE_COMMIT_FRACTION = 0.25;
+
+/**
+ * Release velocity (px/ms) at or above which a flick commits a page turn even if
+ * the drag distance is short. Roughly a quick finger flick.
+ */
+export const SWIPE_VELOCITY_THRESHOLD = 0.4;
+
+/** Above this zoom scale we treat the page as pinch-zoomed (and thus pannable). */
+const ZOOM_EPSILON = 0.01;
+
+/**
+ * True when a pointer drag should be treated as a horizontal swipe: it has moved
+ * past {@link SWIPE_ACTIVATION_PX} horizontally and the horizontal component
+ * strictly dominates the vertical one. A vertical-dominant drag falls through so
+ * native scroll / pull-to-refresh / edge-back gestures keep working.
+ */
+export function isHorizontalDrag(
+  deltaX: number,
+  deltaY: number,
+  activation: number = SWIPE_ACTIVATION_PX,
+): boolean {
+  return Math.abs(deltaX) >= activation && Math.abs(deltaX) > Math.abs(deltaY);
+}
+
+export interface HorizontallyPannableInput {
+  /** `window.visualViewport.scale` (1 when not pinch-zoomed). */
+  visualViewportScale: number;
+  /** Rendered width of the current page content in CSS px. */
+  contentWidth: number;
+  /** Width of the reader viewport in CSS px. */
+  viewportWidth: number;
+}
+
+/**
+ * True when the page can be panned horizontally and swipe-to-turn must therefore
+ * yield to native panning. That is the case when the user has pinch-zoomed in, or
+ * when the rendered page is wider than the viewport (e.g. fit modes `original` /
+ * `width-shrink` on an over-wide page, which the user pans to read). A 1px slack
+ * absorbs sub-pixel rounding.
+ */
+export function isHorizontallyPannable({
+  visualViewportScale,
+  contentWidth,
+  viewportWidth,
+}: HorizontallyPannableInput): boolean {
+  if (visualViewportScale > 1 + ZOOM_EPSILON) return true;
+  if (contentWidth > viewportWidth + 1) return true;
+  return false;
+}
+
+/**
+ * Edge resistance: damps a drag that pulls past the first/last spread so it slows
+ * and never exceeds the viewport width, then snaps back. Near-identity for small
+ * drags, asymptotic to `viewportWidth`. Preserves the sign of `dragPx`.
+ */
+export function rubberBand(dragPx: number, viewportWidth: number): number {
+  if (viewportWidth <= 0) return 0;
+  const sign = Math.sign(dragPx);
+  const distance = Math.abs(dragPx);
+  return sign * viewportWidth * (1 - 1 / (distance / viewportWidth + 1));
+}
+
+export interface SnapDecisionInput {
+  /** Signed horizontal drag at release (px). Positive = finger moved right. */
+  dragPx: number;
+  /** Signed release velocity (px/ms). Positive = moving right. */
+  velocityPxPerMs: number;
+  /** Reader viewport width (px), used for the distance threshold. */
+  viewportWidth: number;
+  /** Whether a previous spread exists (false at the first spread). */
+  hasPrev: boolean;
+  /** Whether a next spread exists (false at the last spread). */
+  hasNext: boolean;
+  /** Reading direction; flips swipe polarity for RTL. */
+  readingDirection: "ltr" | "rtl" | "ttb" | "webtoon";
+}
+
+export type SnapResult = "next" | "prev" | "stay";
+
+/**
+ * Decide what a released swipe does: turn to the next/previous page or snap back.
+ *
+ * A turn commits when the drag covered at least {@link SWIPE_COMMIT_FRACTION} of
+ * the viewport width OR the release was a fast flick ({@link SWIPE_VELOCITY_THRESHOLD}).
+ * Direction comes from the flick velocity when fast, otherwise from the drag sign:
+ * a leftward gesture turns forward in LTR (mirrored in RTL). If the resulting turn
+ * has no page to go to (at an edge), it stays.
+ */
+export function decideSnap({
+  dragPx,
+  velocityPxPerMs,
+  viewportWidth,
+  hasPrev,
+  hasNext,
+  readingDirection,
+}: SnapDecisionInput): SnapResult {
+  const fast = Math.abs(velocityPxPerMs) >= SWIPE_VELOCITY_THRESHOLD;
+  const far = Math.abs(dragPx) >= SWIPE_COMMIT_FRACTION * viewportWidth;
+  if (!fast && !far) return "stay";
+
+  // A fast flick wins the direction even if the drag was reversed; otherwise the
+  // drag distance decides.
+  const movingLeft = fast ? velocityPxPerMs < 0 : dragPx < 0;
+
+  // Leftward = forward (next) in LTR; mirrored in RTL.
+  const isNext = readingDirection === "rtl" ? !movingLeft : movingLeft;
+
+  if (isNext) return hasNext ? "next" : "stay";
+  return hasPrev ? "prev" : "stay";
+}

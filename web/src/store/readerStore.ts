@@ -265,6 +265,12 @@ export interface ReaderSettings {
   autoAdvanceToNextBook: boolean;
   /** Countdown duration (seconds) before auto-advancing to the next book */
   autoAdvanceSeconds: number;
+  /**
+   * Komic-style swipe-to-turn paging on touch devices (paged comic modes).
+   * When off, paging is tap-only. Global because it's an input preference, not
+   * a content characteristic (unlike reading direction or page layout). Default: on.
+   */
+  swipeNavigation: boolean;
 }
 
 export interface ReaderState {
@@ -340,6 +346,7 @@ export interface ReaderState {
   setWebtoonPageGap: (gap: number) => void;
   setAutoAdvanceToNextBook: (enabled: boolean) => void;
   setAutoAdvanceSeconds: (seconds: number) => void;
+  setSwipeNavigation: (enabled: boolean) => void;
 
   // ==========================================================================
   // Actions - Navigation
@@ -432,6 +439,7 @@ const DEFAULT_SETTINGS: ReaderSettings = {
   webtoonPageGap: 0,
   autoAdvanceToNextBook: false,
   autoAdvanceSeconds: DEFAULT_AUTO_ADVANCE_SECONDS,
+  swipeNavigation: true,
 };
 
 const FIT_MODE_CYCLE: FitMode[] = [
@@ -631,6 +639,11 @@ export const useReaderStore = create<ReaderState>()(
               MIN_AUTO_ADVANCE_SECONDS,
               Math.min(MAX_AUTO_ADVANCE_SECONDS, Math.round(seconds)),
             );
+          }),
+
+        setSwipeNavigation: (enabled) =>
+          set((state) => {
+            state.settings.swipeNavigation = enabled;
           }),
 
         // ==========================================================================
@@ -926,6 +939,10 @@ export const selectTransitionDuration = (state: ReaderState): number =>
 export const selectLastNavigationDirection = (
   state: ReaderState,
 ): NavigationDirection => state.lastNavigationDirection;
+
+/** Select whether swipe-to-turn paging is enabled */
+export const selectSwipeNavigation = (state: ReaderState): boolean =>
+  state.settings.swipeNavigation;
 
 // =============================================================================
 // Hydration Hook
