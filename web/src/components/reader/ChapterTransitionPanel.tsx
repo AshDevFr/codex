@@ -1,0 +1,215 @@
+import { Anchor, Box, Button, Image, Loader, Stack, Text } from "@mantine/core";
+import { IconArrowLeft, IconArrowRight } from "@tabler/icons-react";
+import { useAuthenticatedImage } from "@/hooks/useAuthenticatedImage";
+import type { AdjacentBook } from "@/store/readerStore";
+import { useAutoAdvanceCountdown } from "./hooks/useAutoAdvanceCountdown";
+import { bookCoverUrl } from "./utils/coverUrl";
+
+interface ChapterTransitionPanelProps {
+  /** Whether this panel advances to the next book or returns to the previous one. */
+  direction: "next" | "prev";
+  /** The adjacent book, or null at a series edge (no further book that way). */
+  book: AdjacentBook | null;
+  /** Navigate to the adjacent book. */
+  onContinue: () => void;
+  /** Whether auto-advance is enabled (only honored for `direction === "next"`). */
+  autoAdvance?: boolean;
+  /** Called when the user cancels the auto-advance countdown. */
+  onCancelAutoAdvance?: () => void;
+  /** Countdown length override (seconds); primarily for tests. */
+  countdownSeconds?: number;
+}
+
+interface TransitionLabels {
+  series: string;
+  primary: string;
+  secondary: string | null;
+}
+
+/**
+ * Build the display labels for the transition card, gracefully degrading when
+ * series/volume/chapter metadata is missing:
+ * - `primary`: "Ch. {number}" when a book number exists, otherwise the title.
+ * - `secondary`: "S{vol} Chapter {chap}" when volume/chapter metadata exists;
+ *   falls back to the title when only the number drove the primary line.
+ */
+export function formatTransitionLabels(book: AdjacentBook): TransitionLabels {
+  const primary = book.number != null ? `Ch. ${book.number}` : book.title;
+
+  const parts: string[] = [];
+  if (book.volume != null) {
+    parts.push(`S${String(book.volume).padStart(2, "0")}`);
+  }
+  if (book.chapter != null) {
+    parts.push(`Chapter ${String(book.chapter).padStart(3, "0")}`);
+  }
+
+  let secondary: string | null = null;
+  if (parts.length > 0) {
+    secondary = parts.join(" ");
+  } else if (book.number != null && book.title !== primary) {
+    secondary = book.title;
+  }
+
+  return { series: book.seriesName, primary, secondary };
+}
+
+/**
+ * Full-screen "Next Chapter" / "Previous Chapter" transition panel shown at the
+ * boundaries of the reader (Komic-style). Displays the adjacent book's cover and
+ * labels with a "Continue Reading" button. When advancing to the next book and
+ * auto-advance is enabled, it runs a countdown that navigates automatically,
+ * with a Cancel link. At a series edge (`book === null`) it shows an end/start
+ * message with no button.
+ */
+export function ChapterTransitionPanel({
+  direction,
+  book,
+  onContinue,
+  autoAdvance = false,
+  onCancelAutoAdvance,
+  countdownSeconds,
+}: ChapterTransitionPanelProps) {
+  const isNext = direction === "next";
+  const heading = isNext ? "Next Chapter" : "Previous Chapter";
+
+  const coverSrc = useAuthenticatedImage(book ? bookCoverUrl(book.id) : null);
+
+  const countdownActive = isNext && autoAdvance && book != null;
+  const { remaining, cancel, cancelled } = useAutoAdvanceCountdown({
+    active: countdownActive,
+    seconds: countdownSeconds,
+    onElapsed: onContinue,
+  });
+  const showCountdown = countdownActive && !cancelled;
+
+  const handleCancel = () => {
+    cancel();
+    onCancelAutoAdvance?.();
+  };
+
+  return (
+    <Box
+      data-testid={`chapter-transition-${direction}`}
+      style={{
+        width: "100%",
+        height: "100dvh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "#000",
+        padding: "32px 16px",
+      }}
+    >
+      <Stack align="center" gap="lg" style={{ maxWidth: 360, width: "100%" }}>
+        <Text size="xl" fw={700} c="white" ta="center">
+          {book ? heading : isNext ? "End of series" : "Beginning of series"}
+        </Text>
+
+        {book ? (
+          <TransitionCard book={book} coverSrc={coverSrc} />
+        ) : (
+          <Text c="dimmed" ta="center">
+            {isNext
+              ? "You've reached the last book."
+              : "You're at the first book."}
+          </Text>
+        )}
+
+        {book && (
+          <Button
+            size="md"
+            radius="xl"
+            variant="white"
+            color="dark"
+            onClick={onContinue}
+            leftSection={
+              showCountdown ? <Loader size="xs" color="dark" /> : null
+            }
+            rightSection={
+              isNext ? (
+                <IconArrowRight size={18} />
+              ) : (
+                <IconArrowLeft size={18} />
+              )
+            }
+          >
+            Continue Reading
+          </Button>
+        )}
+
+        {showCountdown && (
+          <Stack align="center" gap={4}>
+            <Text size="sm" c="dimmed" ta="center">
+              {isNext ? "Continuing to next chapter" : "Continuing"} in{" "}
+              {remaining}
+              {remaining === 1 ? " second" : " seconds"}
+            </Text>
+            <Anchor
+              component="button"
+              type="button"
+              size="sm"
+              c="dimmed"
+              onClick={handleCancel}
+            >
+              Cancel
+            </Anchor>
+          </Stack>
+        )}
+      </Stack>
+    </Box>
+  );
+}
+
+function TransitionCard({
+  book,
+  coverSrc,
+}: {
+  book: AdjacentBook;
+  coverSrc: string | null;
+}) {
+  const { series, primary, secondary } = formatTransitionLabels(book);
+
+  return (
+    <Stack align="center" gap="sm">
+      <Box
+        style={{
+          width: 180,
+          aspectRatio: "2 / 3",
+          borderRadius: 12,
+          overflow: "hidden",
+          backgroundColor: "#1a1a1a",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        {coverSrc ? (
+          <Image
+            src={coverSrc}
+            alt={`Cover of ${book.title}`}
+            w="100%"
+            h="100%"
+            fit="cover"
+          />
+        ) : (
+          <Loader size="sm" color="gray" />
+        )}
+      </Box>
+
+      <Stack align="center" gap={2}>
+        <Text size="sm" c="dimmed" ta="center">
+          {series}
+        </Text>
+        <Text size="lg" fw={700} c="white" ta="center">
+          {primary}
+        </Text>
+        {secondary && (
+          <Text size="sm" c="dimmed" ta="center">
+            {secondary}
+          </Text>
+        )}
+      </Stack>
+    </Stack>
+  );
+}
