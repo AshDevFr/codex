@@ -222,7 +222,7 @@ When you reach the end of a book in a series (comics and PDFs), a **Next Chapter
 
 ### Auto-advance to Next Book
 
-When enabled, the **Next Chapter** panel starts a short countdown (about 10 seconds) and then continues to the next book automatically, with a **Cancel** link if you'd rather stay. When disabled, the panel waits for you to tap **Continue Reading**. Useful for binge-reading manga or comic series.
+When enabled, the **Next Chapter** panel starts a short countdown and then continues to the next book automatically, with a **Cancel** link if you'd rather stay. The countdown length is adjustable from 1 to 30 seconds (default 5) via the **Auto-advance countdown** slider that appears once auto-advance is turned on. When disabled, the panel waits for you to tap **Continue Reading**. Useful for binge-reading manga or comic series.
 
 ### Preload Pages
 

@@ -3,6 +3,11 @@ import { useEffect, useState } from "react";
 import { create } from "zustand";
 import { devtools, persist } from "zustand/middleware";
 import { immer } from "zustand/middleware/immer";
+import { DEFAULT_AUTO_ADVANCE_SECONDS } from "@/components/reader/hooks/useAutoAdvanceCountdown";
+
+/** Bounds for the auto-advance countdown duration (seconds). */
+export const MIN_AUTO_ADVANCE_SECONDS = 1;
+export const MAX_AUTO_ADVANCE_SECONDS = 30;
 
 // Enable Immer support for Map and Set
 // This is required for proper immutable updates to preloadedImages (Set)
@@ -258,6 +263,8 @@ export interface ReaderSettings {
   webtoonPageGap: number;
   /** Auto-advance to next book when reaching end (default: false) */
   autoAdvanceToNextBook: boolean;
+  /** Countdown duration (seconds) before auto-advancing to the next book */
+  autoAdvanceSeconds: number;
 }
 
 export interface ReaderState {
@@ -332,6 +339,7 @@ export interface ReaderState {
   setWebtoonSidePadding: (padding: number) => void;
   setWebtoonPageGap: (gap: number) => void;
   setAutoAdvanceToNextBook: (enabled: boolean) => void;
+  setAutoAdvanceSeconds: (seconds: number) => void;
 
   // ==========================================================================
   // Actions - Navigation
@@ -423,6 +431,7 @@ const DEFAULT_SETTINGS: ReaderSettings = {
   webtoonSidePadding: 0,
   webtoonPageGap: 0,
   autoAdvanceToNextBook: false,
+  autoAdvanceSeconds: DEFAULT_AUTO_ADVANCE_SECONDS,
 };
 
 const FIT_MODE_CYCLE: FitMode[] = [
@@ -616,6 +625,14 @@ export const useReaderStore = create<ReaderState>()(
             state.settings.autoAdvanceToNextBook = enabled;
           }),
 
+        setAutoAdvanceSeconds: (seconds) =>
+          set((state) => {
+            state.settings.autoAdvanceSeconds = Math.max(
+              MIN_AUTO_ADVANCE_SECONDS,
+              Math.min(MAX_AUTO_ADVANCE_SECONDS, Math.round(seconds)),
+            );
+          }),
+
         // ==========================================================================
         // Navigation Actions
         // ==========================================================================
@@ -801,6 +818,20 @@ export const useReaderStore = create<ReaderState>()(
         partialize: (state) => ({
           settings: state.settings,
         }),
+        // Deep-merge persisted settings over defaults so newly added setting
+        // keys (e.g. autoAdvanceSeconds) fall back to their default instead of
+        // arriving as `undefined` for users with older persisted state.
+        merge: (persisted, current) => {
+          const persistedState = (persisted ?? {}) as Partial<ReaderState>;
+          return {
+            ...current,
+            ...persistedState,
+            settings: {
+              ...DEFAULT_SETTINGS,
+              ...(persistedState.settings ?? {}),
+            },
+          };
+        },
       },
     ),
     {

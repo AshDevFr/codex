@@ -47,6 +47,7 @@ describe("readerStore", () => {
         webtoonSidePadding: 0,
         webtoonPageGap: 0,
         autoAdvanceToNextBook: false,
+        autoAdvanceSeconds: 5,
       },
       currentPage: 1,
       totalPages: 0,
@@ -1245,6 +1246,69 @@ describe("readerStore", () => {
         expect(useReaderStore.getState().settings.autoAdvanceToNextBook).toBe(
           false,
         );
+      });
+    });
+
+    describe("setAutoAdvanceSeconds", () => {
+      it("should default to 5 seconds", () => {
+        expect(useReaderStore.getState().settings.autoAdvanceSeconds).toBe(5);
+      });
+
+      it("should set the countdown duration", () => {
+        const { setAutoAdvanceSeconds } = useReaderStore.getState();
+
+        setAutoAdvanceSeconds(12);
+
+        expect(useReaderStore.getState().settings.autoAdvanceSeconds).toBe(12);
+      });
+
+      it("should round fractional values", () => {
+        const { setAutoAdvanceSeconds } = useReaderStore.getState();
+
+        setAutoAdvanceSeconds(7.6);
+
+        expect(useReaderStore.getState().settings.autoAdvanceSeconds).toBe(8);
+      });
+
+      it("should clamp to the minimum", () => {
+        const { setAutoAdvanceSeconds } = useReaderStore.getState();
+
+        setAutoAdvanceSeconds(0);
+
+        expect(useReaderStore.getState().settings.autoAdvanceSeconds).toBe(1);
+      });
+
+      it("should clamp to the maximum", () => {
+        const { setAutoAdvanceSeconds } = useReaderStore.getState();
+
+        setAutoAdvanceSeconds(120);
+
+        expect(useReaderStore.getState().settings.autoAdvanceSeconds).toBe(30);
+      });
+
+      it("should backfill the default when rehydrating older persisted state", async () => {
+        // Simulate persisted settings from before autoAdvanceSeconds existed.
+        localStorage.setItem(
+          "reader-settings-storage",
+          JSON.stringify({
+            state: {
+              settings: {
+                fitMode: "width",
+                autoAdvanceToNextBook: true,
+              },
+            },
+            version: 0,
+          }),
+        );
+
+        await useReaderStore.persist.rehydrate();
+
+        const { settings } = useReaderStore.getState();
+        // Missing key falls back to its default...
+        expect(settings.autoAdvanceSeconds).toBe(5);
+        // ...while persisted values are preserved.
+        expect(settings.fitMode).toBe("width");
+        expect(settings.autoAdvanceToNextBook).toBe(true);
       });
     });
 

@@ -171,6 +171,9 @@ export function PdfReader({
   const autoAdvanceToNextBook = useReaderStore(
     (state) => state.settings.autoAdvanceToNextBook,
   );
+  const autoAdvanceSeconds = useReaderStore(
+    (state) => state.settings.autoAdvanceSeconds,
+  );
   const readingDirection = useReaderStore(selectEffectiveReadingDirection);
 
   // Reader store actions
@@ -543,6 +546,7 @@ export function PdfReader({
       book={adjacentBooks?.next ?? null}
       onContinue={goToNextBook}
       autoAdvance={autoAdvanceToNextBook && trailingReached}
+      countdownSeconds={autoAdvanceSeconds}
       readingDirection={panelReadingDirection}
     />
   );
@@ -1064,6 +1068,7 @@ export function PdfReader({
             }
             onContinue={boundaryView === "at-end" ? goToNextBook : goToPrevBook}
             autoAdvance={boundaryView === "at-end" && autoAdvanceToNextBook}
+            countdownSeconds={autoAdvanceSeconds}
             readingDirection={panelReadingDirection}
           />
         </Box>

@@ -71,13 +71,13 @@ describe("useAutoAdvanceCountdown", () => {
     expect(result.current.remaining).toBe(3);
   });
 
-  it("defaults to 10 seconds when seconds is omitted", () => {
+  it("defaults to 5 seconds when seconds is omitted", () => {
     const onElapsed = vi.fn();
     const { result } = renderHook(() =>
       useAutoAdvanceCountdown({ active: true, onElapsed }),
     );
 
-    expect(result.current.remaining).toBe(10);
+    expect(result.current.remaining).toBe(5);
   });
 
   it("restarts cleanly when re-activated after deactivation", () => {

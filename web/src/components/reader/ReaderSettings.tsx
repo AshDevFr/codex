@@ -25,6 +25,8 @@ import { seriesMetadataApi } from "@/api/seriesMetadata";
 import {
   type BackgroundColor,
   type FitMode,
+  MAX_AUTO_ADVANCE_SECONDS,
+  MIN_AUTO_ADVANCE_SECONDS,
   type PageLayout,
   type PageTransition,
   type PdfMode,
@@ -99,6 +101,9 @@ export function ReaderSettings({
   const setWebtoonPageGap = useReaderStore((state) => state.setWebtoonPageGap);
   const setAutoAdvanceToNextBook = useReaderStore(
     (state) => state.setAutoAdvanceToNextBook,
+  );
+  const setAutoAdvanceSeconds = useReaderStore(
+    (state) => state.setAutoAdvanceSeconds,
   );
 
   // Global setters for reading direction override (used when updating series metadata)
@@ -349,6 +354,32 @@ export function ReaderSettings({
             onChange={(e) => setAutoAdvanceToNextBook(e.currentTarget.checked)}
           />
         </Group>
+
+        {globalSettings.autoAdvanceToNextBook && (
+          <Box pb="lg">
+            <Group justify="space-between" mb="xs">
+              <Text size="sm" fw={500}>
+                Auto-advance countdown
+              </Text>
+              <Text size="xs" c="dimmed">
+                {globalSettings.autoAdvanceSeconds}s
+              </Text>
+            </Group>
+            <Slider
+              value={globalSettings.autoAdvanceSeconds}
+              onChange={setAutoAdvanceSeconds}
+              min={MIN_AUTO_ADVANCE_SECONDS}
+              max={MAX_AUTO_ADVANCE_SECONDS}
+              step={1}
+              marks={[
+                { value: 1, label: "1s" },
+                { value: 5, label: "5s" },
+                { value: 15, label: "15s" },
+                { value: 30, label: "30s" },
+              ]}
+            />
+          </Box>
+        )}
 
         <Divider />
 

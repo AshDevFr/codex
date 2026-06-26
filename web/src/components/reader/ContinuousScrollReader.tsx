@@ -87,6 +87,18 @@ const DEFAULT_PAGE_GAP = 0;
 const SCROLL_DEBOUNCE_MS = 100;
 /** Sub-pixel tolerance when deciding the scroll has reached the top/bottom. */
 const BOUNDARY_TOLERANCE = 4;
+/**
+ * The trailing "Next Chapter" panel counts as reached once it substantially
+ * fills the viewport, expressed as a fraction of the viewport height measured
+ * up from the very bottom. Engaging before the exact pixel-bottom lets the
+ * auto-advance countdown appear as the panel scrolls into view (instead of a
+ * brief "Continue Reading" flash that then morphs into the countdown), and
+ * keeps the gate far clear of the few dozen px the countdown UI adds so it can
+ * never flip-flop. Once engaged the panel only un-reaches after scrolling up
+ * past the larger release fraction (hysteresis).
+ */
+const TRAILING_ENGAGE_FRACTION = 0.25;
+const TRAILING_RELEASE_FRACTION = 0.4;
 
 // =============================================================================
 // Component
@@ -374,9 +386,19 @@ export function ContinuousScrollReader({
       let atBottom = false;
       let atTop = false;
       if (reach.hasTrailing || reach.hasLeading) {
+        const distanceFromBottom =
+          container.scrollHeight -
+          (container.scrollTop + container.clientHeight);
+        // Engage once the trailing panel substantially fills the viewport, and
+        // (hysteresis) stay engaged until the user scrolls up past the larger
+        // release fraction. The asymmetric, viewport-relative threshold makes
+        // the countdown appear as the panel arrives and keeps the growing
+        // countdown UI from flip-flopping the gate.
+        const trailingFraction = trailingReachedRef.current
+          ? TRAILING_RELEASE_FRACTION
+          : TRAILING_ENGAGE_FRACTION;
         atBottom =
-          container.scrollTop + container.clientHeight >=
-          container.scrollHeight - BOUNDARY_TOLERANCE;
+          distanceFromBottom <= container.clientHeight * trailingFraction;
         atTop = container.scrollTop <= BOUNDARY_TOLERANCE;
         if (reach.hasTrailing && atBottom) {
           currentVisiblePageRef.current = totalPagesRef.current;

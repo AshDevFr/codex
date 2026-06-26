@@ -257,4 +257,51 @@ describe("ChapterTransitionPanel", () => {
     });
     expect(onContinue).not.toHaveBeenCalled();
   });
+
+  it("reserves the countdown space so the layout does not shift on cancel", () => {
+    vi.useFakeTimers();
+    render(
+      <ChapterTransitionPanel
+        direction="next"
+        book={nextBook}
+        onContinue={vi.fn()}
+        autoAdvance
+        countdownSeconds={3}
+      />,
+      { wrapper },
+    );
+
+    // The reserved slot exists while counting down...
+    const slot = screen.getByTestId("auto-advance-slot");
+    expect(slot).toBeInTheDocument();
+    expect(
+      screen.getByText(/Continuing to next chapter in 3 seconds/),
+    ).toBeInTheDocument();
+
+    act(() => {
+      screen.getByRole("button", { name: /cancel/i }).click();
+    });
+
+    // ...and remains mounted after cancel (only its contents clear), so the
+    // cover/button above it never reflow.
+    expect(screen.getByTestId("auto-advance-slot")).toBe(slot);
+    expect(
+      screen.queryByText(/Continuing to next chapter/),
+    ).not.toBeInTheDocument();
+
+    vi.useRealTimers();
+  });
+
+  it("does not reserve countdown space on the prev panel", () => {
+    render(
+      <ChapterTransitionPanel
+        direction="prev"
+        book={nextBook}
+        onContinue={vi.fn()}
+        autoAdvance
+      />,
+      { wrapper },
+    );
+    expect(screen.queryByTestId("auto-advance-slot")).not.toBeInTheDocument();
+  });
 });

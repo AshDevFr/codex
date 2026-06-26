@@ -1,4 +1,13 @@
-import { Anchor, Box, Button, Image, Loader, Stack, Text } from "@mantine/core";
+import {
+  Anchor,
+  Box,
+  Button,
+  Group,
+  Image,
+  Loader,
+  Stack,
+  Text,
+} from "@mantine/core";
 import { IconArrowLeft, IconArrowRight } from "@tabler/icons-react";
 import type { AdjacentBook } from "@/store/readerStore";
 import { useAutoAdvanceCountdown } from "./hooks/useAutoAdvanceCountdown";
@@ -128,9 +137,6 @@ export function ChapterTransitionPanel({
             variant="white"
             color="dark"
             onClick={onContinue}
-            leftSection={
-              showCountdown ? <Loader size="xs" color="dark" /> : null
-            }
             rightSection={
               pointsRight ? (
                 <IconArrowRight size={18} />
@@ -143,23 +149,37 @@ export function ChapterTransitionPanel({
           </Button>
         )}
 
-        {showCountdown && (
-          <Stack align="center" gap={4}>
-            <Text size="sm" c="dimmed" ta="center">
-              {isNext ? "Continuing to next chapter" : "Continuing"} in{" "}
-              {remaining}
-              {remaining === 1 ? " second" : " seconds"}
-            </Text>
-            <Anchor
-              component="button"
-              type="button"
-              size="sm"
-              c="dimmed"
-              onClick={handleCancel}
-            >
-              Cancel
-            </Anchor>
-          </Stack>
+        {/* Reserve the countdown's vertical space for every "next" panel so the
+            cover and button never shift when the countdown appears, disappears,
+            or is cancelled. Only its contents toggle. */}
+        {isNext && book && (
+          <Box
+            data-testid="auto-advance-slot"
+            mih={48}
+            w="100%"
+            style={{ display: "flex", justifyContent: "center" }}
+          >
+            {showCountdown && (
+              <Stack align="center" gap={4}>
+                <Group gap={8} justify="center">
+                  <Loader size="xs" color="gray" />
+                  <Text size="sm" c="dimmed" ta="center">
+                    Continuing to next chapter in {remaining}
+                    {remaining === 1 ? " second" : " seconds"}
+                  </Text>
+                </Group>
+                <Anchor
+                  component="button"
+                  type="button"
+                  size="sm"
+                  c="dimmed"
+                  onClick={handleCancel}
+                >
+                  Cancel
+                </Anchor>
+              </Stack>
+            )}
+          </Box>
         )}
       </Stack>
     </Box>

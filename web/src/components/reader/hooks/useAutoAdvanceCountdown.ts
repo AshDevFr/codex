@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 /** Default countdown length, in seconds, before auto-advancing to the next book. */
-export const DEFAULT_AUTO_ADVANCE_SECONDS = 10;
+export const DEFAULT_AUTO_ADVANCE_SECONDS = 5;
 
 interface UseAutoAdvanceCountdownOptions {
   /**

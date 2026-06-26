@@ -165,6 +165,9 @@ export function ComicReader({
   const autoAdvanceToNextBook = useReaderStore(
     (state) => state.settings.autoAdvanceToNextBook,
   );
+  const autoAdvanceSeconds = useReaderStore(
+    (state) => state.settings.autoAdvanceSeconds,
+  );
 
   // Reader store actions
   const initializeReader = useReaderStore((state) => state.initializeReader);
@@ -862,6 +865,7 @@ export function ComicReader({
       book={adjacentBooks?.next ?? null}
       onContinue={goToNextBook}
       autoAdvance={autoAdvanceToNextBook && trailingReached}
+      countdownSeconds={autoAdvanceSeconds}
       readingDirection={panelReadingDirection}
     />
   );
@@ -986,6 +990,7 @@ export function ComicReader({
             }
             onContinue={boundaryView === "at-end" ? goToNextBook : goToPrevBook}
             autoAdvance={boundaryView === "at-end" && autoAdvanceToNextBook}
+            countdownSeconds={autoAdvanceSeconds}
             readingDirection={panelReadingDirection}
           />
         </Box>

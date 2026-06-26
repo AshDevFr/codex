@@ -1057,5 +1057,136 @@ describe("ContinuousScrollReader", () => {
 
       vi.useRealTimers();
     });
+
+    it("engages trailing-reached as the panel fills the viewport, before the exact bottom", async () => {
+      vi.useFakeTimers();
+      const onTrailingReachedChange = vi.fn();
+
+      renderWithProviders(
+        <ContinuousScrollReader
+          {...defaultProps}
+          totalPages={10}
+          trailingSlot={<div>next-panel</div>}
+          onTrailingReachedChange={onTrailingReachedChange}
+        />,
+      );
+
+      const container = screen.getByTestId("continuous-scroll-container");
+      // 100px from the bottom of a 800px viewport: the trailing panel
+      // substantially fills the screen but we are not at the exact bottom.
+      setScrollMetrics(container, {
+        scrollTop: 1100,
+        clientHeight: 800,
+        scrollHeight: 2000,
+      });
+      act(() => {
+        container.dispatchEvent(new Event("scroll", { bubbles: false }));
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(150);
+      });
+
+      expect(onTrailingReachedChange).toHaveBeenCalledWith(true);
+
+      vi.useRealTimers();
+    });
+
+    it("stays trailing-reached when the countdown UI slightly grows the panel", async () => {
+      vi.useFakeTimers();
+      const onTrailingReachedChange = vi.fn();
+
+      renderWithProviders(
+        <ContinuousScrollReader
+          {...defaultProps}
+          totalPages={10}
+          trailingSlot={<div>next-panel</div>}
+          onTrailingReachedChange={onTrailingReachedChange}
+        />,
+      );
+
+      const container = screen.getByTestId("continuous-scroll-container");
+
+      // Reach the bottom: countdown engages.
+      setScrollMetrics(container, {
+        scrollTop: 1200,
+        clientHeight: 800,
+        scrollHeight: 2000,
+      });
+      act(() => {
+        container.dispatchEvent(new Event("scroll", { bubbles: false }));
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(150);
+      });
+      expect(onTrailingReachedChange).toHaveBeenLastCalledWith(true);
+      onTrailingReachedChange.mockClear();
+
+      // The countdown UI (text + spinner) is added, growing scrollHeight by a
+      // few dozen px without the user scrolling. This must NOT release the
+      // trailing-reached gate, or the countdown would cancel and restart in a
+      // loop.
+      setScrollMetrics(container, {
+        scrollTop: 1200,
+        clientHeight: 800,
+        scrollHeight: 2048,
+      });
+      act(() => {
+        container.dispatchEvent(new Event("scroll", { bubbles: false }));
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(150);
+      });
+
+      expect(onTrailingReachedChange).not.toHaveBeenCalledWith(false);
+
+      vi.useRealTimers();
+    });
+
+    it("releases trailing-reached when the user scrolls up past the panel", async () => {
+      vi.useFakeTimers();
+      const onTrailingReachedChange = vi.fn();
+
+      renderWithProviders(
+        <ContinuousScrollReader
+          {...defaultProps}
+          totalPages={10}
+          trailingSlot={<div>next-panel</div>}
+          onTrailingReachedChange={onTrailingReachedChange}
+        />,
+      );
+
+      const container = screen.getByTestId("continuous-scroll-container");
+
+      setScrollMetrics(container, {
+        scrollTop: 1200,
+        clientHeight: 800,
+        scrollHeight: 2000,
+      });
+      act(() => {
+        container.dispatchEvent(new Event("scroll", { bubbles: false }));
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(150);
+      });
+      expect(onTrailingReachedChange).toHaveBeenLastCalledWith(true);
+      onTrailingReachedChange.mockClear();
+
+      // Deliberate scroll up, well beyond the countdown's layout jitter.
+      setScrollMetrics(container, {
+        scrollTop: 700,
+        clientHeight: 800,
+        scrollHeight: 2000,
+      });
+      act(() => {
+        container.dispatchEvent(new Event("scroll", { bubbles: false }));
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(150);
+      });
+
+      expect(onTrailingReachedChange).toHaveBeenLastCalledWith(false);
+
+      vi.useRealTimers();
+    });
   });
 });
