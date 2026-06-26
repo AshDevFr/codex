@@ -870,7 +870,12 @@ describe("ContinuousScrollReader", () => {
       expect(placeholder).toHaveStyle({ height: "1500px" });
     });
 
-    it("compensates scrollTop when a page above the viewport grows on load", async () => {
+    it("does not manually adjust scrollTop when a page above grows on load", async () => {
+      // The reader now relies on the browser's native scroll anchoring
+      // (overflow-anchor) plus exact reserved heights instead of hand-patching
+      // scrollTop. The old manual compensation was what produced the visible
+      // "stop, then jump" glitch, so a normal image load must leave scrollTop
+      // untouched.
       renderWithProviders(
         <ContinuousScrollReader
           {...defaultProps}
@@ -881,38 +886,58 @@ describe("ContinuousScrollReader", () => {
       );
 
       const scrollContainer = screen.getByTestId("continuous-scroll-container");
-      // Track scrollTop assignments (jsdom has no layout).
       let scrollTop = 2000;
+      const sets: number[] = [];
       Object.defineProperty(scrollContainer, "scrollTop", {
         configurable: true,
         get: () => scrollTop,
         set: (v: number) => {
+          sets.push(v);
           scrollTop = v;
         },
       });
       scrollContainer.getBoundingClientRect = () =>
         ({ top: 0, bottom: 800, height: 800 }) as DOMRect;
 
-      // Page 1 sits above the viewport: reserved at 1000px pre-load, real
-      // image height 1600px. offsetHeight is read once in the load handler
-      // (pre-commit) and once in the layout effect (post-commit).
       const page1Container = screen.getByTestId("page-container-1");
-      let reads = 0;
       Object.defineProperty(page1Container, "offsetHeight", {
         configurable: true,
-        get: () => (++reads === 1 ? 1000 : 1600),
+        value: 1600,
       });
       page1Container.getBoundingClientRect = () =>
-        ({ top: -1200, bottom: -200, height: 1000 }) as DOMRect;
+        ({ top: -1200, bottom: 400, height: 1600 }) as DOMRect;
 
       const image1 = screen.getByTestId("page-image-1");
       await act(async () => {
         image1.dispatchEvent(new Event("load"));
       });
 
-      // The page grew by 600px above the viewport, so the scroll position
-      // must shift by the same amount to keep the visible content anchored.
-      expect(scrollTop).toBe(2600);
+      // No scrollTop writes from a normal (non-sync) load.
+      expect(sets).toEqual([]);
+      expect(scrollTop).toBe(2000);
+    });
+
+    it("reserves a page's exact height from its real dimensions", () => {
+      // With known dimensions, an out-of-window placeholder is sized to the
+      // page's true rendered height up front, so the image later loads into
+      // space that is already held — zero layout shift. In `original` fit mode
+      // the rendered height equals the page's natural pixel height, which is
+      // deterministic regardless of jsdom's (zero) layout.
+      const pageDimensions = new Map([[10, { width: 800, height: 1234 }]]);
+
+      renderWithProviders(
+        <ContinuousScrollReader
+          {...defaultProps}
+          fitMode="original"
+          totalPages={20}
+          initialPage={1}
+          preloadBuffer={0}
+          pageDimensions={pageDimensions}
+        />,
+      );
+
+      const placeholder = screen.getByTestId("page-placeholder-10");
+      expect(placeholder).toHaveStyle({ height: "1234px" });
     });
   });
 

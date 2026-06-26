@@ -288,6 +288,20 @@ export function ComicReader({
     staleTime: Number.POSITIVE_INFINITY, // Page dimensions don't change
   });
 
+  // Real per-page dimensions for the webtoon reader, so it can reserve each
+  // page's exact height before the image loads (prevents scroll-position jumps
+  // on variable-height pages).  Only populated for analyzed books.
+  const pageDimensions = useMemo(() => {
+    if (!pages || pages.length === 0) return undefined;
+    const map = new Map<number, { width: number; height: number }>();
+    for (const page of pages) {
+      if (page.width != null && page.height != null) {
+        map.set(page.pageNumber, { width: page.width, height: page.height });
+      }
+    }
+    return map.size > 0 ? map : undefined;
+  }, [pages]);
+
   // Are we still waiting for data needed before initialization?
   // For analyzed books, we wait for pages to load so we can compute final spreads.
   // For non-analyzed books, pages query is disabled so pagesLoading is false.
@@ -907,6 +921,7 @@ export function ComicReader({
           preloadBuffer={preloadPages}
           pageGap={webtoonPageGap}
           sidePadding={webtoonSidePadding}
+          pageDimensions={pageDimensions}
           scrollContainerRef={scrollContainerRef}
           tapRef={touchRef}
           leadingSlot={webtoonLeadingPanel}

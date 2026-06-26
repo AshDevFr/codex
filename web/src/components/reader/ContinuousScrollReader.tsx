@@ -14,6 +14,7 @@ import {
   type FitMode,
   useReaderStore,
 } from "@/store/readerStore";
+import { type PageDimension, reservedPageHeight } from "./utils/pageHeight";
 
 // =============================================================================
 // Types
@@ -41,6 +42,13 @@ interface ContinuousScrollReaderProps {
   pageGap?: number;
   /** Number of pages to preload above/below visible area */
   preloadBuffer?: number;
+  /**
+   * Real per-page pixel dimensions (from backend analysis), keyed by page
+   * number. When present, each page's box is reserved at its exact rendered
+   * height before the image loads, so loading causes zero layout shift and the
+   * scroll position never jumps. Absent for un-analyzed books.
+   */
+  pageDimensions?: ReadonlyMap<number, PageDimension>;
   /** Side padding as percentage (0-40) */
   sidePadding?: number;
   /** Callback when the visible page changes (for progress tracking) */
@@ -103,6 +111,7 @@ export function ContinuousScrollReader({
   pageGap,
   preloadBuffer,
   sidePadding = 0,
+  pageDimensions,
   onPageChange,
   scrollContainerRef,
   tapRef,
@@ -138,10 +147,12 @@ export function ContinuousScrollReader({
   // render window) snaps the view because off-screen pages above revert to a
   // fixed 100vh placeholder that rarely matches their real height.
   const pageHeightsRef = useRef<Map<number, number>>(new Map());
-  // Image loads awaiting scroll compensation.  onLoad fires while the img is
-  // still display:none (loadedPages hasn't flushed), so the height delta can
-  // only be measured after React commits — see the layout effect below.
-  const pendingLoadsRef = useRef<{ page: number; prevHeight: number }[]>([]);
+  // Pages whose image just loaded, awaiting post-commit height measurement.
+  // We measure after React commits (the img is display:none at onLoad time) to
+  // record a fallback height for un-analyzed pages and to re-pin an in-progress
+  // external sync.  We no longer adjust scrollTop here — native scroll
+  // anchoring keeps the view steady (see the container's overflow-anchor).
+  const pendingLoadsRef = useRef<number[]>([]);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const hasScrolledToInitialRef = useRef(false);
   // Initialise to initialPage so the external-sync effect doesn't scroll on mount.
@@ -167,6 +178,30 @@ export function ContinuousScrollReader({
 
   // Reader store actions
   const goToPage = useReaderStore((state) => state.goToPage);
+
+  // Live layout metrics used to reserve each page's exact height from its real
+  // dimensions: the width available to an image (container minus side padding)
+  // and the scroll-container height (for viewport-relative fit modes).
+  const [layout, setLayout] = useState({ contentWidth: 0, viewportHeight: 0 });
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const measure = () => {
+      const padFactor = Math.max(0, 1 - (2 * sidePadding) / 100);
+      const contentWidth = container.clientWidth * padFactor;
+      const viewportHeight = container.clientHeight;
+      setLayout((prev) =>
+        prev.contentWidth === contentWidth &&
+        prev.viewportHeight === viewportHeight
+          ? prev
+          : { contentWidth, viewportHeight },
+      );
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [sidePadding]);
 
   // Generate page entries.  Deliberately does NOT depend on visiblePages;
   // visibility only affects pagesToRender (below) which is a separate memo.
@@ -451,28 +486,24 @@ export function ContinuousScrollReader({
     }
   }, [initialPage, hasLeadingSlot]);
 
-  // Handle image load.  The img is still display:none here (loadedPages
-  // hasn't flushed yet), so only record the pre-commit height; measurement
-  // and scroll compensation happen in the layout effect below, after React
-  // commits and the image actually occupies its real height.
+  // Handle image load.  The img is still display:none here (loadedPages hasn't
+  // flushed yet), so just queue the page; measurement happens after commit.
   const handleImageLoad = useCallback((pageNumber: number) => {
-    const pageEl = pageRefs.current.get(pageNumber);
-    pendingLoadsRef.current.push({
-      page: pageNumber,
-      prevHeight: pageEl?.offsetHeight ?? 0,
-    });
+    pendingLoadsRef.current.push(pageNumber);
     setLoadedPages((prev) => new Set([...prev, pageNumber]));
   }, []);
 
-  // Scroll anchoring for image loads.  Runs after React commits the
-  // loadedPages update, when freshly-loaded images have their real height.
-  // For each load: record the measured height (used as the reserved
-  // placeholder height), then keep the user's view anchored:
-  // - during an external sync, re-snap the sync target to the viewport top;
-  // - otherwise, if the page sits above the viewport, its growth shifted
-  //   everything below by the height delta, so shift scrollTop to match.
-  // The container sets overflow-anchor:none so browsers with native scroll
-  // anchoring don't compensate a second time.
+  // Post-commit bookkeeping for freshly-loaded images.  Runs after React
+  // commits loadedPages, when the images occupy their real height.
+  // - Record each measured height as a fallback reserved height (only matters
+  //   for un-analyzed pages without known dimensions).
+  // - During an external sync (slider/chevron jump), if an earlier page changed
+  //   height, re-pin the sync target to the viewport top.
+  // We deliberately do NOT touch scrollTop otherwise: the container enables
+  // native scroll anchoring (overflow-anchor:auto) which keeps the view steady
+  // for any residual shift, and exact reserved heights mean there is usually no
+  // shift at all.  The old manual scrollTop math is what caused the visible
+  // jump when a page preloaded mid-scroll.
   // biome-ignore lint/correctness/useExhaustiveDependencies: loadedPages is the commit signal for freshly-loaded images; the effect reads refs
   useLayoutEffect(() => {
     const pending = pendingLoadsRef.current;
@@ -482,33 +513,23 @@ export function ContinuousScrollReader({
     if (!container) return;
 
     const syncTarget = syncTargetPageRef.current;
-    const containerTop = container.getBoundingClientRect().top;
-    let delta = 0;
     let resyncNeeded = false;
 
-    for (const { page, prevHeight } of pending) {
+    for (const page of pending) {
       const el = pageRefs.current.get(page);
       if (!el) continue;
       const newHeight = el.offsetHeight;
       if (newHeight > 0) {
         pageHeightsRef.current.set(page, newHeight);
       }
-      if (syncTarget != null) {
-        if (page < syncTarget) resyncNeeded = true;
-      } else if (el.getBoundingClientRect().top < containerTop) {
-        delta += newHeight - prevHeight;
+      if (syncTarget != null && page < syncTarget) {
+        resyncNeeded = true;
       }
     }
 
-    if (syncTarget != null) {
-      if (resyncNeeded) {
-        const el = container.querySelector(`[data-page="${syncTarget}"]`);
-        el?.scrollIntoView({ behavior: "instant", block: "start" });
-      }
-      return;
-    }
-    if (delta !== 0) {
-      container.scrollTop += delta;
+    if (syncTarget != null && resyncNeeded) {
+      const el = container.querySelector(`[data-page="${syncTarget}"]`);
+      el?.scrollIntoView({ behavior: "instant", block: "start" });
     }
   }, [loadedPages]);
 
@@ -581,15 +602,30 @@ export function ContinuousScrollReader({
     );
   }
 
-  // Estimate for pages that have never been measured.  Webtoon pages are
-  // usually much taller than the viewport and vary a lot, so the average of
-  // already-measured pages is a far better guess than a flat 100vh — it keeps
-  // first-load height deltas (and thus scroll compensation) small.
+  // Estimate for pages without known dimensions that have never been measured.
+  // Webtoon pages vary a lot, so the average of already-measured pages is a far
+  // better guess than a flat 100vh — it keeps first-load shifts small for
+  // un-analyzed books (where native scroll anchoring picks up the slack).
   const measured = Array.from(pageHeightsRef.current.values());
   const estimatedHeight =
     measured.length > 0
       ? `${Math.round(measured.reduce((sum, h) => sum + h, 0) / measured.length)}px`
       : "100vh";
+
+  // Exact reserved height (px) for a page from its real dimensions + current
+  // layout, or null when unavailable (un-analyzed page, or layout not measured
+  // yet).  This is the primary jump-prevention mechanism: a correctly-sized box
+  // means the image loads with no reflow.
+  const knownReservedHeight = (pageNumber: number): number | null => {
+    const dimension = pageDimensions?.get(pageNumber);
+    if (!dimension) return null;
+    return reservedPageHeight({
+      fitMode,
+      contentWidth: layout.contentWidth,
+      viewportHeight: layout.viewportHeight,
+      dimension,
+    });
+  };
 
   return (
     <Box
@@ -600,10 +636,13 @@ export function ContinuousScrollReader({
         height: "100dvh",
         overflow: "auto",
         backgroundColor: BACKGROUND_COLORS[backgroundColor],
-        // We anchor the scroll position ourselves when images above the
-        // viewport load (see the layout effect); disable native scroll
-        // anchoring so Chrome doesn't compensate the same shift twice.
-        overflowAnchor: "none",
+        // Let the browser keep the scroll position pinned when content above
+        // the viewport changes size (e.g. a page image finishing loading).
+        // Combined with exact reserved heights (from real page dimensions),
+        // this prevents the scroll from jumping — no manual scrollTop math.
+        // Note: unsupported in iOS Safari, which is why exact reservation is
+        // the primary mechanism (it removes the shift rather than absorbing it).
+        overflowAnchor: "auto",
       }}
     >
       <Box
@@ -624,14 +663,19 @@ export function ContinuousScrollReader({
         )}
         {pages.map((page) => {
           const shouldRender = pagesToRender.has(page.pageNumber);
-          // Reserve the page's last measured height while it is a placeholder
-          // OR rendered but not yet loaded, so both virtualising in/out and
-          // the loading state are layout-neutral and don't shift the scroll
-          // position.  Never-measured pages use the average measured height.
+          // Reserve the page's height while it is a placeholder OR rendered but
+          // not yet loaded, so both virtualising in/out and the loading state
+          // are layout-neutral and don't shift the scroll position.  Prefer the
+          // exact height from real dimensions; fall back to the last measured
+          // height, then the average estimate (un-analyzed books only).
+          const exactHeight = knownReservedHeight(page.pageNumber);
           const measuredHeight = pageHeightsRef.current.get(page.pageNumber);
-          const reservedHeight = measuredHeight
-            ? `${measuredHeight}px`
-            : estimatedHeight;
+          const reservedHeight =
+            exactHeight != null && exactHeight > 0
+              ? `${exactHeight}px`
+              : measuredHeight
+                ? `${measuredHeight}px`
+                : estimatedHeight;
 
           return (
             <Box
@@ -640,6 +684,7 @@ export function ContinuousScrollReader({
               data-page={page.pageNumber}
               data-testid={`page-container-${page.pageNumber}`}
               style={{
+                position: "relative",
                 width: "100%",
                 minHeight:
                   shouldRender && page.isLoaded ? undefined : reservedHeight,
@@ -651,7 +696,11 @@ export function ContinuousScrollReader({
               {shouldRender ? (
                 <>
                   {!page.isLoaded && (
-                    <Center style={{ minHeight: "50vh", width: "100%" }}>
+                    // Overlay the loader so it never expands the reserved box
+                    // (a short page may be shorter than the loader).
+                    <Center
+                      style={{ position: "absolute", inset: 0, width: "100%" }}
+                    >
                       <Loader size="md" color="gray" />
                     </Center>
                   )}
