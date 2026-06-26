@@ -543,6 +543,130 @@ describe("ContinuousScrollReader", () => {
     });
   });
 
+  // Regression: on reload, restoring a deep page (e.g. webtoon page 189)
+  // scrolled to the target while the pages above were still reserved at the
+  // ~100vh estimate. As the real, taller images loaded above the viewport,
+  // native scroll anchoring pinned the now-stale scroll position, dragging the
+  // restored page backward by however much the above-target height was
+  // underestimated. The slider/chevron path never had this because it engages a
+  // sync lock (suppress transient reports) and re-pins to the target as images
+  // load. The initial restore must do the same.
+  describe("Initial restore position lock", () => {
+    function mockContainerRect() {
+      const container = screen.getByTestId("continuous-scroll-container");
+      container.getBoundingClientRect = () =>
+        ({
+          top: 0,
+          bottom: 800,
+          left: 0,
+          right: 600,
+          width: 600,
+          height: 800,
+          x: 0,
+          y: 0,
+          toJSON: () => {},
+        }) as DOMRect;
+    }
+
+    it("suppresses transient page reports while the restore settles, until the user interacts", async () => {
+      vi.useFakeTimers();
+
+      // On a real reload the store's currentPage already equals the restored
+      // page, so the external-sync effect is a no-op and only the initial
+      // restore runs. Mirror that here so this exercises the restore path, not
+      // the slider/chevron sync path.
+      mockCurrentPage = 5;
+
+      renderWithProviders(
+        <ContinuousScrollReader
+          {...defaultProps}
+          totalPages={20}
+          initialPage={5}
+          preloadBuffer={2}
+        />,
+      );
+
+      mockGoToPage.mockClear();
+      mockContainerRect();
+
+      const scrollContainer = screen.getByTestId("continuous-scroll-container");
+      // The observer momentarily settles on an earlier page (page 3) as the
+      // layout shifts during restore — this must NOT be reported.
+      const pageContainer3 = screen.getByTestId("page-container-3");
+      act(() => {
+        mockObserverInstance?.simulateIntersection([
+          {
+            target: pageContainer3,
+            isIntersecting: true,
+            boundingClientRect: { top: 0, bottom: 800, height: 800 } as DOMRect,
+          },
+        ]);
+        scrollContainer.dispatchEvent(new Event("scroll", { bubbles: false }));
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(150);
+      });
+
+      // Locked: no spurious goToPage while the restore is settling.
+      expect(mockGoToPage).not.toHaveBeenCalled();
+
+      // A real user interaction clears the lock; reporting resumes.
+      act(() => {
+        window.dispatchEvent(new Event("pointerdown"));
+        mockObserverInstance?.simulateIntersection([
+          {
+            target: pageContainer3,
+            isIntersecting: true,
+            boundingClientRect: { top: 0, bottom: 800, height: 800 } as DOMRect,
+          },
+        ]);
+        scrollContainer.dispatchEvent(new Event("scroll", { bubbles: false }));
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(150);
+      });
+
+      expect(mockGoToPage).toHaveBeenCalledWith(3);
+
+      vi.useRealTimers();
+    });
+
+    it("re-pins to the target as the restored page's image loads (buffer 0)", async () => {
+      const scrollIntoView = vi.mocked(Element.prototype.scrollIntoView);
+
+      // Match the store to the restored page so the sync lock comes from the
+      // initial restore, not the external-sync effect.
+      mockCurrentPage = 5;
+
+      renderWithProviders(
+        <ContinuousScrollReader
+          {...defaultProps}
+          totalPages={20}
+          initialPage={5}
+          preloadBuffer={0}
+        />,
+      );
+
+      // Ignore the initial restore scroll; we care about the re-pin on load.
+      scrollIntoView.mockClear();
+
+      // With buffer 0 only the target page (5) is in the render window. Its
+      // measurement still grows the averaged estimate used by the placeholders
+      // above it, shifting the target's offset — so loading it must re-pin.
+      const page5Container = screen.getByTestId("page-container-5");
+      Object.defineProperty(page5Container, "offsetHeight", {
+        configurable: true,
+        value: 2053,
+      });
+      const image5 = screen.getByTestId("page-image-5");
+      await act(async () => {
+        image5.dispatchEvent(new Event("load"));
+      });
+
+      expect(scrollIntoView).toHaveBeenCalled();
+    });
+  });
+
   describe("Page Gap", () => {
     it("should apply custom page gap", () => {
       renderWithProviders(

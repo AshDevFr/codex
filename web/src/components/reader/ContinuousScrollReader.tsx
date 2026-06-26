@@ -504,6 +504,18 @@ export function ContinuousScrollReader({
     const targetRef = pageRefs.current.get(targetPage);
     if (targetRef && containerRef.current) {
       hasScrolledToInitialRef.current = true;
+      // Engage the same sync lock the slider/chevron path uses. Restoring a
+      // deep page scrolls to it while the pages above are still reserved at the
+      // estimated (~100vh) height; as their real, taller images load above the
+      // viewport, native scroll anchoring would otherwise pin the now-stale
+      // scroll position and drag the restored page backward. The lock makes the
+      // observer/flush ignore transient pages during the settle, and the
+      // image-load effect re-pins the viewport to the target. Cleared by the
+      // first user interaction (wheel/pointerdown/keydown). Only needed when
+      // there is content above the target (targetPage > 1).
+      if (targetPage > 1) {
+        syncTargetPageRef.current = targetPage;
+      }
       targetRef.scrollIntoView({ behavior: "instant", block: "start" });
     }
   }, [initialPage, hasLeadingSlot]);
@@ -543,6 +555,14 @@ export function ContinuousScrollReader({
       const newHeight = el.offsetHeight;
       if (newHeight > 0) {
         pageHeightsRef.current.set(page, newHeight);
+        // During an active sync, a new measurement also raises the averaged
+        // height estimate used by the still-unmeasured placeholders *above* the
+        // target, shifting the target's offset even when the loaded page is at
+        // or below the target. Re-pin on any new measurement so the restore (or
+        // a slider jump) can't drift as pages settle.
+        if (syncTarget != null) {
+          resyncNeeded = true;
+        }
       }
       if (syncTarget != null && page < syncTarget) {
         resyncNeeded = true;
