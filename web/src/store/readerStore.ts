@@ -191,11 +191,19 @@ export function createSeriesOverride(
   };
 }
 
-/** Minimal book info needed for series navigation */
+/** Book info needed for series navigation and the chapter-transition panel */
 export interface AdjacentBook {
   id: string;
   title: string;
   pageCount: number;
+  /** Series display name (e.g. "The Gamer") */
+  seriesName: string;
+  /** Book number within the series, if known */
+  number: number | null;
+  /** Volume number from metadata, if known */
+  volume: number | null;
+  /** Chapter number from metadata (may be fractional), if known */
+  chapter: number | null;
 }
 
 /** Page orientation detected from image dimensions */

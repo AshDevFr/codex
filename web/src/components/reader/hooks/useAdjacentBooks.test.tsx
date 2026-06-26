@@ -49,8 +49,24 @@ describe("useAdjacentBooks", () => {
 
   it("should return adjacent books when loaded", async () => {
     mockGetAdjacent.mockResolvedValue({
-      prev: { id: "book-0", title: "Previous Book", pageCount: 50 } as never,
-      next: { id: "book-2", title: "Next Book", pageCount: 100 } as never,
+      prev: {
+        id: "book-0",
+        title: "Previous Book",
+        pageCount: 50,
+        seriesName: "The Gamer",
+        number: 15,
+        volume: 1,
+        chapter: 15,
+      } as never,
+      next: {
+        id: "book-2",
+        title: "Next Book",
+        pageCount: 100,
+        seriesName: "The Gamer",
+        number: 17,
+        volume: 1,
+        chapter: 17,
+      } as never,
     });
 
     const { result } = renderHook(
@@ -64,18 +80,71 @@ describe("useAdjacentBooks", () => {
       id: "book-0",
       title: "Previous Book",
       pageCount: 50,
+      seriesName: "The Gamer",
+      number: 15,
+      volume: 1,
+      chapter: 15,
     });
     expect(result.current.nextBook).toEqual({
       id: "book-2",
       title: "Next Book",
       pageCount: 100,
+      seriesName: "The Gamer",
+      number: 17,
+      volume: 1,
+      chapter: 17,
+    });
+  });
+
+  it("should default missing number/volume/chapter to null", async () => {
+    mockGetAdjacent.mockResolvedValue({
+      prev: null,
+      next: {
+        id: "book-2",
+        title: "Next Book",
+        pageCount: 100,
+        seriesName: "Standalone",
+      } as never,
+    });
+
+    const { result } = renderHook(
+      () => useAdjacentBooks({ bookId: "book-1" }),
+      { wrapper: createWrapper() },
+    );
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.nextBook).toEqual({
+      id: "book-2",
+      title: "Next Book",
+      pageCount: 100,
+      seriesName: "Standalone",
+      number: null,
+      volume: null,
+      chapter: null,
     });
   });
 
   it("should sync adjacent books to the store", async () => {
     mockGetAdjacent.mockResolvedValue({
-      prev: { id: "book-0", title: "Previous Book", pageCount: 50 } as never,
-      next: { id: "book-2", title: "Next Book", pageCount: 100 } as never,
+      prev: {
+        id: "book-0",
+        title: "Previous Book",
+        pageCount: 50,
+        seriesName: "The Gamer",
+        number: 15,
+        volume: 1,
+        chapter: 15,
+      } as never,
+      next: {
+        id: "book-2",
+        title: "Next Book",
+        pageCount: 100,
+        seriesName: "The Gamer",
+        number: 17,
+        volume: 1,
+        chapter: 17,
+      } as never,
     });
 
     const { result } = renderHook(
@@ -87,15 +156,39 @@ describe("useAdjacentBooks", () => {
 
     const storeState = useReaderStore.getState();
     expect(storeState.adjacentBooks).toEqual({
-      prev: { id: "book-0", title: "Previous Book", pageCount: 50 },
-      next: { id: "book-2", title: "Next Book", pageCount: 100 },
+      prev: {
+        id: "book-0",
+        title: "Previous Book",
+        pageCount: 50,
+        seriesName: "The Gamer",
+        number: 15,
+        volume: 1,
+        chapter: 15,
+      },
+      next: {
+        id: "book-2",
+        title: "Next Book",
+        pageCount: 100,
+        seriesName: "The Gamer",
+        number: 17,
+        volume: 1,
+        chapter: 17,
+      },
     });
   });
 
   it("should handle null prev book", async () => {
     mockGetAdjacent.mockResolvedValue({
       prev: null,
-      next: { id: "book-2", title: "Next Book", pageCount: 100 } as never,
+      next: {
+        id: "book-2",
+        title: "Next Book",
+        pageCount: 100,
+        seriesName: "The Gamer",
+        number: 17,
+        volume: 1,
+        chapter: 17,
+      } as never,
     });
 
     const { result } = renderHook(
@@ -110,12 +203,24 @@ describe("useAdjacentBooks", () => {
       id: "book-2",
       title: "Next Book",
       pageCount: 100,
+      seriesName: "The Gamer",
+      number: 17,
+      volume: 1,
+      chapter: 17,
     });
   });
 
   it("should handle null next book", async () => {
     mockGetAdjacent.mockResolvedValue({
-      prev: { id: "book-0", title: "Previous Book", pageCount: 50 } as never,
+      prev: {
+        id: "book-0",
+        title: "Previous Book",
+        pageCount: 50,
+        seriesName: "The Gamer",
+        number: 15,
+        volume: 1,
+        chapter: 15,
+      } as never,
       next: null,
     });
 
@@ -130,6 +235,10 @@ describe("useAdjacentBooks", () => {
       id: "book-0",
       title: "Previous Book",
       pageCount: 50,
+      seriesName: "The Gamer",
+      number: 15,
+      volume: 1,
+      chapter: 15,
     });
     expect(result.current.nextBook).toBeNull();
   });

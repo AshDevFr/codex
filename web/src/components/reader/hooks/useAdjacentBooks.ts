@@ -3,6 +3,21 @@ import { useEffect } from "react";
 import { booksApi } from "@/api/books";
 import type { AdjacentBook } from "@/store/readerStore";
 import { useReaderStore } from "@/store/readerStore";
+import type { Book } from "@/types";
+
+/** Map an API book payload to the reader's AdjacentBook shape. */
+function toAdjacentBook(book: Book | null | undefined): AdjacentBook | null {
+  if (!book) return null;
+  return {
+    id: book.id,
+    title: book.title,
+    pageCount: book.pageCount,
+    seriesName: book.seriesName,
+    number: book.number ?? null,
+    volume: book.volume ?? null,
+    chapter: book.chapter ?? null,
+  };
+}
 
 interface UseAdjacentBooksOptions {
   /** Book ID to fetch adjacent books for */
@@ -42,42 +57,16 @@ export function useAdjacentBooks({
   // Transform API response to AdjacentBook format and sync to store
   useEffect(() => {
     if (data) {
-      const prevBook: AdjacentBook | null = data.prev
-        ? {
-            id: data.prev.id,
-            title: data.prev.title,
-            pageCount: data.prev.pageCount,
-          }
-        : null;
-
-      const nextBook: AdjacentBook | null = data.next
-        ? {
-            id: data.next.id,
-            title: data.next.title,
-            pageCount: data.next.pageCount,
-          }
-        : null;
-
-      setAdjacentBooks({ prev: prevBook, next: nextBook });
+      setAdjacentBooks({
+        prev: toAdjacentBook(data.prev),
+        next: toAdjacentBook(data.next),
+      });
     }
   }, [data, setAdjacentBooks]);
 
   // Derive return values from data
-  const prevBook: AdjacentBook | null = data?.prev
-    ? {
-        id: data.prev.id,
-        title: data.prev.title,
-        pageCount: data.prev.pageCount,
-      }
-    : null;
-
-  const nextBook: AdjacentBook | null = data?.next
-    ? {
-        id: data.next.id,
-        title: data.next.title,
-        pageCount: data.next.pageCount,
-      }
-    : null;
+  const prevBook = toAdjacentBook(data?.prev);
+  const nextBook = toAdjacentBook(data?.next);
 
   return {
     prevBook,
