@@ -15,7 +15,7 @@ import {
   Title,
   Tooltip,
 } from "@mantine/core";
-import { useDisclosure } from "@mantine/hooks";
+import { useDisclosure, useMediaQuery } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
 import {
   IconAnalyze,
@@ -107,6 +107,12 @@ export function SeriesDetail() {
   const { isAdmin, hasPermission } = usePermissions();
   const canEditSeries = hasPermission(PERMISSIONS.SERIES_WRITE);
   const canManageCollections = hasPermission(PERMISSIONS.COLLECTIONS_WRITE);
+  // Below the `sm` breakpoint the cover-beside-title grid squeezes long titles
+  // into a ~130px column (one word per line). On narrow viewports we break the
+  // title and actions out to a full-width row above the cover instead.
+  const isNarrowHeader = useMediaQuery("(max-width: 47.99em)", false, {
+    getInitialValueInEffect: false,
+  });
   const [summaryOpened, { toggle: toggleSummary }] = useDisclosure(false);
   const [editModalOpened, { open: openEditModal, close: closeEditModal }] =
     useDisclosure(false);
@@ -565,8 +571,15 @@ export function SeriesDetail() {
       <Stack gap="md">
         {/* Breadcrumbs */}
         <Breadcrumbs separator={<IconChevronRight size={14} />}>
-          {breadcrumbItems.map((item, index) =>
-            index === breadcrumbItems.length - 1 ? (
+          {/* On mobile the page title is shown prominently right below, so we
+              drop the trailing breadcrumb (this page) to avoid repeating it. */}
+          {(isNarrowHeader
+            ? breadcrumbItems.slice(0, -1)
+            : breadcrumbItems
+          ).map((item, index, items) =>
+            // Only the true current page (full list, desktop) renders as plain
+            // text; trimmed-list tail items stay clickable links.
+            !isNarrowHeader && index === items.length - 1 ? (
               <Text key={item.href} size="sm">
                 {item.title}
               </Text>
@@ -585,10 +598,9 @@ export function SeriesDetail() {
           )}
         </Breadcrumbs>
 
-        {/* Header: Cover + Info side by side */}
-        <Grid gutter="md">
-          {/* Cover - smaller */}
-          <Grid.Col span={{ base: 4, xs: 3, sm: 2 }}>
+        {/* Header: Cover + Info side by side (desktop) or title-on-top (mobile) */}
+        {(() => {
+          const coverImage = (
             <Image
               src={coverUrl}
               alt={seriesTitle}
@@ -596,382 +608,422 @@ export function SeriesDetail() {
               fallbackSrc="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='212'%3E%3Crect fill='%23333' width='150' height='212'/%3E%3Ctext fill='%23666' font-family='sans-serif' font-size='12' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3ENo Cover%3C/text%3E%3C/svg%3E"
               style={{ aspectRatio: "150/212.125" }}
             />
-          </Grid.Col>
+          );
 
-          {/* Info */}
-          <Grid.Col span={{ base: 8, xs: 9, sm: 10 }}>
-            <Stack gap="xs">
-              {/* Title row with badges and menu */}
-              <Group justify="space-between" align="flex-start" wrap="nowrap">
-                <Box style={{ flex: 1, minWidth: 0 }}>
-                  <Group gap="sm" align="center" wrap="wrap">
-                    <Title order={2} style={{ wordBreak: "break-word" }}>
-                      {seriesTitle}
-                    </Title>
-                    {metadata?.publisher && (
-                      <Text size="sm" c="dimmed">
-                        in {series.libraryName}
-                      </Text>
-                    )}
-                  </Group>
-                  <Group gap="xs" mt={4}>
-                    {status && (
-                      <Badge
-                        size="sm"
-                        variant="filled"
-                        color={status === "Ended" ? "green" : "blue"}
-                      >
-                        {status}
-                      </Badge>
-                    )}
-                    {readingDirection && (
-                      <Badge size="sm" variant="outline">
-                        {readingDirection}
-                      </Badge>
-                    )}
-                    {metadata?.ageRating != null && metadata.ageRating > 0 && (
-                      <Badge size="sm" variant="outline" color="orange">
-                        {metadata.ageRating}+
-                      </Badge>
-                    )}
-                  </Group>
-                </Box>
+          const titleHeading = (
+            <Group gap="sm" align="center" wrap="wrap">
+              <Title
+                order={2}
+                fz={{ base: "h3", sm: "h2" }}
+                style={{ wordBreak: "break-word" }}
+              >
+                {seriesTitle}
+              </Title>
+              {metadata?.publisher && (
+                <Text size="sm" c="dimmed">
+                  in {series.libraryName}
+                </Text>
+              )}
+            </Group>
+          );
 
-                <Group gap="xs" wrap="nowrap">
-                  <WantToReadButton
-                    itemType="series"
-                    id={series.id}
-                    wantToRead={series.wantToRead}
-                  />
-                  {canManageCollections && (
-                    <AddToCollectionButton seriesId={series.id} />
+          const statusBadges = (
+            <Group gap="xs" mt={4}>
+              {status && (
+                <Badge
+                  size="sm"
+                  variant="filled"
+                  color={status === "Ended" ? "green" : "blue"}
+                >
+                  {status}
+                </Badge>
+              )}
+              {readingDirection && (
+                <Badge size="sm" variant="outline">
+                  {readingDirection}
+                </Badge>
+              )}
+              {metadata?.ageRating != null && metadata.ageRating > 0 && (
+                <Badge size="sm" variant="outline" color="orange">
+                  {metadata.ageRating}+
+                </Badge>
+              )}
+            </Group>
+          );
+
+          const headerActions = (
+            <Group gap="xs" wrap="nowrap">
+              <WantToReadButton
+                itemType="series"
+                id={series.id}
+                wantToRead={series.wantToRead}
+              />
+              {canManageCollections && (
+                <AddToCollectionButton seriesId={series.id} />
+              )}
+              <Menu shadow="md" width={240} position="bottom-end">
+                <Menu.Target>
+                  <ActionIcon variant="subtle" size="lg">
+                    <IconDotsVertical size={20} />
+                  </ActionIcon>
+                </Menu.Target>
+                <Menu.Dropdown>
+                  {hasUnread && (
+                    <Menu.Item
+                      leftSection={<IconCheck size={14} />}
+                      onClick={() => markAsReadMutation.mutate()}
+                      disabled={markAsReadMutation.isPending}
+                    >
+                      Mark as Read
+                    </Menu.Item>
                   )}
-                  <Menu shadow="md" width={240} position="bottom-end">
-                    <Menu.Target>
-                      <ActionIcon variant="subtle" size="lg">
-                        <IconDotsVertical size={20} />
-                      </ActionIcon>
-                    </Menu.Target>
-                    <Menu.Dropdown>
-                      {hasUnread && (
-                        <Menu.Item
-                          leftSection={<IconCheck size={14} />}
-                          onClick={() => markAsReadMutation.mutate()}
-                          disabled={markAsReadMutation.isPending}
-                        >
-                          Mark as Read
-                        </Menu.Item>
-                      )}
-                      {hasRead && (
-                        <Menu.Item
-                          leftSection={<IconBookOff size={14} />}
-                          onClick={() => markAsUnreadMutation.mutate()}
-                          disabled={markAsUnreadMutation.isPending}
-                        >
-                          Mark as Unread
-                        </Menu.Item>
-                      )}
-                      {canEditSeries && (
+                  {hasRead && (
+                    <Menu.Item
+                      leftSection={<IconBookOff size={14} />}
+                      onClick={() => markAsUnreadMutation.mutate()}
+                      disabled={markAsUnreadMutation.isPending}
+                    >
+                      Mark as Unread
+                    </Menu.Item>
+                  )}
+                  {canEditSeries && (
+                    <>
+                      <Menu.Divider />
+                      <Menu.Item
+                        leftSection={<IconAnalyze size={14} />}
+                        onClick={() => analyzeMutation.mutate()}
+                        disabled={analyzeMutation.isPending}
+                      >
+                        Analyze All Books
+                      </Menu.Item>
+                      <Menu.Item
+                        leftSection={<IconAnalyze size={14} />}
+                        onClick={() => analyzeUnanalyzedMutation.mutate()}
+                        disabled={analyzeUnanalyzedMutation.isPending}
+                      >
+                        Analyze Unanalyzed Books
+                      </Menu.Item>
+                      <Menu.Item
+                        leftSection={<IconListNumbers size={14} />}
+                        onClick={() => renumberMutation.mutate()}
+                        disabled={renumberMutation.isPending}
+                      >
+                        Renumber Books
+                      </Menu.Item>
+                      <Menu.Divider />
+                      <Menu.Label>Book Thumbnails</Menu.Label>
+                      <Menu.Item
+                        leftSection={<IconPhoto size={14} />}
+                        onClick={() =>
+                          generateMissingBookThumbnailsMutation.mutate()
+                        }
+                        disabled={
+                          generateMissingBookThumbnailsMutation.isPending
+                        }
+                      >
+                        Generate Missing
+                      </Menu.Item>
+                      <Menu.Item
+                        leftSection={<IconPhoto size={14} />}
+                        onClick={() =>
+                          regenerateBookThumbnailsMutation.mutate()
+                        }
+                        disabled={regenerateBookThumbnailsMutation.isPending}
+                      >
+                        Regenerate All
+                      </Menu.Item>
+                      <Menu.Divider />
+                      <Menu.Label>Series Thumbnail</Menu.Label>
+                      <Menu.Item
+                        leftSection={<IconPhoto size={14} />}
+                        onClick={() =>
+                          generateSeriesThumbnailIfMissingMutation.mutate()
+                        }
+                        disabled={
+                          generateSeriesThumbnailIfMissingMutation.isPending
+                        }
+                      >
+                        Generate If Missing
+                      </Menu.Item>
+                      <Menu.Item
+                        leftSection={<IconPhoto size={14} />}
+                        onClick={() =>
+                          regenerateSeriesThumbnailMutation.mutate()
+                        }
+                        disabled={regenerateSeriesThumbnailMutation.isPending}
+                      >
+                        Regenerate
+                      </Menu.Item>
+                      <Menu.Divider />
+                      <Menu.Item
+                        leftSection={<IconEdit size={14} />}
+                        onClick={openEditModal}
+                      >
+                        Edit Metadata
+                      </Menu.Item>
+                      <Menu.Item
+                        leftSection={<IconRefresh size={14} />}
+                        onClick={() => reprocessTitleMutation.mutate()}
+                        disabled={reprocessTitleMutation.isPending}
+                      >
+                        Reprocess Title
+                      </Menu.Item>
+                      <Menu.Item
+                        leftSection={<IconRestore size={14} />}
+                        color="red"
+                        onClick={() => setResetConfirmOpened(true)}
+                        disabled={resetMetadataMutation.isPending}
+                      >
+                        Reset Metadata
+                      </Menu.Item>
+                      {/* Plugin actions for metadata fetching */}
+                      {pluginActions && pluginActions.actions.length > 0 && (
                         <>
                           <Menu.Divider />
-                          <Menu.Item
-                            leftSection={<IconAnalyze size={14} />}
-                            onClick={() => analyzeMutation.mutate()}
-                            disabled={analyzeMutation.isPending}
-                          >
-                            Analyze All Books
-                          </Menu.Item>
-                          <Menu.Item
-                            leftSection={<IconAnalyze size={14} />}
-                            onClick={() => analyzeUnanalyzedMutation.mutate()}
-                            disabled={analyzeUnanalyzedMutation.isPending}
-                          >
-                            Analyze Unanalyzed Books
-                          </Menu.Item>
-                          <Menu.Item
-                            leftSection={<IconListNumbers size={14} />}
-                            onClick={() => renumberMutation.mutate()}
-                            disabled={renumberMutation.isPending}
-                          >
-                            Renumber Books
-                          </Menu.Item>
+                          <Menu.Label>Fetch Metadata</Menu.Label>
+                          {pluginActions.actions.map((action) => (
+                            <Menu.Item
+                              key={`search-${action.pluginId}`}
+                              leftSection={<IconSearch size={14} />}
+                              onClick={() => handlePluginAction(action)}
+                            >
+                              {action.label}
+                            </Menu.Item>
+                          ))}
                           <Menu.Divider />
-                          <Menu.Label>Book Thumbnails</Menu.Label>
-                          <Menu.Item
-                            leftSection={<IconPhoto size={14} />}
-                            onClick={() =>
-                              generateMissingBookThumbnailsMutation.mutate()
-                            }
-                            disabled={
-                              generateMissingBookThumbnailsMutation.isPending
-                            }
-                          >
-                            Generate Missing
-                          </Menu.Item>
-                          <Menu.Item
-                            leftSection={<IconPhoto size={14} />}
-                            onClick={() =>
-                              regenerateBookThumbnailsMutation.mutate()
-                            }
-                            disabled={
-                              regenerateBookThumbnailsMutation.isPending
-                            }
-                          >
-                            Regenerate All
-                          </Menu.Item>
-                          <Menu.Divider />
-                          <Menu.Label>Series Thumbnail</Menu.Label>
-                          <Menu.Item
-                            leftSection={<IconPhoto size={14} />}
-                            onClick={() =>
-                              generateSeriesThumbnailIfMissingMutation.mutate()
-                            }
-                            disabled={
-                              generateSeriesThumbnailIfMissingMutation.isPending
-                            }
-                          >
-                            Generate If Missing
-                          </Menu.Item>
-                          <Menu.Item
-                            leftSection={<IconPhoto size={14} />}
-                            onClick={() =>
-                              regenerateSeriesThumbnailMutation.mutate()
-                            }
-                            disabled={
-                              regenerateSeriesThumbnailMutation.isPending
-                            }
-                          >
-                            Regenerate
-                          </Menu.Item>
-                          <Menu.Divider />
-                          <Menu.Item
-                            leftSection={<IconEdit size={14} />}
-                            onClick={openEditModal}
-                          >
-                            Edit Metadata
-                          </Menu.Item>
-                          <Menu.Item
-                            leftSection={<IconRefresh size={14} />}
-                            onClick={() => reprocessTitleMutation.mutate()}
-                            disabled={reprocessTitleMutation.isPending}
-                          >
-                            Reprocess Title
-                          </Menu.Item>
-                          <Menu.Item
-                            leftSection={<IconRestore size={14} />}
-                            color="red"
-                            onClick={() => setResetConfirmOpened(true)}
-                            disabled={resetMetadataMutation.isPending}
-                          >
-                            Reset Metadata
-                          </Menu.Item>
-                          {/* Plugin actions for metadata fetching */}
-                          {pluginActions &&
-                            pluginActions.actions.length > 0 && (
-                              <>
-                                <Menu.Divider />
-                                <Menu.Label>Fetch Metadata</Menu.Label>
-                                {pluginActions.actions.map((action) => (
-                                  <Menu.Item
-                                    key={`search-${action.pluginId}`}
-                                    leftSection={<IconSearch size={14} />}
-                                    onClick={() => handlePluginAction(action)}
-                                  >
-                                    {action.label}
-                                  </Menu.Item>
-                                ))}
-                                <Menu.Divider />
-                                <Menu.Label>Auto-Apply Metadata</Menu.Label>
-                                {pluginActions.actions.map((action) => (
-                                  <Menu.Item
-                                    key={`auto-${action.pluginId}`}
-                                    leftSection={<IconWand size={14} />}
-                                    onClick={() => handleAutoMatch(action)}
-                                    disabled={autoMatchMutation.isPending}
-                                  >
-                                    {action.pluginDisplayName}
-                                  </Menu.Item>
-                                ))}
-                              </>
-                            )}
+                          <Menu.Label>Auto-Apply Metadata</Menu.Label>
+                          {pluginActions.actions.map((action) => (
+                            <Menu.Item
+                              key={`auto-${action.pluginId}`}
+                              leftSection={<IconWand size={14} />}
+                              onClick={() => handleAutoMatch(action)}
+                              disabled={autoMatchMutation.isPending}
+                            >
+                              {action.pluginDisplayName}
+                            </Menu.Item>
+                          ))}
                         </>
                       )}
-                    </Menu.Dropdown>
-                  </Menu>
-                </Group>
-              </Group>
-
-              {/* Book count */}
-              {(() => {
-                const counts = formatSeriesCounts({
-                  localCount: series.bookCount ?? null,
-                  totalVolumeCount: metadata?.totalVolumeCount ?? null,
-                  totalChapterCount: metadata?.totalChapterCount ?? null,
-                  localMaxVolume: series.localMaxVolume ?? null,
-                  localMaxChapter: series.localMaxChapter ?? null,
-                });
-                return counts ? (
-                  <Text size="sm" c="dimmed">
-                    {counts}
-                  </Text>
-                ) : null;
-              })()}
-
-              {/* Behind-by-N badges: translation gap (release sources)
-                  and upstream gap (metadata signal). Each badge is a no-op
-                  when the gap is zero/missing, the series isn't tracked,
-                  or the corresponding axis is disabled. */}
-              {tracking?.tracked && (
-                <Group gap={6} wrap="wrap">
-                  {tracking.trackChapters &&
-                    tracking.latestKnownChapter != null &&
-                    series.localMaxChapter != null &&
-                    tracking.latestKnownChapter > series.localMaxChapter && (
-                      <BehindByBadge
-                        variant="translation"
-                        axis="chapter"
-                        delta={
-                          Math.round(
-                            (tracking.latestKnownChapter -
-                              series.localMaxChapter) *
-                              10,
-                          ) / 10
-                        }
-                        seriesId={series.id}
-                        language={tracking.languages?.[0] ?? undefined}
-                      />
-                    )}
-                  {tracking.trackVolumes &&
-                    tracking.latestKnownVolume != null &&
-                    series.localMaxVolume != null &&
-                    tracking.latestKnownVolume > series.localMaxVolume && (
-                      <BehindByBadge
-                        variant="translation"
-                        axis="volume"
-                        delta={
-                          tracking.latestKnownVolume - series.localMaxVolume
-                        }
-                        seriesId={series.id}
-                      />
-                    )}
-                  {series.upstreamChapterGap != null &&
-                    series.upstreamChapterGap > 0 && (
-                      <BehindByBadge
-                        variant="upstream"
-                        axis="chapter"
-                        delta={Math.round(series.upstreamChapterGap * 10) / 10}
-                        seriesId={series.id}
-                        provider={series.upstreamGapProvider ?? undefined}
-                      />
-                    )}
-                  {series.upstreamVolumeGap != null &&
-                    series.upstreamVolumeGap > 0 && (
-                      <BehindByBadge
-                        variant="upstream"
-                        axis="volume"
-                        delta={series.upstreamVolumeGap}
-                        seriesId={series.id}
-                        provider={series.upstreamGapProvider ?? undefined}
-                      />
-                    )}
-                </Group>
-              )}
-
-              {/* Alternate titles inline */}
-              {series.alternateTitles && series.alternateTitles.length > 0 && (
-                <AlternateTitles titles={series.alternateTitles} compact />
-              )}
-
-              {/* Action buttons */}
-              <Group gap="sm" mt="xs">
-                {nextBook && (
-                  <Button
-                    size="xs"
-                    variant="filled"
-                    leftSection={<IconBook size={14} />}
-                    onClick={() => {
-                      if (nextBook.fileFormat === "epub") {
-                        navigate(`/reader/${nextBook.id}`);
-                      } else {
-                        const page = nextBook.readProgress?.currentPage ?? 1;
-                        navigate(`/reader/${nextBook.id}?page=${page}`);
-                      }
-                    }}
-                  >
-                    {nextBook.readProgress ? "Continue" : "Read"}
-                  </Button>
-                )}
-                {seriesBooks && seriesBooks.length > 0 ? (
-                  <SeriesDownloadButton
-                    seriesId={series.id}
-                    books={seriesBooks.map((b) => ({
-                      id: b.id,
-                      fileFormat: b.fileFormat,
-                      pageCount: b.pageCount,
-                      fileSize: b.fileSize,
-                    }))}
-                    archiveDownloadUrl={`/api/v1/series/${series.id}/download`}
-                  />
-                ) : (
-                  <Button
-                    size="xs"
-                    variant={nextBook ? "light" : "filled"}
-                    component="a"
-                    href={`/api/v1/series/${series.id}/download`}
-                    leftSection={<IconDownload size={14} />}
-                  >
-                    Download
-                  </Button>
-                )}
-                <Tooltip label="Series Info">
-                  <ActionIcon
-                    variant="subtle"
-                    size="md"
-                    onClick={openInfoModal}
-                  >
-                    <IconInfoCircle size={18} />
-                  </ActionIcon>
-                </Tooltip>
-              </Group>
-
-              {/* Summary - show preview with expand if long */}
-              {metadata?.summary && (
-                <Box mt="xs">
-                  <Text
-                    size="sm"
-                    style={{ whiteSpace: "pre-wrap" }}
-                    lineClamp={summaryOpened ? undefined : 2}
-                  >
-                    {metadata.summary}
-                  </Text>
-                  {/* Only show READ MORE if summary is long enough (roughly > 150 chars or has newlines) */}
-                  {(metadata.summary.length > 150 ||
-                    metadata.summary.includes("\n")) && (
-                    <Text
-                      size="sm"
-                      c="dimmed"
-                      style={{
-                        cursor: "pointer",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 4,
-                      }}
-                      onClick={toggleSummary}
-                      mt={4}
-                    >
-                      {summaryOpened ? "READ LESS" : "READ MORE"}
-                      {summaryOpened ? (
-                        <IconChevronUp size={14} />
-                      ) : (
-                        <IconChevronDown size={14} />
-                      )}
-                    </Text>
+                    </>
                   )}
-                </Box>
+                </Menu.Dropdown>
+              </Menu>
+            </Group>
+          );
+
+          const countsText = (() => {
+            const counts = formatSeriesCounts({
+              localCount: series.bookCount ?? null,
+              totalVolumeCount: metadata?.totalVolumeCount ?? null,
+              totalChapterCount: metadata?.totalChapterCount ?? null,
+              localMaxVolume: series.localMaxVolume ?? null,
+              localMaxChapter: series.localMaxChapter ?? null,
+            });
+            return counts ? (
+              <Text size="sm" c="dimmed">
+                {counts}
+              </Text>
+            ) : null;
+          })();
+
+          // Behind-by-N badges: translation gap (release sources) and upstream
+          // gap (metadata signal). Each badge is a no-op when the gap is
+          // zero/missing, the series isn't tracked, or the axis is disabled.
+          const behindBadges = tracking?.tracked ? (
+            <Group gap={6} wrap="wrap">
+              {tracking.trackChapters &&
+                tracking.latestKnownChapter != null &&
+                series.localMaxChapter != null &&
+                tracking.latestKnownChapter > series.localMaxChapter && (
+                  <BehindByBadge
+                    variant="translation"
+                    axis="chapter"
+                    delta={
+                      Math.round(
+                        (tracking.latestKnownChapter - series.localMaxChapter) *
+                          10,
+                      ) / 10
+                    }
+                    seriesId={series.id}
+                    language={tracking.languages?.[0] ?? undefined}
+                  />
+                )}
+              {tracking.trackVolumes &&
+                tracking.latestKnownVolume != null &&
+                series.localMaxVolume != null &&
+                tracking.latestKnownVolume > series.localMaxVolume && (
+                  <BehindByBadge
+                    variant="translation"
+                    axis="volume"
+                    delta={tracking.latestKnownVolume - series.localMaxVolume}
+                    seriesId={series.id}
+                  />
+                )}
+              {series.upstreamChapterGap != null &&
+                series.upstreamChapterGap > 0 && (
+                  <BehindByBadge
+                    variant="upstream"
+                    axis="chapter"
+                    delta={Math.round(series.upstreamChapterGap * 10) / 10}
+                    seriesId={series.id}
+                    provider={series.upstreamGapProvider ?? undefined}
+                  />
+                )}
+              {series.upstreamVolumeGap != null &&
+                series.upstreamVolumeGap > 0 && (
+                  <BehindByBadge
+                    variant="upstream"
+                    axis="volume"
+                    delta={series.upstreamVolumeGap}
+                    seriesId={series.id}
+                    provider={series.upstreamGapProvider ?? undefined}
+                  />
+                )}
+            </Group>
+          ) : null;
+
+          const alternateTitlesBlock =
+            series.alternateTitles && series.alternateTitles.length > 0 ? (
+              <AlternateTitles titles={series.alternateTitles} compact />
+            ) : null;
+
+          const readDownloadButtons = (
+            <Group gap="sm" mt="xs">
+              {nextBook && (
+                <Button
+                  size="xs"
+                  variant="filled"
+                  leftSection={<IconBook size={14} />}
+                  onClick={() => {
+                    if (nextBook.fileFormat === "epub") {
+                      navigate(`/reader/${nextBook.id}`);
+                    } else {
+                      const page = nextBook.readProgress?.currentPage ?? 1;
+                      navigate(`/reader/${nextBook.id}?page=${page}`);
+                    }
+                  }}
+                >
+                  {nextBook.readProgress ? "Continue" : "Read"}
+                </Button>
               )}
-            </Stack>
-          </Grid.Col>
-        </Grid>
+              {seriesBooks && seriesBooks.length > 0 ? (
+                <SeriesDownloadButton
+                  seriesId={series.id}
+                  books={seriesBooks.map((b) => ({
+                    id: b.id,
+                    fileFormat: b.fileFormat,
+                    pageCount: b.pageCount,
+                    fileSize: b.fileSize,
+                  }))}
+                  archiveDownloadUrl={`/api/v1/series/${series.id}/download`}
+                />
+              ) : (
+                <Button
+                  size="xs"
+                  variant={nextBook ? "light" : "filled"}
+                  component="a"
+                  href={`/api/v1/series/${series.id}/download`}
+                  leftSection={<IconDownload size={14} />}
+                >
+                  Download
+                </Button>
+              )}
+              <Tooltip label="Series Info">
+                <ActionIcon variant="subtle" size="md" onClick={openInfoModal}>
+                  <IconInfoCircle size={18} />
+                </ActionIcon>
+              </Tooltip>
+            </Group>
+          );
+
+          // Summary - show preview with expand if long
+          const summaryBlock = metadata?.summary ? (
+            <Box mt="xs">
+              <Text
+                size="sm"
+                style={{ whiteSpace: "pre-wrap" }}
+                lineClamp={summaryOpened ? undefined : 2}
+              >
+                {metadata.summary}
+              </Text>
+              {/* Only show READ MORE if summary is long enough (roughly > 150 chars or has newlines) */}
+              {(metadata.summary.length > 150 ||
+                metadata.summary.includes("\n")) && (
+                <Text
+                  size="sm"
+                  c="dimmed"
+                  style={{
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 4,
+                  }}
+                  onClick={toggleSummary}
+                  mt={4}
+                >
+                  {summaryOpened ? "READ LESS" : "READ MORE"}
+                  {summaryOpened ? (
+                    <IconChevronUp size={14} />
+                  ) : (
+                    <IconChevronDown size={14} />
+                  )}
+                </Text>
+              )}
+            </Box>
+          ) : null;
+
+          // Mobile: give the title the full viewport width on every line, and
+          // tuck the action buttons next to the cover (top of the info column)
+          // so they don't steal width from the title's first lines.
+          if (isNarrowHeader) {
+            return (
+              <Stack gap="md">
+                {titleHeading}
+                <Grid gutter="md">
+                  <Grid.Col span={{ base: 4, xs: 3 }}>{coverImage}</Grid.Col>
+                  <Grid.Col span={{ base: 8, xs: 9 }}>
+                    <Stack gap="xs">
+                      <Group justify="flex-end">{headerActions}</Group>
+                      {statusBadges}
+                      {countsText}
+                      {behindBadges}
+                      {alternateTitlesBlock}
+                    </Stack>
+                  </Grid.Col>
+                </Grid>
+                {readDownloadButtons}
+                {summaryBlock}
+              </Stack>
+            );
+          }
+
+          // Desktop: cover beside an info column holding everything.
+          return (
+            <Grid gutter="md">
+              <Grid.Col span={{ base: 4, xs: 3, sm: 2 }}>{coverImage}</Grid.Col>
+              <Grid.Col span={{ base: 8, xs: 9, sm: 10 }}>
+                <Stack gap="xs">
+                  <Group
+                    justify="space-between"
+                    align="flex-start"
+                    wrap="nowrap"
+                  >
+                    <Box style={{ flex: 1, minWidth: 0 }}>
+                      {titleHeading}
+                      {statusBadges}
+                    </Box>
+                    {headerActions}
+                  </Group>
+                  {countsText}
+                  {behindBadges}
+                  {alternateTitlesBlock}
+                  {readDownloadButtons}
+                  {summaryBlock}
+                </Stack>
+              </Grid.Col>
+            </Grid>
+          );
+        })()}
 
         {/* Metadata rows - Komga style */}
         <Stack gap="xs">

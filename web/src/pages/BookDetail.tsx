@@ -114,6 +114,12 @@ export function BookDetail() {
   const [infoModalOpened, { open: openInfoModal, close: closeInfoModal }] =
     useDisclosure(false);
   const isWideScreen = useMediaQuery("(min-width: 768px)");
+  // Below the `sm` breakpoint the cover-beside-title grid squeezes long titles
+  // into a ~130px column (one word per line). On narrow viewports we break the
+  // title and actions out to a full-width row above the cover instead.
+  const isNarrowHeader = useMediaQuery("(max-width: 47.99em)", false, {
+    getInitialValueInEffect: false,
+  });
 
   // Permission checks
   const { hasPermission } = usePermissions();
@@ -421,8 +427,15 @@ export function BookDetail() {
       <Stack gap="md">
         {/* Breadcrumbs */}
         <Breadcrumbs separator={<IconChevronRight size={14} />}>
-          {breadcrumbItems.map((item, index) =>
-            index === breadcrumbItems.length - 1 ? (
+          {/* On mobile the page title is shown prominently right below, so we
+              drop the trailing breadcrumb (this page) to avoid repeating it. */}
+          {(isNarrowHeader
+            ? breadcrumbItems.slice(0, -1)
+            : breadcrumbItems
+          ).map((item, index, items) =>
+            // Only the true current page (full list, desktop) renders as plain
+            // text; trimmed-list tail items stay clickable links.
+            !isNarrowHeader && index === items.length - 1 ? (
               <Text key={item.href} size="sm">
                 {item.title}
               </Text>
@@ -441,10 +454,9 @@ export function BookDetail() {
           )}
         </Breadcrumbs>
 
-        {/* Header: Cover + Info side by side */}
-        <Grid gutter="md">
-          {/* Cover - smaller */}
-          <Grid.Col span={{ base: 4, xs: 3, sm: 2 }}>
+        {/* Header: Cover + Info side by side (desktop) or title-on-top (mobile) */}
+        {(() => {
+          const coverImage = (
             <Box pos="relative">
               {book.deleted ? (
                 <Box
@@ -480,292 +492,340 @@ export function BookDetail() {
                 />
               )}
             </Box>
-          </Grid.Col>
+          );
 
-          {/* Info */}
-          <Grid.Col span={{ base: 8, xs: 9, sm: 10 }}>
-            <Stack gap="xs">
-              {/* Title row with badges and menu */}
-              <Group justify="space-between" align="flex-start" wrap="nowrap">
-                <Box style={{ flex: 1, minWidth: 0 }}>
-                  <Group gap="sm" align="center" wrap="wrap">
-                    <Title order={2} style={{ wordBreak: "break-word" }}>
-                      {displayTitle}
-                    </Title>
-                  </Group>
-                  <Group gap="xs" mt={4}>
-                    {book.deleted && (
-                      <Badge
-                        size="sm"
-                        variant="filled"
-                        color="red"
-                        leftSection={<IconTrash size={12} />}
-                      >
-                        Deleted
-                      </Badge>
-                    )}
-                    <Badge size="sm" variant="filled">
-                      {book.fileFormat.toUpperCase()}
-                    </Badge>
-                    <BookTypeBadge
-                      bookType={metadata?.bookType}
-                      size="sm"
-                      variant="light"
-                    />
-                    <BookKindBadge
-                      volume={metadata?.volume}
-                      chapter={metadata?.chapter}
-                      size="sm"
-                      variant="light"
-                    />
-                    {isCompleted && (
-                      <Badge size="sm" variant="filled" color="green">
-                        Completed
-                      </Badge>
-                    )}
-                    {hasProgress && !isCompleted && (
-                      <Badge size="sm" variant="outline" color="blue">
-                        In Progress
-                      </Badge>
-                    )}
-                  </Group>
-                </Box>
+          const titleHeading = (
+            <Group gap="sm" align="center" wrap="wrap">
+              <Title
+                order={2}
+                fz={{ base: "h3", sm: "h2" }}
+                style={{ wordBreak: "break-word" }}
+              >
+                {displayTitle}
+              </Title>
+            </Group>
+          );
 
-                <Group gap="xs" wrap="nowrap">
-                  <WantToReadButton
-                    itemType="book"
-                    id={book.id}
-                    wantToRead={book.wantToRead}
-                  />
-                  {canManageReadLists && (
-                    <AddToReadListButton bookId={book.id} />
+          const statusBadges = (
+            <Group gap="xs" mt={4}>
+              {book.deleted && (
+                <Badge
+                  size="sm"
+                  variant="filled"
+                  color="red"
+                  leftSection={<IconTrash size={12} />}
+                >
+                  Deleted
+                </Badge>
+              )}
+              <Badge size="sm" variant="filled">
+                {book.fileFormat.toUpperCase()}
+              </Badge>
+              <BookTypeBadge
+                bookType={metadata?.bookType}
+                size="sm"
+                variant="light"
+              />
+              <BookKindBadge
+                volume={metadata?.volume}
+                chapter={metadata?.chapter}
+                size="sm"
+                variant="light"
+              />
+              {isCompleted && (
+                <Badge size="sm" variant="filled" color="green">
+                  Completed
+                </Badge>
+              )}
+              {hasProgress && !isCompleted && (
+                <Badge size="sm" variant="outline" color="blue">
+                  In Progress
+                </Badge>
+              )}
+            </Group>
+          );
+
+          const headerActions = (
+            <Group gap="xs" wrap="nowrap">
+              <WantToReadButton
+                itemType="book"
+                id={book.id}
+                wantToRead={book.wantToRead}
+              />
+              {canManageReadLists && <AddToReadListButton bookId={book.id} />}
+              <Menu shadow="md" width={200} position="bottom-end">
+                <Menu.Target>
+                  <ActionIcon variant="subtle" size="lg">
+                    <IconDotsVertical size={20} />
+                  </ActionIcon>
+                </Menu.Target>
+                <Menu.Dropdown>
+                  {!isCompleted && (
+                    <Menu.Item
+                      leftSection={<IconCheck size={14} />}
+                      onClick={() => markAsReadMutation.mutate()}
+                      disabled={markAsReadMutation.isPending}
+                    >
+                      Mark as Read
+                    </Menu.Item>
                   )}
-                  <Menu shadow="md" width={200} position="bottom-end">
-                    <Menu.Target>
-                      <ActionIcon variant="subtle" size="lg">
-                        <IconDotsVertical size={20} />
-                      </ActionIcon>
-                    </Menu.Target>
-                    <Menu.Dropdown>
-                      {!isCompleted && (
-                        <Menu.Item
-                          leftSection={<IconCheck size={14} />}
-                          onClick={() => markAsReadMutation.mutate()}
-                          disabled={markAsReadMutation.isPending}
-                        >
-                          Mark as Read
-                        </Menu.Item>
-                      )}
-                      {hasProgress && (
-                        <Menu.Item
-                          leftSection={<IconBookOff size={14} />}
-                          onClick={() => markAsUnreadMutation.mutate()}
-                          disabled={markAsUnreadMutation.isPending}
-                        >
-                          Mark as Unread
-                        </Menu.Item>
-                      )}
-                      {canEditBook && (
+                  {hasProgress && (
+                    <Menu.Item
+                      leftSection={<IconBookOff size={14} />}
+                      onClick={() => markAsUnreadMutation.mutate()}
+                      disabled={markAsUnreadMutation.isPending}
+                    >
+                      Mark as Unread
+                    </Menu.Item>
+                  )}
+                  {canEditBook && (
+                    <>
+                      <Menu.Divider />
+                      <Menu.Item
+                        leftSection={<IconAnalyze size={14} />}
+                        onClick={() => analyzeMutation.mutate()}
+                        disabled={analyzeMutation.isPending}
+                      >
+                        Analyze Book
+                      </Menu.Item>
+                      <Menu.Item
+                        leftSection={<IconPhoto size={14} />}
+                        onClick={() => generateThumbnailMutation.mutate()}
+                        disabled={generateThumbnailMutation.isPending}
+                      >
+                        Regenerate Thumbnail
+                      </Menu.Item>
+                      <Menu.Divider />
+                      <Menu.Item
+                        leftSection={<IconEdit size={14} />}
+                        onClick={openEditModal}
+                      >
+                        Edit Metadata
+                      </Menu.Item>
+                      {/* Plugin actions for metadata fetching */}
+                      {pluginActions && pluginActions.actions.length > 0 && (
                         <>
                           <Menu.Divider />
-                          <Menu.Item
-                            leftSection={<IconAnalyze size={14} />}
-                            onClick={() => analyzeMutation.mutate()}
-                            disabled={analyzeMutation.isPending}
-                          >
-                            Analyze Book
-                          </Menu.Item>
-                          <Menu.Item
-                            leftSection={<IconPhoto size={14} />}
-                            onClick={() => generateThumbnailMutation.mutate()}
-                            disabled={generateThumbnailMutation.isPending}
-                          >
-                            Regenerate Thumbnail
-                          </Menu.Item>
+                          <Menu.Label>Fetch Metadata</Menu.Label>
+                          {pluginActions.actions.map((action) => (
+                            <Menu.Item
+                              key={`search-${action.pluginId}`}
+                              leftSection={<IconSearch size={14} />}
+                              onClick={() => handlePluginAction(action)}
+                            >
+                              {action.label}
+                            </Menu.Item>
+                          ))}
                           <Menu.Divider />
-                          <Menu.Item
-                            leftSection={<IconEdit size={14} />}
-                            onClick={openEditModal}
-                          >
-                            Edit Metadata
-                          </Menu.Item>
-                          {/* Plugin actions for metadata fetching */}
-                          {pluginActions &&
-                            pluginActions.actions.length > 0 && (
-                              <>
-                                <Menu.Divider />
-                                <Menu.Label>Fetch Metadata</Menu.Label>
-                                {pluginActions.actions.map((action) => (
-                                  <Menu.Item
-                                    key={`search-${action.pluginId}`}
-                                    leftSection={<IconSearch size={14} />}
-                                    onClick={() => handlePluginAction(action)}
-                                  >
-                                    {action.label}
-                                  </Menu.Item>
-                                ))}
-                                <Menu.Divider />
-                                <Menu.Label>Auto-Apply Metadata</Menu.Label>
-                                {pluginActions.actions.map((action) => (
-                                  <Menu.Item
-                                    key={`auto-${action.pluginId}`}
-                                    leftSection={<IconWand size={14} />}
-                                    onClick={() => handleAutoMatch(action)}
-                                    disabled={autoMatchMutation.isPending}
-                                  >
-                                    {action.pluginDisplayName}
-                                  </Menu.Item>
-                                ))}
-                              </>
-                            )}
+                          <Menu.Label>Auto-Apply Metadata</Menu.Label>
+                          {pluginActions.actions.map((action) => (
+                            <Menu.Item
+                              key={`auto-${action.pluginId}`}
+                              leftSection={<IconWand size={14} />}
+                              onClick={() => handleAutoMatch(action)}
+                              disabled={autoMatchMutation.isPending}
+                            >
+                              {action.pluginDisplayName}
+                            </Menu.Item>
+                          ))}
                         </>
                       )}
-                    </Menu.Dropdown>
-                  </Menu>
-                </Group>
-              </Group>
-
-              {/* Subtitle */}
-              {metadata?.subtitle && (
-                <Text size="md" c="dimmed" fs="italic">
-                  {metadata.subtitle}
-                </Text>
-              )}
-
-              {/* Series link */}
-              <Text
-                component={Link}
-                to={`/series/${book.seriesId}`}
-                size="sm"
-                c="dimmed"
-                className="hover-underline"
-                style={{ textDecoration: "none", width: "fit-content" }}
-              >
-                in {book.seriesName}
-              </Text>
-
-              {/* Reading progress */}
-              {hasProgress && !isCompleted && (
-                <Group gap="sm" align="center">
-                  {book.fileFormat !== "epub" && (
-                    <Text size="sm">
-                      Page {currentPage} of {book.pageCount}
-                    </Text>
+                    </>
                   )}
-                  <Progress
-                    value={percentage}
-                    size="sm"
-                    style={{ flex: 1, maxWidth: 200 }}
-                  />
-                  <Text size="sm" c="dimmed">
-                    {Math.round(percentage)}%
-                  </Text>
-                </Group>
-              )}
+                </Menu.Dropdown>
+              </Menu>
+            </Group>
+          );
 
-              {/* Action buttons */}
-              <Group gap="sm" mt="xs">
+          const subtitleBlock = metadata?.subtitle ? (
+            <Text size="md" c="dimmed" fs="italic">
+              {metadata.subtitle}
+            </Text>
+          ) : null;
+
+          const seriesLink = (
+            <Text
+              component={Link}
+              to={`/series/${book.seriesId}`}
+              size="sm"
+              c="dimmed"
+              className="hover-underline"
+              style={{ textDecoration: "none", width: "fit-content" }}
+            >
+              in {book.seriesName}
+            </Text>
+          );
+
+          const readingProgress =
+            hasProgress && !isCompleted ? (
+              <Group gap="sm" align="center">
+                {book.fileFormat !== "epub" && (
+                  <Text size="sm">
+                    Page {currentPage} of {book.pageCount}
+                  </Text>
+                )}
+                <Progress
+                  value={percentage}
+                  size="sm"
+                  style={{ flex: 1, maxWidth: 200 }}
+                />
+                <Text size="sm" c="dimmed">
+                  {Math.round(percentage)}%
+                </Text>
+              </Group>
+            ) : null;
+
+          const readActions = (
+            <Group gap="sm" mt="xs">
+              <Button
+                size="xs"
+                variant="filled"
+                leftSection={<IconBook size={14} />}
+                onClick={() => {
+                  if (book.fileFormat === "epub") {
+                    // EPUB reader restores position from R2Progression CFI automatically
+                    navigate(`/reader/${book.id}`);
+                  } else {
+                    const page = book.readProgress?.currentPage ?? 1;
+                    navigate(`/reader/${book.id}?page=${page}`);
+                  }
+                }}
+              >
+                {hasProgress && !isCompleted ? "Continue" : "Read"}
+              </Button>
+              <Tooltip label="Read without tracking progress">
                 <Button
                   size="xs"
-                  variant="filled"
-                  leftSection={<IconBook size={14} />}
-                  onClick={() => {
-                    if (book.fileFormat === "epub") {
-                      // EPUB reader restores position from R2Progression CFI automatically
-                      navigate(`/reader/${book.id}`);
-                    } else {
-                      const page = book.readProgress?.currentPage ?? 1;
-                      navigate(`/reader/${book.id}?page=${page}`);
-                    }
-                  }}
+                  variant="outline"
+                  leftSection={<IconEyeOff size={14} />}
+                  onClick={() =>
+                    navigate(
+                      book.fileFormat === "epub"
+                        ? `/reader/${book.id}?incognito=true`
+                        : `/reader/${book.id}?page=1&incognito=true`,
+                    )
+                  }
                 >
-                  {hasProgress && !isCompleted ? "Continue" : "Read"}
+                  Incognito
                 </Button>
-                <Tooltip label="Read without tracking progress">
-                  <Button
-                    size="xs"
-                    variant="outline"
-                    leftSection={<IconEyeOff size={14} />}
-                    onClick={() =>
-                      navigate(
-                        book.fileFormat === "epub"
-                          ? `/reader/${book.id}?incognito=true`
-                          : `/reader/${book.id}?page=1&incognito=true`,
-                      )
-                    }
-                  >
-                    Incognito
-                  </Button>
-                </Tooltip>
-                <DownloadButton
-                  bookId={book.id}
-                  fileFormat={book.fileFormat}
-                  pageCount={book.pageCount}
-                  fileDownloadUrl={downloadUrl}
-                />
-                <Tooltip label="Book Info">
-                  <ActionIcon
-                    variant="subtle"
-                    size="md"
-                    onClick={openInfoModal}
-                  >
-                    <IconInfoCircle size={18} />
-                  </ActionIcon>
-                </Tooltip>
-              </Group>
+              </Tooltip>
+              <DownloadButton
+                bookId={book.id}
+                fileFormat={book.fileFormat}
+                pageCount={book.pageCount}
+                fileDownloadUrl={downloadUrl}
+              />
+              <Tooltip label="Book Info">
+                <ActionIcon variant="subtle" size="md" onClick={openInfoModal}>
+                  <IconInfoCircle size={18} />
+                </ActionIcon>
+              </Tooltip>
+            </Group>
+          );
 
-              {/* Summary - show preview with expand if long */}
-              {metadata?.summary && (
-                <Box mt="xs">
-                  <Text
-                    size="sm"
-                    style={{ whiteSpace: "pre-wrap" }}
-                    lineClamp={summaryOpened ? undefined : 2}
-                  >
-                    {metadata.summary}
-                  </Text>
-                  {(metadata.summary.length > 150 ||
-                    metadata.summary.includes("\n")) && (
-                    <Text
-                      size="sm"
-                      c="dimmed"
-                      style={{
-                        cursor: "pointer",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 4,
-                      }}
-                      onClick={toggleSummary}
-                      mt={4}
-                    >
-                      {summaryOpened ? "READ LESS" : "READ MORE"}
-                      {summaryOpened ? (
-                        <IconChevronUp size={14} />
-                      ) : (
-                        <IconChevronDown size={14} />
-                      )}
-                    </Text>
-                  )}
-                </Box>
-              )}
-
-              {/* Analysis error */}
-              {book.analysisError && (
-                <Box
-                  p="xs"
+          // Summary - show preview with expand if long
+          const summaryBlock = metadata?.summary ? (
+            <Box mt="xs">
+              <Text
+                size="sm"
+                style={{ whiteSpace: "pre-wrap" }}
+                lineClamp={summaryOpened ? undefined : 2}
+              >
+                {metadata.summary}
+              </Text>
+              {(metadata.summary.length > 150 ||
+                metadata.summary.includes("\n")) && (
+                <Text
+                  size="sm"
+                  c="dimmed"
                   style={{
-                    backgroundColor: "var(--mantine-color-red-light)",
-                    borderRadius: "var(--mantine-radius-sm)",
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 4,
                   }}
+                  onClick={toggleSummary}
+                  mt={4}
                 >
-                  <Text size="sm" c="red">
-                    Analysis Error: {book.analysisError}
-                  </Text>
-                </Box>
+                  {summaryOpened ? "READ LESS" : "READ MORE"}
+                  {summaryOpened ? (
+                    <IconChevronUp size={14} />
+                  ) : (
+                    <IconChevronDown size={14} />
+                  )}
+                </Text>
               )}
-            </Stack>
-          </Grid.Col>
-        </Grid>
+            </Box>
+          ) : null;
+
+          const analysisError = book.analysisError ? (
+            <Box
+              p="xs"
+              style={{
+                backgroundColor: "var(--mantine-color-red-light)",
+                borderRadius: "var(--mantine-radius-sm)",
+              }}
+            >
+              <Text size="sm" c="red">
+                Analysis Error: {book.analysisError}
+              </Text>
+            </Box>
+          ) : null;
+
+          // Mobile: give the title the full viewport width on every line, and
+          // tuck the action buttons next to the cover (top of the info column)
+          // so they don't steal width from the title's first lines.
+          if (isNarrowHeader) {
+            return (
+              <Stack gap="md">
+                {titleHeading}
+                <Grid gutter="md">
+                  <Grid.Col span={{ base: 4, xs: 3 }}>{coverImage}</Grid.Col>
+                  <Grid.Col span={{ base: 8, xs: 9 }}>
+                    <Stack gap="xs">
+                      <Group justify="flex-end">{headerActions}</Group>
+                      {statusBadges}
+                      {subtitleBlock}
+                      {seriesLink}
+                      {readingProgress}
+                    </Stack>
+                  </Grid.Col>
+                </Grid>
+                {readActions}
+                {summaryBlock}
+                {analysisError}
+              </Stack>
+            );
+          }
+
+          // Desktop: cover beside an info column holding everything.
+          return (
+            <Grid gutter="md">
+              <Grid.Col span={{ base: 4, xs: 3, sm: 2 }}>{coverImage}</Grid.Col>
+              <Grid.Col span={{ base: 8, xs: 9, sm: 10 }}>
+                <Stack gap="xs">
+                  <Group
+                    justify="space-between"
+                    align="flex-start"
+                    wrap="nowrap"
+                  >
+                    <Box style={{ flex: 1, minWidth: 0 }}>
+                      {titleHeading}
+                      {statusBadges}
+                    </Box>
+                    {headerActions}
+                  </Group>
+                  {subtitleBlock}
+                  {seriesLink}
+                  {readingProgress}
+                  {readActions}
+                  {summaryBlock}
+                  {analysisError}
+                </Stack>
+              </Grid.Col>
+            </Grid>
+          );
+        })()}
 
         {/* Metadata rows - Komga style */}
         <Stack gap="xs">
