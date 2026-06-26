@@ -37,6 +37,8 @@ vi.mock("react-pdf", () => ({
     scale,
     renderTextLayer,
     renderAnnotationLayer,
+    onLoadSuccess,
+    onRenderSuccess,
   }: {
     pageNumber: number;
     width?: number;
@@ -44,18 +46,31 @@ vi.mock("react-pdf", () => ({
     scale?: number;
     renderTextLayer?: boolean;
     renderAnnotationLayer?: boolean;
-  }) => (
-    <div
-      data-testid={`pdf-page-${pageNumber}`}
-      data-width={width}
-      data-height={height}
-      data-scale={scale}
-      data-text-layer={renderTextLayer}
-      data-annotation-layer={renderAnnotationLayer}
-    >
-      Page {pageNumber}
-    </div>
-  ),
+    onLoadSuccess?: (page: {
+      originalWidth: number;
+      originalHeight: number;
+    }) => void;
+    onRenderSuccess?: () => void;
+  }) => {
+    // Mimic react-pdf: report the intrinsic page size, then signal render.
+    // 600×900 points → a 1.5 aspect ratio for reserved-height assertions.
+    queueMicrotask(() => {
+      onLoadSuccess?.({ originalWidth: 600, originalHeight: 900 });
+      onRenderSuccess?.();
+    });
+    return (
+      <div
+        data-testid={`pdf-page-${pageNumber}`}
+        data-width={width}
+        data-height={height}
+        data-scale={scale}
+        data-text-layer={renderTextLayer}
+        data-annotation-layer={renderAnnotationLayer}
+      >
+        Page {pageNumber}
+      </div>
+    );
+  },
   pdfjs: {
     GlobalWorkerOptions: { workerSrc: "" },
   },
@@ -520,10 +535,12 @@ describe("PdfContinuousScrollReader", () => {
   });
 
   describe("Scroll position stability", () => {
-    // Regression: a page virtualised out of the render window must reserve a
-    // height rather than snap content. Until a page has rendered (and its real
-    // height is known), the placeholder falls back to an 800px guess.
-    it("uses an 800px placeholder for pages outside the render window", async () => {
+    // Once any page reports its intrinsic size, pages that haven't entered the
+    // render window reserve that exact rendered height instead of a flat guess,
+    // so the image loading into them causes no layout shift / scroll jump.
+    // fit-width at 800px container − 40px padding = 760px wide; a 600×900 page
+    // has a 1.5 aspect ratio → 760 × 1.5 = 1140px.
+    it("reserves the exact derived height for pages outside the render window", async () => {
       renderWithProviders(
         <PdfContinuousScrollReader
           {...defaultProps}
@@ -533,10 +550,8 @@ describe("PdfContinuousScrollReader", () => {
         />,
       );
 
-      // A far page that has never rendered uses the fallback placeholder
-      // height, keeping the scrollable area roughly sized.
       const placeholder = await screen.findByTestId("pdf-page-placeholder-15");
-      expect(placeholder).toHaveStyle({ height: "800px" });
+      expect(placeholder).toHaveStyle({ height: "1140px" });
     });
   });
 

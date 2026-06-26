@@ -10,6 +10,7 @@ import {
 import { Document, Page, pdfjs } from "react-pdf";
 import { type BackgroundColor, useReaderStore } from "@/store/readerStore";
 import type { PdfZoomLevel } from "./PdfReader";
+import { type PdfPageOrig, pdfPageReservedHeight } from "./utils/pdfPageHeight";
 
 // Import CSS for text layer and annotation layer
 import "react-pdf/dist/Page/TextLayer.css";
@@ -118,6 +119,11 @@ export function PdfContinuousScrollReader({
   // settles. Without it, off-screen pages revert to a fixed 800px guess that
   // rarely matches their real (zoom-dependent) height.
   const pageHeightsRef = useRef<Map<number, number>>(new Map());
+  // Intrinsic page size (PDF points) per page, learned from react-pdf's
+  // onLoadSuccess. Lets us reserve each page's exact rendered height before the
+  // canvas paints, so a page entering the render window — or finishing its draw
+  // — never resizes its box and shifts the scroll position.
+  const pageOrigRef = useRef<Map<number, PdfPageOrig>>(new Map());
   const observerRef = useRef<IntersectionObserver | null>(null);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const hasScrolledToInitialRef = useRef(false);
@@ -148,6 +154,12 @@ export function PdfContinuousScrollReader({
   const [currentVisiblePage, setCurrentVisiblePage] = useState(initialPage);
   const [containerWidth, setContainerWidth] = useState(0);
   const [pdfLoaded, setPdfLoaded] = useState(false);
+  // A representative intrinsic page size, set from the first page that loads.
+  // PDF pages are usually uniform, so this lets us reserve a good height for
+  // pages that haven't entered the render window yet (instead of a flat guess).
+  // Stored as state (not a ref) so learning it triggers a re-render.
+  const [representativeOrig, setRepresentativeOrig] =
+    useState<PdfPageOrig | null>(null);
 
   // Reader store actions
   const goToPage = useReaderStore((state) => state.goToPage);
@@ -417,6 +429,24 @@ export function PdfContinuousScrollReader({
     [],
   );
 
+  // Capture a page's intrinsic size as soon as react-pdf loads it (before the
+  // canvas paints), so we can reserve its exact height. The first page to load
+  // also seeds the representative size used for not-yet-seen pages.
+  const handlePageLoadSuccess = useCallback(
+    (
+      pageNumber: number,
+      page: { originalWidth: number; originalHeight: number },
+    ) => {
+      const orig: PdfPageOrig = {
+        width: page.originalWidth,
+        height: page.originalHeight,
+      };
+      pageOrigRef.current.set(pageNumber, orig);
+      setRepresentativeOrig((prev) => prev ?? orig);
+    },
+    [],
+  );
+
   // Remember a page's rendered height once react-pdf finishes drawing it, so
   // virtualising it out later keeps the layout stable (see pageHeightsRef).
   const handlePageRenderSuccess = useCallback((pageNumber: number) => {
@@ -460,6 +490,10 @@ export function PdfContinuousScrollReader({
   // Check if fit modes require container width that isn't ready yet
   const isFitMode = zoomLevel === "fit-page" || zoomLevel === "fit-width";
   const containerReady = containerWidth > 0;
+  // Width available to a page in fit modes: container minus the inner padding
+  // (20px each side). Matches getPageDimensions so reserved heights line up
+  // exactly with what react-pdf actually renders.
+  const availableWidth = containerWidth - 40;
 
   if (totalPages === 0) {
     return (
@@ -478,6 +512,11 @@ export function PdfContinuousScrollReader({
         height: "100%",
         overflow: "auto",
         backgroundColor: BACKGROUND_COLORS[backgroundColor],
+        // Let the browser keep the scroll position pinned when content above
+        // the viewport changes size. Combined with exact reserved heights, this
+        // prevents scroll jumps with no manual scrollTop math. (Unsupported on
+        // iOS Safari, which is why the exact reservation below is primary.)
+        overflowAnchor: "auto",
       }}
     >
       <Document
@@ -531,13 +570,24 @@ export function PdfContinuousScrollReader({
             {Array.from({ length: totalPages }, (_, i) => {
               const pageNumber = i + 1;
               const shouldRender = pagesToRender.has(pageNumber);
-              // Reserve a virtualised page's last measured height so it doesn't
-              // collapse to the 800px guess and shift the scroll position when
-              // scrolling settles. Fall back to 800px for never-rendered pages.
+              const hasRendered = pageHeightsRef.current.has(pageNumber);
+              // Reserve each page's exact rendered height before its canvas
+              // paints, so entering the render window, finishing the draw, and
+              // virtualising back out are all layout-neutral and never shift the
+              // scroll position. Prefer this page's intrinsic size, then the
+              // representative size, then the last measured height, then a guess.
+              const orig =
+                pageOrigRef.current.get(pageNumber) ?? representativeOrig;
+              const exactHeight = orig
+                ? pdfPageReservedHeight({ zoomLevel, availableWidth, orig })
+                : null;
               const measuredHeight = pageHeightsRef.current.get(pageNumber);
-              const reservedHeight = measuredHeight
-                ? `${measuredHeight}px`
-                : "800px";
+              const reservedHeight =
+                exactHeight != null && exactHeight > 0
+                  ? `${exactHeight}px`
+                  : measuredHeight
+                    ? `${measuredHeight}px`
+                    : "800px";
 
               return (
                 <Box
@@ -547,7 +597,11 @@ export function PdfContinuousScrollReader({
                   data-testid={`pdf-page-container-${pageNumber}`}
                   style={{
                     width: "100%",
-                    minHeight: shouldRender ? undefined : reservedHeight,
+                    // Keep the reserved height until the page has actually
+                    // rendered, so the loading→canvas transition doesn't
+                    // collapse the box and shift everything below it.
+                    minHeight:
+                      shouldRender && hasRendered ? undefined : reservedHeight,
                     display: "flex",
                     justifyContent: "center",
                     alignItems: "center",
@@ -565,6 +619,9 @@ export function PdfContinuousScrollReader({
                       }
                       renderTextLayer={true}
                       renderAnnotationLayer={true}
+                      onLoadSuccess={(page) =>
+                        handlePageLoadSuccess(pageNumber, page)
+                      }
                       onRenderSuccess={() =>
                         handlePageRenderSuccess(pageNumber)
                       }
@@ -572,7 +629,7 @@ export function PdfContinuousScrollReader({
                         <Center
                           style={{
                             width: "100%",
-                            height: 400,
+                            height: reservedHeight,
                             backgroundColor: "transparent",
                           }}
                         >
