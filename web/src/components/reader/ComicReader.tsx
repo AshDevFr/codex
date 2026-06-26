@@ -16,6 +16,7 @@ import {
   type WebtoonFitMode,
 } from "@/store/readerStore";
 import { BoundaryNotification } from "./BoundaryNotification";
+import { ChapterTransitionPanel } from "./ChapterTransitionPanel";
 import { ComicReaderPage } from "./ComicReaderPage";
 import { ContinuousScrollReader } from "./ContinuousScrollReader";
 import { DoublePageSpread } from "./DoublePageSpread";
@@ -103,6 +104,11 @@ export function ComicReader({
   const hideTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const initializedBookIdRef = useRef<string | null>(null);
   const [settingsOpened, setSettingsOpened] = useState(false);
+  // Whether the user has scrolled to the trailing "Next Chapter" panel in
+  // continuous/webtoon mode. Gates the auto-advance countdown so it only runs
+  // once the panel is actually on screen (the panel is always in the scroll
+  // content, far below the last page, until then).
+  const [trailingReached, setTrailingReached] = useState(false);
   const {
     message: boundaryNotification,
     onBoundaryChange,
@@ -162,6 +168,9 @@ export function ComicReader({
   );
   const webtoonPageGap = useReaderStore(
     (state) => state.settings.webtoonPageGap,
+  );
+  const autoAdvanceToNextBook = useReaderStore(
+    (state) => state.settings.autoAdvanceToNextBook,
   );
 
   // Reader store actions
@@ -234,6 +243,16 @@ export function ComicReader({
 
   // Fetch adjacent books for series navigation
   useAdjacentBooks({ bookId, enabled: true });
+
+  // Reset the trailing-panel reached flag whenever the book changes so the
+  // countdown doesn't carry over from the previous book. Render-phase reset
+  // (per the React docs) handles the case where the reader is reused across a
+  // book navigation rather than remounted.
+  const [prevBookId, setPrevBookId] = useState(bookId);
+  if (bookId !== prevBookId) {
+    setPrevBookId(bookId);
+    setTrailingReached(false);
+  }
 
   // Series navigation with boundary detection
   const {
@@ -752,6 +771,25 @@ export function ComicReader({
     );
   }
 
+  // Webtoon/continuous transition panels: a "Previous Chapter" panel above the
+  // first page and a "Next Chapter" panel after the last. The countdown only
+  // runs once the user has actually scrolled the trailing panel into view.
+  const webtoonLeadingPanel = (
+    <ChapterTransitionPanel
+      direction="prev"
+      book={adjacentBooks?.prev ?? null}
+      onContinue={goToPrevBook}
+    />
+  );
+  const webtoonTrailingPanel = (
+    <ChapterTransitionPanel
+      direction="next"
+      book={adjacentBooks?.next ?? null}
+      onContinue={goToNextBook}
+      autoAdvance={autoAdvanceToNextBook && trailingReached}
+    />
+  );
+
   return (
     <Box
       ref={containerRef}
@@ -826,6 +864,9 @@ export function ComicReader({
           sidePadding={webtoonSidePadding}
           scrollContainerRef={scrollContainerRef}
           tapRef={touchRef}
+          leadingSlot={webtoonLeadingPanel}
+          trailingSlot={webtoonTrailingPanel}
+          onTrailingReachedChange={setTrailingReached}
         />
       ) : (
         <Box

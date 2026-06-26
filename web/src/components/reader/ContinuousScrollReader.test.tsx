@@ -915,4 +915,122 @@ describe("ContinuousScrollReader", () => {
       expect(scrollTop).toBe(2600);
     });
   });
+
+  describe("Transition panels", () => {
+    function setScrollMetrics(
+      el: HTMLElement,
+      { scrollTop, clientHeight, scrollHeight }: Record<string, number>,
+    ) {
+      Object.defineProperty(el, "scrollHeight", {
+        configurable: true,
+        value: scrollHeight,
+      });
+      Object.defineProperty(el, "clientHeight", {
+        configurable: true,
+        value: clientHeight,
+      });
+      Object.defineProperty(el, "scrollTop", {
+        configurable: true,
+        writable: true,
+        value: scrollTop,
+      });
+    }
+
+    it("renders the leading and trailing slots when provided", () => {
+      renderWithProviders(
+        <ContinuousScrollReader
+          {...defaultProps}
+          leadingSlot={<div>prev-panel</div>}
+          trailingSlot={<div>next-panel</div>}
+        />,
+      );
+
+      expect(screen.getByTestId("continuous-leading-slot")).toBeInTheDocument();
+      expect(
+        screen.getByTestId("continuous-trailing-slot"),
+      ).toBeInTheDocument();
+      expect(screen.getByText("prev-panel")).toBeInTheDocument();
+      expect(screen.getByText("next-panel")).toBeInTheDocument();
+    });
+
+    it("scrolls past the leading panel to page 1 on mount", () => {
+      const scrollIntoView = vi.spyOn(Element.prototype, "scrollIntoView");
+      renderWithProviders(
+        <ContinuousScrollReader
+          {...defaultProps}
+          initialPage={1}
+          leadingSlot={<div>prev-panel</div>}
+        />,
+      );
+      expect(scrollIntoView).toHaveBeenCalled();
+    });
+
+    it("reports the final page and fires trailing-reached at the bottom", async () => {
+      vi.useFakeTimers();
+      const onTrailingReachedChange = vi.fn();
+
+      renderWithProviders(
+        <ContinuousScrollReader
+          {...defaultProps}
+          totalPages={10}
+          trailingSlot={<div>next-panel</div>}
+          onTrailingReachedChange={onTrailingReachedChange}
+        />,
+      );
+
+      mockGoToPage.mockClear();
+      const container = screen.getByTestId("continuous-scroll-container");
+      setScrollMetrics(container, {
+        scrollTop: 1200,
+        clientHeight: 800,
+        scrollHeight: 2000,
+      });
+
+      act(() => {
+        container.dispatchEvent(new Event("scroll", { bubbles: false }));
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(150);
+      });
+
+      expect(mockGoToPage).toHaveBeenCalledWith(10);
+      expect(onTrailingReachedChange).toHaveBeenCalledWith(true);
+
+      vi.useRealTimers();
+    });
+
+    it("does not report the final page when not at the bottom", async () => {
+      vi.useFakeTimers();
+      const onTrailingReachedChange = vi.fn();
+
+      renderWithProviders(
+        <ContinuousScrollReader
+          {...defaultProps}
+          totalPages={10}
+          trailingSlot={<div>next-panel</div>}
+          onTrailingReachedChange={onTrailingReachedChange}
+        />,
+      );
+
+      mockGoToPage.mockClear();
+      const container = screen.getByTestId("continuous-scroll-container");
+      setScrollMetrics(container, {
+        scrollTop: 100,
+        clientHeight: 800,
+        scrollHeight: 2000,
+      });
+
+      act(() => {
+        container.dispatchEvent(new Event("scroll", { bubbles: false }));
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(150);
+      });
+
+      expect(mockGoToPage).not.toHaveBeenCalledWith(10);
+      expect(onTrailingReachedChange).not.toHaveBeenCalledWith(true);
+
+      vi.useRealTimers();
+    });
+  });
 });

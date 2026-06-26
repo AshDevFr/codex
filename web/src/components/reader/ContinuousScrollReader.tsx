@@ -1,5 +1,6 @@
 import { Box, Center, Loader, Text } from "@mantine/core";
 import {
+  type ReactNode,
   type RefObject,
   useCallback,
   useEffect,
@@ -51,6 +52,17 @@ interface ContinuousScrollReaderProps {
    * navigation (useTouchNav) can listen on the same element that scrolls.
    */
   tapRef?: (el: HTMLDivElement | null) => void;
+  /** Panel rendered before the first page (e.g. a "Previous Chapter" panel). */
+  leadingSlot?: ReactNode;
+  /** Panel rendered after the last page (e.g. a "Next Chapter" panel). */
+  trailingSlot?: ReactNode;
+  /**
+   * Fired on the rising/falling edge of the trailing panel being reached
+   * (scrolled to the very bottom). Used to gate the auto-advance countdown.
+   */
+  onTrailingReachedChange?: (reached: boolean) => void;
+  /** Fired on the rising/falling edge of the leading panel being reached (top). */
+  onLeadingReachedChange?: (reached: boolean) => void;
 }
 
 // =============================================================================
@@ -65,6 +77,8 @@ const BACKGROUND_COLORS: Record<BackgroundColor, string> = {
 
 const DEFAULT_PAGE_GAP = 0;
 const SCROLL_DEBOUNCE_MS = 100;
+/** Sub-pixel tolerance when deciding the scroll has reached the top/bottom. */
+const BOUNDARY_TOLERANCE = 4;
 
 // =============================================================================
 // Component
@@ -92,6 +106,10 @@ export function ContinuousScrollReader({
   onPageChange,
   scrollContainerRef,
   tapRef,
+  leadingSlot,
+  trailingSlot,
+  onTrailingReachedChange,
+  onLeadingReachedChange,
 }: ContinuousScrollReaderProps) {
   // Use explicit undefined checks to allow 0 as a valid value
   const effectivePageGap = pageGap ?? DEFAULT_PAGE_GAP;
@@ -198,6 +216,23 @@ export function ContinuousScrollReader({
   const totalPagesRef = useRef(totalPages);
   totalPagesRef.current = totalPages;
 
+  // Stable view of the transition-panel config for the scroll handler, plus
+  // edge-tracking refs so reached-change callbacks only fire on transitions.
+  const reachConfigRef = useRef({
+    hasLeading: leadingSlot != null,
+    hasTrailing: trailingSlot != null,
+    onLeadingReachedChange,
+    onTrailingReachedChange,
+  });
+  reachConfigRef.current = {
+    hasLeading: leadingSlot != null,
+    hasTrailing: trailingSlot != null,
+    onLeadingReachedChange,
+    onTrailingReachedChange,
+  };
+  const trailingReachedRef = useRef(false);
+  const leadingReachedRef = useRef(false);
+
   // Set up intersection observer.
   // The observer only updates refs and visiblePages state (for lazy loading).
   // It never sets currentVisiblePage state directly; that is flushed by the
@@ -291,6 +326,28 @@ export function ContinuousScrollReader({
       // (above) so lazy loading keeps working.
       if (syncTargetPageRef.current != null) return;
 
+      // Transition-panel reach detection.  When a trailing "Next Chapter"
+      // panel is present and the user has scrolled to the very bottom, the
+      // final page has been passed — force the reported page to the last page
+      // so progress reaches 100% and the book is marked complete.  Without
+      // this, the "most visible page" heuristic settles on the second-to-last
+      // page (a tall final image or the panel itself dominates the viewport),
+      // capping progress short of the end.  Routing it through the normal
+      // report path (below) also updates lastReportedPageRef, so the external
+      // sync effect won't yank the scroll back up to the last page.
+      const reach = reachConfigRef.current;
+      let atBottom = false;
+      let atTop = false;
+      if (reach.hasTrailing || reach.hasLeading) {
+        atBottom =
+          container.scrollTop + container.clientHeight >=
+          container.scrollHeight - BOUNDARY_TOLERANCE;
+        atTop = container.scrollTop <= BOUNDARY_TOLERANCE;
+        if (reach.hasTrailing && atBottom) {
+          currentVisiblePageRef.current = totalPagesRef.current;
+        }
+      }
+
       const page = currentVisiblePageRef.current;
 
       if (page !== lastReportedPageRef.current) {
@@ -299,8 +356,17 @@ export function ContinuousScrollReader({
         cbs.onPageChange?.(page);
       }
 
-      // Boundary detection is handled by useKeyboardNav (arrow keys only)
-      // to prevent accidental triggers from casual scrolling/wheeling.
+      // Notify rising/falling edges of reaching the trailing/leading panels so
+      // the parent can gate the auto-advance countdown.  Two-press keyboard
+      // boundary detection still lives in useKeyboardNav.
+      if (reach.hasTrailing && atBottom !== trailingReachedRef.current) {
+        trailingReachedRef.current = atBottom;
+        reach.onTrailingReachedChange?.(atBottom);
+      }
+      if (reach.hasLeading && atTop !== leadingReachedRef.current) {
+        leadingReachedRef.current = atTop;
+        reach.onLeadingReachedChange?.(atTop);
+      }
     };
 
     const scheduleFlush = () => {
@@ -365,21 +431,25 @@ export function ContinuousScrollReader({
     }
   }, [storeCurrentPage]);
 
-  // Scroll to initial page on mount
+  // Scroll to initial page on mount.  A leading panel sits above page 1, so
+  // even when starting at page 1 we must scroll down past it to land on the
+  // first page rather than opening on the "Previous Chapter" panel.
+  const hasLeadingSlot = leadingSlot != null;
   useEffect(() => {
     if (hasScrolledToInitialRef.current) return;
-    if (initialPage <= 1) {
+    const targetPage = Math.max(1, initialPage);
+    if (targetPage <= 1 && !hasLeadingSlot) {
       hasScrolledToInitialRef.current = true;
       return;
     }
 
     // Wait for page refs to be set
-    const targetRef = pageRefs.current.get(initialPage);
+    const targetRef = pageRefs.current.get(targetPage);
     if (targetRef && containerRef.current) {
       hasScrolledToInitialRef.current = true;
       targetRef.scrollIntoView({ behavior: "instant", block: "start" });
     }
-  }, [initialPage]);
+  }, [initialPage, hasLeadingSlot]);
 
   // Handle image load.  The img is still display:none here (loadedPages
   // hasn't flushed yet), so only record the pre-commit height; measurement
@@ -547,6 +617,11 @@ export function ContinuousScrollReader({
           paddingRight: `${sidePadding}%`,
         }}
       >
+        {leadingSlot && (
+          <Box data-testid="continuous-leading-slot" style={{ width: "100%" }}>
+            {leadingSlot}
+          </Box>
+        )}
         {pages.map((page) => {
           const shouldRender = pagesToRender.has(page.pageNumber);
           // Reserve the page's last measured height while it is a placeholder
@@ -618,6 +693,11 @@ export function ContinuousScrollReader({
             </Box>
           );
         })}
+        {trailingSlot && (
+          <Box data-testid="continuous-trailing-slot" style={{ width: "100%" }}>
+            {trailingSlot}
+          </Box>
+        )}
       </Box>
     </Box>
   );
