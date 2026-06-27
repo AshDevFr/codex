@@ -1,3 +1,4 @@
+.codex
 /target
 /tmp
 /logs
@@ -8,6 +9,7 @@
 *.db-shm
 *.db-wal
 *.log
+.env
 
 plugins/**/openapi.json
 seed-config.yaml
