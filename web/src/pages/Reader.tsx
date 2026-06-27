@@ -4,6 +4,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { booksApi } from "@/api/books";
 import { ReaderRouter } from "@/components/reader";
 import { useDynamicDocumentTitle } from "@/hooks/useDocumentTitle";
+import { useViewportZoomLock } from "@/hooks/useViewportZoomLock";
 
 /**
  * Reader page component.
@@ -36,6 +37,10 @@ export function Reader() {
 
   // Set document title to book name for browser history
   useDynamicDocumentTitle(bookDetail?.book?.title, "Reading");
+
+  // Disable native viewport zoom while reading: it scales the whole UI (not just
+  // the page) and gets stuck on iOS. Content-only zoom is handled in the reader.
+  useViewportZoomLock();
 
   const handleClose = () => {
     // Navigate back to book detail page

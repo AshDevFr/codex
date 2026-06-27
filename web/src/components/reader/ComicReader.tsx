@@ -973,6 +973,10 @@ export function ComicReader({
         position: "relative",
         overflow: "hidden",
         backgroundColor: "#000",
+        // Allow scroll panning but no pinch / double-tap zoom, so the black
+        // letterbox around the page can't zoom the UI (Android). iOS is handled
+        // by useViewportZoomLock's gesture* preventDefault.
+        touchAction: "pan-x pan-y",
       }}
     >
       {/* Toolbar */}
