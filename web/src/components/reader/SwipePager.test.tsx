@@ -291,6 +291,37 @@ describe("SwipePager", () => {
     expect(zoomEl().style.transform).toContain("scale(2.5)");
   });
 
+  it("re-centers the strip instantly (no animated transition) when the committed spread changes", async () => {
+    // Regression guard for the production-only swipe flash: after a turn commits
+    // and the page advances (pageKey changes), the filmstrip must snap back to
+    // its centered slot with the transition disabled, so the new page and the
+    // re-center land in one frame instead of briefly revealing the old page.
+    const props = {
+      current: <div>current</div>,
+      prev: <div>prev</div>,
+      next: <div>next</div>,
+      readingDirection: "ltr" as ReadingDirection,
+      onNext: vi.fn(),
+      onPrev: vi.fn(),
+      onTap: vi.fn(),
+      enabled: true,
+      duration: DURATION,
+    };
+    const { container, rerender } = renderWithProviders(
+      <SwipePager {...props} pageKey="5" />,
+    );
+    const root = container.querySelector("div") as HTMLElement;
+    // The flex track wraps the three slots; reach it via the centered slot.
+    const track = (screen.getByText("current").parentElement as HTMLElement)
+      .parentElement?.parentElement as HTMLElement;
+
+    rerender(<SwipePager {...props} pageKey="6" />);
+
+    expect(track.style.transition).toBe("none");
+    expect(track.style.transform).toBe("translate3d(calc(-100% + 0px), 0, 0)");
+    expect(root).toBeTruthy();
+  });
+
   it("resets zoom when the page changes", async () => {
     const props = {
       current: <div>current</div>,

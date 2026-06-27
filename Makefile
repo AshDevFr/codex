@@ -424,6 +424,9 @@ prod-up: ## Start production services
 prod-up-d: ## Start production services (detached)
 	docker compose --profile prod up -d
 
+prod-up-build: ## Start production services with rebuild
+	docker compose --profile prod up --build
+
 prod-down: ## Stop production services
 	docker compose --profile prod down
 

@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { flushSync } from "react-dom";
 import type { ReadingDirection } from "@/store/readerStore";
 import {
   decideSnap,
@@ -143,6 +144,18 @@ export function SwipePager({
     prevPageKeyRef.current = pageKey;
     clearCommitTimer();
     draggingRef.current = false;
+    // Force the strip back to its centered slot with the transition disabled,
+    // imperatively, before the browser paints. The committed slide content is
+    // already in the DOM at this point, so writing the centered transform here
+    // (rather than waiting for the `setAnim` re-render to commit) guarantees the
+    // new page and the re-center land in the same frame. Without this the strip
+    // could paint one stale frame at the neighbor slot, briefly re-showing the
+    // previous page after the new one had settled.
+    const track = trackRef.current;
+    if (track) {
+      track.style.transition = "none";
+      track.style.transform = trackTransform(1, 0);
+    }
     setAnim(CENTERED);
     // A new page always starts at fit; reset before paint so it never flashes
     // the previous page's zoom.
@@ -208,8 +221,15 @@ export function SwipePager({
       clearCommitTimer();
       commitTimerRef.current = setTimeout(() => {
         commitTimerRef.current = null;
-        if (goNext) onNext();
-        else onPrev();
+        // Commit synchronously so the page-index advance and the resulting
+        // filmstrip re-center (the pageKey layout effect) flush in a single
+        // paint. On production/minified builds React can otherwise split them
+        // across two frames, painting one stale frame that re-shows the page we
+        // just turned away from.
+        flushSync(() => {
+          if (goNext) onNext();
+          else onPrev();
+        });
       }, duration);
     },
     [
