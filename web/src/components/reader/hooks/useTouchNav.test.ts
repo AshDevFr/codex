@@ -216,6 +216,24 @@ describe("useTouchNav", () => {
       expect(mockTap).toHaveBeenCalledTimes(1);
     });
 
+    it("captures the pointer while a drag is armed and releases it on end", async () => {
+      const swipe = makeSwipe();
+      const setCapture = vi.fn();
+      const releaseCapture = vi.fn();
+      (element as unknown as Record<string, unknown>).setPointerCapture =
+        setCapture;
+      (element as unknown as Record<string, unknown>).releasePointerCapture =
+        releaseCapture;
+      mountSwipe(swipe);
+
+      await dispatch("pointerdown", 200, 300, 0);
+      await dispatch("pointermove", 260, 300, 50);
+      expect(setCapture).toHaveBeenCalledWith(1);
+
+      await dispatch("pointerup", 260, 300, 100);
+      expect(releaseCapture).toHaveBeenCalledWith(1);
+    });
+
     it("calls onCancel when an armed drag is cancelled", async () => {
       const swipe = makeSwipe();
       mountSwipe(swipe);

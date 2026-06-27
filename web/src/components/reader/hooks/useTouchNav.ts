@@ -81,6 +81,31 @@ const INITIAL_GESTURE: GestureState = {
 };
 
 /**
+ * Capture the pointer so a fast drag keeps delivering `pointermove` even if the
+ * finger strays over a child or briefly leaves the surface (smoother tracking).
+ * Feature-detected and best-effort: jsdom and older browsers simply skip it.
+ */
+function capturePointer(element: HTMLElement | null, pointerId: number): void {
+  if (element && typeof element.setPointerCapture === "function") {
+    try {
+      element.setPointerCapture(pointerId);
+    } catch {
+      // Ignore — capture is a smoothness optimization, not load-bearing.
+    }
+  }
+}
+
+function releasePointer(element: HTMLElement | null, pointerId: number): void {
+  if (element && typeof element.releasePointerCapture === "function") {
+    try {
+      element.releasePointerCapture(pointerId);
+    } catch {
+      // Ignore — the pointer may already be released.
+    }
+  }
+}
+
+/**
  * Hook for tap navigation in the reader. Click/tap only — we intentionally
  * do not implement swipe gestures; movement above {@link TAP_TOLERANCE} is
  * ignored so the browser keeps its native pan/scroll/back-swipe behavior.
@@ -182,6 +207,7 @@ export function useTouchNav({
         return;
       }
       state.armed = true;
+      capturePointer(elementRef.current, e.pointerId);
     }
 
     sw.onMove?.(deltaX, deltaY);
@@ -206,6 +232,7 @@ export function useTouchNav({
     if (!cfg.enabled) return;
 
     if (wasArmed) {
+      releasePointer(elementRef.current, e.pointerId);
       cfg.swipe?.onEnd?.(deltaX, deltaY, velocity);
       return;
     }
@@ -248,7 +275,10 @@ export function useTouchNav({
     if (state.pointerId === e.pointerId) {
       const wasArmed = state.armed;
       gestureState.current = { ...INITIAL_GESTURE };
-      if (wasArmed) cfg.swipe?.onCancel?.();
+      if (wasArmed) {
+        releasePointer(elementRef.current, e.pointerId);
+        cfg.swipe?.onCancel?.();
+      }
     }
   }, []);
 
