@@ -2,6 +2,26 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.39.8] - 2026-06-27
+
+### 🚀 Features
+
+- *(reader)* Add swipe-paging gesture helpers and setting
+- *(reader)* Add finger-drag swipe pager and drag input
+- *(reader)* Enable swipe paging in the comic reader
+- *(reader)* Add swipe-to-turn-pages setting toggle
+- *(reader)* Add pinch-to-zoom and pan for comic pages
+- *(reader)* Add double-tap zoom for comic pages
+
+### 🐛 Bug Fixes
+
+- *(reader)* Capture the pointer during a swipe drag for smoother tracking
+- *(reader)* Disable native viewport zoom while reading
+
+### 📚 Documentation
+
+- *(reader)* Document pinch and double-tap page zoom
+
 ## [1.39.7] - 2026-06-26
 
 ### 🚀 Features

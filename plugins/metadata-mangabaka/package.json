@@ -1,6 +1,6 @@
 {
   "name": "@ashdev/codex-plugin-metadata-mangabaka",
-  "version": "1.39.7",
+  "version": "1.39.8",
   "description": "MangaBaka metadata provider plugin for Codex",
   "main": "dist/index.js",
   "bin": "dist/index.js",

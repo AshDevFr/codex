@@ -1,6 +1,6 @@
 {
   "name": "@ashdev/codex-plugin-release-tsundoku",
-  "version": "1.39.7",
+  "version": "1.39.8",
   "description": "Tsundoku release-source plugin for Codex - announces new volume/chapter coverage for tracked series via the Tsundoku incremental series feed, matched by exact external IDs",
   "main": "dist/index.js",
   "bin": "dist/index.js",
