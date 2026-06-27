@@ -309,7 +309,21 @@ describe("useTouchNav", () => {
       onMove: vi.fn(),
       onEnd: vi.fn(),
       onCancel: vi.fn(),
+      onSwipeDown: vi.fn(),
     });
+
+    const stubRect = () =>
+      vi.spyOn(element, "getBoundingClientRect").mockReturnValue({
+        left: 0,
+        top: 0,
+        right: 900,
+        bottom: 600,
+        width: 900,
+        height: 600,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      });
 
     const mountSwipe = (swipe: ReturnType<typeof makeSwipe>) => {
       const { result } = renderHook(() =>
@@ -443,6 +457,49 @@ describe("useTouchNav", () => {
 
       expect(swipe.onStart).not.toHaveBeenCalled();
       expect(swipe.onMove).not.toHaveBeenCalled();
+      expect(swipe.onEnd).not.toHaveBeenCalled();
+    });
+
+    it("fires onSwipeDown on a downward-dominant drag past the threshold", async () => {
+      const swipe = makeSwipe();
+      stubRect();
+      mountSwipe(swipe);
+
+      // Drop ~half the viewport height; barely any horizontal movement.
+      await dispatch("pointerdown", 200, 100, 0);
+      await dispatch("pointermove", 205, 250, 50);
+      await dispatch("pointerup", 210, 400, 100);
+
+      expect(swipe.onSwipeDown).toHaveBeenCalledTimes(1);
+      // It must not also arm a page-turn swipe or fire a tap.
+      expect(swipe.onStart).not.toHaveBeenCalled();
+      expect(swipe.onEnd).not.toHaveBeenCalled();
+      expect(mockTap).not.toHaveBeenCalled();
+    });
+
+    it("does not fire onSwipeDown on a horizontal drag", async () => {
+      const swipe = makeSwipe();
+      stubRect();
+      mountSwipe(swipe);
+
+      await dispatch("pointerdown", 200, 300, 0);
+      await dispatch("pointermove", 320, 305, 50);
+      await dispatch("pointerup", 440, 305, 100);
+
+      expect(swipe.onSwipeDown).not.toHaveBeenCalled();
+      expect(swipe.onEnd).toHaveBeenCalledTimes(1); // armed as a page turn instead
+    });
+
+    it("does not fire onSwipeDown on an upward drag", async () => {
+      const swipe = makeSwipe();
+      stubRect();
+      mountSwipe(swipe);
+
+      await dispatch("pointerdown", 200, 400, 0);
+      await dispatch("pointermove", 205, 250, 50);
+      await dispatch("pointerup", 210, 100, 100);
+
+      expect(swipe.onSwipeDown).not.toHaveBeenCalled();
       expect(swipe.onEnd).not.toHaveBeenCalled();
     });
   });

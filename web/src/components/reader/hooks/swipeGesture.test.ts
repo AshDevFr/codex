@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   classifyTapZone,
   decideSnap,
+  isDownwardExit,
   isHorizontalDrag,
   isHorizontallyPannable,
   isPinchZoomed,
@@ -9,6 +10,9 @@ import {
   rubberBand,
   SWIPE_ACTIVATION_PX,
   SWIPE_COMMIT_FRACTION,
+  SWIPE_DOWN_COMMIT_FRACTION,
+  SWIPE_DOWN_MIN_PX,
+  SWIPE_DOWN_VELOCITY_THRESHOLD,
   SWIPE_VELOCITY_THRESHOLD,
   TAP_TOLERANCE,
 } from "./swipeGesture";
@@ -264,5 +268,59 @@ describe("decideSnap", () => {
         input({ dragPx: -commitPx, velocityPxPerMs: SWIPE_VELOCITY_THRESHOLD }),
       ),
     ).toBe("prev");
+  });
+});
+
+describe("isDownwardExit", () => {
+  const VIEWPORT_H = 800;
+  const farPx = SWIPE_DOWN_COMMIT_FRACTION * VIEWPORT_H; // distance-commit threshold
+
+  const input = (over: Partial<Parameters<typeof isDownwardExit>[0]> = {}) => ({
+    dragX: 0,
+    dragY: 0,
+    velocityYPxPerMs: 0,
+    viewportHeight: VIEWPORT_H,
+    ...over,
+  });
+
+  it("commits when a downward drag covers enough of the viewport height", () => {
+    expect(isDownwardExit(input({ dragY: farPx }))).toBe(true);
+  });
+
+  it("commits on a fast downward flick once it clears the minimum distance", () => {
+    expect(
+      isDownwardExit(
+        input({
+          dragY: SWIPE_DOWN_MIN_PX,
+          velocityYPxPerMs: SWIPE_DOWN_VELOCITY_THRESHOLD,
+        }),
+      ),
+    ).toBe(true);
+  });
+
+  it("does not commit on a short slow downward drag", () => {
+    expect(isDownwardExit(input({ dragY: SWIPE_DOWN_MIN_PX - 1 }))).toBe(false);
+  });
+
+  it("does not commit on an upward drag", () => {
+    expect(isDownwardExit(input({ dragY: -farPx }))).toBe(false);
+  });
+
+  it("does not commit when the drag is horizontal-dominant", () => {
+    // Far enough vertically, but moved further horizontally.
+    expect(isDownwardExit(input({ dragY: farPx, dragX: farPx + 10 }))).toBe(
+      false,
+    );
+  });
+
+  it("ignores a fast flick that did not travel far enough", () => {
+    expect(
+      isDownwardExit(
+        input({
+          dragY: SWIPE_DOWN_MIN_PX - 1,
+          velocityYPxPerMs: SWIPE_DOWN_VELOCITY_THRESHOLD * 3,
+        }),
+      ),
+    ).toBe(false);
   });
 });

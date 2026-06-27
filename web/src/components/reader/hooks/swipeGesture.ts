@@ -228,3 +228,62 @@ export function decideSnap({
   if (isNext) return hasNext ? "next" : "stay";
   return hasPrev ? "prev" : "stay";
 }
+
+// =============================================================================
+// Vertical dismiss (swipe down to exit the reader)
+// =============================================================================
+
+/**
+ * Fraction of the viewport height a downward drag must cover to dismiss (exit)
+ * the reader on release when it was not a fast flick. ~0.18 = a fifth-screen
+ * pull-down.
+ */
+export const SWIPE_DOWN_COMMIT_FRACTION = 0.18;
+
+/**
+ * Downward release velocity (px/ms) at or above which a flick dismisses the
+ * reader even if the drag was short — provided it still cleared
+ * {@link SWIPE_DOWN_MIN_PX}.
+ */
+export const SWIPE_DOWN_VELOCITY_THRESHOLD = 0.5;
+
+/**
+ * Minimum downward travel (px) before a fast flick may dismiss. Keeps a quick
+ * tap-flick with a few pixels of downward jitter from exiting by accident.
+ */
+export const SWIPE_DOWN_MIN_PX = 64;
+
+export interface DownwardExitInput {
+  /** Signed horizontal drag at release (px). */
+  dragX: number;
+  /** Signed vertical drag at release (px). Positive = finger moved down. */
+  dragY: number;
+  /** Signed vertical release velocity (px/ms). Positive = moving down. */
+  velocityYPxPerMs: number;
+  /** Reader viewport height (px), used for the distance threshold. */
+  viewportHeight: number;
+}
+
+/**
+ * Decide whether a released drag is a deliberate downward fling that should
+ * dismiss (exit) the reader.
+ *
+ * Requires the drag to move downward and be vertical-dominant (so a horizontal
+ * page-turn swipe never doubles as an exit), then commits when it either covered
+ * at least {@link SWIPE_DOWN_COMMIT_FRACTION} of the viewport height OR was a
+ * fast downward flick that still cleared {@link SWIPE_DOWN_MIN_PX}.
+ */
+export function isDownwardExit({
+  dragX,
+  dragY,
+  velocityYPxPerMs,
+  viewportHeight,
+}: DownwardExitInput): boolean {
+  if (dragY <= 0) return false; // must travel downward
+  if (dragY <= Math.abs(dragX)) return false; // vertical-dominant
+  const far = dragY >= SWIPE_DOWN_COMMIT_FRACTION * viewportHeight;
+  const flick =
+    velocityYPxPerMs >= SWIPE_DOWN_VELOCITY_THRESHOLD &&
+    dragY >= SWIPE_DOWN_MIN_PX;
+  return far || flick;
+}

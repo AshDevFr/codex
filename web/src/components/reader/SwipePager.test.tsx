@@ -46,6 +46,7 @@ interface Handlers {
   onNext: ReturnType<typeof vi.fn>;
   onPrev: ReturnType<typeof vi.fn>;
   onTap: ReturnType<typeof vi.fn>;
+  onExit: ReturnType<typeof vi.fn>;
 }
 
 const renderPager = (
@@ -54,6 +55,7 @@ const renderPager = (
     readingDirection?: ReadingDirection;
     prev?: boolean;
     next?: boolean;
+    isContentPannable?: () => boolean;
   } = {},
 ): { root: HTMLElement; handlers: Handlers } => {
   const {
@@ -61,11 +63,13 @@ const renderPager = (
     readingDirection = "ltr",
     prev = true,
     next = true,
+    isContentPannable,
   } = opts;
   const handlers: Handlers = {
     onNext: vi.fn(),
     onPrev: vi.fn(),
     onTap: vi.fn(),
+    onExit: vi.fn(),
   };
 
   const { container } = renderWithProviders(
@@ -78,8 +82,10 @@ const renderPager = (
       onNext={handlers.onNext}
       onPrev={handlers.onPrev}
       onTap={handlers.onTap}
+      onExit={handlers.onExit}
       enabled={enabled}
       duration={DURATION}
+      isContentPannable={isContentPannable}
     />,
   );
 
@@ -123,6 +129,19 @@ const drag = async (root: HTMLElement, startX: number, endX: number) => {
   await fire(root, "pointermove", midX, 300, 100);
   await fire(root, "pointermove", endX, 300, 200);
   await fire(root, "pointerup", endX, 300, 300);
+};
+
+/** Drag vertically from startY to endY at x=500, then release. */
+const dragVertical = async (
+  root: HTMLElement,
+  startY: number,
+  endY: number,
+) => {
+  const midY = (startY + endY) / 2;
+  await fire(root, "pointerdown", 500, startY, 0);
+  await fire(root, "pointermove", 500, midY, 100);
+  await fire(root, "pointermove", 500, endY, 200);
+  await fire(root, "pointerup", 500, endY, 300);
 };
 
 describe("SwipePager", () => {
@@ -198,6 +217,29 @@ describe("SwipePager", () => {
     });
     expect(handlers.onNext).not.toHaveBeenCalled();
     expect(handlers.onPrev).not.toHaveBeenCalled();
+  });
+
+  it("exits the reader on a downward fling", async () => {
+    const { root, handlers } = renderPager();
+
+    // Drop from near the top to near the bottom (VIEWPORT_H = 600).
+    await dragVertical(root, 80, 520);
+
+    expect(handlers.onExit).toHaveBeenCalledTimes(1);
+    // A downward fling must not turn the page or fire a tap.
+    expect(handlers.onNext).not.toHaveBeenCalled();
+    expect(handlers.onPrev).not.toHaveBeenCalled();
+    expect(handlers.onTap).not.toHaveBeenCalled();
+  });
+
+  it("does not exit on a downward fling when the content is pannable", async () => {
+    const { root, handlers } = renderPager({
+      isContentPannable: () => true,
+    });
+
+    await dragVertical(root, 80, 520);
+
+    expect(handlers.onExit).not.toHaveBeenCalled();
   });
 
   it("routes a center tap to onTap, not navigation", async () => {

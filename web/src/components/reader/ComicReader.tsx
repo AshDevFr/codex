@@ -1042,6 +1042,7 @@ export function ComicReader({
           onNext={handlePaginatedNext}
           onPrev={handlePaginatedPrev}
           onTap={toggleToolbar}
+          onExit={onClose}
           enabled={!settingsOpened}
           duration={transitionDuration}
           isContentPannable={isContentHorizontallyPannable}

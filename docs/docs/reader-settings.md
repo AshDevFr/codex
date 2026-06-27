@@ -222,6 +222,8 @@ On touch devices, drag a page sideways to turn it: the page follows your finger 
 
 The gesture only applies to **paged comic modes** (single and double page); webtoon and continuous-scroll modes navigate by scrolling. While a page is zoomed in, a one-finger drag pans the page instead of turning it.
 
+**Swipe down** anywhere on the page to exit the reader, a quick alternative to revealing the toolbar and pressing the close button. A deliberate downward fling (far enough, or a fast flick) is required, so it won't trigger on small vertical movements. Like turning pages, it's disabled while the page is zoomed or panned.
+
 Enabled by default. Turn it off to use tap-only navigation.
 
 ### Pinch and Double-Tap to Zoom

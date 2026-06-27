@@ -5,6 +5,7 @@ import {
 } from "@/store/readerStore";
 import {
   classifyTapZone,
+  isDownwardExit,
   isHorizontalDrag,
   isTap,
   SWIPE_ACTIVATION_PX,
@@ -32,6 +33,12 @@ export interface SwipeHandlers {
   onEnd?: (dragPx: number, dragY: number, velocityPxPerMs: number) => void;
   /** Called when the gesture is cancelled mid-drag (system interruption). */
   onCancel?: () => void;
+  /**
+   * Called when a release was a deliberate downward fling (vertical-dominant,
+   * past threshold) rather than a horizontal page turn. Used to exit the reader.
+   * Never fires while panning/zoomed (that drag is captured as a pan instead).
+   */
+  onSwipeDown?: () => void;
 }
 
 /**
@@ -105,11 +112,12 @@ interface GestureState {
   startY: number;
   /** True once a swipe was vetoed (over-wide fit) — suppresses re-arming. */
   vetoed: boolean;
-  /** Last move position (both axes) + x-velocity sample window. */
+  /** Last move position (both axes) + velocity sample window. */
   lastX: number;
   lastY: number;
   lastT: number;
   prevX: number;
+  prevY: number;
   prevT: number;
   /** The two pointers tracked during a pinch, and their last separation. */
   pinchA: number | null;
@@ -127,6 +135,7 @@ const INITIAL_GESTURE: GestureState = {
   lastY: 0,
   lastT: 0,
   prevX: 0,
+  prevY: 0,
   prevT: 0,
   pinchA: null,
   pinchB: null,
@@ -315,6 +324,7 @@ export function useTouchNav({
       lastY: e.clientY,
       lastT: e.timeStamp,
       prevX: e.clientX,
+      prevY: e.clientY,
       prevT: e.timeStamp,
     };
   }, []);
@@ -365,6 +375,7 @@ export function useTouchNav({
 
     // Roll the velocity / last-position window forward.
     state.prevX = state.lastX;
+    state.prevY = state.lastY;
     state.prevT = state.lastT;
     state.lastX = e.clientX;
     state.lastY = e.clientY;
@@ -432,6 +443,7 @@ export function useTouchNav({
       // Release velocity from the last two samples (px/ms); 0 if we lack a window.
       const dt = state.lastT - state.prevT;
       const velocity = dt > 0 ? (state.lastX - state.prevX) / dt : 0;
+      const velocityY = dt > 0 ? (state.lastY - state.prevY) / dt : 0;
 
       gestureState.current = { ...INITIAL_GESTURE };
       if (!cfg.enabled) return;
@@ -446,7 +458,27 @@ export function useTouchNav({
         cfg.swipe?.onEnd?.(deltaX, deltaY, velocity);
         return;
       }
-      if (!isTap(deltaX, deltaY)) return;
+      if (!isTap(deltaX, deltaY)) {
+        // The drag never armed as a horizontal page turn (and we are not
+        // panning a zoomed page — that path is captured as `pan` above). A
+        // deliberate downward fling exits the reader.
+        const sw = cfg.swipe;
+        if (sw?.enabled && sw.onSwipeDown) {
+          const viewportHeight =
+            elementRef.current?.getBoundingClientRect().height ?? 0;
+          if (
+            isDownwardExit({
+              dragX: deltaX,
+              dragY: deltaY,
+              velocityYPxPerMs: velocityY,
+              viewportHeight,
+            })
+          ) {
+            sw.onSwipeDown();
+          }
+        }
+        return;
+      }
 
       // No double-tap configured: fire the tap action immediately (no delay).
       const onDoubleTap = cfg.zoom?.onDoubleTap;

@@ -41,6 +41,11 @@ export interface SwipePagerProps {
   onPrev: () => void;
   /** Tap callback (toolbar toggle for center taps, via the tap-zone logic). */
   onTap: () => void;
+  /**
+   * Exit the reader. Wired to a deliberate downward fling (swipe down to
+   * dismiss). Skipped when the page is pannable/zoomed (that drag pans instead).
+   */
+  onExit?: () => void;
   /** Master switch for finger-drag paging. When false, only tap navigation runs. */
   enabled: boolean;
   /** Snap animation duration in ms. */
@@ -89,6 +94,7 @@ export function SwipePager({
   onNext,
   onPrev,
   onTap,
+  onExit,
   enabled,
   duration = DEFAULT_SNAP_DURATION,
   isContentPannable,
@@ -251,6 +257,13 @@ export function SwipePager({
     setAnim({ index: 1, animate: true });
   }, [clearCommitTimer]);
 
+  const handleSwipeDown = useCallback(() => {
+    // A downward fling exits the reader, but not while the page is pannable
+    // (over-wide fit / pinch-zoom), where the same drag pans the content.
+    if (pannable()) return;
+    onExit?.();
+  }, [pannable, onExit]);
+
   const { touchRef } = useTouchNav({
     enabled,
     onNextPage: onNext,
@@ -264,6 +277,7 @@ export function SwipePager({
           onMove: handleDragMove,
           onEnd: handleDragEnd,
           onCancel: handleDragCancel,
+          onSwipeDown: onExit ? handleSwipeDown : undefined,
         }
       : undefined,
     zoom: enabled
