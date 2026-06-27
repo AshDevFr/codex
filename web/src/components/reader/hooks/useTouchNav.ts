@@ -54,6 +54,24 @@ export interface ZoomHandlers {
   onPinch: (scaleRatio: number, focus: { x: number; y: number }) => void;
   /** The pinch gesture ended (dropped below two fingers). */
   onPinchEnd?: () => void;
+  /**
+   * Double-tap with the focal point (relative to element center). When set, every
+   * single tap is held briefly ({@link DOUBLE_TAP_MS}) to disambiguate, so taps
+   * incur a small delay.
+   */
+  onDoubleTap?: (focus: { x: number; y: number }) => void;
+}
+
+/** Max gap (ms) between two taps to count as a double-tap. */
+const DOUBLE_TAP_MS = 280;
+/** Max distance (px) between two taps to count as a double-tap. */
+const DOUBLE_TAP_DIST = 40;
+
+interface PendingTap {
+  timer: ReturnType<typeof setTimeout>;
+  x: number;
+  y: number;
+  t: number;
 }
 
 export interface UseTouchNavOptions {
@@ -187,6 +205,7 @@ export function useTouchNav({
 
   const gestureState = useRef<GestureState>({ ...INITIAL_GESTURE });
   const pointersRef = useRef<Map<number, Pt>>(new Map());
+  const tapPendingRef = useRef<PendingTap | null>(null);
   const elementRef = useRef<HTMLElement | null>(null);
 
   // Stash live config in a ref so the attached listeners (whose identity is
@@ -213,6 +232,46 @@ export function useTouchNav({
       zoom,
     };
   });
+
+  // Resolve a tap at the given client point to its action (tap zone nav, or
+  // toolbar toggle). Reads fresh config so it works when deferred for double-tap.
+  const fireTapAt = useCallback((clientX: number, clientY: number) => {
+    const cfg = configRef.current;
+    // While zoomed, a single tap never navigates — it only toggles the toolbar,
+    // so an edge tap can't accidentally turn the page out from under the zoom.
+    if (cfg.zoom?.panActive?.()) {
+      cfg.onTap?.();
+      return;
+    }
+    if (!cfg.tapZones) {
+      cfg.onTap?.();
+      return;
+    }
+    const element = elementRef.current;
+    if (!element) {
+      cfg.onTap?.();
+      return;
+    }
+    const rect = element.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) {
+      cfg.onTap?.();
+      return;
+    }
+    const zone = classifyTapZone(
+      clientX - rect.left,
+      clientY - rect.top,
+      rect.width,
+      rect.height,
+      { readingDirection: cfg.readingDirection },
+    );
+    if (zone === "center") {
+      cfg.onTap?.();
+    } else if (zone === "next") {
+      cfg.nextPage();
+    } else {
+      cfg.prevPage();
+    }
+  }, []);
 
   const handlePointerDown = useCallback((e: PointerEvent) => {
     const cfg = configRef.current;
@@ -346,78 +405,91 @@ export function useTouchNav({
     if (e.cancelable) e.preventDefault();
   }, []);
 
-  const handlePointerUp = useCallback((e: PointerEvent) => {
-    const cfg = configRef.current;
-    const pointers = pointersRef.current;
-    pointers.delete(e.pointerId);
-    const state = gestureState.current;
+  const handlePointerUp = useCallback(
+    (e: PointerEvent) => {
+      const cfg = configRef.current;
+      const pointers = pointersRef.current;
+      pointers.delete(e.pointerId);
+      const state = gestureState.current;
 
-    if (state.mode === "pinch") {
-      if (pointers.size < 2) {
-        cfg.zoom?.onPinchEnd?.();
-        // Ignore any finger still down until a full release.
-        gestureState.current = { ...INITIAL_GESTURE };
+      if (state.mode === "pinch") {
+        if (pointers.size < 2) {
+          cfg.zoom?.onPinchEnd?.();
+          // Ignore any finger still down until a full release.
+          gestureState.current = { ...INITIAL_GESTURE };
+        }
+        return;
       }
-      return;
-    }
 
-    if (state.pointerId === null || state.pointerId !== e.pointerId) {
-      if (pointers.size === 0) gestureState.current = { ...INITIAL_GESTURE };
-      return;
-    }
+      if (state.pointerId === null || state.pointerId !== e.pointerId) {
+        if (pointers.size === 0) gestureState.current = { ...INITIAL_GESTURE };
+        return;
+      }
 
-    const deltaX = e.clientX - state.startX;
-    const deltaY = e.clientY - state.startY;
-    const mode = state.mode;
-    // Release velocity from the last two samples (px/ms); 0 if we lack a window.
-    const dt = state.lastT - state.prevT;
-    const velocity = dt > 0 ? (state.lastX - state.prevX) / dt : 0;
+      const deltaX = e.clientX - state.startX;
+      const deltaY = e.clientY - state.startY;
+      const mode = state.mode;
+      // Release velocity from the last two samples (px/ms); 0 if we lack a window.
+      const dt = state.lastT - state.prevT;
+      const velocity = dt > 0 ? (state.lastX - state.prevX) / dt : 0;
 
-    gestureState.current = { ...INITIAL_GESTURE };
-    if (!cfg.enabled) return;
+      gestureState.current = { ...INITIAL_GESTURE };
+      if (!cfg.enabled) return;
 
-    if (mode === "pan") {
-      releasePointer(elementRef.current, e.pointerId);
-      cfg.zoom?.onPanEnd?.();
-      return;
-    }
-    if (mode === "swipe") {
-      releasePointer(elementRef.current, e.pointerId);
-      cfg.swipe?.onEnd?.(deltaX, deltaY, velocity);
-      return;
-    }
-    if (!isTap(deltaX, deltaY)) return;
+      if (mode === "pan") {
+        releasePointer(elementRef.current, e.pointerId);
+        cfg.zoom?.onPanEnd?.();
+        return;
+      }
+      if (mode === "swipe") {
+        releasePointer(elementRef.current, e.pointerId);
+        cfg.swipe?.onEnd?.(deltaX, deltaY, velocity);
+        return;
+      }
+      if (!isTap(deltaX, deltaY)) return;
 
-    if (!cfg.tapZones) {
-      cfg.onTap?.();
-      return;
-    }
+      // No double-tap configured: fire the tap action immediately (no delay).
+      const onDoubleTap = cfg.zoom?.onDoubleTap;
+      if (!onDoubleTap) {
+        fireTapAt(e.clientX, e.clientY);
+        return;
+      }
 
-    const element = elementRef.current;
-    if (!element) {
-      cfg.onTap?.();
-      return;
-    }
-    const rect = element.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0) {
-      cfg.onTap?.();
-      return;
-    }
-    const zone = classifyTapZone(
-      e.clientX - rect.left,
-      e.clientY - rect.top,
-      rect.width,
-      rect.height,
-      { readingDirection: cfg.readingDirection },
-    );
-    if (zone === "center") {
-      cfg.onTap?.();
-    } else if (zone === "next") {
-      cfg.nextPage();
-    } else {
-      cfg.prevPage();
-    }
-  }, []);
+      // A second tap close in time + space to the first is a double-tap: cancel the
+      // first tap's deferred action and zoom instead.
+      const pending = tapPendingRef.current;
+      if (
+        pending &&
+        e.timeStamp - pending.t <= DOUBLE_TAP_MS &&
+        Math.hypot(e.clientX - pending.x, e.clientY - pending.y) <=
+          DOUBLE_TAP_DIST
+      ) {
+        clearTimeout(pending.timer);
+        tapPendingRef.current = null;
+        const el = elementRef.current;
+        let focus = { x: 0, y: 0 };
+        if (el) {
+          const rect = el.getBoundingClientRect();
+          focus = {
+            x: e.clientX - (rect.left + rect.width / 2),
+            y: e.clientY - (rect.top + rect.height / 2),
+          };
+        }
+        onDoubleTap(focus);
+        return;
+      }
+
+      // First tap: defer the action so a following tap can upgrade it to a zoom.
+      const x = e.clientX;
+      const y = e.clientY;
+      const timer = setTimeout(() => {
+        tapPendingRef.current = null;
+        fireTapAt(x, y);
+      }, DOUBLE_TAP_MS);
+      tapPendingRef.current = { timer, x, y, t: e.timeStamp };
+    },
+    [fireTapAt],
+  );
 
   const handlePointerCancel = useCallback((e: PointerEvent) => {
     const cfg = configRef.current;
@@ -489,6 +561,10 @@ export function useTouchNav({
 
   useEffect(() => {
     return () => {
+      if (tapPendingRef.current) {
+        clearTimeout(tapPendingRef.current.timer);
+        tapPendingRef.current = null;
+      }
       if (elementRef.current) {
         elementRef.current.removeEventListener(
           "pointerdown",

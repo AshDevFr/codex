@@ -108,6 +108,7 @@ export function SwipePager({
     pinch,
     panBy,
     reset: resetZoom,
+    doubleTap,
     isZoomedNow,
   } = usePinchZoom({
     viewportRef: rootRef,
@@ -251,6 +252,8 @@ export function SwipePager({
           panActive: isZoomedNow,
           onPan: panBy,
           onPinch: pinch,
+          // Double-tap zooms in to the point (or back out to fit when zoomed).
+          onDoubleTap: doubleTap,
         }
       : undefined,
   });

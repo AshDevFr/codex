@@ -64,6 +64,24 @@ describe("usePinchZoom", () => {
     expect(content.style.transform).toContain("translate3d(500px, 400px, 0)");
   });
 
+  it("double-tap zooms in at fit and resets when already zoomed", () => {
+    const { viewportRef, contentRef, content } = makeRefs();
+    const { result } = renderHook(() =>
+      usePinchZoom({ viewportRef, contentRef }),
+    );
+
+    // At fit: double-tap zooms in (animated).
+    act(() => result.current.doubleTap({ x: 0, y: 0 }));
+    expect(result.current.isZoomedNow()).toBe(true);
+    expect(content.style.transform).toContain("scale(2.5)");
+    expect(content.style.transition).toContain("transform");
+
+    // Already zoomed: double-tap returns to fit.
+    act(() => result.current.doubleTap({ x: 0, y: 0 }));
+    expect(result.current.isZoomedNow()).toBe(false);
+    expect(content.style.transform).toContain("scale(1)");
+  });
+
   it("resets to fit", () => {
     const { viewportRef, contentRef, content } = makeRefs();
     const { result } = renderHook(() =>

@@ -206,6 +206,11 @@ describe("SwipePager", () => {
     await fire(root, "pointerdown", 500, 300, 0);
     await fire(root, "pointerup", 500, 300, 0);
 
+    // Taps are held briefly to detect a double-tap (zoom); advance past it.
+    await act(async () => {
+      vi.advanceTimersByTime(300);
+    });
+
     expect(handlers.onTap).toHaveBeenCalledTimes(1);
     expect(handlers.onNext).not.toHaveBeenCalled();
     expect(handlers.onPrev).not.toHaveBeenCalled();
@@ -242,6 +247,23 @@ describe("SwipePager", () => {
     expect(zoomEl().style.transform).toContain("scale(2.5)");
     // Neighbors are not wrapped in the zoom element, so they stay at fit.
     expect(screen.getByText("prev").parentElement?.style.transform).toBe("");
+  });
+
+  it("double-tap zooms the page in, then back out to fit", async () => {
+    const { root } = renderPager();
+
+    const doubleTap = async (x: number, y: number, base: number) => {
+      await fire(root, "pointerdown", x, y, base, 1);
+      await fire(root, "pointerup", x, y, base, 1);
+      await fire(root, "pointerdown", x, y, base + 80, 1);
+      await fire(root, "pointerup", x, y, base + 80, 1);
+    };
+
+    await doubleTap(500, 300, 0);
+    expect(zoomEl().style.transform).toContain("scale(2.5)");
+
+    await doubleTap(500, 300, 1000);
+    expect(zoomEl().style.transform).toContain("scale(1)");
   });
 
   it("pans instead of turning the page while zoomed", async () => {

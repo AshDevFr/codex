@@ -27,6 +27,7 @@ describe("useTouchNav", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     document.body.removeChild(element);
   });
 
@@ -131,6 +132,7 @@ describe("useTouchNav", () => {
       onPanEnd: vi.fn(),
       onPinch: vi.fn(),
       onPinchEnd: vi.fn(),
+      onDoubleTap: vi.fn(),
     });
 
     const mountZoom = (
@@ -245,6 +247,58 @@ describe("useTouchNav", () => {
       await dispatch("pointerup", 600, 500, 50, { pointerId: 2 });
 
       expect(zoom.onPinchEnd).toHaveBeenCalledTimes(1);
+    });
+
+    it("detects a double-tap and suppresses the single-tap action", async () => {
+      vi.useFakeTimers();
+      stubRect(900, 600);
+      const zoom = makeZoom();
+      mountZoom(makeSwipe(), zoom);
+
+      // Two quick taps at the same point (center).
+      await dispatch("pointerdown", 450, 300, 0);
+      await dispatch("pointerup", 450, 300, 0);
+      await dispatch("pointerdown", 450, 300, 100);
+      await dispatch("pointerup", 450, 300, 100);
+
+      expect(zoom.onDoubleTap).toHaveBeenCalledTimes(1);
+      // The first tap's deferred action is cancelled.
+      vi.advanceTimersByTime(400);
+      expect(mockTap).not.toHaveBeenCalled();
+    });
+
+    it("defers a lone tap until the double-tap window passes", async () => {
+      vi.useFakeTimers();
+      stubRect(900, 600);
+      const zoom = makeZoom();
+      mountZoom(makeSwipe(), zoom);
+
+      await dispatch("pointerdown", 450, 300, 0);
+      await dispatch("pointerup", 450, 300, 0);
+      expect(mockTap).not.toHaveBeenCalled(); // held to detect a double
+
+      await act(async () => {
+        vi.advanceTimersByTime(300);
+      });
+      expect(mockTap).toHaveBeenCalledTimes(1); // center tap → toolbar
+      expect(zoom.onDoubleTap).not.toHaveBeenCalled();
+    });
+
+    it("a single tap only toggles the toolbar (never navigates) while zoomed", async () => {
+      vi.useFakeTimers();
+      stubRect(900, 600);
+      const zoom = makeZoom(true); // panActive → zoomed
+      mountZoom(makeSwipe(), zoom);
+
+      // Tap in the right (next) zone.
+      await dispatch("pointerdown", 800, 300, 0);
+      await dispatch("pointerup", 800, 300, 0);
+      await act(async () => {
+        vi.advanceTimersByTime(300);
+      });
+
+      expect(mockTap).toHaveBeenCalledTimes(1);
+      expect(mockNextPage).not.toHaveBeenCalled();
     });
   });
 

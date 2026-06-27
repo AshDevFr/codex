@@ -21,13 +21,19 @@ export interface PinchZoomController {
   pinch: (scaleRatio: number, focus: Point) => void;
   /** Pan by an incremental delta (no-op at fit scale). */
   panBy: (dx: number, dy: number) => void;
-  /** Reset to fit (scale 1, centered). */
-  reset: () => void;
+  /** Reset to fit (scale 1, centered). `animate` for a smooth zoom-out. */
+  reset: (animate?: boolean) => void;
+  /** Double-tap toggle: animate in to `focus` when at fit, or out to fit when zoomed. */
+  doubleTap: (focus: Point) => void;
   /** Whether the page is currently zoomed in (read synchronously, ref-backed). */
   isZoomedNow: () => boolean;
 }
 
 const ZOOM_EPSILON = 0.01;
+/** Target scale for a double-tap zoom-in. */
+const DOUBLE_TAP_SCALE = 2.5;
+/** Duration of the animated double-tap zoom (ms). */
+const ZOOM_ANIM_MS = 200;
 
 /**
  * Content-only zoom controller. Holds the page transform in a ref and writes it
@@ -45,11 +51,14 @@ export function usePinchZoom({
   const transformRef = useRef<ZoomTransform>(IDENTITY);
 
   const write = useCallback(
-    (next: ZoomTransform) => {
+    (next: ZoomTransform, animate = false) => {
       transformRef.current = next;
       const el = contentRef.current;
       if (el) {
         el.style.transformOrigin = "center center";
+        el.style.transition = animate
+          ? `transform ${ZOOM_ANIM_MS}ms ease-out`
+          : "none";
         el.style.transform = `translate3d(${next.tx}px, ${next.ty}px, 0) scale(${next.scale})`;
       }
     },
@@ -91,12 +100,31 @@ export function usePinchZoom({
     [measure, write],
   );
 
-  const reset = useCallback(() => write(IDENTITY), [write]);
+  const reset = useCallback(
+    (animate = false) => write(IDENTITY, animate),
+    [write],
+  );
 
   const isZoomedNow = useCallback(
     () => transformRef.current.scale > MIN_SCALE + ZOOM_EPSILON,
     [],
   );
 
-  return { pinch, panBy, reset, isZoomedNow };
+  const doubleTap = useCallback(
+    (focus: Point) => {
+      if (isZoomedNow()) {
+        reset(true);
+        return;
+      }
+      // Zoom in to the tapped point.
+      const zoomed = focalZoom(transformRef.current, focus, DOUBLE_TAP_SCALE);
+      write(
+        { scale: zoomed.scale, ...clampPan(zoomed, zoomed.scale, measure()) },
+        true,
+      );
+    },
+    [isZoomedNow, reset, measure, write],
+  );
+
+  return { pinch, panBy, reset, doubleTap, isZoomedNow };
 }
