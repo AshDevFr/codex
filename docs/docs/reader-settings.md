@@ -220,9 +220,22 @@ When enabled, the toolbar automatically hides after a period of inactivity. Move
 
 On touch devices, drag a page sideways to turn it: the page follows your finger and snaps to the next or previous page when you release (based on how far you dragged or how fast you flicked). Reading direction is respected, so in right-to-left (manga) mode the gesture is mirrored, and double-page spreads move as a unit. Tap-zone navigation (tap the left/right edge) and the center-tap toolbar toggle keep working alongside it.
 
-The gesture only applies to **paged comic modes** (single and double page); webtoon and continuous-scroll modes navigate by scrolling. It also yields to the browser when the page is zoomed in or a fit mode makes the page wider than the screen, so you can pinch-zoom and pan without accidentally turning the page.
+The gesture only applies to **paged comic modes** (single and double page); webtoon and continuous-scroll modes navigate by scrolling. While a page is zoomed in, a one-finger drag pans the page instead of turning it.
 
 Enabled by default. Turn it off to use tap-only navigation.
+
+### Pinch and Double-Tap to Zoom
+
+On touch devices you can zoom into a comic page to inspect detail:
+
+- **Pinch** with two fingers to zoom the page in and out. Only the page image zooms; the toolbar and the rest of the interface stay put.
+- **Double-tap** the page to zoom in toward the point you tapped. Double-tap again (or pinch back) to return to fit.
+- **Drag** with one finger while zoomed to pan around the page. Panning is bounded to the page edges.
+- Zoom **resets to fit when you turn the page**, and a single tap while zoomed only toggles the toolbar (it won't turn the page out from under you).
+
+Because the reader controls zoom itself, the browser's own pinch/double-tap zoom (which would scale the whole interface and, on iOS, could get stuck) is disabled while you're reading. Page zoom is part of the touch reader, so it works together with **Swipe to Turn Pages** (both are on by default). Zoom applies to paged comic modes (single and double page); the native PDF and EPUB readers have their own zoom and font controls.
+
+To detect a double-tap, single taps are held for a fraction of a second, so tap-to-turn and the toolbar toggle feel slightly less immediate when zoom is active.
 
 ### End-of-Book Transition
 
