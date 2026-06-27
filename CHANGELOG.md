@@ -2,6 +2,20 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.39.9] - 2026-06-27
+
+### 🚀 Features
+
+- *(reader)* Swipe down to exit the comic reader
+
+### 🐛 Bug Fixes
+
+- *(reader)* Prevent swipe page-turn from flashing the previous page
+
+### ⚙️ Miscellaneous Tasks
+
+- Ignore .codex and .env files
+
 ## [1.39.8] - 2026-06-27
 
 ### 🚀 Features
