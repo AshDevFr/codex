@@ -13,6 +13,7 @@ import {
   rubberBand,
   type SnapResult,
 } from "./hooks/swipeGesture";
+import { usePinchZoom } from "./hooks/usePinchZoom";
 import { useTouchNav } from "./hooks/useTouchNav";
 
 /** Default snap-back / page-turn animation duration (ms). */
@@ -93,11 +94,25 @@ export function SwipePager({
 }: SwipePagerProps) {
   const rootRef = useRef<HTMLElement | null>(null);
   const trackRef = useRef<HTMLDivElement | null>(null);
+  const zoomContentRef = useRef<HTMLDivElement | null>(null);
   const draggingRef = useRef(false);
   const commitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevPageKeyRef = useRef(pageKey);
 
   const [anim, setAnim] = useState<AnimState>(CENTERED);
+
+  // Content-only zoom for the current page (pinch + pan). The transform is
+  // written imperatively to the current slide; `isZoomedNow` lets the gesture
+  // layer route a one-finger drag to pan (zoomed) vs page-turn (fit).
+  const {
+    pinch,
+    panBy,
+    reset: resetZoom,
+    isZoomedNow,
+  } = usePinchZoom({
+    viewportRef: rootRef,
+    contentRef: zoomContentRef,
+  });
 
   const isRtl = readingDirection === "rtl";
   // Visual left→right order. In RTL the "next" page sits on the left.
@@ -128,7 +143,10 @@ export function SwipePager({
     clearCommitTimer();
     draggingRef.current = false;
     setAnim(CENTERED);
-  }, [pageKey, clearCommitTimer]);
+    // A new page always starts at fit; reset before paint so it never flashes
+    // the previous page's zoom.
+    resetZoom();
+  }, [pageKey, clearCommitTimer, resetZoom]);
 
   useLayoutEffect(() => () => clearCommitTimer(), [clearCommitTimer]);
 
@@ -227,6 +245,14 @@ export function SwipePager({
           onCancel: handleDragCancel,
         }
       : undefined,
+    zoom: enabled
+      ? {
+          // When zoomed, a one-finger drag pans the page instead of turning it.
+          panActive: isZoomedNow,
+          onPan: panBy,
+          onPinch: pinch,
+        }
+      : undefined,
   });
 
   const setRootRef = useCallback(
@@ -245,8 +271,10 @@ export function SwipePager({
         width: "100%",
         height: "100%",
         overflow: "hidden",
-        // Let native vertical scroll through; we own horizontal for the drag.
-        touchAction: enabled ? "pan-y" : "manipulation",
+        // We own all touch on the page (swipe, pan, pinch), so take the gestures
+        // outright. This also avoids the browser's pan-y direction-disambiguation
+        // latency, making the drag track the finger immediately.
+        touchAction: enabled ? "none" : "manipulation",
       }}
     >
       <Box
@@ -275,7 +303,22 @@ export function SwipePager({
               overflow: "hidden",
             }}
           >
-            {slot}
+            {/* Only the center slot is the current page and carries the zoom
+                transform; neighbors always render at fit. */}
+            {i === 1 ? (
+              <Box
+                ref={zoomContentRef}
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  willChange: "transform",
+                }}
+              >
+                {slot}
+              </Box>
+            ) : (
+              slot
+            )}
           </Box>
         ))}
       </Box>

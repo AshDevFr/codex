@@ -7,7 +7,7 @@ import {
   classifyTapZone,
   isHorizontalDrag,
   isTap,
-  TAP_TOLERANCE,
+  SWIPE_ACTIVATION_PX,
 } from "./swipeGesture";
 
 /**
@@ -34,6 +34,28 @@ export interface SwipeHandlers {
   onCancel?: () => void;
 }
 
+/**
+ * Content-zoom callbacks. When provided, the hook also recognizes two-finger
+ * pinch and (while `panActive` returns true, i.e. the page is zoomed) one-finger
+ * pan. Pinch/pan take priority over swipe: a second finger aborts an in-flight
+ * swipe, and while panning a one-finger drag never turns the page.
+ */
+export interface ZoomHandlers {
+  /** When true, a one-finger drag pans the page (zoomed) instead of swiping. */
+  panActive: () => boolean;
+  /** Incremental pan delta since the previous move, in px. */
+  onPan: (dx: number, dy: number) => void;
+  /** The pan gesture ended (finger lifted). */
+  onPanEnd?: () => void;
+  /**
+   * Two-finger pinch step: the incremental scale ratio since the last move and
+   * the focal point (the pinch midpoint, relative to the element center).
+   */
+  onPinch: (scaleRatio: number, focus: { x: number; y: number }) => void;
+  /** The pinch gesture ended (dropped below two fingers). */
+  onPinchEnd?: () => void;
+}
+
 export interface UseTouchNavOptions {
   /** Whether pointer/touch navigation is enabled */
   enabled?: boolean;
@@ -50,35 +72,59 @@ export interface UseTouchNavOptions {
   tapZones?: boolean;
   /** Optional live swipe (finger-drag paging) handlers. */
   swipe?: SwipeHandlers;
+  /** Optional content-zoom (pinch + pan) handlers. */
+  zoom?: ZoomHandlers;
 }
 
+type GestureMode = "none" | "swipe" | "pan" | "pinch";
+
 interface GestureState {
+  /** Recognized gesture. `none` = a single pointer is down but not yet armed. */
+  mode: GestureMode;
+  /** The primary single-finger pointer (swipe/pan/tap origin). */
   pointerId: number | null;
   startX: number;
   startY: number;
-  /** True once a horizontal drag has armed (swipe in progress). */
-  armed: boolean;
-  /** True once a drag was vetoed (pannable/zoomed) — suppresses re-arming. */
+  /** True once a swipe was vetoed (over-wide fit) — suppresses re-arming. */
   vetoed: boolean;
-  /** Most recent sample, for release-velocity estimation. */
+  /** Last move position (both axes) + x-velocity sample window. */
   lastX: number;
+  lastY: number;
   lastT: number;
-  /** Previous sample (the one before `last`). */
   prevX: number;
   prevT: number;
+  /** The two pointers tracked during a pinch, and their last separation. */
+  pinchA: number | null;
+  pinchB: number | null;
+  pinchLastDist: number;
 }
 
 const INITIAL_GESTURE: GestureState = {
+  mode: "none",
   pointerId: null,
   startX: 0,
   startY: 0,
-  armed: false,
   vetoed: false,
   lastX: 0,
+  lastY: 0,
   lastT: 0,
   prevX: 0,
   prevT: 0,
+  pinchA: null,
+  pinchB: null,
+  pinchLastDist: 0,
 };
+
+interface Pt {
+  x: number;
+  y: number;
+}
+
+const distance = (a: Pt, b: Pt): number => Math.hypot(a.x - b.x, a.y - b.y);
+const midpoint = (a: Pt, b: Pt): Pt => ({
+  x: (a.x + b.x) / 2,
+  y: (a.y + b.y) / 2,
+});
 
 /**
  * Capture the pointer so a fast drag keeps delivering `pointermove` even if the
@@ -106,20 +152,20 @@ function releasePointer(element: HTMLElement | null, pointerId: number): void {
 }
 
 /**
- * Hook for tap navigation in the reader. Click/tap only — we intentionally
- * do not implement swipe gestures; movement above {@link TAP_TOLERANCE} is
- * ignored so the browser keeps its native pan/scroll/back-swipe behavior.
+ * Pointer-gesture hook for the reader page surface. A single multi-touch owner so
+ * tap, swipe (page turn), pan, and pinch never fight: it tracks every active
+ * pointer and recognizes one gesture at a time.
  *
  * Uses Pointer Events so a single code path covers touch (finger), mouse
  * (desktop, Chrome mobile-viewport emulation), and pen input.
  *
- * Tap-zone mapping (when `tapZones` is true, the default):
- * - LTR: left third → prev, middle → toolbar toggle, right third → next.
- * - RTL: mirrored.
- * - TTB / webtoon: top → prev, middle → toolbar, bottom → next.
- *
- * With `tapZones: false`, every tap fires `onTap` (used by continuous-scroll
- * modes where the whole surface is a toolbar toggle).
+ * - **Tap** (no/below-threshold movement): tap zones (when `tapZones`) map
+ *   LTR left→prev / middle→toolbar / right→next (mirrored RTL; vertical for
+ *   TTB/webtoon); with `tapZones: false` every tap fires `onTap`.
+ * - **Swipe** (`swipe` config): a horizontal-dominant one-finger drag turns the
+ *   page; `onStart` may veto it.
+ * - **Pan/pinch** (`zoom` config): two fingers pinch; while `panActive()` a
+ *   one-finger drag pans. These pre-empt swipe.
  *
  * @returns ref to attach to the touchable element
  */
@@ -130,6 +176,7 @@ export function useTouchNav({
   onTap,
   tapZones = true,
   swipe,
+  zoom,
 }: UseTouchNavOptions = {}) {
   const storeNextPage = useReaderStore((state) => state.nextPage);
   const storePrevPage = useReaderStore((state) => state.prevPage);
@@ -139,6 +186,7 @@ export function useTouchNav({
   const prevPage = onPrevPage ?? storePrevPage;
 
   const gestureState = useRef<GestureState>({ ...INITIAL_GESTURE });
+  const pointersRef = useRef<Map<number, Pt>>(new Map());
   const elementRef = useRef<HTMLElement | null>(null);
 
   // Stash live config in a ref so the attached listeners (whose identity is
@@ -151,6 +199,7 @@ export function useTouchNav({
     onTap,
     tapZones,
     swipe,
+    zoom,
   });
   useLayoutEffect(() => {
     configRef.current = {
@@ -161,21 +210,50 @@ export function useTouchNav({
       onTap,
       tapZones,
       swipe,
+      zoom,
     };
   });
 
   const handlePointerDown = useCallback((e: PointerEvent) => {
     const cfg = configRef.current;
     if (!cfg.enabled) return;
-    if (!e.isPrimary) return;
     if (e.pointerType === "mouse" && e.button !== 0) return;
 
+    const pointers = pointersRef.current;
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const state = gestureState.current;
+
+    // Second finger → pinch (only when zoom is configured). Abort any one-finger
+    // gesture already in progress.
+    if (pointers.size >= 2 && cfg.zoom) {
+      if (state.mode === "swipe") cfg.swipe?.onCancel?.();
+      else if (state.mode === "pan") cfg.zoom.onPanEnd?.();
+
+      const ids = Array.from(pointers.keys());
+      const a = ids[0];
+      const b = ids[1];
+      const pa = pointers.get(a);
+      const pb = pointers.get(b);
+      gestureState.current = {
+        ...INITIAL_GESTURE,
+        mode: "pinch",
+        pinchA: a,
+        pinchB: b,
+        pinchLastDist: pa && pb ? distance(pa, pb) : 0,
+      };
+      return;
+    }
+
+    // Single primary pointer → swipe/pan/tap origin.
+    if (!e.isPrimary) return;
     gestureState.current = {
       ...INITIAL_GESTURE,
+      mode: "none",
       pointerId: e.pointerId,
       startX: e.clientX,
       startY: e.clientY,
       lastX: e.clientX,
+      lastY: e.clientY,
       lastT: e.timeStamp,
       prevX: e.clientX,
       prevT: e.timeStamp,
@@ -184,46 +262,113 @@ export function useTouchNav({
 
   const handlePointerMove = useCallback((e: PointerEvent) => {
     const cfg = configRef.current;
+    if (!cfg.enabled) return;
+    const pointers = pointersRef.current;
+    if (pointers.has(e.pointerId)) {
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    }
     const state = gestureState.current;
+
+    // --- Pinch ---
+    if (state.mode === "pinch") {
+      if (!cfg.zoom || state.pinchA === null || state.pinchB === null) return;
+      const pa = pointers.get(state.pinchA);
+      const pb = pointers.get(state.pinchB);
+      if (!pa || !pb) return;
+      const dist = distance(pa, pb);
+      if (state.pinchLastDist > 0 && dist > 0) {
+        const mid = midpoint(pa, pb);
+        const el = elementRef.current;
+        let focus = { x: 0, y: 0 };
+        if (el) {
+          const rect = el.getBoundingClientRect();
+          focus = {
+            x: mid.x - (rect.left + rect.width / 2),
+            y: mid.y - (rect.top + rect.height / 2),
+          };
+        }
+        cfg.zoom.onPinch(dist / state.pinchLastDist, focus);
+      }
+      state.pinchLastDist = dist;
+      if (e.cancelable) e.preventDefault();
+      return;
+    }
+
+    // --- One finger (swipe / pan / pending) ---
     if (state.pointerId === null || state.pointerId !== e.pointerId) return;
     const sw = cfg.swipe;
-    if (!cfg.enabled || !sw?.enabled || state.vetoed) return;
 
     const deltaX = e.clientX - state.startX;
     const deltaY = e.clientY - state.startY;
+    // Incremental pan delta uses the *previous* move position (before rolling).
+    const panDx = e.clientX - state.lastX;
+    const panDy = e.clientY - state.lastY;
 
-    // Roll the velocity sample window forward.
+    // Roll the velocity / last-position window forward.
     state.prevX = state.lastX;
     state.prevT = state.lastT;
     state.lastX = e.clientX;
+    state.lastY = e.clientY;
     state.lastT = e.timeStamp;
 
-    if (!state.armed) {
-      if (!isHorizontalDrag(deltaX, deltaY)) return;
-      // Crossed the activation threshold horizontally: try to arm. A veto (e.g.
-      // the page is pannable/zoomed) leaves native panning untouched.
-      if (sw.onStart && !sw.onStart()) {
-        state.vetoed = true;
+    if (state.mode === "none") {
+      const panActive = cfg.zoom?.panActive?.() ?? false;
+      const movedEnough =
+        Math.abs(deltaX) >= SWIPE_ACTIVATION_PX ||
+        Math.abs(deltaY) >= SWIPE_ACTIVATION_PX;
+
+      if (panActive && cfg.zoom) {
+        if (!movedEnough) return;
+        state.mode = "pan";
+        capturePointer(elementRef.current, e.pointerId);
+        // Start panning on the next move to avoid an initial jump.
+        if (e.cancelable) e.preventDefault();
         return;
       }
-      state.armed = true;
-      capturePointer(elementRef.current, e.pointerId);
+      if (sw?.enabled && !state.vetoed && isHorizontalDrag(deltaX, deltaY)) {
+        if (sw.onStart && !sw.onStart()) {
+          state.vetoed = true;
+          return;
+        }
+        state.mode = "swipe";
+        capturePointer(elementRef.current, e.pointerId);
+        // Fall through to emit this move.
+      } else {
+        return;
+      }
     }
 
-    sw.onMove?.(deltaX, deltaY);
-    // Stop native horizontal scroll/back-swipe from fighting the drag. Requires
-    // a non-passive listener (registered below).
+    if (state.mode === "pan") {
+      cfg.zoom?.onPan(panDx, panDy);
+    } else if (state.mode === "swipe") {
+      sw?.onMove?.(deltaX, deltaY);
+    }
     if (e.cancelable) e.preventDefault();
   }, []);
 
   const handlePointerUp = useCallback((e: PointerEvent) => {
     const cfg = configRef.current;
+    const pointers = pointersRef.current;
+    pointers.delete(e.pointerId);
     const state = gestureState.current;
-    if (state.pointerId === null || state.pointerId !== e.pointerId) return;
+
+    if (state.mode === "pinch") {
+      if (pointers.size < 2) {
+        cfg.zoom?.onPinchEnd?.();
+        // Ignore any finger still down until a full release.
+        gestureState.current = { ...INITIAL_GESTURE };
+      }
+      return;
+    }
+
+    if (state.pointerId === null || state.pointerId !== e.pointerId) {
+      if (pointers.size === 0) gestureState.current = { ...INITIAL_GESTURE };
+      return;
+    }
 
     const deltaX = e.clientX - state.startX;
     const deltaY = e.clientY - state.startY;
-    const wasArmed = state.armed;
+    const mode = state.mode;
     // Release velocity from the last two samples (px/ms); 0 if we lack a window.
     const dt = state.lastT - state.prevT;
     const velocity = dt > 0 ? (state.lastX - state.prevX) / dt : 0;
@@ -231,7 +376,12 @@ export function useTouchNav({
     gestureState.current = { ...INITIAL_GESTURE };
     if (!cfg.enabled) return;
 
-    if (wasArmed) {
+    if (mode === "pan") {
+      releasePointer(elementRef.current, e.pointerId);
+      cfg.zoom?.onPanEnd?.();
+      return;
+    }
+    if (mode === "swipe") {
       releasePointer(elementRef.current, e.pointerId);
       cfg.swipe?.onEnd?.(deltaX, deltaY, velocity);
       return;
@@ -271,14 +421,31 @@ export function useTouchNav({
 
   const handlePointerCancel = useCallback((e: PointerEvent) => {
     const cfg = configRef.current;
+    const pointers = pointersRef.current;
+    pointers.delete(e.pointerId);
     const state = gestureState.current;
-    if (state.pointerId === e.pointerId) {
-      const wasArmed = state.armed;
-      gestureState.current = { ...INITIAL_GESTURE };
-      if (wasArmed) {
-        releasePointer(elementRef.current, e.pointerId);
-        cfg.swipe?.onCancel?.();
+
+    if (state.mode === "pinch") {
+      if (pointers.size < 2) {
+        cfg.zoom?.onPinchEnd?.();
+        gestureState.current = { ...INITIAL_GESTURE };
       }
+      return;
+    }
+
+    if (state.pointerId !== e.pointerId) {
+      if (pointers.size === 0) gestureState.current = { ...INITIAL_GESTURE };
+      return;
+    }
+
+    const mode = state.mode;
+    gestureState.current = { ...INITIAL_GESTURE };
+    if (mode === "pan") {
+      releasePointer(elementRef.current, e.pointerId);
+      cfg.zoom?.onPanEnd?.();
+    } else if (mode === "swipe") {
+      releasePointer(elementRef.current, e.pointerId);
+      cfg.swipe?.onCancel?.();
     }
   }, []);
 

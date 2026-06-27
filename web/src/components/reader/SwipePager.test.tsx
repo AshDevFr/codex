@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReadingDirection } from "@/store/readerStore";
-import { act, renderWithProviders } from "@/test/utils";
+import { act, renderWithProviders, screen } from "@/test/utils";
 import { SwipePager } from "./SwipePager";
 
 /**
@@ -22,6 +22,7 @@ const createPointerEvent = (
   x: number,
   y: number,
   t: number,
+  pointerId = 1,
 ): PointerEvent => {
   const event = new MouseEvent(type, {
     clientX: x,
@@ -34,9 +35,9 @@ const createPointerEvent = (
     pointerType: PointerKind;
     isPrimary: boolean;
   };
-  Object.defineProperty(event, "pointerId", { value: 1 });
+  Object.defineProperty(event, "pointerId", { value: pointerId });
   Object.defineProperty(event, "pointerType", { value: "touch" });
-  Object.defineProperty(event, "isPrimary", { value: true });
+  Object.defineProperty(event, "isPrimary", { value: pointerId === 1 });
   Object.defineProperty(event, "timeStamp", { value: t });
   return event as unknown as PointerEvent;
 };
@@ -104,11 +105,16 @@ const fire = async (
   x: number,
   y: number,
   t: number,
+  pointerId = 1,
 ) => {
   await act(async () => {
-    root.dispatchEvent(createPointerEvent(type, x, y, t));
+    root.dispatchEvent(createPointerEvent(type, x, y, t, pointerId));
   });
 };
+
+/** The element carrying the current page's zoom transform (wraps "current"). */
+const zoomEl = (): HTMLElement =>
+  screen.getByText("current").parentElement as HTMLElement;
 
 /** Drag horizontally from startX to endX at y=300, then release. */
 const drag = async (root: HTMLElement, startX: number, endX: number) => {
@@ -218,5 +224,83 @@ describe("SwipePager", () => {
     expect(handlers.onNext).not.toHaveBeenCalled();
     expect(handlers.onPrev).not.toHaveBeenCalled();
     expect(handlers.onTap).not.toHaveBeenCalled();
+  });
+
+  // Pinch two fingers apart, centered on the viewport, to scale 2.5
+  // (separation 200 → 500 at viewport center 500,300).
+  const pinchOpen = async (root: HTMLElement) => {
+    await fire(root, "pointerdown", 400, 300, 0, 1);
+    await fire(root, "pointerdown", 600, 300, 0, 2);
+    await fire(root, "pointermove", 900, 300, 50, 2);
+  };
+
+  it("pinches to zoom the current page only", async () => {
+    const { root } = renderPager();
+
+    await pinchOpen(root);
+
+    expect(zoomEl().style.transform).toContain("scale(2.5)");
+    // Neighbors are not wrapped in the zoom element, so they stay at fit.
+    expect(screen.getByText("prev").parentElement?.style.transform).toBe("");
+  });
+
+  it("pans instead of turning the page while zoomed", async () => {
+    const { root, handlers } = renderPager();
+
+    await pinchOpen(root);
+    await fire(root, "pointerup", 900, 300, 60, 2);
+    await fire(root, "pointerup", 400, 300, 60, 1);
+
+    const before = zoomEl().style.transform;
+
+    // One-finger horizontal drag: pans (transform changes), does not navigate.
+    await fire(root, "pointerdown", 500, 300, 100, 1);
+    await fire(root, "pointermove", 450, 300, 120, 1);
+    await fire(root, "pointermove", 420, 300, 140, 1);
+    await fire(root, "pointerup", 420, 300, 160, 1);
+
+    await act(async () => {
+      vi.advanceTimersByTime(DURATION);
+    });
+
+    expect(handlers.onNext).not.toHaveBeenCalled();
+    expect(handlers.onPrev).not.toHaveBeenCalled();
+    expect(zoomEl().style.transform).not.toBe(before);
+    expect(zoomEl().style.transform).toContain("scale(2.5)");
+  });
+
+  it("resets zoom when the page changes", async () => {
+    const props = {
+      current: <div>current</div>,
+      prev: <div>prev</div>,
+      next: <div>next</div>,
+      readingDirection: "ltr" as ReadingDirection,
+      onNext: vi.fn(),
+      onPrev: vi.fn(),
+      onTap: vi.fn(),
+      enabled: true,
+      duration: DURATION,
+    };
+    const { container, rerender } = renderWithProviders(
+      <SwipePager {...props} pageKey="5" />,
+    );
+    const root = container.querySelector("div") as HTMLElement;
+    vi.spyOn(root, "getBoundingClientRect").mockReturnValue({
+      left: 0,
+      top: 0,
+      right: VIEWPORT_W,
+      bottom: VIEWPORT_H,
+      width: VIEWPORT_W,
+      height: VIEWPORT_H,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+
+    await pinchOpen(root);
+    expect(zoomEl().style.transform).toContain("scale(2.5)");
+
+    rerender(<SwipePager {...props} pageKey="6" />);
+    expect(zoomEl().style.transform).toContain("scale(1)");
   });
 });

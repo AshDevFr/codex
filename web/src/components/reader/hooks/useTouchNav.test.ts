@@ -116,6 +116,138 @@ describe("useTouchNav", () => {
     });
   };
 
+  describe("zoom (pinch/pan) plumbing", () => {
+    const makeSwipe = () => ({
+      enabled: true,
+      onStart: vi.fn(() => true),
+      onMove: vi.fn(),
+      onEnd: vi.fn(),
+      onCancel: vi.fn(),
+    });
+
+    const makeZoom = (panActive = false) => ({
+      panActive: vi.fn(() => panActive),
+      onPan: vi.fn(),
+      onPanEnd: vi.fn(),
+      onPinch: vi.fn(),
+      onPinchEnd: vi.fn(),
+    });
+
+    const mountZoom = (
+      swipe: ReturnType<typeof makeSwipe>,
+      zoom: ReturnType<typeof makeZoom>,
+    ) => {
+      const { result } = renderHook(() =>
+        useTouchNav({
+          enabled: true,
+          onNextPage: mockNextPage,
+          onPrevPage: mockPrevPage,
+          onTap: mockTap,
+          swipe,
+          zoom,
+        }),
+      );
+      act(() => {
+        result.current.touchRef(element);
+      });
+    };
+
+    const stubRect = (w = 1000, h = 1000) => {
+      vi.spyOn(element, "getBoundingClientRect").mockReturnValue({
+        left: 0,
+        top: 0,
+        right: w,
+        bottom: h,
+        width: w,
+        height: h,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      });
+    };
+
+    it("emits pinch with the incremental scale ratio and focal point", async () => {
+      stubRect();
+      const zoom = makeZoom();
+      mountZoom(makeSwipe(), zoom);
+
+      // Two fingers 200px apart, centered horizontally.
+      await dispatch("pointerdown", 400, 500, 0, { pointerId: 1 });
+      await dispatch("pointerdown", 600, 500, 0, {
+        pointerId: 2,
+        isPrimary: false,
+      });
+      // Spread the second finger to 300px separation.
+      await dispatch("pointermove", 700, 500, 50, { pointerId: 2 });
+
+      expect(zoom.onPinch).toHaveBeenCalledTimes(1);
+      const [ratio, focus] = zoom.onPinch.mock.calls[0];
+      expect(ratio).toBeCloseTo(1.5); // 300 / 200
+      // Midpoint (550,500) relative to element center (500,500).
+      expect(focus.x).toBeCloseTo(50);
+      expect(focus.y).toBeCloseTo(0);
+    });
+
+    it("pans with incremental deltas when panActive, not swipe", async () => {
+      const swipe = makeSwipe();
+      const zoom = makeZoom(true);
+      mountZoom(swipe, zoom);
+
+      await dispatch("pointerdown", 300, 300, 0, { pointerId: 1 });
+      // First move past activation arms pan (no pan emitted yet).
+      await dispatch("pointermove", 320, 330, 16, { pointerId: 1 });
+      // Subsequent move emits the incremental delta.
+      await dispatch("pointermove", 340, 360, 32, { pointerId: 1 });
+
+      expect(zoom.onPan).toHaveBeenCalledTimes(1);
+      expect(zoom.onPan).toHaveBeenCalledWith(20, 30);
+      expect(swipe.onMove).not.toHaveBeenCalled();
+
+      await dispatch("pointerup", 340, 360, 48, { pointerId: 1 });
+      expect(zoom.onPanEnd).toHaveBeenCalledTimes(1);
+      expect(swipe.onEnd).not.toHaveBeenCalled();
+    });
+
+    it("a second finger aborts an in-flight swipe and starts pinch", async () => {
+      stubRect();
+      const swipe = makeSwipe();
+      const zoom = makeZoom();
+      mountZoom(swipe, zoom);
+
+      // Arm a swipe with one finger.
+      await dispatch("pointerdown", 200, 300, 0, { pointerId: 1 });
+      await dispatch("pointermove", 260, 300, 50, { pointerId: 1 });
+      expect(swipe.onMove).toHaveBeenCalled();
+
+      // Second finger lands → swipe aborts, pinch begins.
+      await dispatch("pointerdown", 500, 300, 60, {
+        pointerId: 2,
+        isPrimary: false,
+      });
+      expect(swipe.onCancel).toHaveBeenCalledTimes(1);
+
+      await dispatch("pointermove", 560, 300, 80, { pointerId: 2 });
+      expect(zoom.onPinch).toHaveBeenCalled();
+      // The aborted swipe must not also end.
+      expect(swipe.onEnd).not.toHaveBeenCalled();
+    });
+
+    it("ends the pinch when a finger lifts", async () => {
+      stubRect();
+      const zoom = makeZoom();
+      mountZoom(makeSwipe(), zoom);
+
+      await dispatch("pointerdown", 400, 500, 0, { pointerId: 1 });
+      await dispatch("pointerdown", 600, 500, 0, {
+        pointerId: 2,
+        isPrimary: false,
+      });
+      await dispatch("pointerup", 600, 500, 50, { pointerId: 2 });
+
+      expect(zoom.onPinchEnd).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe("swipe (live drag) plumbing", () => {
     const makeSwipe = () => ({
       enabled: true,
