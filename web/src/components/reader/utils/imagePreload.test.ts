@@ -82,6 +82,19 @@ describe("preloadImage", () => {
     await expect(promise).resolves.toBe(created[0]);
   });
 
+  it("skips decode() and waits on load when decode is disabled", async () => {
+    const decode = vi.fn(() => Promise.resolve());
+    const created = stubImage(() => new FakeImage(decode));
+
+    const promise = preloadImage("/page/5.jpg", { decode: false });
+    // decode() must not be used; resolution comes from the load event.
+    expect(decode).not.toHaveBeenCalled();
+    created[0].fireLoad();
+
+    await expect(promise).resolves.toBe(created[0]);
+    expect(decode).not.toHaveBeenCalled();
+  });
+
   it("rejects when the image fails to load", async () => {
     const created = stubImage(() => new FakeImage(undefined));
 

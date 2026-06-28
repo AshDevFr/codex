@@ -886,18 +886,22 @@ export function ComicReader({
       (p) => p >= 1 && p <= totalPages,
     );
 
-    // Preload, decode, and track each image, also detecting orientation if not
-    // already known. Decoding (not just fetching) means a swipe to a preloaded
-    // neighbour paints instantly instead of flashing the page background while
-    // the browser decodes it on reveal.
+    // Decoding (not just fetching) lets a swipe to a neighbour paint instantly
+    // instead of flashing the page background while the browser decodes on
+    // reveal. But a decoded page is a full uncompressed bitmap (tens of MB), so
+    // decoding the whole preload window exhausts memory and crashes the tab on
+    // phones. Fetch the wide window (cheap, compressed) but decode only the
+    // immediate neighbours the filmstrip can actually reveal next.
+    const decodeRadius = pageLayout === "double" ? 2 : 1;
+
+    // Preload and track each image, also detecting orientation if not already
+    // known (hasOrientationsLoaded means the API gave us every page's size).
     for (const pageNum of validPages) {
       const url = getPageUrl(pageNum);
-      preloadImage(url)
+      const decode = Math.abs(pageNum - currentPage) <= decodeRadius;
+      preloadImage(url, { decode })
         .then((img) => {
           addPreloadedImage(url);
-          // Only detect orientation from the preloaded image if we don't already
-          // have it from the backend (hasOrientationsLoaded means the API gave us
-          // every page's dimensions).
           if (!hasOrientationsLoaded) {
             const orientation =
               img.naturalWidth > img.naturalHeight ? "landscape" : "portrait";
