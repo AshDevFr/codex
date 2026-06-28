@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.39.10] - 2026-06-28
+
+### 🐛 Bug Fixes
+
+- *(reader)* Fix swipe page-turn flash and missing snap-back
+
 ## [1.39.9] - 2026-06-27
 
 ### 🚀 Features
