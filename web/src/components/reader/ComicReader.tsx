@@ -780,6 +780,19 @@ export function ComicReader({
       ? displayPages.map((p) => p.pageNumber).join("-")
       : String(currentPage);
 
+  // Identity of the neighbor spreads, in the same page-number format as
+  // `pagedKey`. Used as the filmstrip slide keys so that when a turn commits, the
+  // neighbor that becomes the new current is matched by key and its decoded image
+  // node is moved into the center rather than re-loaded (which flashes the old
+  // page). The next spread's key here equals the current spread's key after the
+  // turn, which is exactly what lets React reuse the node.
+  const prevPagedKey = prevSpreadPages
+    ? prevSpreadPages.map((p) => p.pageNumber).join("-")
+    : undefined;
+  const nextPagedKey = nextSpreadPages
+    ? nextSpreadPages.map((p) => p.pageNumber).join("-")
+    : undefined;
+
   // Render the page content for one filmstrip slide (single page or double spread).
   const renderSpreadSlide = useCallback(
     (slidePages: { pageNumber: number; src: string }[]) =>
@@ -1038,6 +1051,8 @@ export function ComicReader({
           prev={prevSpreadPages ? renderSpreadSlide(prevSpreadPages) : null}
           next={nextSpreadPages ? renderSpreadSlide(nextSpreadPages) : null}
           pageKey={pagedKey}
+          prevKey={prevPagedKey}
+          nextKey={nextPagedKey}
           readingDirection={readingDirection}
           onNext={handlePaginatedNext}
           onPrev={handlePaginatedPrev}

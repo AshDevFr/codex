@@ -33,6 +33,15 @@ export interface SwipePagerProps {
    * committed turn lands seamlessly.
    */
   pageKey: string;
+  /**
+   * Identity of the previous spread, used as the filmstrip slide's React key so a
+   * committed turn moves the already-rendered (decoded) slide into the center
+   * instead of swapping the centered slot's image source (which re-decodes and
+   * briefly flashes the previous page). Falls back to a stable edge key when null.
+   */
+  prevKey?: string;
+  /** Identity of the next spread; see {@link prevKey}. */
+  nextKey?: string;
   /** Reading direction; flips the visual slot order and swipe polarity for RTL. */
   readingDirection: ReadingDirection;
   /** Turn to the next spread (e.g. the reader's paginated-next handler). */
@@ -90,6 +99,8 @@ export function SwipePager({
   prev,
   next,
   pageKey,
+  prevKey,
+  nextKey,
   readingDirection,
   onNext,
   onPrev,
@@ -123,12 +134,20 @@ export function SwipePager({
   });
 
   const isRtl = readingDirection === "rtl";
-  // Visual left→right order. In RTL the "next" page sits on the left.
-  const slots: (ReactNode | null)[] = isRtl
-    ? [next, current, prev]
-    : [prev, current, next];
-  const visualLeftPresent = slots[0] != null;
-  const visualRightPresent = slots[2] != null;
+  // Visual left→right order. In RTL the "next" page sits on the left. Each slide
+  // is keyed by its page identity (not its fixed position) so that when a turn
+  // commits, the slide that was a neighbor and becomes the new current is *moved*
+  // into the center slot by React — keeping its already-decoded <img>. Keying by
+  // position instead would reuse the center slot and swap its image source, which
+  // re-decodes on production and briefly flashes the previous page.
+  const currentSlide = { key: pageKey, node: current };
+  const prevSlide = { key: prevKey ?? "edge-prev", node: prev };
+  const nextSlide = { key: nextKey ?? "edge-next", node: next };
+  const orderedSlides = isRtl
+    ? [nextSlide, currentSlide, prevSlide]
+    : [prevSlide, currentSlide, nextSlide];
+  const visualLeftPresent = orderedSlides[0].node != null;
+  const visualRightPresent = orderedSlides[2].node != null;
 
   const rootWidth = useCallback(
     () => rootRef.current?.getBoundingClientRect().width ?? 0,
@@ -201,6 +220,26 @@ export function SwipePager({
     [rootWidth, visualLeftPresent, visualRightPresent],
   );
 
+  // Start the snap (or snap-back) animation imperatively. The live drag writes
+  // the track transform straight to the DOM (bypassing React for per-frame
+  // perf), so React's model goes stale. A `setAnim` that then computes the same
+  // transform string React last rendered — notably snapping back to the centered
+  // slot (index 1) after a sub-threshold drag — would be skipped by
+  // reconciliation, parking the track at the dragged offset (no snap-back).
+  // Writing the target transform here guarantees the animation always runs;
+  // `setAnim` keeps React's model in sync for subsequent renders.
+  const animateTrackTo = useCallback(
+    (index: number) => {
+      const track = trackRef.current;
+      if (track) {
+        track.style.transition = `transform ${duration}ms ease-out`;
+        track.style.transform = trackTransform(index, 0);
+      }
+      setAnim({ index, animate: true });
+    },
+    [duration],
+  );
+
   const handleDragEnd = useCallback(
     (dragPx: number, _dragY: number, velocityPxPerMs: number) => {
       draggingRef.current = false;
@@ -215,14 +254,14 @@ export function SwipePager({
       });
 
       if (result === "stay") {
-        setAnim({ index: 1, animate: true });
+        animateTrackTo(1);
         return;
       }
 
       const goNext = result === "next";
       // Map the logical turn to a visual slot: next is on the right (LTR) / left (RTL).
       const visualTarget = (isRtl ? !goNext : goNext) ? 2 : 0;
-      setAnim({ index: visualTarget, animate: true });
+      animateTrackTo(visualTarget);
 
       clearCommitTimer();
       commitTimerRef.current = setTimeout(() => {
@@ -248,14 +287,15 @@ export function SwipePager({
       onPrev,
       duration,
       clearCommitTimer,
+      animateTrackTo,
     ],
   );
 
   const handleDragCancel = useCallback(() => {
     draggingRef.current = false;
     clearCommitTimer();
-    setAnim({ index: 1, animate: true });
-  }, [clearCommitTimer]);
+    animateTrackTo(1);
+  }, [clearCommitTimer, animateTrackTo]);
 
   const handleSwipeDown = useCallback(() => {
     // A downward fling exits the reader, but not while the page is pannable
@@ -327,12 +367,11 @@ export function SwipePager({
           willChange: "transform",
         }}
       >
-        {slots.map((slot, i) => (
+        {orderedSlides.map((slide, i) => (
           <Box
-            // Slot position is stable (visual-left / center / visual-right); the
-            // content inside changes with navigation.
-            // biome-ignore lint/suspicious/noArrayIndexKey: fixed 3-slot filmstrip
-            key={i}
+            // Keyed by page identity so a committed turn moves the slide (and its
+            // decoded image) into place rather than re-sourcing a fixed slot.
+            key={slide.key}
             style={{
               flex: "0 0 100%",
               width: "100%",
@@ -340,22 +379,20 @@ export function SwipePager({
               overflow: "hidden",
             }}
           >
-            {/* Only the center slot is the current page and carries the zoom
-                transform; neighbors always render at fit. */}
-            {i === 1 ? (
-              <Box
-                ref={zoomContentRef}
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  willChange: "transform",
-                }}
-              >
-                {slot}
-              </Box>
-            ) : (
-              slot
-            )}
+            {/* Every slide uses the same inner wrapper, so a slide moving from a
+                neighbor into the center keeps its DOM node (and decoded image)
+                instead of remounting. Only the centered slide carries the live
+                zoom transform via the ref; neighbors render at fit. */}
+            <Box
+              ref={i === 1 ? zoomContentRef : undefined}
+              style={{
+                width: "100%",
+                height: "100%",
+                willChange: "transform",
+              }}
+            >
+              {slide.node}
+            </Box>
           </Box>
         ))}
       </Box>

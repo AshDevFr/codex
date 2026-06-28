@@ -195,6 +195,33 @@ describe("SwipePager", () => {
     expect(handlers.onPrev).not.toHaveBeenCalled();
   });
 
+  it("resets the track to centered after a sub-threshold drag (snap back)", async () => {
+    const { root } = renderPager();
+    const track = (screen.getByText("current").parentElement as HTMLElement)
+      .parentElement?.parentElement as HTMLElement;
+
+    // Arm a drag (so the track is offset imperatively), then release short.
+    await fire(root, "pointerdown", 500, 300, 0);
+    await fire(root, "pointermove", 470, 300, 100); // dx = -30, offsets the track
+    await fire(root, "pointerup", 460, 300, 200); // dx = -40, stays
+
+    // The release must drive the track back to the centered slot, not leave it
+    // parked at the dragged offset.
+    expect(track.style.transform).toBe("translate3d(calc(-100% + 0px), 0, 0)");
+  });
+
+  it("resets the track to centered when a drag is cancelled", async () => {
+    const { root } = renderPager();
+    const track = (screen.getByText("current").parentElement as HTMLElement)
+      .parentElement?.parentElement as HTMLElement;
+
+    await fire(root, "pointerdown", 500, 300, 0);
+    await fire(root, "pointermove", 470, 300, 100); // offsets the track
+    await fire(root, "pointercancel", 470, 300, 120);
+
+    expect(track.style.transform).toBe("translate3d(calc(-100% + 0px), 0, 0)");
+  });
+
   it("flips polarity in RTL (leftward drag = prev)", async () => {
     const { root, handlers } = renderPager({ readingDirection: "rtl" });
 
@@ -240,6 +267,49 @@ describe("SwipePager", () => {
     await dragVertical(root, 80, 520);
 
     expect(handlers.onExit).not.toHaveBeenCalled();
+  });
+
+  it("preserves the committed slide's DOM node so its image is not reloaded", () => {
+    // The page just turned to (the old `next`) becomes the new `current`. Its
+    // already-decoded <img> must move into the center slot, not be torn down and
+    // re-created (which re-decodes and flashes the previous page on production).
+    const shared = {
+      readingDirection: "ltr" as ReadingDirection,
+      onNext: vi.fn(),
+      onPrev: vi.fn(),
+      onTap: vi.fn(),
+      enabled: true,
+      duration: DURATION,
+    };
+    const { container, rerender } = renderWithProviders(
+      <SwipePager
+        {...shared}
+        current={<div>A</div>}
+        prev={null}
+        next={<div data-testid="slide-B">B</div>}
+        pageKey="A"
+        nextKey="B"
+      />,
+    );
+    const root = container.querySelector("div") as HTMLElement;
+    expect(root).toBeTruthy();
+    const bBefore = screen.getByTestId("slide-B");
+
+    // Commit the turn: B is now current, A is prev, C is the new next.
+    rerender(
+      <SwipePager
+        {...shared}
+        current={<div data-testid="slide-B">B</div>}
+        prev={<div>A</div>}
+        next={<div>C</div>}
+        pageKey="B"
+        prevKey="A"
+        nextKey="C"
+      />,
+    );
+
+    // Same DOM element, moved to the center — not a re-created node.
+    expect(screen.getByTestId("slide-B")).toBe(bBefore);
   });
 
   it("routes a center tap to onTap, not navigation", async () => {
