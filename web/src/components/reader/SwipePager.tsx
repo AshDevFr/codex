@@ -65,9 +65,12 @@ export interface SwipePagerProps {
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(Math.max(value, min), max);
 
-/** translate3d for the track given the centered slot index and a live drag offset. */
+// 2D translateX (not translate3d) so the strip isn't forced onto its own GPU
+// layer. Compositing the full-resolution page image as a persistent layer is
+// expensive on WebKit at each turn and buys nothing here; leaving the strip
+// un-promoted keeps turns cheaper.
 const trackTransform = (index: number, dragPx: number): string =>
-  `translate3d(calc(${-index * 100}% + ${dragPx}px), 0, 0)`;
+  `translateX(calc(${-index * 100}% + ${dragPx}px))`;
 
 /** The centered slot: 0 = visual-left, 1 = current, 2 = visual-right. */
 const CENTER_INDEX = 1;
@@ -348,7 +351,8 @@ export function SwipePager({
           // `transform` / `transition` are deliberately NOT set here: they are
           // written imperatively (see `setTrack`) so a re-render can never
           // clobber an in-flight drag, snap, or re-center with a stale value.
-          willChange: "transform",
+          // No `will-change`: see `trackTransform` — promoting the large page
+          // image to a persistent composited layer is costly on WebKit.
         }}
       >
         {orderedSlides.map((slide, i) => (
@@ -372,7 +376,6 @@ export function SwipePager({
               style={{
                 width: "100%",
                 height: "100%",
-                willChange: "transform",
               }}
             >
               {slide.node}

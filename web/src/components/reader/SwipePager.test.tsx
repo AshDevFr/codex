@@ -207,7 +207,7 @@ describe("SwipePager", () => {
 
     // The release must drive the track back to the centered slot, not leave it
     // parked at the dragged offset.
-    expect(track.style.transform).toBe("translate3d(calc(-100% + 0px), 0, 0)");
+    expect(track.style.transform).toBe("translateX(calc(-100% + 0px))");
   });
 
   it("resets the track to centered when a drag is cancelled", async () => {
@@ -219,7 +219,7 @@ describe("SwipePager", () => {
     await fire(root, "pointermove", 470, 300, 100); // offsets the track
     await fire(root, "pointercancel", 470, 300, 120);
 
-    expect(track.style.transform).toBe("translate3d(calc(-100% + 0px), 0, 0)");
+    expect(track.style.transform).toBe("translateX(calc(-100% + 0px))");
   });
 
   it("flips polarity in RTL (leftward drag = prev)", async () => {
@@ -354,15 +354,11 @@ describe("SwipePager", () => {
     // Arm a drag and offset the strip by -50px.
     await fire(root, "pointerdown", 500, 300, 0);
     await fire(root, "pointermove", 450, 300, 50);
-    expect(track.style.transform).toBe(
-      "translate3d(calc(-100% + -50px), 0, 0)",
-    );
+    expect(track.style.transform).toBe("translateX(calc(-100% + -50px))");
 
     // A re-render with unchanged navigation must leave the drag offset intact.
     rerender(<SwipePager {...shared} {...slides} />);
-    expect(track.style.transform).toBe(
-      "translate3d(calc(-100% + -50px), 0, 0)",
-    );
+    expect(track.style.transform).toBe("translateX(calc(-100% + -50px))");
   });
 
   it("routes a center tap to onTap, not navigation", async () => {
@@ -483,7 +479,7 @@ describe("SwipePager", () => {
     rerender(<SwipePager {...props} pageKey="6" />);
 
     expect(track.style.transition).toBe("none");
-    expect(track.style.transform).toBe("translate3d(calc(-100% + 0px), 0, 0)");
+    expect(track.style.transform).toBe("translateX(calc(-100% + 0px))");
     expect(root).toBeTruthy();
   });
 
