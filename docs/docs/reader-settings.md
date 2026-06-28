@@ -228,13 +228,16 @@ Enabled by default. Turn it off to use tap-only navigation.
 
 ### Downscale Pages
 
-Some comics are scanned at very high resolution (e.g. 3000+ px wide). Rendering an image that large into a much smaller area is expensive for the browser, and on Safari / iOS it can cause a brief flicker on each page turn. **Downscale Pages** asks the server to resize each page down to roughly your screen size before sending it, so turns render quickly and you also download less data.
+Some comics are scanned at very high resolution (e.g. 3000+ px wide), which is far more than a phone or tablet can display. **Downscale Pages** asks the server to resize each page down to roughly your screen size before sending it, so you download less data and use less memory.
 
 - Applies to **comic archives (CBZ/CBR)** only; EPUB and PDF are unaffected.
-- It's a quality/speed trade-off: pages are slightly softer, most noticeable if you pinch-zoom. It is **not** applied in the `original` fit mode, where native pixels are the point.
-- The server resizes on demand and your browser caches the result, so the work happens once per page.
+- It's a data/quality trade-off: pages are slightly softer, most noticeable if you pinch-zoom. It is **not** applied in the `original` fit mode, where native pixels are the point.
 
-Disabled by default. Turn it on if page turns feel laggy or flicker on large scans.
+:::warning
+The server resizes each page **on demand with no cache**, so enabling this can noticeably **slow page loading**, especially with a large preload window. It saves bandwidth and memory; it does **not** make page turns smoother. Leave it off unless you specifically need to reduce data usage.
+:::
+
+Disabled by default.
 
 ### Pinch and Double-Tap to Zoom
 

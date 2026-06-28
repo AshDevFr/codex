@@ -360,14 +360,19 @@ export function ReaderSettings({
           />
         </Group>
 
-        <Group justify="space-between">
-          <Box>
+        <Group justify="space-between" align="flex-start" wrap="nowrap">
+          <Box style={{ flex: 1, minWidth: 0 }}>
             <Text size="sm" fw={500}>
               Downscale pages
             </Text>
             <Text size="xs" c="dimmed">
-              Load display-sized images for smoother turns on large scans
-              (CBZ/CBR; slightly softer, more so when zoomed)
+              Download smaller, display-sized images to save bandwidth and
+              memory (CBZ/CBR only). Pages look slightly softer, more so when
+              zoomed.
+            </Text>
+            <Text size="xs" c="orange.6" mt={4}>
+              ⚠ The server resizes each page on demand (no cache), which can
+              noticeably slow page loading. Leave off unless you need it.
             </Text>
           </Box>
           <Switch

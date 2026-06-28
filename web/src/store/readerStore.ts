@@ -274,10 +274,13 @@ export interface ReaderSettings {
 
   /**
    * Request display-sized (downscaled) page images from the server instead of
-   * full resolution, for smoother page turns on large scans (notably WebKit).
-   * Comic archives (CBZ/CBR) only; not applied in `original` fit mode, where
-   * native pixels are the point. Trades a little sharpness (more noticeable when
-   * pinch-zoomed) for speed. Global preference. Default: off.
+   * full resolution, to save bandwidth and memory on large scans. Comic archives
+   * (CBZ/CBR) only; not applied in `original` fit mode, where native pixels are
+   * the point. Trades a little sharpness (more noticeable when pinch-zoomed).
+   *
+   * Note: the server resizes per request with no cache, so enabling this can
+   * noticeably slow page loading. It does NOT affect page-turn smoothness.
+   * Global preference. Default: off.
    */
   downscalePages: boolean;
 }
