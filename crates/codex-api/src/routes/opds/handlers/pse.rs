@@ -1,13 +1,13 @@
 use super::super::dto::{OpdsEntry, OpdsFeed, OpdsLink};
 use crate::require_permission;
-use crate::routes::v1::handlers::get_page_image;
+use crate::routes::v1::handlers::{PageImageQuery, get_page_image};
 use crate::{
     error::ApiError,
     extractors::{AuthContext, AuthState, FlexibleAuthContext},
     permissions::Permission,
 };
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::{HeaderMap, StatusCode, header},
     response::{IntoResponse, Response},
 };
@@ -164,12 +164,14 @@ pub async fn book_page_image(
             .await;
     }
 
-    // Delegate to the v1 page image handler for actual image serving
+    // Delegate to the v1 page image handler for actual image serving. OPDS always
+    // serves the original page (no downscale).
     get_page_image(
         State(state),
         FlexibleAuthContext(auth),
         headers,
         Path((book_id, page_number)),
+        Query(PageImageQuery { width: None }),
     )
     .await
 }

@@ -108,6 +108,7 @@ export function ReaderSettings({
   const setSwipeNavigation = useReaderStore(
     (state) => state.setSwipeNavigation,
   );
+  const setDownscalePages = useReaderStore((state) => state.setDownscalePages);
 
   // Global setters for reading direction override (used when updating series metadata)
   const setReadingDirectionOverride = useReaderStore(
@@ -356,6 +357,24 @@ export function ReaderSettings({
             aria-label="Swipe to turn pages"
             checked={globalSettings.swipeNavigation}
             onChange={(e) => setSwipeNavigation(e.currentTarget.checked)}
+          />
+        </Group>
+
+        <Group justify="space-between">
+          <Box>
+            <Text size="sm" fw={500}>
+              Downscale pages
+            </Text>
+            <Text size="xs" c="dimmed">
+              Load display-sized images for smoother turns on large scans
+              (CBZ/CBR; slightly softer, more so when zoomed)
+            </Text>
+          </Box>
+          <Switch
+            size="sm"
+            aria-label="Downscale pages"
+            checked={globalSettings.downscalePages}
+            onChange={(e) => setDownscalePages(e.currentTarget.checked)}
           />
         </Group>
 

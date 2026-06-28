@@ -24588,7 +24588,10 @@ export interface operations {
     };
     get_page_image: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Downscale CBZ/CBR pages to at most this width (px); other formats ignore it */
+                width?: number;
+            };
             header?: never;
             path: {
                 /** @description Book ID */

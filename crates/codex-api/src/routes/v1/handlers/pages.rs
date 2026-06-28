@@ -6,7 +6,7 @@ use crate::{
 };
 use axum::{
     body::Body,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::{HeaderMap, StatusCode, header},
     response::Response,
 };
@@ -14,10 +14,27 @@ use codex_db::repositories::{BookCoversRepository, BookRepository, PageRepositor
 use codex_utils::{DeadlineResult, with_deadline};
 use httpdate::fmt_http_date;
 use image::{ImageFormat, imageops::FilterType};
+use serde::Deserialize;
 use std::io::Cursor;
 use std::sync::Arc;
 use std::time::{Duration, UNIX_EPOCH};
 use uuid::Uuid;
+
+/// Lower/upper bounds for the optional `?width` page downscale, guarding against
+/// pathological values. Anything outside is clamped; a width at or above the
+/// source width is a no-op (the original is served untouched).
+const MIN_DOWNSCALE_WIDTH: u32 = 320;
+const MAX_DOWNSCALE_WIDTH: u32 = 6000;
+
+/// Query parameters for the page image endpoint.
+#[derive(Debug, Deserialize)]
+pub struct PageImageQuery {
+    /// Optional target width in pixels. When set and the book is a comic archive
+    /// (CBZ/CBR), the page is downscaled to at most this width, preserving aspect
+    /// ratio, and re-encoded as JPEG. Downscale-only: a source no wider than this
+    /// is served untouched. Other formats ignore it.
+    pub width: Option<u32>,
+}
 
 /// Placeholder SVG for thumbnails that are being generated or don't exist
 /// This is a simple gray rectangle with a book icon, loaded from assets at compile time
@@ -33,7 +50,8 @@ const PLACEHOLDER_SVG: &[u8] = include_bytes!("../../../../../../assets/placehol
     path = "/api/v1/books/{book_id}/pages/{page_number}",
     params(
         ("book_id" = Uuid, Path, description = "Book ID"),
-        ("page_number" = i32, Path, description = "Page number (1-indexed)")
+        ("page_number" = i32, Path, description = "Page number (1-indexed)"),
+        ("width" = Option<u32>, Query, description = "Downscale CBZ/CBR pages to at most this width (px); other formats ignore it")
     ),
     responses(
         (status = 200, description = "Page image", content_type = "image/jpeg"),
@@ -52,6 +70,7 @@ pub async fn get_page_image(
     FlexibleAuthContext(auth): FlexibleAuthContext,
     headers: HeaderMap,
     Path((book_id, page_number)): Path<(Uuid, i32)>,
+    Query(query): Query<PageImageQuery>,
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::PagesRead)?;
 
@@ -130,6 +149,34 @@ pub async fn get_page_image(
         detect_content_type(&image_data)
     };
 
+    // Optional, opt-in, no-cache downscale. Only comic archives (CBZ/CBR) are
+    // resized — EPUB/PDF are served as-is. Only requests that pass `?width`
+    // (i.e. the reader's "downscale pages" setting) pay for it; the variant is
+    // distinguished by URL, so the browser caches it per device. Trades a little
+    // CPU for far cheaper rendering of oversized pages (notably on WebKit).
+    let is_archive = matches!(book.format.to_uppercase().as_str(), "CBZ" | "CBR");
+    let (image_data, content_type) = match query.width {
+        Some(width) if is_archive => {
+            let target = width.clamp(MIN_DOWNSCALE_WIDTH, MAX_DOWNSCALE_WIDTH);
+            // Clone the (compressed) bytes for the blocking resize so the original
+            // is still available if the source is already small enough or resize fails.
+            match downscale_to_width(image_data.clone(), target).await {
+                Ok(Some(resized)) => (resized, "image/jpeg"),
+                Ok(None) => (image_data, content_type),
+                Err(e) => {
+                    tracing::warn!(
+                        %book_id,
+                        page = page_number,
+                        error = %e,
+                        "page downscale failed; serving original"
+                    );
+                    (image_data, content_type)
+                }
+            }
+        }
+        _ => (image_data, content_type),
+    };
+
     // Build response with caching headers
     Ok(Response::builder()
         .status(StatusCode::OK)
@@ -138,6 +185,36 @@ pub async fn get_page_image(
         .header(header::CONTENT_LENGTH, image_data.len())
         .body(Body::from(image_data))
         .unwrap())
+}
+
+/// Downscale `image_data` so it is at most `target_width` px wide (preserving
+/// aspect ratio) and re-encode it as JPEG. Returns `Ok(None)` when the source is
+/// already no wider than `target_width`, so the caller serves the original
+/// untouched. Runs the CPU-heavy decode/resize/encode off the async runtime.
+async fn downscale_to_width(
+    image_data: Vec<u8>,
+    target_width: u32,
+) -> anyhow::Result<Option<Vec<u8>>> {
+    tokio::task::spawn_blocking(move || downscale_to_width_sync(&image_data, target_width))
+        .await
+        .map_err(|e| anyhow::anyhow!("Task join error: {}", e))?
+}
+
+/// Synchronous core of {@link downscale_to_width} (runs inside `spawn_blocking`).
+fn downscale_to_width_sync(
+    image_data: &[u8],
+    target_width: u32,
+) -> anyhow::Result<Option<Vec<u8>>> {
+    let img = image::load_from_memory(image_data)?;
+    if img.width() <= target_width {
+        return Ok(None);
+    }
+    // `u32::MAX` height lets the width constraint drive the (aspect-preserving) scale.
+    let resized = img.resize(target_width, u32::MAX, FilterType::Lanczos3);
+    let mut bytes = Vec::new();
+    let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut bytes, 85);
+    resized.into_rgb8().write_with_encoder(encoder)?;
+    Ok(Some(bytes))
 }
 
 /// Serve a PDF page with streaming and HTTP conditional caching
@@ -716,4 +793,44 @@ async fn extract_page_image(
     })
     .await
     .map_err(|e| anyhow::anyhow!("Task join error: {}", e))?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Encode a solid-colour image of the given size to PNG bytes.
+    fn make_png(width: u32, height: u32) -> Vec<u8> {
+        let img = image::RgbImage::from_pixel(width, height, image::Rgb([120, 130, 140]));
+        let mut bytes = Vec::new();
+        image::DynamicImage::ImageRgb8(img)
+            .write_to(&mut Cursor::new(&mut bytes), ImageFormat::Png)
+            .unwrap();
+        bytes
+    }
+
+    #[test]
+    fn downscales_and_preserves_aspect_when_source_is_wider() {
+        let src = make_png(2000, 3000);
+        let resized = downscale_to_width_sync(&src, 800)
+            .unwrap()
+            .expect("source wider than target should resize");
+        let img = image::load_from_memory(&resized).unwrap();
+        assert_eq!(img.width(), 800);
+        assert!((1190..=1210).contains(&img.height()), "aspect preserved");
+        // Re-encoded as JPEG.
+        assert!(resized.starts_with(&[0xFF, 0xD8, 0xFF]));
+    }
+
+    #[test]
+    fn returns_none_when_source_not_wider_than_target() {
+        let src = make_png(600, 900);
+        assert!(downscale_to_width_sync(&src, 800).unwrap().is_none());
+    }
+
+    #[test]
+    fn returns_none_when_source_equals_target() {
+        let src = make_png(800, 1000);
+        assert!(downscale_to_width_sync(&src, 800).unwrap().is_none());
+    }
 }

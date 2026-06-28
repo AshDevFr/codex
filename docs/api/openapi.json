@@ -5066,6 +5066,17 @@
               "type": "integer",
               "format": "int32"
             }
+          },
+          {
+            "name": "width",
+            "in": "query",
+            "description": "Downscale CBZ/CBR pages to at most this width (px); other formats ignore it",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
           }
         ],
         "responses": {

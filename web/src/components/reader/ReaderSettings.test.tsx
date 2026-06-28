@@ -277,4 +277,30 @@ describe("ReaderSettings", () => {
       expect(toggle).not.toBeChecked();
     });
   });
+
+  describe("Downscale pages toggle", () => {
+    it("reflects the downscalePages setting and toggles it", async () => {
+      const user = userEvent.setup();
+      useReaderStore.setState({
+        settings: {
+          ...useReaderStore.getState().settings,
+          downscalePages: false,
+        },
+      });
+
+      renderWithProviders(
+        <ReaderSettings opened={true} onClose={vi.fn()} format="CBZ" />,
+      );
+
+      const toggle = screen.getByRole("switch", { name: "Downscale pages" });
+      expect(toggle).not.toBeChecked();
+
+      await user.click(toggle);
+
+      await waitFor(() => {
+        expect(useReaderStore.getState().settings.downscalePages).toBe(true);
+      });
+      expect(toggle).toBeChecked();
+    });
+  });
 });

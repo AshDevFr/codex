@@ -226,6 +226,16 @@ The gesture only applies to **paged comic modes** (single and double page); webt
 
 Enabled by default. Turn it off to use tap-only navigation.
 
+### Downscale Pages
+
+Some comics are scanned at very high resolution (e.g. 3000+ px wide). Rendering an image that large into a much smaller area is expensive for the browser, and on Safari / iOS it can cause a brief flicker on each page turn. **Downscale Pages** asks the server to resize each page down to roughly your screen size before sending it, so turns render quickly and you also download less data.
+
+- Applies to **comic archives (CBZ/CBR)** only; EPUB and PDF are unaffected.
+- It's a quality/speed trade-off: pages are slightly softer, most noticeable if you pinch-zoom. It is **not** applied in the `original` fit mode, where native pixels are the point.
+- The server resizes on demand and your browser caches the result, so the work happens once per page.
+
+Disabled by default. Turn it on if page turns feel laggy or flicker on large scans.
+
 ### Pinch and Double-Tap to Zoom
 
 On touch devices you can zoom into a comic page to inspect detail:

@@ -271,6 +271,15 @@ export interface ReaderSettings {
    * a content characteristic (unlike reading direction or page layout). Default: on.
    */
   swipeNavigation: boolean;
+
+  /**
+   * Request display-sized (downscaled) page images from the server instead of
+   * full resolution, for smoother page turns on large scans (notably WebKit).
+   * Comic archives (CBZ/CBR) only; not applied in `original` fit mode, where
+   * native pixels are the point. Trades a little sharpness (more noticeable when
+   * pinch-zoomed) for speed. Global preference. Default: off.
+   */
+  downscalePages: boolean;
 }
 
 export interface ReaderState {
@@ -347,6 +356,7 @@ export interface ReaderState {
   setAutoAdvanceToNextBook: (enabled: boolean) => void;
   setAutoAdvanceSeconds: (seconds: number) => void;
   setSwipeNavigation: (enabled: boolean) => void;
+  setDownscalePages: (enabled: boolean) => void;
 
   // ==========================================================================
   // Actions - Navigation
@@ -440,6 +450,7 @@ const DEFAULT_SETTINGS: ReaderSettings = {
   autoAdvanceToNextBook: false,
   autoAdvanceSeconds: DEFAULT_AUTO_ADVANCE_SECONDS,
   swipeNavigation: true,
+  downscalePages: false,
 };
 
 const FIT_MODE_CYCLE: FitMode[] = [
@@ -644,6 +655,11 @@ export const useReaderStore = create<ReaderState>()(
         setSwipeNavigation: (enabled) =>
           set((state) => {
             state.settings.swipeNavigation = enabled;
+          }),
+
+        setDownscalePages: (enabled) =>
+          set((state) => {
+            state.settings.downscalePages = enabled;
           }),
 
         // ==========================================================================
@@ -943,6 +959,9 @@ export const selectLastNavigationDirection = (
 /** Select whether swipe-to-turn paging is enabled */
 export const selectSwipeNavigation = (state: ReaderState): boolean =>
   state.settings.swipeNavigation;
+
+export const selectDownscalePages = (state: ReaderState): boolean =>
+  state.settings.downscalePages;
 
 // =============================================================================
 // Hydration Hook

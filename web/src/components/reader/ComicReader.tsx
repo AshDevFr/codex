@@ -11,6 +11,7 @@ import { getEffectivePreloadWindow } from "@/lib/offline/prefetchWindow";
 import {
   type FitMode,
   type PageOrientation,
+  selectDownscalePages,
   selectEffectiveReadingDirection,
   selectSwipeNavigation,
   useReaderStore,
@@ -35,6 +36,7 @@ import { ReaderSettings } from "./ReaderSettings";
 import { ReaderToolbar } from "./ReaderToolbar";
 import { SwipePager } from "./SwipePager";
 import { preloadImage } from "./utils/imagePreload";
+import { downscaleWidth } from "./utils/pageDownscale";
 import {
   detectPageOrientation,
   getDisplayOrder,
@@ -144,6 +146,7 @@ export function ComicReader({
   const pageOrientations = useReaderStore((state) => state.pageOrientations);
   const readingDirection = useReaderStore(selectEffectiveReadingDirection);
   const swipeNavigation = useReaderStore(selectSwipeNavigation);
+  const downscalePages = useReaderStore(selectDownscalePages);
 
   // Resolve the active fit mode based on reading direction
   const isWebtoon = readingDirection === "webtoon";
@@ -508,12 +511,28 @@ export function ComicReader({
     if (canGoPrevBook) goToPrevBook();
   }, [canGoPrevBook, goToPrevBook]);
 
-  // Generate page URL
+  // Generate page URL. With "downscale pages" on, request a display-sized image
+  // (cheaper to render, notably on WebKit) except in `original` fit, where native
+  // pixels are the point. The width is bucketed so the URL — and thus the browser
+  // cache and the server's per-request resize — is stable across minor resizes.
   const getPageUrl = useCallback(
     (pageNumber: number) => {
-      return `/api/v1/books/${bookId}/pages/${pageNumber}`;
+      const base = `/api/v1/books/${bookId}/pages/${pageNumber}`;
+      if (
+        downscalePages &&
+        fitMode !== "original" &&
+        typeof window !== "undefined"
+      ) {
+        const width = downscaleWidth(
+          window.innerWidth,
+          window.devicePixelRatio,
+          pageLayout === "double",
+        );
+        return `${base}?width=${width}`;
+      }
+      return base;
     },
-    [bookId],
+    [bookId, downscalePages, fitMode, pageLayout],
   );
 
   // When a page image fails to load, the real page count is less than metadata.

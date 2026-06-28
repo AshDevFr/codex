@@ -7,6 +7,7 @@ import {
   type SeriesReaderOverride,
   selectAdjacentBooks,
   selectBoundaryState,
+  selectDownscalePages,
   selectEffectiveReadingDirection,
   selectHasNextBook,
   selectHasPrevBook,
@@ -50,6 +51,7 @@ describe("readerStore", () => {
         autoAdvanceToNextBook: false,
         autoAdvanceSeconds: 5,
         swipeNavigation: true,
+        downscalePages: false,
       },
       currentPage: 1,
       totalPages: 0,
@@ -1644,6 +1646,24 @@ describe("readerStore", () => {
 
       setSwipeNavigation(true);
       expect(useReaderStore.getState().settings.swipeNavigation).toBe(true);
+    });
+  });
+
+  describe("downscalePages setting", () => {
+    it("defaults to disabled", () => {
+      expect(useReaderStore.getState().settings.downscalePages).toBe(false);
+      expect(selectDownscalePages(useReaderStore.getState())).toBe(false);
+    });
+
+    it("can be toggled on and off", () => {
+      const { setDownscalePages } = useReaderStore.getState();
+
+      setDownscalePages(true);
+      expect(useReaderStore.getState().settings.downscalePages).toBe(true);
+      expect(selectDownscalePages(useReaderStore.getState())).toBe(true);
+
+      setDownscalePages(false);
+      expect(useReaderStore.getState().settings.downscalePages).toBe(false);
     });
   });
 });
