@@ -2,6 +2,16 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.39.12] - 2026-06-28
+
+### 🚀 Features
+
+- *(reader)* Add opt-in page downscaling for smoother turns
+
+### 🐛 Bug Fixes
+
+- *(reader)* Warn that page downscaling is slow and not a flicker fix
+
 ## [1.39.11] - 2026-06-28
 
 ### 🐛 Bug Fixes
