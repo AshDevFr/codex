@@ -1,11 +1,5 @@
 import { Box } from "@mantine/core";
-import {
-  type ReactNode,
-  useCallback,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
+import { type ReactNode, useCallback, useLayoutEffect, useRef } from "react";
 import { flushSync } from "react-dom";
 import type { ReadingDirection } from "@/store/readerStore";
 import {
@@ -75,14 +69,8 @@ const clamp = (value: number, min: number, max: number): number =>
 const trackTransform = (index: number, dragPx: number): string =>
   `translate3d(calc(${-index * 100}% + ${dragPx}px), 0, 0)`;
 
-interface AnimState {
-  /** Which slot is centered: 0 = visual-left, 1 = current, 2 = visual-right. */
-  index: number;
-  /** Whether to animate the move to `index` (false = instant snap). */
-  animate: boolean;
-}
-
-const CENTERED: AnimState = { index: 1, animate: false };
+/** The centered slot: 0 = visual-left, 1 = current, 2 = visual-right. */
+const CENTER_INDEX = 1;
 
 /**
  * Finger-drag pager for the paged comic reader. Renders a 3-up
@@ -117,7 +105,29 @@ export function SwipePager({
   const commitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevPageKeyRef = useRef(pageKey);
 
-  const [anim, setAnim] = useState<AnimState>(CENTERED);
+  // The track's transform is written imperatively, never through React's `style`
+  // prop. If it were a function of React state, any unrelated re-render during a
+  // commit (a neighbour image loading, preload/orientation updates) would
+  // re-apply the stale pre-commit transform from the style prop and clobber the
+  // imperative re-center, parking the strip on the wrong (black) slot for several
+  // frames. Keeping it out of the style prop means re-renders leave it untouched.
+  const setTrack = useCallback(
+    (index: number, animate: boolean, dragPx = 0) => {
+      const track = trackRef.current;
+      if (!track) return;
+      track.style.transition = animate
+        ? `transform ${duration}ms ease-out`
+        : "none";
+      track.style.transform = trackTransform(index, dragPx);
+    },
+    [duration],
+  );
+
+  // Center the strip before the first paint (the transform isn't in the style
+  // prop, so the element would otherwise mount untransformed at slot 0).
+  useLayoutEffect(() => {
+    setTrack(CENTER_INDEX, false);
+  }, [setTrack]);
 
   // Content-only zoom for the current page (pinch + pan). The transform is
   // written imperatively to the current slide; `isZoomedNow` lets the gesture
@@ -169,23 +179,14 @@ export function SwipePager({
     prevPageKeyRef.current = pageKey;
     clearCommitTimer();
     draggingRef.current = false;
-    // Force the strip back to its centered slot with the transition disabled,
-    // imperatively, before the browser paints. The committed slide content is
-    // already in the DOM at this point, so writing the centered transform here
-    // (rather than waiting for the `setAnim` re-render to commit) guarantees the
-    // new page and the re-center land in the same frame. Without this the strip
-    // could paint one stale frame at the neighbor slot, briefly re-showing the
-    // previous page after the new one had settled.
-    const track = trackRef.current;
-    if (track) {
-      track.style.transition = "none";
-      track.style.transform = trackTransform(1, 0);
-    }
-    setAnim(CENTERED);
+    // Snap the strip back to its centered slot with the transition disabled,
+    // before the browser paints. The committed slide content is already in the
+    // DOM here, so the new page and the re-center land in the same frame.
+    setTrack(CENTER_INDEX, false);
     // A new page always starts at fit; reset before paint so it never flashes
     // the previous page's zoom.
     resetZoom();
-  }, [pageKey, clearCommitTimer, resetZoom]);
+  }, [pageKey, clearCommitTimer, resetZoom, setTrack]);
 
   useLayoutEffect(() => () => clearCommitTimer(), [clearCommitTimer]);
 
@@ -206,38 +207,22 @@ export function SwipePager({
   const handleDragMove = useCallback(
     (dragPx: number) => {
       draggingRef.current = true;
-      const track = trackRef.current;
-      if (!track) return;
       const width = rootWidth();
       const revealingLeft = dragPx > 0;
       const present = revealingLeft ? visualLeftPresent : visualRightPresent;
       const eff = present
         ? clamp(dragPx, -width, width)
         : rubberBand(dragPx, width);
-      track.style.transition = "none";
-      track.style.transform = trackTransform(1, eff);
+      setTrack(CENTER_INDEX, false, eff);
     },
-    [rootWidth, visualLeftPresent, visualRightPresent],
+    [rootWidth, visualLeftPresent, visualRightPresent, setTrack],
   );
 
-  // Start the snap (or snap-back) animation imperatively. The live drag writes
-  // the track transform straight to the DOM (bypassing React for per-frame
-  // perf), so React's model goes stale. A `setAnim` that then computes the same
-  // transform string React last rendered — notably snapping back to the centered
-  // slot (index 1) after a sub-threshold drag — would be skipped by
-  // reconciliation, parking the track at the dragged offset (no snap-back).
-  // Writing the target transform here guarantees the animation always runs;
-  // `setAnim` keeps React's model in sync for subsequent renders.
+  // Animate the strip to a slot (snap forward to a neighbor, or snap back to
+  // center). Purely imperative, like every other track move.
   const animateTrackTo = useCallback(
-    (index: number) => {
-      const track = trackRef.current;
-      if (track) {
-        track.style.transition = `transform ${duration}ms ease-out`;
-        track.style.transform = trackTransform(index, 0);
-      }
-      setAnim({ index, animate: true });
-    },
-    [duration],
+    (index: number) => setTrack(index, true),
+    [setTrack],
   );
 
   const handleDragEnd = useCallback(
@@ -360,10 +345,9 @@ export function SwipePager({
           display: "flex",
           width: "100%",
           height: "100%",
-          transform: trackTransform(anim.index, 0),
-          transition: anim.animate
-            ? `transform ${duration}ms ease-out`
-            : "none",
+          // `transform` / `transition` are deliberately NOT set here: they are
+          // written imperatively (see `setTrack`) so a re-render can never
+          // clobber an in-flight drag, snap, or re-center with a stale value.
           willChange: "transform",
         }}
       >

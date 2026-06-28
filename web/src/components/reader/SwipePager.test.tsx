@@ -312,6 +312,59 @@ describe("SwipePager", () => {
     expect(screen.getByTestId("slide-B")).toBe(bBefore);
   });
 
+  it("keeps the live drag offset across an unrelated re-render", async () => {
+    // The track transform is written imperatively, not via React state. An
+    // unrelated re-render mid-gesture (e.g. a neighbour image loading, a
+    // preload/orientation update) must not re-apply a stale transform and clobber
+    // the in-flight drag/snap — that was the cause of the commit-time black flash.
+    const shared = {
+      readingDirection: "ltr" as ReadingDirection,
+      onNext: vi.fn(),
+      onPrev: vi.fn(),
+      onTap: vi.fn(),
+      enabled: true,
+      duration: DURATION,
+    };
+    const slides = {
+      current: <div>current</div>,
+      prev: <div>p</div>,
+      next: <div>n</div>,
+      pageKey: "5",
+      prevKey: "4",
+      nextKey: "6",
+    };
+    const { container, rerender } = renderWithProviders(
+      <SwipePager {...shared} {...slides} />,
+    );
+    const root = container.querySelector("div") as HTMLElement;
+    vi.spyOn(root, "getBoundingClientRect").mockReturnValue({
+      left: 0,
+      top: 0,
+      right: VIEWPORT_W,
+      bottom: VIEWPORT_H,
+      width: VIEWPORT_W,
+      height: VIEWPORT_H,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+    const track = (screen.getByText("current").parentElement as HTMLElement)
+      .parentElement?.parentElement as HTMLElement;
+
+    // Arm a drag and offset the strip by -50px.
+    await fire(root, "pointerdown", 500, 300, 0);
+    await fire(root, "pointermove", 450, 300, 50);
+    expect(track.style.transform).toBe(
+      "translate3d(calc(-100% + -50px), 0, 0)",
+    );
+
+    // A re-render with unchanged navigation must leave the drag offset intact.
+    rerender(<SwipePager {...shared} {...slides} />);
+    expect(track.style.transform).toBe(
+      "translate3d(calc(-100% + -50px), 0, 0)",
+    );
+  });
+
   it("routes a center tap to onTap, not navigation", async () => {
     const { root, handlers } = renderPager();
 
