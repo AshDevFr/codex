@@ -34,6 +34,7 @@ import { ReaderFirstRunHint } from "./ReaderFirstRunHint";
 import { ReaderSettings } from "./ReaderSettings";
 import { ReaderToolbar } from "./ReaderToolbar";
 import { SwipePager } from "./SwipePager";
+import { preloadImage } from "./utils/imagePreload";
 import {
   detectPageOrientation,
   getDisplayOrder,
@@ -885,21 +886,27 @@ export function ComicReader({
       (p) => p >= 1 && p <= totalPages,
     );
 
-    // Preload and track each image, also detect orientation if not already known
+    // Preload, decode, and track each image, also detecting orientation if not
+    // already known. Decoding (not just fetching) means a swipe to a preloaded
+    // neighbour paints instantly instead of flashing the page background while
+    // the browser decodes it on reveal.
     for (const pageNum of validPages) {
       const url = getPageUrl(pageNum);
-      const img = new Image();
-      img.onload = () => {
-        addPreloadedImage(url);
-        // Only detect orientation from preloaded image if we don't already have it from backend
-        // When hasOrientationsLoaded is true, we already have all page dimensions from the API
-        if (!hasOrientationsLoaded) {
-          const orientation =
-            img.naturalWidth > img.naturalHeight ? "landscape" : "portrait";
-          setPageOrientation(pageNum, orientation);
-        }
-      };
-      img.src = url;
+      preloadImage(url)
+        .then((img) => {
+          addPreloadedImage(url);
+          // Only detect orientation from the preloaded image if we don't already
+          // have it from the backend (hasOrientationsLoaded means the API gave us
+          // every page's dimensions).
+          if (!hasOrientationsLoaded) {
+            const orientation =
+              img.naturalWidth > img.naturalHeight ? "landscape" : "portrait";
+            setPageOrientation(pageNum, orientation);
+          }
+        })
+        .catch(() => {
+          // A page that fails to preload simply loads on demand when shown.
+        });
     }
   }, [
     currentPage,
