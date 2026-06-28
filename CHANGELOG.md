@@ -2,6 +2,15 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.39.11] - 2026-06-28
+
+### 🐛 Bug Fixes
+
+- *(reader)* Decode preloaded pages to stop swipe-in black flicker
+- *(reader)* Only decode neighbor pages to prevent mobile OOM crash
+- *(reader)* Drive swipe track transform imperatively to kill commit flash
+- *(reader)* Drop swipe filmstrip's compositing layer to cut WebKit flicker
+
 ## [1.39.10] - 2026-06-28
 
 ### 🐛 Bug Fixes
