@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.39.13] - 2026-06-29
+
+### 🐛 Bug Fixes
+
+- *(reader)* Enable swipe navigation to and on the chapter overlay
+
 ## [1.39.12] - 2026-06-28
 
 ### 🚀 Features
