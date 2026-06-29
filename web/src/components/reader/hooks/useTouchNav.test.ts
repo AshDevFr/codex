@@ -365,6 +365,33 @@ describe("useTouchNav", () => {
       expect(mockPrevPage).not.toHaveBeenCalled();
     });
 
+    it("arms and fires onEnd with a minimal config (no onStart/onMove)", async () => {
+      // The chapter-transition overlay supplies only onEnd (+ onSwipeDown): it
+      // has no filmstrip to follow, so it navigates on release. Verify the hook
+      // still arms a horizontal drag and reports it when those are omitted.
+      const onEnd = vi.fn();
+      stubRect();
+      const { result } = renderHook(() =>
+        useTouchNav({
+          enabled: true,
+          onNextPage: mockNextPage,
+          onPrevPage: mockPrevPage,
+          swipe: { enabled: true, onEnd },
+        }),
+      );
+      act(() => {
+        result.current.touchRef(element);
+      });
+
+      await dispatch("pointerdown", 200, 300, 0);
+      await dispatch("pointermove", 320, 305, 50);
+      await dispatch("pointermove", 440, 305, 100);
+      await dispatch("pointerup", 440, 305, 100);
+
+      expect(onEnd).toHaveBeenCalledTimes(1);
+      expect(onEnd.mock.calls[0][0]).toBe(240);
+    });
+
     it("does not arm when onStart vetoes (pannable/zoomed)", async () => {
       const swipe = makeSwipe();
       swipe.onStart.mockReturnValue(false);

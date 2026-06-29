@@ -5,7 +5,7 @@ import type { AdjacentBook } from "@/store/readerStore";
 import { useReaderStore } from "@/store/readerStore";
 import { renderWithProviders, screen, waitFor } from "@/test/utils";
 import { ComicReader } from "./ComicReader";
-import { useKeyboardNav } from "./hooks";
+import { useKeyboardNav, useTouchNav } from "./hooks";
 
 // Store the mock implementations so we can change them per test
 let mockUseReadProgress = vi.fn(() => ({
@@ -712,6 +712,73 @@ describe("ComicReader", () => {
       expect(
         screen.queryByTestId("chapter-transition-next"),
       ).not.toBeInTheDocument();
+    });
+
+    // The overlay wires its own useTouchNav (tap zones + swipe). It is the only
+    // instance configured with a `swipe` handler, so grab it from the mock to
+    // drive the gestures directly (jsdom can't deliver real pointer flings, and
+    // useTouchNav itself is mocked here).
+    function overlayTouchNav() {
+      const cfg = vi
+        .mocked(useTouchNav)
+        .mock.calls.map((c) => c[0])
+        .filter((o): o is NonNullable<typeof o> => Boolean(o?.swipe))
+        .at(-1);
+      if (!cfg) throw new Error("overlay useTouchNav was not configured");
+      return cfg;
+    }
+
+    it("swipes forward on the overlay to continue to the next book", () => {
+      const nav = setupNav();
+      const { onNextPage } = renderAt(10, { prev: prevBook, next: nextBook });
+
+      act(() => onNextPage());
+      expect(useReaderStore.getState().boundaryView).toBe("at-end");
+
+      // A leftward fling is "forward" in LTR.
+      act(() => overlayTouchNav().swipe?.onEnd?.(-300, 0, 0));
+
+      expect(nav.goToNextBook).toHaveBeenCalledTimes(1);
+    });
+
+    it("swipes backward on the overlay to dismiss back to the page", () => {
+      setupNav();
+      const { onNextPage } = renderAt(10, { prev: prevBook, next: nextBook });
+
+      act(() => onNextPage());
+      expect(useReaderStore.getState().boundaryView).toBe("at-end");
+
+      // A rightward fling is "backward" in LTR; from the end boundary that
+      // dismisses the overlay rather than turning the page.
+      act(() => overlayTouchNav().swipe?.onEnd?.(300, 0, 0));
+
+      expect(useReaderStore.getState().boundaryView).toBe("none");
+      expect(
+        screen.queryByTestId("chapter-transition-next"),
+      ).not.toBeInTheDocument();
+    });
+
+    it("taps the prev zone on the overlay to go to the previous book", () => {
+      const nav = setupNav();
+      const { onPrevPage } = renderAt(1, { prev: prevBook, next: null });
+
+      act(() => onPrevPage());
+      expect(useReaderStore.getState().boundaryView).toBe("at-start");
+
+      // The overlay's tap zones map to the same paginated handlers as the page.
+      act(() => overlayTouchNav().onPrevPage?.());
+
+      expect(nav.goToPrevBook).toHaveBeenCalledTimes(1);
+    });
+
+    it("swipes down on the overlay to exit the reader", () => {
+      setupNav();
+      const { onNextPage } = renderAt(10, { prev: null, next: nextBook });
+
+      act(() => onNextPage());
+      act(() => overlayTouchNav().swipe?.onSwipeDown?.());
+
+      expect(defaultProps.onClose).toHaveBeenCalledTimes(1);
     });
 
     it("webtoon keyboard at the bottom continues to the next book", () => {

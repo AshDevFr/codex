@@ -232,12 +232,17 @@ export function SwipePager({
     (dragPx: number, _dragY: number, velocityPxPerMs: number) => {
       draggingRef.current = false;
       const width = rootWidth();
+      // Decide the direction independent of whether a neighbor spread exists, so
+      // a committed swipe at a book boundary still fires the turn. The parent's
+      // handler then raises the chapter-transition overlay (or end-of-series)
+      // exactly as a tap/keyboard turn would — instead of rubber-banding back
+      // with no effect, which left swipe unable to reach the overlay.
       const result: SnapResult = decideSnap({
         dragPx,
         velocityPxPerMs,
         viewportWidth: width || 1,
-        hasPrev: prev != null,
-        hasNext: next != null,
+        hasPrev: true,
+        hasNext: true,
         readingDirection,
       });
 
@@ -247,6 +252,18 @@ export function SwipePager({
       }
 
       const goNext = result === "next";
+      const neighborPresent = goNext ? next != null : prev != null;
+
+      // Book boundary: there is no slide to turn to, so snap the strip back to
+      // center and fire the turn straight away. The parent raises the boundary
+      // overlay; the snap-back is hidden behind it.
+      if (!neighborPresent) {
+        animateTrackTo(1);
+        if (goNext) onNext();
+        else onPrev();
+        return;
+      }
+
       // Map the logical turn to a visual slot: next is on the right (LTR) / left (RTL).
       const visualTarget = (isRtl ? !goNext : goNext) ? 2 : 0;
       animateTrackTo(visualTarget);

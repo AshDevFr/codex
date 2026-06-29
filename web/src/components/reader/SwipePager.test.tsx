@@ -234,16 +234,35 @@ describe("SwipePager", () => {
     expect(handlers.onNext).not.toHaveBeenCalled();
   });
 
-  it("stays at the edge when there is no next spread", async () => {
+  it("commits forward at the last spread so the parent can raise the boundary overlay", async () => {
     const { root, handlers } = renderPager({ next: false });
 
-    await drag(root, 700, 200); // leftward = next, but no next page
+    await drag(root, 700, 200); // leftward = next, no next spread (book boundary)
 
-    await act(async () => {
-      vi.advanceTimersByTime(DURATION);
-    });
-    expect(handlers.onNext).not.toHaveBeenCalled();
+    // Fires immediately (no slide to animate to) so the overlay appears at once.
+    expect(handlers.onNext).toHaveBeenCalledTimes(1);
     expect(handlers.onPrev).not.toHaveBeenCalled();
+  });
+
+  it("commits backward at the first spread so the parent can raise the boundary overlay", async () => {
+    const { root, handlers } = renderPager({ prev: false });
+
+    await drag(root, 200, 700); // rightward = prev, no prev spread (book boundary)
+
+    expect(handlers.onPrev).toHaveBeenCalledTimes(1);
+    expect(handlers.onNext).not.toHaveBeenCalled();
+  });
+
+  it("snaps the track back to center after committing at a boundary", async () => {
+    const { root } = renderPager({ next: false });
+    const track = (screen.getByText("current").parentElement as HTMLElement)
+      .parentElement?.parentElement as HTMLElement;
+
+    await drag(root, 700, 200);
+
+    // Boundary commit must re-center the strip (it has nowhere to slide), so the
+    // page is centered again when the overlay is later dismissed.
+    expect(track.style.transform).toBe("translateX(calc(-100% + 0px))");
   });
 
   it("exits the reader on a downward fling", async () => {

@@ -113,6 +113,11 @@ export function ChapterTransitionPanel({
         justifyContent: "center",
         backgroundColor: "#000",
         padding: "32px 16px",
+        // The panel sits on a swipe surface (the paginated reader's overlay).
+        // Suppress text selection so a horizontal drag starting on the labels
+        // isn't swallowed by a native selection gesture. The cover image is made
+        // non-draggable/pointer-transparent below for the same reason.
+        userSelect: "none",
       }}
     >
       <Stack align="center" gap="lg" style={{ maxWidth: 360, width: "100%" }}>
@@ -212,6 +217,12 @@ function TransitionCard({ book }: { book: AdjacentBook }) {
           w="100%"
           h="100%"
           fit="cover"
+          // Without this a swipe starting on the cover triggers the browser's
+          // native image drag and the page-turn gesture never fires. Pointer
+          // events pass through to the swipe surface behind it (same treatment as
+          // the comic page images).
+          draggable={false}
+          style={{ pointerEvents: "none" }}
         />
       </Box>
 

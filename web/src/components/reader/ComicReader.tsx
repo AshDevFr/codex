@@ -29,6 +29,7 @@ import {
   useSeriesReaderSettings,
   useTouchNav,
 } from "./hooks";
+import { decideSnap } from "./hooks/swipeGesture";
 import { MobileReaderBottomBar } from "./MobileReaderBottomBar";
 import { PageTransitionWrapper } from "./PageTransitionWrapper";
 import { ReaderFirstRunHint } from "./ReaderFirstRunHint";
@@ -865,6 +866,48 @@ export function ComicReader({
     onTap: toggleToolbar,
   });
 
+  // Release-decided swipe for the paginated chapter-transition overlay. The
+  // overlay is a static card (no filmstrip to follow), so it just navigates on
+  // release rather than tracking the finger. Both directions are always live:
+  // one continues to the adjacent book, the other dismisses back to the page
+  // (handlePaginatedNext/Prev resolve which, based on the boundary side).
+  const handleOverlaySwipeEnd = useCallback(
+    (dragPx: number, _dragY: number, velocity: number) => {
+      const width = containerRef.current?.getBoundingClientRect().width || 1;
+      const result = decideSnap({
+        dragPx,
+        velocityPxPerMs: velocity,
+        viewportWidth: width,
+        hasPrev: true,
+        hasNext: true,
+        readingDirection: readingDirection === "rtl" ? "rtl" : "ltr",
+      });
+      if (result === "next") handlePaginatedNext();
+      else if (result === "prev") handlePaginatedPrev();
+    },
+    [readingDirection, handlePaginatedNext, handlePaginatedPrev],
+  );
+
+  // Tap zones + swipe for the chapter-transition overlay. Without this the
+  // overlay (rendered above the page surface) swallows all input, so neither a
+  // tap on the outer thirds nor a swipe could reach the page-turn handlers — the
+  // user was stranded on the panel with only the "Continue Reading" button. The
+  // ref is attached to the overlay element, which only exists while it is shown.
+  const { touchRef: overlayTouchRef } = useTouchNav({
+    enabled: !settingsOpened,
+    tapZones: true,
+    onNextPage: handlePaginatedNext,
+    onPrevPage: handlePaginatedPrev,
+    // Center taps are reserved for the panel's own "Continue Reading" button;
+    // leaving onTap unset means a center tap is a no-op here rather than also
+    // toggling the toolbar (which is already pinned visible over the overlay).
+    swipe: {
+      enabled: true,
+      onEnd: handleOverlaySwipeEnd,
+      onSwipeDown: onClose,
+    },
+  });
+
   // Preload adjacent pages and track in store
   // Also detect orientation for preloaded images
   useEffect(() => {
@@ -1136,7 +1179,17 @@ export function ComicReader({
           book boundary. The webtoon/continuous mode uses in-flow panels
           instead, so this only applies to single/double/ttb. */}
       {!isContinuousScroll && boundaryView !== "none" && (
-        <Box style={{ position: "absolute", inset: 0, zIndex: 50 }}>
+        <Box
+          ref={overlayTouchRef}
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 50,
+            // Own all touch here so the tap zones / swipe drive the page-turn
+            // handlers instead of the browser scrolling/panning the panel.
+            touchAction: "none",
+          }}
+        >
           <ChapterTransitionPanel
             direction={boundaryView === "at-end" ? "next" : "prev"}
             book={
