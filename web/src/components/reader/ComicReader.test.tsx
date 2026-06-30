@@ -60,6 +60,27 @@ vi.mock("./hooks", () => ({
   })),
 }));
 
+// Capture the trailing-reach callback ComicReader hands to the webtoon reader,
+// so tests can fire the "trailing panel reached" signal directly (jsdom can't
+// run the real scroll math). The holder is hoisted so the mock factory may
+// reference it.
+const { mockTrailingHolder } = vi.hoisted(() => ({
+  mockTrailingHolder: {
+    onTrailingReachedChange: undefined as
+      | undefined
+      | ((reached: boolean) => void),
+  },
+}));
+
+vi.mock("./ContinuousScrollReader", () => ({
+  ContinuousScrollReader: (props: {
+    onTrailingReachedChange?: (reached: boolean) => void;
+  }) => {
+    mockTrailingHolder.onTrailingReachedChange = props.onTrailingReachedChange;
+    return null;
+  },
+}));
+
 // Mock the API client
 vi.mock("@/api/client", () => ({
   api: {
@@ -804,6 +825,63 @@ describe("ComicReader", () => {
 
       act(() => opts.onBoundaryStart?.());
       expect(nav.goToPrevBook).toHaveBeenCalledTimes(1);
+    });
+
+    it("marks the book read when the webtoon trailing panel is reached", () => {
+      // Last book of the series: there is no next book to navigate to, so the
+      // navigate-to-next markAsRead never fires. Reaching the trailing
+      // end-of-book panel must still mark the book read.
+      setupNav({ canGoNextBook: false });
+      const saveProgress = vi.fn();
+      mockUseReadProgress = vi.fn(() => ({
+        initialPage: 10,
+        isLoading: false,
+        saveProgress,
+        cancelPendingSave: vi.fn(),
+      }));
+      useReaderStore.setState({
+        currentBookId: "book-123",
+        currentPage: 10,
+        totalPages: 10,
+        adjacentBooks: { prev: prevBook, next: null },
+        readingDirectionOverride: "webtoon",
+      });
+      renderWithProviders(
+        <ComicReader {...defaultProps} readingDirectionOverride="webtoon" />,
+      );
+
+      act(() => mockTrailingHolder.onTrailingReachedChange?.(true));
+
+      expect(saveProgress).toHaveBeenCalledWith(10);
+    });
+
+    it("does not mark read on trailing reach in incognito mode", () => {
+      setupNav({ canGoNextBook: false });
+      const saveProgress = vi.fn();
+      mockUseReadProgress = vi.fn(() => ({
+        initialPage: 10,
+        isLoading: false,
+        saveProgress,
+        cancelPendingSave: vi.fn(),
+      }));
+      useReaderStore.setState({
+        currentBookId: "book-123",
+        currentPage: 10,
+        totalPages: 10,
+        adjacentBooks: { prev: prevBook, next: null },
+        readingDirectionOverride: "webtoon",
+      });
+      renderWithProviders(
+        <ComicReader
+          {...defaultProps}
+          readingDirectionOverride="webtoon"
+          incognito
+        />,
+      );
+
+      act(() => mockTrailingHolder.onTrailingReachedChange?.(true));
+
+      expect(saveProgress).not.toHaveBeenCalled();
     });
   });
 

@@ -290,6 +290,20 @@ export function ComicReader({
     enabled: !incognito,
   });
 
+  // Showing the end-of-book overlay marks the current book as read, in every
+  // reading mode: the paginated overlay (LTR/RTL single + double page, TTB)
+  // sets boundaryView to "at-end", and webtoon scrolls the in-flow trailing
+  // panel into view (trailingReached). This is the only place the *last* book
+  // of a series is marked read — there is no next book to navigate to, so the
+  // navigate-to-next markAsRead never fires. It also covers double-page spreads
+  // whose final spread leaves currentPage one short of the last page (which
+  // would otherwise round to a misleading "100%" while the book stays unread).
+  const endOfBookOverlayShown = boundaryView === "at-end" || trailingReached;
+  useEffect(() => {
+    if (incognito || !endOfBookOverlayShown) return;
+    saveProgress(totalPages);
+  }, [incognito, endOfBookOverlayShown, saveProgress, totalPages]);
+
   // Fetch page dimensions when book is analyzed
   // This allows us to pre-populate orientations for smart spread calculation
   const { data: pages, isLoading: pagesLoading } = useQuery({
@@ -719,10 +733,9 @@ export function ComicReader({
         : currentPage >= totalPages;
     if (atEnd) {
       setLastNavigationDirection("next");
+      // Raising the end-of-book overlay marks the book read; see the
+      // boundaryView effect above (covers paginated and webtoon uniformly).
       setBoundaryView("at-end");
-      // Reaching the end marks the book complete (also fixes double-page
-      // spreads whose last spread leaves currentPage short of totalPages).
-      if (!incognito) saveProgress(totalPages);
       return;
     }
 
@@ -732,8 +745,6 @@ export function ComicReader({
     currentPage,
     totalPages,
     spreadConfig,
-    incognito,
-    saveProgress,
     goToNextBook,
     setBoundaryView,
     setLastNavigationDirection,
