@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.39.14] - 2026-06-30
+
+### 🐛 Bug Fixes
+
+- *(reader)* Mark the last book of a series read at the end-of-book overlay
+
 ## [1.39.13] - 2026-06-29
 
 ### 🐛 Bug Fixes
