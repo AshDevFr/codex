@@ -1,0 +1,42 @@
+[package]
+name = "codex-migrate"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[lib]
+name = "codex_migrate"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+serde = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+
+codex-db = { workspace = true }
+codex-config = { workspace = true }
+migration = { path = "../../migration" }
+
+# SeaORM — same backend feature set as codex-db so both drivers stay supported.
+sea-orm = { version = "1.1", features = [
+    "sqlx-postgres",
+    "sqlx-sqlite",
+    "runtime-tokio-rustls",
+    "macros",
+    "with-chrono",
+    "with-uuid",
+] }
+
+# NDJSON row serialization.
+serde_json = "1.0"
+# Streaming rows out of `Entity::find().stream()`.
+futures = "0.3"
+
+[dev-dependencies]
+codex-db = { workspace = true, features = ["test-utils"] }
+migration = { path = "../../migration" }
+tempfile = { workspace = true }
+tokio = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
