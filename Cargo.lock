@@ -991,6 +991,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "codex-migrate"
+version = "1.39.14"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "codex-config",
+ "codex-db",
+ "futures",
+ "migration",
+ "sea-orm",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "codex-models"
 version = "1.39.14"
 dependencies = [

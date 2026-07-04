@@ -47,6 +47,7 @@ members = [
     "crates/codex-utils",
     "crates/codex-parsers",
     "crates/codex-db",
+    "crates/codex-migrate",
     "crates/codex-services",
     "crates/codex-search",
     "crates/codex-scanner",
@@ -81,6 +82,7 @@ codex-cli-common = { path = "crates/codex-cli-common", default-features = false 
 codex-config = { path = "crates/codex-config" }
 codex-db = { path = "crates/codex-db" }
 codex-events = { path = "crates/codex-events" }
+codex-migrate = { path = "crates/codex-migrate" }
 codex-models = { path = "crates/codex-models" }
 codex-parsers = { path = "crates/codex-parsers", default-features = false }
 codex-scanner = { path = "crates/codex-scanner", default-features = false }
