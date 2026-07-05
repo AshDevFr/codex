@@ -2,6 +2,18 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.40.0] - 2026-07-05
+
+### 🚀 Features
+
+- *(migrate)* Add entity-driven data transfer engine
+- *(migrate)* Add portable export archive with artifact bundling
+- *(cli)* Add export, import, and copy database commands
+
+### 📚 Documentation
+
+- *(migrate)* Add cross-engine round-trip test and backup/migration guide
+
 ## [1.39.15] - 2026-07-05
 
 ### 🐛 Bug Fixes
