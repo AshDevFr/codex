@@ -1,3 +1,6 @@
+pub mod copy;
+pub mod export;
+pub mod import;
 pub mod migrate;
 pub mod openapi;
 pub mod scan;
@@ -7,6 +10,9 @@ pub mod tasks;
 pub mod wait_for_migrations;
 pub mod worker;
 
+pub use copy::copy_command;
+pub use export::export_command;
+pub use import::import_command;
 pub use migrate::migrate_command;
 pub use openapi::{OpenApiFormat, openapi_command};
 pub use scan::scan_command;

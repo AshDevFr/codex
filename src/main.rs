@@ -2,8 +2,9 @@ mod commands;
 
 use clap::{Parser, Subcommand};
 use commands::{
-    OpenApiFormat, TasksSubcommand, migrate_command, openapi_command, scan_command, seed_command,
-    serve_command, tasks_command, wait_for_migrations_command, worker_command,
+    OpenApiFormat, TasksSubcommand, copy_command, export_command, import_command, migrate_command,
+    openapi_command, scan_command, seed_command, serve_command, tasks_command,
+    wait_for_migrations_command, worker_command,
 };
 use std::path::PathBuf;
 
@@ -105,6 +106,79 @@ enum Commands {
         #[command(subcommand)]
         command: TasksSubcommand,
     },
+
+    /// Export the database and on-disk artifacts to a portable .tar.gz archive
+    Export {
+        /// Path to configuration file
+        #[arg(short, long, default_value = DEFAULT_CONFIG_PATH)]
+        config: PathBuf,
+
+        /// Output archive path (.tar.gz)
+        #[arg(short, long)]
+        output: PathBuf,
+
+        /// Also bundle the (reproducible) rendered PDF page cache
+        #[arg(long)]
+        include_cache: bool,
+
+        /// Export the database only; bundle no on-disk artifacts
+        #[arg(long)]
+        db_only: bool,
+
+        /// Skip bundling generated thumbnails
+        #[arg(long)]
+        no_thumbnails: bool,
+
+        /// Skip bundling uploaded/extracted covers
+        #[arg(long)]
+        no_uploads: bool,
+
+        /// Skip bundling plugin data
+        #[arg(long)]
+        no_plugins: bool,
+    },
+
+    /// Import a .tar.gz archive produced by `export` into this instance
+    Import {
+        /// Path to configuration file
+        #[arg(short, long, default_value = DEFAULT_CONFIG_PATH)]
+        config: PathBuf,
+
+        /// Input archive path (.tar.gz)
+        #[arg(short, long)]
+        input: PathBuf,
+
+        /// Replace existing data in the target instead of refusing a non-empty target
+        #[arg(long)]
+        replace: bool,
+    },
+
+    /// Copy database rows directly from one instance to another
+    Copy {
+        /// Local instance config (tracing + fallback for an omitted side)
+        #[arg(short, long, default_value = DEFAULT_CONFIG_PATH)]
+        config: PathBuf,
+
+        /// Source database URL (sqlite://… or postgres://…)
+        #[arg(long)]
+        from: Option<String>,
+
+        /// Target database URL (sqlite://… or postgres://…)
+        #[arg(long)]
+        to: Option<String>,
+
+        /// Read the source database connection from this config file
+        #[arg(long)]
+        from_config: Option<PathBuf>,
+
+        /// Read the target database connection from this config file
+        #[arg(long)]
+        to_config: Option<PathBuf>,
+
+        /// Replace existing data in the target instead of refusing a non-empty target
+        #[arg(long)]
+        replace: bool,
+    },
 }
 
 #[tokio::main]
@@ -147,6 +221,43 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::Tasks { config, command } => {
             tasks_command(config, command).await?;
+        }
+        Commands::Export {
+            config,
+            output,
+            include_cache,
+            db_only,
+            no_thumbnails,
+            no_uploads,
+            no_plugins,
+        } => {
+            export_command(
+                config,
+                output,
+                include_cache,
+                db_only,
+                no_thumbnails,
+                no_uploads,
+                no_plugins,
+            )
+            .await?;
+        }
+        Commands::Import {
+            config,
+            input,
+            replace,
+        } => {
+            import_command(config, input, replace).await?;
+        }
+        Commands::Copy {
+            config,
+            from,
+            to,
+            from_config,
+            to_config,
+            replace,
+        } => {
+            copy_command(config, from, to, from_config, to_config, replace).await?;
         }
     }
 

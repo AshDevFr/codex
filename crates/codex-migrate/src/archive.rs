@@ -183,6 +183,32 @@ pub fn extract(in_path: &Path, dest: &Path) -> Result<Manifest> {
     let manifest: Manifest = serde_json::from_reader(std::io::BufReader::new(manifest_file))
         .context("failed to parse manifest.json")?;
 
+    check_format_version(&manifest)?;
+    Ok(manifest)
+}
+
+/// Read only the `manifest.json` from an archive without unpacking it, for
+/// pre-flight checks (schema version, artifact list) before a heavy import.
+/// `manifest.json` is written first, so this stops after the first entry.
+pub fn read_manifest(in_path: &Path) -> Result<Manifest> {
+    let file = std::fs::File::open(in_path)
+        .with_context(|| format!("failed to open archive {}", in_path.display()))?;
+    let decoder = flate2::read::GzDecoder::new(file);
+    let mut archive = tar::Archive::new(decoder);
+
+    for entry in archive.entries().context("archive is not a valid tar")? {
+        let mut entry = entry?;
+        if entry.path()?.as_ref() == Path::new("manifest.json") {
+            let manifest: Manifest =
+                serde_json::from_reader(&mut entry).context("failed to parse manifest.json")?;
+            check_format_version(&manifest)?;
+            return Ok(manifest);
+        }
+    }
+    anyhow::bail!("archive is missing manifest.json");
+}
+
+fn check_format_version(manifest: &Manifest) -> Result<()> {
     if manifest.format_version != ARCHIVE_FORMAT_VERSION {
         anyhow::bail!(
             "unsupported archive format version {} (this build reads version {})",
@@ -190,7 +216,7 @@ pub fn extract(in_path: &Path, dest: &Path) -> Result<Manifest> {
             ARCHIVE_FORMAT_VERSION
         );
     }
-    Ok(manifest)
+    Ok(())
 }
 
 /// Pack the staged manifest + `db/` tree and the artifact source dirs into a

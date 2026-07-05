@@ -37,6 +37,8 @@ futures = "0.3"
 # Archive packing: gzip-compressed tar for the portable export bundle.
 tar = "0.4"
 flate2 = "1.0"
+# Parsing postgres:// connection URLs for the `copy` command.
+url = "2"
 # Staging directories for export/import at runtime.
 tempfile = { workspace = true }
 
