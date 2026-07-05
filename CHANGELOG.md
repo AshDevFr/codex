@@ -2,6 +2,23 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.40.2] - 2026-07-05
+
+### 🚀 Features
+
+- *(migrate)* Add --progress and default row-count verification
+- *(migrate)* Add --full-verification report for import and copy
+
+### 🐛 Bug Fixes
+
+- *(migrate)* Cap insert batches to the destination bind-parameter limit
+- *(migrate)* Disable foreign keys without superuser on PostgreSQL
+
+### 📚 Documentation
+
+- Reorganize navigation and give data export/import its own pages
+- *(migrate)* Document progress, verification, and owner-only FK handling
+
 ## [1.40.1] - 2026-07-05
 
 ### 🐛 Bug Fixes
