@@ -459,3 +459,83 @@ async fn copy_wide_table_exceeding_param_limit() {
     drop(pg);
     drop_pg("codex_test_wide").await;
 }
+
+// ---------------------------------------------------------------------------
+// The FK suppression must work as an ordinary (non-superuser) database owner,
+// which is what managed Postgres gives you. Before the drop/recreate approach
+// this failed with "permission denied to set parameter session_replication_role".
+// ---------------------------------------------------------------------------
+
+fn pg_base_url() -> String {
+    std::env::var("POSTGRES_TEST_URL")
+        .unwrap_or_else(|_| "postgres://codex:codex@localhost:54321/codex_test".to_string())
+}
+
+#[tokio::test]
+#[ignore] // requires a PostgreSQL test database with a superuser admin
+async fn copy_works_as_non_superuser_database_owner() {
+    let base = pg_base_url();
+    let Ok(admin) = Database::new(&database_config_from_url(&base).unwrap()).await else {
+        return; // no PostgreSQL available
+    };
+    let ac = admin.sea_orm_connection();
+
+    // Clean slate, then a NOSUPERUSER role that owns a fresh database.
+    ac.execute_unprepared("DROP DATABASE IF EXISTS codex_test_nosuper WITH (FORCE)")
+        .await
+        .ok();
+    ac.execute_unprepared("DROP ROLE IF EXISTS codex_nosuper")
+        .await
+        .ok();
+    ac.execute_unprepared("CREATE ROLE codex_nosuper LOGIN PASSWORD 'nosuperpw' NOSUPERUSER")
+        .await
+        .unwrap();
+    ac.execute_unprepared("CREATE DATABASE codex_test_nosuper OWNER codex_nosuper")
+        .await
+        .unwrap();
+
+    // As admin, hand the schema to the role so it can create tables (PG-version safe).
+    let mut admin_newdb = database_config_from_url(&base).unwrap();
+    admin_newdb.postgres.as_mut().unwrap().database_name = "codex_test_nosuper".to_string();
+    let admin2 = Database::new(&admin_newdb).await.unwrap();
+    admin2
+        .sea_orm_connection()
+        .execute_unprepared("ALTER SCHEMA public OWNER TO codex_nosuper")
+        .await
+        .ok();
+
+    // Connect AS the non-superuser owner and run migrations + transfer.
+    let mut cfg = database_config_from_url(&base).unwrap();
+    {
+        let pg = cfg.postgres.as_mut().unwrap();
+        pg.username = "codex_nosuper".to_string();
+        pg.password = "nosuperpw".to_string();
+        pg.database_name = "codex_test_nosuper".to_string();
+    }
+    let target = Database::new(&cfg).await.unwrap();
+    target.run_migrations().await.unwrap();
+
+    let (src, _sd) = setup_test_db_wrapper().await;
+    seed_min(src.sea_orm_connection()).await;
+
+    // The crux: this must succeed without superuser.
+    transfer(src.sea_orm_connection(), target.sea_orm_connection())
+        .await
+        .expect("copy must work as a non-superuser database owner");
+
+    let n = users::Entity::find()
+        .count(target.sea_orm_connection())
+        .await
+        .unwrap();
+    assert_eq!(n, 1);
+
+    // Cleanup.
+    drop(target);
+    drop(admin2);
+    ac.execute_unprepared("DROP DATABASE IF EXISTS codex_test_nosuper WITH (FORCE)")
+        .await
+        .ok();
+    ac.execute_unprepared("DROP ROLE IF EXISTS codex_nosuper")
+        .await
+        .ok();
+}

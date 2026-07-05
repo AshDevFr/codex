@@ -59,7 +59,7 @@ pub async fn transfer(
         .await
         .context("failed to open destination transaction")?;
 
-    fk::disable(&txn).await?;
+    let guard = fk::before_load(&txn).await?;
 
     registry::truncate_all(&txn)
         .await
@@ -68,6 +68,8 @@ pub async fn transfer(
     let tables = registry::copy_all(src, &txn, engine::DEFAULT_BATCH_SIZE)
         .await
         .context("failed while copying tables")?;
+
+    fk::after_load(&txn, guard).await?;
 
     txn.commit()
         .await
@@ -87,7 +89,7 @@ pub async fn load_from_dir(dst: &DatabaseConnection, db_dir: &Path) -> Result<Tr
         .await
         .context("failed to open destination transaction")?;
 
-    fk::disable(&txn).await?;
+    let guard = fk::before_load(&txn).await?;
 
     registry::truncate_all(&txn)
         .await
@@ -96,6 +98,8 @@ pub async fn load_from_dir(dst: &DatabaseConnection, db_dir: &Path) -> Result<Tr
     let tables = registry::load_all_from_dir(&txn, db_dir, engine::DEFAULT_BATCH_SIZE)
         .await
         .context("failed while loading tables from archive")?;
+
+    fk::after_load(&txn, guard).await?;
 
     txn.commit()
         .await
