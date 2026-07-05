@@ -104,6 +104,7 @@ where
     C: ConnectionTrait,
     R: BufRead,
 {
+    let batch_size = safe_batch_size::<E>(conn.get_database_backend(), batch_size);
     let mut batch: Vec<E::ActiveModel> = Vec::with_capacity(batch_size);
     let mut count = 0u64;
     for line in reader.lines() {
@@ -133,6 +134,7 @@ where
     S: ConnectionTrait + StreamTrait,
     D: ConnectionTrait,
 {
+    let batch_size = safe_batch_size::<E>(dst.get_database_backend(), batch_size);
     let mut stream = open_source_stream::<E, S>(src).await?;
     let mut batch: Vec<E::ActiveModel> = Vec::with_capacity(batch_size);
     let mut count = 0u64;
@@ -168,6 +170,19 @@ where
     Ok(E::delete_many().exec(conn).await?.rows_affected)
 }
 
+/// Cap the batch so a multi-row insert can't exceed the destination's bind
+/// parameter limit. A batch binds `rows × columns` parameters; PostgreSQL caps
+/// a statement at 65535 and SQLite at 32766, so a wide table (e.g.
+/// `book_metadata`, ~66 columns) overflows a naive 1000-row batch.
+fn safe_batch_size<E: EntityTrait>(backend: DatabaseBackend, requested: usize) -> usize {
+    let columns = <E::Column as Iterable>::iter().count().max(1);
+    let param_limit = match backend {
+        DatabaseBackend::Postgres | DatabaseBackend::MySql => 65535,
+        DatabaseBackend::Sqlite => 32766,
+    };
+    requested.min((param_limit / columns).max(1))
+}
+
 /// Insert one batch, using `exec_without_returning` to avoid a per-row
 /// RETURNING clause on bulk loads. No-op (and no DB round-trip) when empty.
 async fn insert_batch<E, C>(conn: &C, batch: Vec<E::ActiveModel>) -> Result<u64>
@@ -182,4 +197,30 @@ where
     }
     E::insert_many(batch).exec_without_returning(conn).await?;
     Ok(n)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::safe_batch_size;
+    use sea_orm::DatabaseBackend;
+
+    #[test]
+    fn caps_wide_table_under_postgres_param_limit() {
+        // book_metadata has 66 columns; a naive 1000-row batch would bind
+        // 66000 parameters, over PostgreSQL's 65535 limit.
+        let n = safe_batch_size::<codex_db::entities::book_metadata::Entity>(
+            DatabaseBackend::Postgres,
+            1000,
+        );
+        assert!(n < 1000, "wide table should be capped, got {n}");
+        assert!(n * 66 <= 65535, "batch {n} still exceeds the limit");
+    }
+
+    #[test]
+    fn keeps_requested_size_for_narrow_table() {
+        // genres has 4 columns; 1000 rows is well within the limit.
+        let n =
+            safe_batch_size::<codex_db::entities::genres::Entity>(DatabaseBackend::Postgres, 1000);
+        assert_eq!(n, 1000);
+    }
 }
