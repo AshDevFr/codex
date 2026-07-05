@@ -15,6 +15,7 @@ pub use export::export_command;
 pub use import::import_command;
 
 use anyhow::{Result, bail};
+use codex_migrate::full_verify::FullMismatch;
 use codex_migrate::{TableRows, registry, verify};
 use sea_orm::DatabaseConnection;
 use tracing::{info, warn};
@@ -39,6 +40,39 @@ pub(crate) async fn verify_row_counts(
             mismatches.len()
         );
     }
+}
+
+/// Print the outcome of a full (per-record) verification as a report.
+///
+/// This is an informational deep check: it reports which tables differ but does
+/// **not** fail the command (the default row-count check is the hard safety
+/// gate). `tables_checked` is the total number of tables compared.
+pub(crate) fn report_full_verify(mismatches: &[FullMismatch], tables_checked: usize) {
+    info!("---------- full verification ----------");
+    if mismatches.is_empty() {
+        info!("✓ every row matches across all {tables_checked} tables (canonical comparison)");
+    } else {
+        warn!(
+            "⚠ {} of {} table(s) differ:",
+            mismatches.len(),
+            tables_checked
+        );
+        for m in mismatches {
+            if m.content_differs {
+                warn!(
+                    "  ✗ {}: {} rows, content differs (values not identical after canonicalization)",
+                    m.table, m.source_rows
+                );
+            } else {
+                warn!(
+                    "  ✗ {}: row count differs — source={} target={}",
+                    m.table, m.source_rows, m.target_rows
+                );
+            }
+        }
+        warn!("(full verification is informational; the command did not fail on these)");
+    }
+    info!("---------------------------------------");
 }
 pub use migrate::migrate_command;
 pub use openapi::{OpenApiFormat, openapi_command};

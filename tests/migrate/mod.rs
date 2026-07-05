@@ -313,7 +313,7 @@ async fn export_import_pair(src: &DatabaseConnection, tgt: &DatabaseConnection, 
     export_archive(src, &archive, &[], codex::migrate::Progress::Silent)
         .await
         .unwrap_or_else(|e| panic!("{label}: export failed: {e:#}"));
-    import_archive(tgt, &archive, &[], codex::migrate::Progress::Silent)
+    import_archive(tgt, &archive, &[], codex::migrate::Progress::Silent, false)
         .await
         .unwrap_or_else(|e| panic!("{label}: import failed: {e:#}"));
 
@@ -550,4 +550,62 @@ async fn copy_works_as_non_superuser_database_owner() {
     ac.execute_unprepared("DROP ROLE IF EXISTS codex_nosuper")
         .await
         .ok();
+}
+
+// ---------------------------------------------------------------------------
+// Full (per-record) verification: canonical content matches cross-engine, and
+// a tampered row is detected.
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+#[ignore] // requires a PostgreSQL test database
+async fn full_verification_matches_then_detects_tampering() {
+    use codex::migrate::full_verify::compare_digests;
+
+    let (src, _sd) = setup_test_db_wrapper().await;
+    let Some(pg) = fresh_pg("codex_test_fullverify").await else {
+        return;
+    };
+    // Rich fixture: JSON, a float, ints, timestamps, UUID FKs.
+    seed_source(&src).await;
+
+    transfer(
+        src.sea_orm_connection(),
+        &pg,
+        codex::migrate::Progress::Silent,
+    )
+    .await
+    .unwrap();
+
+    // Positive: canonical content matches across engines despite jsonb key
+    // reordering, number normalization, and timestamp precision differences.
+    let src_digests = registry::digest_all_from_conn(src.sea_orm_connection())
+        .await
+        .unwrap();
+    let pg_digests = registry::digest_all_from_conn(&pg).await.unwrap();
+    let clean = compare_digests(&src_digests, &pg_digests);
+    assert!(
+        clean.is_empty(),
+        "content should match cross-engine: {clean:?}"
+    );
+
+    // Negative: mutate one row on the target; only that table should differ.
+    pg.execute_unprepared("UPDATE users SET username = 'tampered'")
+        .await
+        .unwrap();
+    let pg_digests2 = registry::digest_all_from_conn(&pg).await.unwrap();
+    let mismatches = compare_digests(&src_digests, &pg_digests2);
+    assert!(
+        mismatches
+            .iter()
+            .any(|m| m.table == "users" && m.content_differs),
+        "tampered users row should be detected: {mismatches:?}"
+    );
+    assert!(
+        mismatches.iter().all(|m| m.table == "users"),
+        "only users should differ: {mismatches:?}"
+    );
+
+    drop(pg);
+    drop_pg("codex_test_fullverify").await;
 }

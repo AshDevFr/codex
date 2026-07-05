@@ -19,6 +19,7 @@ use sea_orm::{
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
+use crate::full_verify::{DigestAccumulator, TableDigest};
 use crate::progress::{Progress, ROW_REPORT_INTERVAL};
 
 /// Default insert batch size. Bounds memory and round-trips while staying well
@@ -188,6 +189,43 @@ where
     C: ConnectionTrait,
 {
     Ok(E::find().count(conn).await?)
+}
+
+/// Compute the canonical content digest of `E` read from a connection.
+pub async fn digest_table_from_conn<E, C>(conn: &C) -> Result<TableDigest>
+where
+    E: EntityTrait,
+    E::Model: Serialize,
+    C: ConnectionTrait + StreamTrait,
+{
+    let table = iden_string(&E::default());
+    let mut stream = open_source_stream::<E, C>(conn).await?;
+    let mut acc = DigestAccumulator::default();
+    while let Some(model) = stream.try_next().await? {
+        acc.add(&model);
+    }
+    Ok(acc.finish(table))
+}
+
+/// Compute the canonical content digest of `E` read from an NDJSON reader (the
+/// archive payload).
+pub fn digest_table_from_ndjson<E, R>(reader: R) -> Result<TableDigest>
+where
+    E: EntityTrait,
+    E::Model: DeserializeOwned + Serialize,
+    R: BufRead,
+{
+    let table = iden_string(&E::default());
+    let mut acc = DigestAccumulator::default();
+    for line in reader.lines() {
+        let line = line?;
+        if line.trim().is_empty() {
+            continue;
+        }
+        let model: E::Model = serde_json::from_str(&line)?;
+        acc.add(&model);
+    }
+    Ok(acc.finish(table))
 }
 
 /// Delete every row of `E`. Used by `--replace` before a load. Callers must

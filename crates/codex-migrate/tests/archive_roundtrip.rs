@@ -167,6 +167,7 @@ async fn archive_roundtrip_mirrors_data_and_reroots_paths() {
             },
         ],
         codex_migrate::Progress::Silent,
+        false,
     )
     .await
     .expect("import should succeed");

@@ -163,6 +163,10 @@ enum Commands {
         /// Skip the post-import row-count verification
         #[arg(long)]
         no_verify: bool,
+
+        /// Also compare every record's canonical content between archive and target (slower)
+        #[arg(long)]
+        full_verification: bool,
     },
 
     /// Copy database rows directly from one instance to another
@@ -198,6 +202,10 @@ enum Commands {
         /// Skip the post-copy row-count verification
         #[arg(long)]
         no_verify: bool,
+
+        /// Also compare every record's canonical content between source and target (slower)
+        #[arg(long)]
+        full_verification: bool,
     },
 }
 
@@ -270,8 +278,17 @@ async fn main() -> anyhow::Result<()> {
             replace,
             progress,
             no_verify,
+            full_verification,
         } => {
-            import_command(config, input, replace, progress, no_verify).await?;
+            import_command(
+                config,
+                input,
+                replace,
+                progress,
+                no_verify,
+                full_verification,
+            )
+            .await?;
         }
         Commands::Copy {
             config,
@@ -282,6 +299,7 @@ async fn main() -> anyhow::Result<()> {
             replace,
             progress,
             no_verify,
+            full_verification,
         } => {
             copy_command(
                 config,
@@ -292,6 +310,7 @@ async fn main() -> anyhow::Result<()> {
                 replace,
                 progress,
                 no_verify,
+                full_verification,
             )
             .await?;
         }

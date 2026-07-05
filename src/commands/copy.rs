@@ -24,6 +24,7 @@ pub async fn copy_command(
     replace: bool,
     progress: bool,
     no_verify: bool,
+    full_verification: bool,
 ) -> Result<()> {
     // Local config: used for tracing and as the fallback for an omitted side.
     let (local_config, _created) = load_config(config_path.clone())?;
@@ -95,6 +96,16 @@ pub async fn copy_command(
     if !no_verify {
         let source_counts = codex_migrate::registry::count_all(source.sea_orm_connection()).await?;
         super::verify_row_counts(&source_counts, target.sea_orm_connection()).await?;
+    }
+
+    if full_verification {
+        info!("Running full per-record verification...");
+        let src_digests =
+            codex_migrate::registry::digest_all_from_conn(source.sea_orm_connection()).await?;
+        let dst_digests =
+            codex_migrate::registry::digest_all_from_conn(target.sea_orm_connection()).await?;
+        let mismatches = codex_migrate::full_verify::compare_digests(&src_digests, &dst_digests);
+        super::report_full_verify(&mismatches, src_digests.len());
     }
 
     info!("========================================");
@@ -204,6 +215,7 @@ files:
             false,
             false,
             false,
+            false,
         )
         .await
         .expect("copy should succeed");
@@ -219,7 +231,7 @@ files:
     async fn copy_requires_at_least_one_explicit_side() {
         let dir = TempDir::new().unwrap();
         let cfg = write_config(dir.path(), "only");
-        let err = copy_command(cfg, None, None, None, None, false, false, false)
+        let err = copy_command(cfg, None, None, None, None, false, false, false, false)
             .await
             .expect_err("copy with no explicit side must error");
         assert!(err.to_string().contains("at least one explicit side"));

@@ -15,6 +15,7 @@ pub mod archive;
 pub mod conn;
 pub mod engine;
 pub mod fk;
+pub mod full_verify;
 pub mod guard;
 pub mod manifest;
 pub mod progress;

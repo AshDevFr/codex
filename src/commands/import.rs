@@ -18,6 +18,7 @@ pub async fn import_command(
     replace: bool,
     progress: bool,
     no_verify: bool,
+    full_verification: bool,
 ) -> Result<()> {
     let (config, _created) = load_config(config_path.clone())?;
     let _tracing = init_tracing(&config)?;
@@ -62,9 +63,14 @@ pub async fn import_command(
         &input,
         &artifact_targets(&config),
         codex_migrate::Progress::from_flag(progress),
+        full_verification,
     )
     .await
     .context("Import failed")?;
+
+    if full_verification {
+        super::report_full_verify(&outcome.full_verify, codex_migrate::table_names().len());
+    }
 
     if !no_verify {
         // The manifest records the source's per-table counts at export time.
@@ -199,13 +205,13 @@ files:
         assert!(archive.exists(), "archive written");
 
         // Import into a fresh target.
-        import_command(tgt_cfg.clone(), archive.clone(), false, false, false)
+        import_command(tgt_cfg.clone(), archive.clone(), false, false, false, false)
             .await
             .expect("import into fresh target should succeed");
         assert_eq!(library_names(&tgt_cfg).await, vec!["Comics".to_string()]);
 
         // A second import without --replace is refused (target now has data).
-        let err = import_command(tgt_cfg.clone(), archive.clone(), false, false, false)
+        let err = import_command(tgt_cfg.clone(), archive.clone(), false, false, false, false)
             .await
             .expect_err("import into non-fresh target should be refused");
         assert!(
@@ -214,7 +220,7 @@ files:
         );
 
         // With --replace it succeeds and still mirrors the source.
-        import_command(tgt_cfg.clone(), archive.clone(), true, false, false)
+        import_command(tgt_cfg.clone(), archive.clone(), true, false, false, false)
             .await
             .expect("import --replace should succeed");
         assert_eq!(library_names(&tgt_cfg).await, vec!["Comics".to_string()]);
@@ -224,9 +230,16 @@ files:
     async fn import_rejects_missing_archive() {
         let dir = TempDir::new().unwrap();
         let cfg = write_config(dir.path(), "tgt");
-        let err = import_command(cfg, dir.path().join("nope.tar.gz"), false, false, false)
-            .await
-            .expect_err("missing archive should error");
+        let err = import_command(
+            cfg,
+            dir.path().join("nope.tar.gz"),
+            false,
+            false,
+            false,
+            false,
+        )
+        .await
+        .expect_err("missing archive should error");
         assert!(err.to_string().contains("archive not found"));
     }
 }
