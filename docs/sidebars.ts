@@ -88,6 +88,7 @@ const sidebars: SidebarsConfig = {
         "deployment/database",
         "deployment/performance",
         "deployment/operations",
+        "deployment/backup-and-migration",
       ],
     },
     "troubleshooting",

@@ -8,6 +8,7 @@
 mod api;
 mod db;
 mod event_bridge;
+mod migrate;
 mod parsers;
 mod scanner;
 mod scheduler;
