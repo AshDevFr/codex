@@ -374,3 +374,88 @@ async fn export_import_across_all_engine_pairs() {
     drop_pg("codex_test_pair_a").await;
     drop_pg("codex_test_pair_b").await;
 }
+
+// ---------------------------------------------------------------------------
+// Wide-table batch: a table with many columns must not exceed the destination's
+// bind-parameter limit (PostgreSQL 65535 / SQLite 32766).
+// ---------------------------------------------------------------------------
+
+use codex::db::entities::book_metadata;
+use sea_orm::PaginatorTrait;
+
+async fn seed_wide_rows(db: &Database, n: usize) {
+    let library = db
+        .create_library("Comics", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = db.create_series(library.id, "Saga").await.unwrap();
+    let conn = db.sea_orm_connection();
+
+    let mut books_am = Vec::with_capacity(n);
+    let mut meta_am = Vec::with_capacity(n);
+    for i in 0..n {
+        let book_id = Uuid::new_v4();
+        books_am.push(books::ActiveModel {
+            id: Set(book_id),
+            series_id: Set(series.id),
+            library_id: Set(library.id),
+            path: Set(format!("/lib/{i}.cbz")),
+            file_name: Set(format!("{i}.cbz")),
+            file_size: Set(1),
+            file_hash: Set(format!("h{i}")),
+            partial_hash: Set(format!("p{i}")),
+            format: Set("cbz".to_string()),
+            page_count: Set(1),
+            deleted: Set(false),
+            analyzed: Set(true),
+            modified_at: Set(Utc::now()),
+            created_at: Set(Utc::now()),
+            updated_at: Set(Utc::now()),
+            ..Default::default()
+        });
+        meta_am.push(book_metadata::ActiveModel {
+            id: Set(Uuid::new_v4()),
+            book_id: Set(book_id),
+            search_title: Set(format!("title {i}")),
+            created_at: Set(Utc::now()),
+            updated_at: Set(Utc::now()),
+            ..Default::default()
+        });
+    }
+    // Seed in modest chunks so seeding itself stays under the SQLite limit.
+    for chunk in books_am.chunks(400) {
+        books::Entity::insert_many(chunk.to_vec())
+            .exec(conn)
+            .await
+            .unwrap();
+    }
+    for chunk in meta_am.chunks(400) {
+        book_metadata::Entity::insert_many(chunk.to_vec())
+            .exec(conn)
+            .await
+            .unwrap();
+    }
+}
+
+#[tokio::test]
+#[ignore] // requires a PostgreSQL test database
+async fn copy_wide_table_exceeding_param_limit() {
+    let (src, _sd) = setup_test_db_wrapper().await;
+    let Some(pg) = fresh_pg("codex_test_wide").await else {
+        return; // no PostgreSQL available
+    };
+
+    // 1000 book_metadata rows × 66 columns = 66000 bind params in one naive
+    // batch — over PostgreSQL's 65535 limit. The batch cap must split it.
+    seed_wide_rows(&src, 1000).await;
+
+    transfer(src.sea_orm_connection(), &pg)
+        .await
+        .expect("wide-table copy must not exceed the bind-parameter limit");
+
+    let n = book_metadata::Entity::find().count(&pg).await.unwrap();
+    assert_eq!(n, 1000, "all wide rows copied");
+
+    drop(pg);
+    drop_pg("codex_test_wide").await;
+}
