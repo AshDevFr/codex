@@ -217,3 +217,160 @@ async fn sqlite_to_postgres_roundtrip_mirrors_all_data() {
     assert_eq!(src_lib.name, pg_lib.name);
     assert_eq!(src_lib.series_config, pg_lib.series_config);
 }
+
+// ---------------------------------------------------------------------------
+// Export/import across every engine pair.
+// ---------------------------------------------------------------------------
+
+use codex::db::entities::genres;
+use codex::migrate::archive::{export_archive, import_archive};
+use codex::migrate::database_config_from_url;
+use common::setup_test_db;
+use sea_orm::{ConnectionTrait, DatabaseConnection};
+
+/// Seed an engine-neutral fixture on any connection: one genre (UUID + text +
+/// timestamp) and one user (UUID + JSON permissions + bool). No FKs, so it
+/// inserts on SQLite or Postgres identically.
+async fn seed_min(conn: &DatabaseConnection) {
+    let gid = Uuid::new_v4();
+    genres::ActiveModel {
+        id: Set(gid),
+        name: Set("Action".to_string()),
+        normalized_name: Set("action".to_string()),
+        created_at: Set(Utc::now()),
+    }
+    .insert(conn)
+    .await
+    .unwrap();
+
+    let uid = Uuid::new_v4();
+    users::ActiveModel {
+        id: Set(uid),
+        username: Set(format!("u-{uid}")),
+        email: Set(format!("{uid}@example.com")),
+        password_hash: Set("h".to_string()),
+        role: Set("reader".to_string()),
+        is_active: Set(true),
+        email_verified: Set(false),
+        permissions: Set(json!(["books:read"])),
+        created_at: Set(Utc::now()),
+        updated_at: Set(Utc::now()),
+        last_login_at: Set(None),
+    }
+    .insert(conn)
+    .await
+    .unwrap();
+}
+
+/// Create a fresh, migrated PostgreSQL database named `name` on the test
+/// server. Returns `None` if PostgreSQL is unreachable.
+async fn fresh_pg(name: &str) -> Option<DatabaseConnection> {
+    let base = std::env::var("POSTGRES_TEST_URL")
+        .unwrap_or_else(|_| "postgres://codex:codex@localhost:54321/codex_test".to_string());
+
+    // Connect to the default test DB to issue CREATE DATABASE.
+    let admin = Database::new(&database_config_from_url(&base).ok()?)
+        .await
+        .ok()?;
+    let ac = admin.sea_orm_connection();
+    ac.execute_unprepared(&format!("DROP DATABASE IF EXISTS {name} WITH (FORCE)"))
+        .await
+        .ok()?;
+    ac.execute_unprepared(&format!("CREATE DATABASE {name}"))
+        .await
+        .ok()?;
+
+    let mut cfg = database_config_from_url(&base).ok()?;
+    cfg.postgres.as_mut().unwrap().database_name = name.to_string();
+    let db = Database::new(&cfg).await.ok()?;
+    db.run_migrations().await.ok()?;
+    Some(db.sea_orm_connection().clone())
+}
+
+async fn drop_pg(name: &str) {
+    let base = std::env::var("POSTGRES_TEST_URL")
+        .unwrap_or_else(|_| "postgres://codex:codex@localhost:54321/codex_test".to_string());
+    if let Ok(cfg) = database_config_from_url(&base)
+        && let Ok(admin) = Database::new(&cfg).await
+    {
+        let _ = admin
+            .sea_orm_connection()
+            .execute_unprepared(&format!("DROP DATABASE IF EXISTS {name} WITH (FORCE)"))
+            .await;
+    }
+}
+
+/// Export `src` to an archive and import it into `tgt`, then assert the target
+/// mirrors the source (row-count parity) and the JSON permissions survived.
+async fn export_import_pair(src: &DatabaseConnection, tgt: &DatabaseConnection, label: &str) {
+    let dir = tempfile::tempdir().unwrap();
+    let archive = dir.path().join("export.tar.gz");
+
+    export_archive(src, &archive, &[])
+        .await
+        .unwrap_or_else(|e| panic!("{label}: export failed: {e:#}"));
+    import_archive(tgt, &archive, &[])
+        .await
+        .unwrap_or_else(|e| panic!("{label}: import failed: {e:#}"));
+
+    let src_counts = registry::count_all(src).await.unwrap();
+    let tgt_counts = registry::count_all(tgt).await.unwrap();
+    let mismatches = verify::compare(&src_counts, &tgt_counts);
+    assert!(
+        mismatches.is_empty(),
+        "{label}: count mismatch: {mismatches:?}"
+    );
+
+    // JSON permissions (text JSON <-> JSONB) survived across the pair.
+    let user = users::Entity::find()
+        .one(tgt)
+        .await
+        .unwrap()
+        .unwrap_or_else(|| panic!("{label}: seeded user missing after import"));
+    assert_eq!(
+        user.permissions,
+        json!(["books:read"]),
+        "{label}: permissions"
+    );
+}
+
+#[tokio::test]
+#[ignore] // Postgres pairs require a test database (see `make test-up`)
+async fn export_import_across_all_engine_pairs() {
+    // --- SQLite -> SQLite (always runs). ---
+    {
+        let (src, _sd) = setup_test_db().await;
+        let (tgt, _td) = setup_test_db().await;
+        seed_min(&src).await;
+        export_import_pair(&src, &tgt, "sqlite->sqlite").await;
+    }
+
+    // --- Pairs involving Postgres (skip when unavailable). ---
+    let Some(pg_a) = fresh_pg("codex_test_pair_a").await else {
+        eprintln!("PostgreSQL unavailable; ran sqlite->sqlite only");
+        return;
+    };
+    let pg_b = fresh_pg("codex_test_pair_b")
+        .await
+        .expect("second Postgres database");
+    seed_min(&pg_a).await;
+
+    // SQLite -> Postgres
+    {
+        let (src, _sd) = setup_test_db().await;
+        seed_min(&src).await;
+        export_import_pair(&src, &pg_b, "sqlite->postgres").await;
+    }
+    // Postgres -> SQLite
+    {
+        let (tgt, _td) = setup_test_db().await;
+        export_import_pair(&pg_a, &tgt, "postgres->sqlite").await;
+    }
+    // Postgres -> Postgres
+    export_import_pair(&pg_a, &pg_b, "postgres->postgres").await;
+
+    drop(pg_a);
+    drop(pg_b);
+    drop_pg("codex_test_pair_a").await;
+    drop_pg("codex_test_pair_b").await;
+}

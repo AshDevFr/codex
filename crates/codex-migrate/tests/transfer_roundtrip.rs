@@ -200,3 +200,47 @@ async fn registry_covers_every_migration_table() {
         "registry drift.\n  tables missing from registry: {missing_from_registry:?}\n  registry tables not in schema: {unknown_in_registry:?}"
     );
 }
+
+#[tokio::test]
+async fn transfer_reads_text_stored_uuids_from_sqlite() {
+    // Some databases written by older toolchains store UUIDs as 36-char
+    // hyphenated text rather than 16-byte blobs. The reader must handle both.
+    let (src, _s) = create_test_db().await;
+    let (dst, _d) = create_test_db().await;
+    let sconn = src.sea_orm_connection();
+
+    let id = "550e8400-e29b-41d4-a716-446655440000";
+    sconn
+        .execute_unprepared(&format!(
+            "INSERT INTO genres (id, name, normalized_name, created_at) \
+             VALUES ('{id}','Action','action','2020-01-01 00:00:00+00:00')"
+        ))
+        .await
+        .unwrap();
+
+    // Sanity: the id really is stored as text, not a blob.
+    let row = sconn
+        .query_one(Statement::from_string(
+            sea_orm::DatabaseBackend::Sqlite,
+            "SELECT typeof(id) AS t FROM genres".to_string(),
+        ))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(row.try_get::<String>("", "t").unwrap(), "text");
+
+    codex_migrate::transfer(sconn, dst.sea_orm_connection())
+        .await
+        .expect("transfer must read text-stored UUIDs");
+
+    let uuid = Uuid::parse_str(id).unwrap();
+    let genre = genres::Entity::find_by_id(uuid)
+        .one(dst.sea_orm_connection())
+        .await
+        .unwrap();
+    assert!(
+        genre.is_some(),
+        "genre with a text-stored UUID should transfer"
+    );
+    assert_eq!(genre.unwrap().name, "Action");
+}
