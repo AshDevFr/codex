@@ -6,6 +6,7 @@ pub use codex_api::web;
 pub use codex_config as config;
 pub use codex_db as db;
 pub use codex_events as events;
+pub use codex_migrate as migrate;
 pub use codex_models as models;
 pub use codex_parsers as parsers;
 pub use codex_scanner as scanner;
