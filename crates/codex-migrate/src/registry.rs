@@ -12,6 +12,7 @@ use anyhow::Result;
 use sea_orm::{ConnectionTrait, EntityName, StreamTrait};
 
 use crate::engine;
+use crate::full_verify::TableDigest;
 use crate::progress::Progress;
 
 /// Row count for a single table, produced by the collective operations.
@@ -223,4 +224,46 @@ where
     }
     for_each_entity!(load_one);
     Ok(rows)
+}
+
+/// Canonical content digest of every table read from a connection.
+pub async fn digest_all_from_conn<C>(conn: &C) -> Result<Vec<TableDigest>>
+where
+    C: ConnectionTrait + StreamTrait,
+{
+    let mut digests = Vec::new();
+    macro_rules! digest_one {
+        ($ent:ident) => {{
+            type E = codex_db::entities::$ent::Entity;
+            digests.push(engine::digest_table_from_conn::<E, C>(conn).await?);
+        }};
+    }
+    for_each_entity!(digest_one);
+    Ok(digests)
+}
+
+/// Canonical content digest of every table read from a directory of
+/// `<table>.ndjson` files. Missing files are treated as empty tables.
+pub async fn digest_all_from_ndjson_dir(dir: &Path) -> Result<Vec<TableDigest>> {
+    let mut digests = Vec::new();
+    macro_rules! digest_one {
+        ($ent:ident) => {{
+            type E = codex_db::entities::$ent::Entity;
+            let table = <E as Default>::default().table_name().to_string();
+            let path = dir.join(format!("{table}.ndjson"));
+            let digest = if path.exists() {
+                let reader = std::io::BufReader::new(std::fs::File::open(&path)?);
+                engine::digest_table_from_ndjson::<E, _>(reader)?
+            } else {
+                TableDigest {
+                    table,
+                    checksum: 0,
+                    rows: 0,
+                }
+            };
+            digests.push(digest);
+        }};
+    }
+    for_each_entity!(digest_one);
+    Ok(digests)
 }

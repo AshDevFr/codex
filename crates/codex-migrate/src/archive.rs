@@ -46,6 +46,9 @@ pub struct ImportOutcome {
     pub manifest: Manifest,
     pub report: TransferReport,
     pub reroot: RerootStats,
+    /// Per-table canonical-content mismatches, when full verification was
+    /// requested; empty otherwise.
+    pub full_verify: Vec<crate::full_verify::FullMismatch>,
 }
 
 /// Export `conn` and the given artifact trees into a `.tar.gz` at `out_path`.
@@ -114,11 +117,13 @@ pub async fn import_archive(
     in_path: &Path,
     targets: &[ArtifactTarget],
     progress: Progress,
+    full_verify: bool,
 ) -> Result<ImportOutcome> {
     let staging = tempfile::tempdir().context("failed to create import staging dir")?;
     let manifest = extract(in_path, staging.path())?;
+    let db_dir = staging.path().join("db");
 
-    let report = crate::load_from_dir(conn, &staging.path().join("db"), progress)
+    let report = crate::load_from_dir(conn, &db_dir, progress)
         .await
         .context("failed to load database from archive")?;
 
@@ -163,10 +168,25 @@ pub async fn import_archive(
     .await
     .context("failed to re-root artifact paths")?;
 
+    // Optional deep check: compare the canonical content of every row in the
+    // archive against the loaded target.
+    let full_verify_mismatches = if full_verify {
+        let source = registry::digest_all_from_ndjson_dir(&db_dir)
+            .await
+            .context("failed to digest archive contents")?;
+        let target = registry::digest_all_from_conn(conn)
+            .await
+            .context("failed to digest imported data")?;
+        crate::full_verify::compare_digests(&source, &target)
+    } else {
+        Vec::new()
+    };
+
     Ok(ImportOutcome {
         manifest,
         report,
         reroot,
+        full_verify: full_verify_mismatches,
     })
 }
 
