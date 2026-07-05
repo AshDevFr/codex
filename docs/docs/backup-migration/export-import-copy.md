@@ -1,20 +1,13 @@
----
-sidebar_position: 8
----
+# Export, Import & Copy
 
-# Backup & Migration
+Codex can move its entire dataset between databases and snapshot it to a
+portable archive. Three commands cover it:
 
-Codex can export its entire dataset to a portable archive and load it back into
-any supported database engine. This powers three workflows:
-
-- **Backup / restore** — snapshot the database (and the on-disk artifacts it
-  references) to a single `.tar.gz`, and restore it later.
-- **SQLite → PostgreSQL migration** — move an existing single-node instance to a
-  distributed, PostgreSQL-backed deployment with a faithful 1:1 copy of all
-  data (metadata, custom data, ratings, reading progress, uploaded covers,
-  plugin state).
-- **Direct instance-to-instance copy** — stream one database's rows straight
-  into another.
+- **`export`** — write the database (and the on-disk artifacts it references) to
+  a single `.tar.gz`.
+- **`import`** — load an archive into an instance.
+- **`copy`** — stream one database's rows directly into another (the "sync"
+  between two instances), no file in between.
 
 All three are driven by the database's own entity definitions, so
 engine-specific representations (UUIDs, JSON, booleans, timestamps) are
@@ -22,15 +15,18 @@ translated correctly between SQLite and PostgreSQL — something a raw SQL dump 
 generic converter cannot guarantee.
 
 :::info Why not just copy the SQLite file or use `pg_dump`?
-The SQLite file only works on SQLite. `pg_dump` only reads PostgreSQL. Neither
-crosses engines: SQLite stores UUIDs as 16-byte blobs and JSON as text, while
-PostgreSQL uses native `uuid` and `jsonb`. The `export`/`import`/`copy` commands
-translate these correctly.
+The SQLite file only works on SQLite, and `pg_dump` only reads PostgreSQL —
+neither crosses engines. SQLite stores UUIDs and JSON differently from
+PostgreSQL's native `uuid`/`jsonb`, so a byte-level copy would corrupt data. The
+`export`/`import`/`copy` commands translate these correctly.
 :::
 
-## Commands
+:::note Not the same as "Data Exports"
+This is database-level backup/transfer. The user-facing [Data Exports](../exports)
+feature (exporting a series to JSON/CSV) is unrelated.
+:::
 
-### `export`
+## `export`
 
 Writes the database and its on-disk artifacts to a `.tar.gz`.
 
@@ -53,10 +49,10 @@ The archive contains a `manifest.json` (format and schema version, per-table row
 counts, bundled artifact groups), one `db/<table>.ndjson` per table, and the
 bundled artifact directories.
 
-### `import`
+## `import`
 
-Loads an archive into the current instance. Runs migrations on the target first,
-then validates and loads.
+Loads an archive into the current instance, running migrations on the target
+first, then validating and loading.
 
 ```bash
 codex import --config config/codex.yaml --input codex-backup.tar.gz
@@ -78,10 +74,10 @@ On import, file paths stored in the database are **re-rooted** to this
 instance's configured directories, so an archive from an instance with different
 `files.*_dir` paths still resolves its images.
 
-### `copy`
+## `copy`
 
 Streams database rows directly from one database to another, without an
-intermediate file.
+intermediate file — useful for pushing/pulling between two live instances.
 
 ```bash
 # Run on the destination: pull the old SQLite database into the local (Postgres) config
@@ -109,59 +105,34 @@ To avoid leaking a password via the process list, prefer the env vars or
 `--from-config` / `--to-config` over a `postgres://user:pass@…` URL on the
 command line.
 
-## Migrate SQLite → PostgreSQL (Kubernetes)
+## Setting up the target
 
-A step-by-step runbook for moving a single-node SQLite instance to a
-PostgreSQL-backed, worker-separated deployment.
+You never create tables — `import` and `copy` run the migrations themselves.
+What you need to prepare depends on the engine:
 
-1. **Quiesce the source.** Stop writes to the running instance (scale it down or
-   take it offline). The export reads a consistent snapshot; new writes during
-   the export would be lost.
+- **SQLite target — nothing to create.** Like `serve`, `import` writes a default
+  config if none exists and creates the database file (and its parent
+  directories) automatically. Just point `database.sqlite.path` (or
+  `CODEX_DATABASE_SQLITE_PATH`) at the destination and run it.
+- **PostgreSQL target — create the empty database and role first.** PostgreSQL
+  won't create a database from a connection string, so provision it once (your
+  Kubernetes chart / operator / an init job typically does this):
 
-2. **Export on the source**, including artifacts (the default):
+  ```sql
+  CREATE DATABASE codex;
+  CREATE USER codex WITH PASSWORD '...';
+  ALTER DATABASE codex OWNER TO codex;   -- owner/superuser: see the privilege note below
+  ```
 
-   ```bash
-   codex export --config config/codex.yaml --output codex-migration.tar.gz
-   ```
-
-3. **Provision PostgreSQL** and configure the new deployment to use it. **Carry
-   over the encryption key** (see the caution below) into the new instance's
-   config.
-
-4. **Import on the new instance.** The target is fresh, so no `--replace` is
-   needed:
-
-   ```bash
-   codex import --config config/codex.yaml --input codex-migration.tar.gz
-   ```
-
-   Migrations run, rows load, artifacts unpack, and file paths are re-rooted to
-   the new instance's directories.
-
-5. **Verify.** Review the import summary (per-table row counts, re-rooted path
-   counts). Bring up the server and worker, open the app, and confirm covers,
-   thumbnails, and reading progress are intact.
-
-:::danger Carry over the encryption key
-Encrypted values (such as plugin credentials) are copied as **ciphertext** and
-are never decrypted during migration. The destination instance must be
-configured with the **same encryption key** as the source, or those values
-cannot be decrypted after the move.
-:::
-
-:::note PostgreSQL privileges
-`import` and `copy` temporarily disable foreign-key enforcement during the bulk
-load (`SET session_replication_role = replica`), which requires the target
-connection to be a **superuser or the database owner**. This is normally the
-case when you provision the database yourself.
-:::
+  Then point the config/env at it and import — the schema and data are created
+  for you.
 
 ## Backup & restore
 
 The same tooling doubles as backup:
 
 ```bash
-# Nightly backup
+# Dated backup
 codex export --output "backups/codex-$(date +%F).tar.gz"
 
 # Restore into a fresh instance
@@ -184,3 +155,15 @@ uploaded/extracted covers, and plugin data.
 those live on a volume the new instance is expected to mount. The reproducible
 PDF page cache is excluded unless you pass `--include-cache`, and user-generated
 export files are not bundled.
+
+:::danger Carry over the encryption key
+Encrypted values (such as plugin credentials) are copied as **ciphertext** and
+are never decrypted. A destination instance must be configured with the **same
+encryption key** as the source, or those values cannot be decrypted afterwards.
+:::
+
+:::note PostgreSQL privileges
+`import` and `copy` temporarily disable foreign-key enforcement during the bulk
+load, which requires the target connection to be a **superuser or the database
+owner**. This is normally the case when you provision the database yourself.
+:::

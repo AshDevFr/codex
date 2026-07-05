@@ -22,14 +22,7 @@ const devSidebar: SidebarsConfig = {
         "contributing/development",
         "contributing/architecture",
         "contributing/migrations",
-      ],
-    },
-    {
-      type: "category",
-      label: "Decisions",
-      collapsed: false,
-      items: [
-        "decisions/0001-workspace-split",
+        "contributing/data-export-import",
       ],
     },
   ],

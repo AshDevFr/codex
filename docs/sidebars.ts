@@ -13,8 +13,7 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: "category",
-      label: "Using Codex",
-      collapsed: false,
+      label: "Libraries & Scanning",
       items: [
         "libraries",
         "library-jobs",
@@ -35,15 +34,46 @@ const sidebars: SidebarsConfig = {
           items: ["examples/preprocessing-examples"],
         },
         "formats",
-        "filtering",
+      ],
+    },
+    {
+      type: "category",
+      label: "Metadata",
+      items: [
         "book-metadata",
         "series-metadata",
         "series-management",
-        "collections-readlists",
         "custom-metadata",
         "release-tracking",
-        "tsundoku",
-        "exports",
+      ],
+    },
+    {
+      type: "category",
+      label: "Reading & Lists",
+      items: [
+        "reader-settings",
+        "offline-reading",
+        "filtering",
+        "collections-readlists",
+      ],
+    },
+    {
+      type: "category",
+      label: "Users & Permissions",
+      link: { type: "doc", id: "users/index" },
+      items: [
+        "users/user-management",
+        "users/permissions",
+        "users/api-keys",
+        "users/authentication",
+        "users/oidc",
+        "users/sharing-tags",
+      ],
+    },
+    {
+      type: "category",
+      label: "Integrations & Apps",
+      items: [
         {
           type: "category",
           label: "Plugins",
@@ -57,23 +87,18 @@ const sidebars: SidebarsConfig = {
             "plugins/release-nyaa",
           ],
         },
-        {
-          type: "category",
-          label: "Users & Permissions",
-          link: { type: "doc", id: "users/index" },
-          items: [
-            "users/user-management",
-            "users/permissions",
-            "users/api-keys",
-            "users/authentication",
-            "users/oidc",
-            "users/sharing-tags",
-          ],
-        },
         "opds",
         "third-party-apps",
-        "reader-settings",
-        "offline-reading",
+        "tsundoku",
+        "exports",
+      ],
+    },
+    {
+      type: "category",
+      label: "Backup & Migration",
+      items: [
+        "backup-migration/export-import-copy",
+        "backup-migration/migrate-postgres",
       ],
     },
     {
@@ -88,7 +113,6 @@ const sidebars: SidebarsConfig = {
         "deployment/database",
         "deployment/performance",
         "deployment/operations",
-        "deployment/backup-and-migration",
       ],
     },
     "troubleshooting",

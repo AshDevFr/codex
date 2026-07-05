@@ -104,7 +104,7 @@ Three feature flags cascade from the root binary through the sibling crates:
 
 ### Design Rationale
 
-The workspace split is documented in detail in [ADR 0001: Workspace Split](../decisions/0001-workspace-split.md), which captures the original dependency graph, the measured build-time outcomes, and the alternatives considered.
+The workspace is split into per-subsystem crates so that editing one crate only recompiles that crate and its downstream consumers, keeping warm rebuilds fast. Each crate builds in isolation (`cargo build -p codex-<crate>`) and owns a single responsibility, which keeps cross-crate dependency edges explicit and the root binary thin.
 
 ## Core Principles
 
