@@ -140,6 +140,7 @@ async fn archive_roundtrip_mirrors_data_and_reroots_paths() {
                 source_dir: src_uploads.clone(),
             },
         ],
+        codex_migrate::Progress::Silent,
     )
     .await
     .expect("export should succeed");
@@ -165,6 +166,7 @@ async fn archive_roundtrip_mirrors_data_and_reroots_paths() {
                 target_dir: dst_uploads.clone(),
             },
         ],
+        codex_migrate::Progress::Silent,
     )
     .await
     .expect("import should succeed");

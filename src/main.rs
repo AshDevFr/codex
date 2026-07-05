@@ -136,6 +136,10 @@ enum Commands {
         /// Skip bundling plugin data
         #[arg(long)]
         no_plugins: bool,
+
+        /// Log per-table progress while exporting
+        #[arg(long)]
+        progress: bool,
     },
 
     /// Import a .tar.gz archive produced by `export` into this instance
@@ -151,6 +155,14 @@ enum Commands {
         /// Replace existing data in the target instead of refusing a non-empty target
         #[arg(long)]
         replace: bool,
+
+        /// Log per-table progress while importing
+        #[arg(long)]
+        progress: bool,
+
+        /// Skip the post-import row-count verification
+        #[arg(long)]
+        no_verify: bool,
     },
 
     /// Copy database rows directly from one instance to another
@@ -178,6 +190,14 @@ enum Commands {
         /// Replace existing data in the target instead of refusing a non-empty target
         #[arg(long)]
         replace: bool,
+
+        /// Log per-table progress while copying
+        #[arg(long)]
+        progress: bool,
+
+        /// Skip the post-copy row-count verification
+        #[arg(long)]
+        no_verify: bool,
     },
 }
 
@@ -230,6 +250,7 @@ async fn main() -> anyhow::Result<()> {
             no_thumbnails,
             no_uploads,
             no_plugins,
+            progress,
         } => {
             export_command(
                 config,
@@ -239,6 +260,7 @@ async fn main() -> anyhow::Result<()> {
                 no_thumbnails,
                 no_uploads,
                 no_plugins,
+                progress,
             )
             .await?;
         }
@@ -246,8 +268,10 @@ async fn main() -> anyhow::Result<()> {
             config,
             input,
             replace,
+            progress,
+            no_verify,
         } => {
-            import_command(config, input, replace).await?;
+            import_command(config, input, replace, progress, no_verify).await?;
         }
         Commands::Copy {
             config,
@@ -256,8 +280,20 @@ async fn main() -> anyhow::Result<()> {
             from_config,
             to_config,
             replace,
+            progress,
+            no_verify,
         } => {
-            copy_command(config, from, to, from_config, to_config, replace).await?;
+            copy_command(
+                config,
+                from,
+                to,
+                from_config,
+                to_config,
+                replace,
+                progress,
+                no_verify,
+            )
+            .await?;
         }
     }
 
