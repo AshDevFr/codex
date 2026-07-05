@@ -10,9 +10,11 @@ path = "src/lib.rs"
 
 [dependencies]
 anyhow = { workspace = true }
+chrono = { workspace = true }
 serde = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
+uuid = { workspace = true }
 
 codex-db = { workspace = true }
 codex-config = { workspace = true }
@@ -32,6 +34,11 @@ sea-orm = { version = "1.1", features = [
 serde_json = "1.0"
 # Streaming rows out of `Entity::find().stream()`.
 futures = "0.3"
+# Archive packing: gzip-compressed tar for the portable export bundle.
+tar = "0.4"
+flate2 = "1.0"
+# Staging directories for export/import at runtime.
+tempfile = { workspace = true }
 
 [dev-dependencies]
 codex-db = { workspace = true, features = ["test-utils"] }
