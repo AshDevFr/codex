@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.40.1] - 2026-07-05
+
+### 🐛 Bug Fixes
+
+- *(migrate)* Read SQLite UUIDs stored as text, not just blobs
+
 ## [1.40.0] - 2026-07-05
 
 ### 🚀 Features
