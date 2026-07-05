@@ -821,6 +821,7 @@ dependencies = [
  "codex-config",
  "codex-db",
  "codex-events",
+ "codex-migrate",
  "codex-models",
  "codex-parsers",
  "codex-scanner",
@@ -1008,6 +1009,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tracing",
+ "url",
  "uuid",
 ]
 

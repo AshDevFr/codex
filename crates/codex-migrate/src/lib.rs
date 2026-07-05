@@ -12,12 +12,16 @@
 //! rests on source consistency plus the row-count verification in [`verify`].
 
 pub mod archive;
+pub mod conn;
 pub mod engine;
 pub mod fk;
+pub mod guard;
 pub mod manifest;
 pub mod registry;
 pub mod reroot;
 pub mod verify;
+
+pub use conn::database_config_from_url;
 
 use std::path::Path;
 

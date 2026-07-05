@@ -116,6 +116,7 @@ codex-cli-common = { workspace = true }
 codex-config = { workspace = true }
 codex-db = { workspace = true }
 codex-events = { workspace = true }
+codex-migrate = { workspace = true }
 codex-models = { workspace = true }
 codex-parsers = { workspace = true }
 codex-scanner = { workspace = true }
