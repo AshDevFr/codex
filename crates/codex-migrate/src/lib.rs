@@ -11,14 +11,20 @@
 //! re-validates the whole dataset (deferred FK check); on PostgreSQL integrity
 //! rests on source consistency plus the row-count verification in [`verify`].
 
+pub mod archive;
 pub mod engine;
 pub mod fk;
+pub mod manifest;
 pub mod registry;
+pub mod reroot;
 pub mod verify;
+
+use std::path::Path;
 
 use anyhow::{Context, Result};
 use sea_orm::{DatabaseConnection, TransactionTrait};
 
+pub use manifest::Manifest;
 pub use registry::{TableRows, table_names};
 
 /// Outcome of a [`transfer`], carrying per-table and total row counts.
@@ -58,6 +64,34 @@ pub async fn transfer(
     let tables = registry::copy_all(src, &txn, engine::DEFAULT_BATCH_SIZE)
         .await
         .context("failed while copying tables")?;
+
+    txn.commit()
+        .await
+        .context("failed to commit destination transaction (foreign-key check may have failed)")?;
+
+    let total_rows = tables.iter().map(|t| t.rows).sum();
+    Ok(TransferReport { tables, total_rows })
+}
+
+/// Load a directory of `<table>.ndjson` files into `dst`, producing a faithful
+/// 1:1 mirror. Same transaction semantics as [`transfer`] (disable FK →
+/// truncate → load → commit); this is the archive-backed load used by
+/// `import`.
+pub async fn load_from_dir(dst: &DatabaseConnection, db_dir: &Path) -> Result<TransferReport> {
+    let txn = dst
+        .begin()
+        .await
+        .context("failed to open destination transaction")?;
+
+    fk::disable(&txn).await?;
+
+    registry::truncate_all(&txn)
+        .await
+        .context("failed to clear destination before load")?;
+
+    let tables = registry::load_all_from_dir(&txn, db_dir, engine::DEFAULT_BATCH_SIZE)
+        .await
+        .context("failed while loading tables from archive")?;
 
     txn.commit()
         .await
