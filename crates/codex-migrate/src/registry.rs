@@ -12,6 +12,7 @@ use anyhow::Result;
 use sea_orm::{ConnectionTrait, EntityName, StreamTrait};
 
 use crate::engine;
+use crate::progress::Progress;
 
 /// Row count for a single table, produced by the collective operations.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -141,7 +142,12 @@ where
 }
 
 /// Stream every table directly from `src` into `dst` (the direct copy path).
-pub async fn copy_all<S, D>(src: &S, dst: &D, batch_size: usize) -> Result<Vec<TableRows>>
+pub async fn copy_all<S, D>(
+    src: &S,
+    dst: &D,
+    batch_size: usize,
+    progress: Progress,
+) -> Result<Vec<TableRows>>
 where
     S: ConnectionTrait + StreamTrait,
     D: ConnectionTrait,
@@ -151,7 +157,9 @@ where
         ($ent:ident) => {{
             type E = codex_db::entities::$ent::Entity;
             let table = <E as Default>::default().table_name().to_string();
-            let n = engine::copy_table::<E, S, D>(src, dst, batch_size).await?;
+            progress.table_start(&table);
+            let n = engine::copy_table::<E, S, D>(src, dst, batch_size, progress).await?;
+            progress.table_done(&table, n);
             rows.push(TableRows { table, rows: n });
         }};
     }
@@ -161,7 +169,7 @@ where
 
 /// Dump every table to `dir` as one `<table>.ndjson` file each (the archive
 /// payload). `dir` must already exist.
-pub async fn dump_all_to_dir<C>(conn: &C, dir: &Path) -> Result<Vec<TableRows>>
+pub async fn dump_all_to_dir<C>(conn: &C, dir: &Path, progress: Progress) -> Result<Vec<TableRows>>
 where
     C: ConnectionTrait + StreamTrait,
 {
@@ -171,10 +179,12 @@ where
         ($ent:ident) => {{
             type E = codex_db::entities::$ent::Entity;
             let table = <E as Default>::default().table_name().to_string();
+            progress.table_start(&table);
             let path = dir.join(format!("{table}.ndjson"));
             let mut writer = std::io::BufWriter::new(std::fs::File::create(&path)?);
-            let n = engine::dump_table::<E, C, _>(conn, &mut writer).await?;
+            let n = engine::dump_table::<E, C, _>(conn, &mut writer, progress).await?;
             writer.flush()?;
+            progress.table_done(&table, n);
             rows.push(TableRows { table, rows: n });
         }};
     }
@@ -184,7 +194,12 @@ where
 
 /// Load every table from a directory of `<table>.ndjson` files. Missing files
 /// are treated as empty tables.
-pub async fn load_all_from_dir<C>(conn: &C, dir: &Path, batch_size: usize) -> Result<Vec<TableRows>>
+pub async fn load_all_from_dir<C>(
+    conn: &C,
+    dir: &Path,
+    batch_size: usize,
+    progress: Progress,
+) -> Result<Vec<TableRows>>
 where
     C: ConnectionTrait,
 {
@@ -195,8 +210,11 @@ where
             let table = <E as Default>::default().table_name().to_string();
             let path = dir.join(format!("{table}.ndjson"));
             let n = if path.exists() {
+                progress.table_start(&table);
                 let reader = std::io::BufReader::new(std::fs::File::open(&path)?);
-                engine::load_table::<E, C, _>(conn, reader, batch_size).await?
+                let n = engine::load_table::<E, C, _>(conn, reader, batch_size, progress).await?;
+                progress.table_done(&table, n);
+                n
             } else {
                 0
             };

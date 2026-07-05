@@ -17,11 +17,13 @@ pub mod engine;
 pub mod fk;
 pub mod guard;
 pub mod manifest;
+pub mod progress;
 pub mod registry;
 pub mod reroot;
 pub mod verify;
 
 pub use conn::database_config_from_url;
+pub use progress::Progress;
 
 use std::path::Path;
 
@@ -53,6 +55,7 @@ pub struct TransferReport {
 pub async fn transfer(
     src: &DatabaseConnection,
     dst: &DatabaseConnection,
+    progress: Progress,
 ) -> Result<TransferReport> {
     let txn = dst
         .begin()
@@ -65,7 +68,7 @@ pub async fn transfer(
         .await
         .context("failed to clear destination before load")?;
 
-    let tables = registry::copy_all(src, &txn, engine::DEFAULT_BATCH_SIZE)
+    let tables = registry::copy_all(src, &txn, engine::DEFAULT_BATCH_SIZE, progress)
         .await
         .context("failed while copying tables")?;
 
@@ -83,7 +86,11 @@ pub async fn transfer(
 /// 1:1 mirror. Same transaction semantics as [`transfer`] (disable FK →
 /// truncate → load → commit); this is the archive-backed load used by
 /// `import`.
-pub async fn load_from_dir(dst: &DatabaseConnection, db_dir: &Path) -> Result<TransferReport> {
+pub async fn load_from_dir(
+    dst: &DatabaseConnection,
+    db_dir: &Path,
+    progress: Progress,
+) -> Result<TransferReport> {
     let txn = dst
         .begin()
         .await
@@ -95,7 +102,7 @@ pub async fn load_from_dir(dst: &DatabaseConnection, db_dir: &Path) -> Result<Tr
         .await
         .context("failed to clear destination before load")?;
 
-    let tables = registry::load_all_from_dir(&txn, db_dir, engine::DEFAULT_BATCH_SIZE)
+    let tables = registry::load_all_from_dir(&txn, db_dir, engine::DEFAULT_BATCH_SIZE, progress)
         .await
         .context("failed while loading tables from archive")?;
 

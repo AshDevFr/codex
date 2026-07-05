@@ -20,6 +20,7 @@ use crate::manifest::{
     ARCHIVE_FORMAT_VERSION, ArtifactEntry, ArtifactGroup, Manifest, TableCount, backend_name,
     schema_version,
 };
+use crate::progress::Progress;
 use crate::reroot::{self, RerootStats};
 use crate::{TransferReport, registry};
 
@@ -54,12 +55,13 @@ pub async fn export_archive(
     conn: &DatabaseConnection,
     out_path: &Path,
     artifacts: &[ArtifactSource],
+    progress: Progress,
 ) -> Result<Manifest> {
     let staging = tempfile::tempdir().context("failed to create export staging dir")?;
     let db_dir = staging.path().join("db");
     std::fs::create_dir_all(&db_dir)?;
 
-    let counts = registry::dump_all_to_dir(conn, &db_dir)
+    let counts = registry::dump_all_to_dir(conn, &db_dir, progress)
         .await
         .context("failed to dump database tables")?;
     let total_rows = counts.iter().map(|c| c.rows).sum();
@@ -111,11 +113,12 @@ pub async fn import_archive(
     conn: &DatabaseConnection,
     in_path: &Path,
     targets: &[ArtifactTarget],
+    progress: Progress,
 ) -> Result<ImportOutcome> {
     let staging = tempfile::tempdir().context("failed to create import staging dir")?;
     let manifest = extract(in_path, staging.path())?;
 
-    let report = crate::load_from_dir(conn, &staging.path().join("db"))
+    let report = crate::load_from_dir(conn, &staging.path().join("db"), progress)
         .await
         .context("failed to load database from archive")?;
 

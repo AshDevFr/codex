@@ -18,6 +18,7 @@ pub async fn export_command(
     no_thumbnails: bool,
     no_uploads: bool,
     no_plugins: bool,
+    progress: bool,
 ) -> Result<()> {
     let (config, _created) = load_config(config_path.clone())?;
     let _tracing = init_tracing(&config)?;
@@ -56,9 +57,14 @@ pub async fn export_command(
     }
 
     info!("Exporting database to {}", output.display());
-    let manifest = export_archive(db.sea_orm_connection(), &output, &artifacts)
-        .await
-        .context("Export failed")?;
+    let manifest = export_archive(
+        db.sea_orm_connection(),
+        &output,
+        &artifacts,
+        codex_migrate::Progress::from_flag(progress),
+    )
+    .await
+    .context("Export failed")?;
 
     info!("========================================");
     info!(

@@ -12,7 +12,13 @@ use tracing::{info, warn};
 /// migrations on the target, verifies the archive matches this schema, refuses
 /// a target that already holds user data (unless `--replace`), then loads the
 /// data, unpacks artifacts, and re-roots stored file paths.
-pub async fn import_command(config_path: PathBuf, input: PathBuf, replace: bool) -> Result<()> {
+pub async fn import_command(
+    config_path: PathBuf,
+    input: PathBuf,
+    replace: bool,
+    progress: bool,
+    no_verify: bool,
+) -> Result<()> {
     let (config, _created) = load_config(config_path.clone())?;
     let _tracing = init_tracing(&config)?;
     info!("Loading configuration from {:?}", config_path);
@@ -51,9 +57,28 @@ pub async fn import_command(config_path: PathBuf, input: PathBuf, replace: bool)
     }
 
     info!("Importing {} ...", input.display());
-    let outcome = import_archive(conn, &input, &artifact_targets(&config))
-        .await
-        .context("Import failed")?;
+    let outcome = import_archive(
+        conn,
+        &input,
+        &artifact_targets(&config),
+        codex_migrate::Progress::from_flag(progress),
+    )
+    .await
+    .context("Import failed")?;
+
+    if !no_verify {
+        // The manifest records the source's per-table counts at export time.
+        let source_counts: Vec<codex_migrate::TableRows> = outcome
+            .manifest
+            .tables
+            .iter()
+            .map(|t| codex_migrate::TableRows {
+                table: t.table.clone(),
+                rows: t.rows,
+            })
+            .collect();
+        super::verify_row_counts(&source_counts, conn).await?;
+    }
 
     info!("========================================");
     info!(
@@ -167,19 +192,20 @@ files:
             false,
             false,
             false,
+            false,
         )
         .await
         .expect("export should succeed");
         assert!(archive.exists(), "archive written");
 
         // Import into a fresh target.
-        import_command(tgt_cfg.clone(), archive.clone(), false)
+        import_command(tgt_cfg.clone(), archive.clone(), false, false, false)
             .await
             .expect("import into fresh target should succeed");
         assert_eq!(library_names(&tgt_cfg).await, vec!["Comics".to_string()]);
 
         // A second import without --replace is refused (target now has data).
-        let err = import_command(tgt_cfg.clone(), archive.clone(), false)
+        let err = import_command(tgt_cfg.clone(), archive.clone(), false, false, false)
             .await
             .expect_err("import into non-fresh target should be refused");
         assert!(
@@ -188,7 +214,7 @@ files:
         );
 
         // With --replace it succeeds and still mirrors the source.
-        import_command(tgt_cfg.clone(), archive.clone(), true)
+        import_command(tgt_cfg.clone(), archive.clone(), true, false, false)
             .await
             .expect("import --replace should succeed");
         assert_eq!(library_names(&tgt_cfg).await, vec!["Comics".to_string()]);
@@ -198,7 +224,7 @@ files:
     async fn import_rejects_missing_archive() {
         let dir = TempDir::new().unwrap();
         let cfg = write_config(dir.path(), "tgt");
-        let err = import_command(cfg, dir.path().join("nope.tar.gz"), false)
+        let err = import_command(cfg, dir.path().join("nope.tar.gz"), false, false, false)
             .await
             .expect_err("missing archive should error");
         assert!(err.to_string().contains("archive not found"));

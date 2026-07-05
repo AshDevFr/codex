@@ -148,9 +148,13 @@ async fn sqlite_to_postgres_roundtrip_mirrors_all_data() {
     };
     let ids = seed_source(&src).await;
 
-    transfer(src.sea_orm_connection(), &pg)
-        .await
-        .expect("SQLite -> PostgreSQL transfer should succeed");
+    transfer(
+        src.sea_orm_connection(),
+        &pg,
+        codex::migrate::Progress::Silent,
+    )
+    .await
+    .expect("SQLite -> PostgreSQL transfer should succeed");
 
     // Row-count parity across every table.
     let src_counts = registry::count_all(src.sea_orm_connection()).await.unwrap();
@@ -306,10 +310,10 @@ async fn export_import_pair(src: &DatabaseConnection, tgt: &DatabaseConnection, 
     let dir = tempfile::tempdir().unwrap();
     let archive = dir.path().join("export.tar.gz");
 
-    export_archive(src, &archive, &[])
+    export_archive(src, &archive, &[], codex::migrate::Progress::Silent)
         .await
         .unwrap_or_else(|e| panic!("{label}: export failed: {e:#}"));
-    import_archive(tgt, &archive, &[])
+    import_archive(tgt, &archive, &[], codex::migrate::Progress::Silent)
         .await
         .unwrap_or_else(|e| panic!("{label}: import failed: {e:#}"));
 
@@ -449,9 +453,13 @@ async fn copy_wide_table_exceeding_param_limit() {
     // batch — over PostgreSQL's 65535 limit. The batch cap must split it.
     seed_wide_rows(&src, 1000).await;
 
-    transfer(src.sea_orm_connection(), &pg)
-        .await
-        .expect("wide-table copy must not exceed the bind-parameter limit");
+    transfer(
+        src.sea_orm_connection(),
+        &pg,
+        codex::migrate::Progress::Silent,
+    )
+    .await
+    .expect("wide-table copy must not exceed the bind-parameter limit");
 
     let n = book_metadata::Entity::find().count(&pg).await.unwrap();
     assert_eq!(n, 1000, "all wide rows copied");
@@ -519,9 +527,13 @@ async fn copy_works_as_non_superuser_database_owner() {
     seed_min(src.sea_orm_connection()).await;
 
     // The crux: this must succeed without superuser.
-    transfer(src.sea_orm_connection(), target.sea_orm_connection())
-        .await
-        .expect("copy must work as a non-superuser database owner");
+    transfer(
+        src.sea_orm_connection(),
+        target.sea_orm_connection(),
+        codex::migrate::Progress::Silent,
+    )
+    .await
+    .expect("copy must work as a non-superuser database owner");
 
     let n = users::Entity::find()
         .count(target.sea_orm_connection())

@@ -14,6 +14,7 @@ use tracing::{info, warn};
 /// At least one side must be non-local.
 ///
 /// `copy` moves rows only; on-disk files are not transferred.
+#[allow(clippy::too_many_arguments)]
 pub async fn copy_command(
     config_path: PathBuf,
     from: Option<String>,
@@ -21,6 +22,8 @@ pub async fn copy_command(
     from_config: Option<PathBuf>,
     to_config: Option<PathBuf>,
     replace: bool,
+    progress: bool,
+    no_verify: bool,
 ) -> Result<()> {
     // Local config: used for tracing and as the fallback for an omitted side.
     let (local_config, _created) = load_config(config_path.clone())?;
@@ -81,9 +84,18 @@ pub async fn copy_command(
     }
 
     info!("Copying database rows from source to target...");
-    let report = transfer(source.sea_orm_connection(), target.sea_orm_connection())
-        .await
-        .context("Copy failed")?;
+    let report = transfer(
+        source.sea_orm_connection(),
+        target.sea_orm_connection(),
+        codex_migrate::Progress::from_flag(progress),
+    )
+    .await
+    .context("Copy failed")?;
+
+    if !no_verify {
+        let source_counts = codex_migrate::registry::count_all(source.sea_orm_connection()).await?;
+        super::verify_row_counts(&source_counts, target.sea_orm_connection()).await?;
+    }
 
     info!("========================================");
     info!(
@@ -190,6 +202,8 @@ files:
             None,
             None,
             false,
+            false,
+            false,
         )
         .await
         .expect("copy should succeed");
@@ -205,7 +219,7 @@ files:
     async fn copy_requires_at_least_one_explicit_side() {
         let dir = TempDir::new().unwrap();
         let cfg = write_config(dir.path(), "only");
-        let err = copy_command(cfg, None, None, None, None, false)
+        let err = copy_command(cfg, None, None, None, None, false, false, false)
             .await
             .expect_err("copy with no explicit side must error");
         assert!(err.to_string().contains("at least one explicit side"));

@@ -52,9 +52,13 @@ async fn transfer_mirrors_source_into_empty_target() {
 
     let (library_id, series_id, genre_id) = seed_source(&src).await;
 
-    let report = codex_migrate::transfer(src.sea_orm_connection(), dst.sea_orm_connection())
-        .await
-        .expect("transfer should succeed");
+    let report = codex_migrate::transfer(
+        src.sea_orm_connection(),
+        dst.sea_orm_connection(),
+        codex_migrate::Progress::Silent,
+    )
+    .await
+    .expect("transfer should succeed");
 
     // Every non-empty table copied at least what we seeded.
     assert!(
@@ -108,9 +112,13 @@ async fn transfer_preserves_library_json_config_exactly() {
     let (dst, _dst_dir) = create_test_db().await;
     let (library_id, _, _) = seed_source(&src).await;
 
-    codex_migrate::transfer(src.sea_orm_connection(), dst.sea_orm_connection())
-        .await
-        .unwrap();
+    codex_migrate::transfer(
+        src.sea_orm_connection(),
+        dst.sea_orm_connection(),
+        codex_migrate::Progress::Silent,
+    )
+    .await
+    .unwrap();
 
     // Full-model equality confirms JSON config columns round-trip verbatim.
     let src_lib = codex_db::entities::libraries::Entity::find_by_id(library_id)
@@ -136,9 +144,13 @@ async fn transfer_overwrites_existing_target_data() {
     let (dst_only_lib, _, _) = seed_source(&dst).await;
 
     // First transfer replaces the target's content with the source's.
-    codex_migrate::transfer(src.sea_orm_connection(), dst.sea_orm_connection())
-        .await
-        .unwrap();
+    codex_migrate::transfer(
+        src.sea_orm_connection(),
+        dst.sea_orm_connection(),
+        codex_migrate::Progress::Silent,
+    )
+    .await
+    .unwrap();
 
     // The target's original library is gone; the target now mirrors the source.
     let stale = codex_db::entities::libraries::Entity::find_by_id(dst_only_lib)
@@ -152,9 +164,13 @@ async fn transfer_overwrites_existing_target_data() {
     assert!(verify::compare(&src_counts, &after_first).is_empty());
 
     // A second transfer is idempotent (truncate → reload leaves the mirror).
-    codex_migrate::transfer(src.sea_orm_connection(), dst.sea_orm_connection())
-        .await
-        .unwrap();
+    codex_migrate::transfer(
+        src.sea_orm_connection(),
+        dst.sea_orm_connection(),
+        codex_migrate::Progress::Silent,
+    )
+    .await
+    .unwrap();
     let after_second = registry::count_all(dst.sea_orm_connection()).await.unwrap();
     assert!(verify::compare(&src_counts, &after_second).is_empty());
 }
@@ -229,9 +245,13 @@ async fn transfer_reads_text_stored_uuids_from_sqlite() {
         .unwrap();
     assert_eq!(row.try_get::<String>("", "t").unwrap(), "text");
 
-    codex_migrate::transfer(sconn, dst.sea_orm_connection())
-        .await
-        .expect("transfer must read text-stored UUIDs");
+    codex_migrate::transfer(
+        sconn,
+        dst.sea_orm_connection(),
+        codex_migrate::Progress::Silent,
+    )
+    .await
+    .expect("transfer must read text-stored UUIDs");
 
     let uuid = Uuid::parse_str(id).unwrap();
     let genre = genres::Entity::find_by_id(uuid)

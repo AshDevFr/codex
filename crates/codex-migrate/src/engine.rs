@@ -19,6 +19,8 @@ use sea_orm::{
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
+use crate::progress::{Progress, ROW_REPORT_INTERVAL};
+
 /// Default insert batch size. Bounds memory and round-trips while staying well
 /// under parameter limits for the widest tables.
 pub const DEFAULT_BATCH_SIZE: usize = 1000;
@@ -78,35 +80,48 @@ fn iden_string<I: Iden>(iden: &I) -> String {
 
 /// Stream every row of `E` and write it as one NDJSON line to `out`.
 /// Returns the number of rows written.
-pub async fn dump_table<E, C, W>(conn: &C, out: &mut W) -> Result<u64>
+pub async fn dump_table<E, C, W>(conn: &C, out: &mut W, progress: Progress) -> Result<u64>
 where
     E: EntityTrait,
     E::Model: Serialize,
     C: ConnectionTrait + StreamTrait,
     W: Write,
 {
+    let table = iden_string(&E::default());
     let mut stream = open_source_stream::<E, C>(conn).await?;
     let mut count = 0u64;
+    let mut next_report = ROW_REPORT_INTERVAL;
     while let Some(model) = stream.try_next().await? {
         serde_json::to_writer(&mut *out, &model)?;
         out.write_all(b"\n")?;
         count += 1;
+        if count >= next_report {
+            progress.table_rows(&table, count);
+            next_report += ROW_REPORT_INTERVAL;
+        }
     }
     Ok(count)
 }
 
 /// Read NDJSON lines from `reader`, deserialize each into `E::Model`, and
 /// insert them into `conn` in batches of `batch_size`. Returns rows inserted.
-pub async fn load_table<E, C, R>(conn: &C, reader: R, batch_size: usize) -> Result<u64>
+pub async fn load_table<E, C, R>(
+    conn: &C,
+    reader: R,
+    batch_size: usize,
+    progress: Progress,
+) -> Result<u64>
 where
     E: EntityTrait,
     E::Model: DeserializeOwned + IntoActiveModel<E::ActiveModel>,
     C: ConnectionTrait,
     R: BufRead,
 {
+    let table = iden_string(&E::default());
     let batch_size = safe_batch_size::<E>(conn.get_database_backend(), batch_size);
     let mut batch: Vec<E::ActiveModel> = Vec::with_capacity(batch_size);
     let mut count = 0u64;
+    let mut next_report = ROW_REPORT_INTERVAL;
     for line in reader.lines() {
         let line = line?;
         if line.trim().is_empty() {
@@ -116,6 +131,10 @@ where
         batch.push(model.into_active_model());
         if batch.len() >= batch_size {
             count += insert_batch::<E, C>(conn, std::mem::take(&mut batch)).await?;
+            if count >= next_report {
+                progress.table_rows(&table, count);
+                next_report += ROW_REPORT_INTERVAL;
+            }
         }
     }
     if !batch.is_empty() {
@@ -127,21 +146,32 @@ where
 /// Stream every row of `E` directly from `src` into `dst` in batches, without
 /// an intermediate serialized form. This is the path used by the direct
 /// database-to-database `copy`.
-pub async fn copy_table<E, S, D>(src: &S, dst: &D, batch_size: usize) -> Result<u64>
+pub async fn copy_table<E, S, D>(
+    src: &S,
+    dst: &D,
+    batch_size: usize,
+    progress: Progress,
+) -> Result<u64>
 where
     E: EntityTrait,
     E::Model: IntoActiveModel<E::ActiveModel>,
     S: ConnectionTrait + StreamTrait,
     D: ConnectionTrait,
 {
+    let table = iden_string(&E::default());
     let batch_size = safe_batch_size::<E>(dst.get_database_backend(), batch_size);
     let mut stream = open_source_stream::<E, S>(src).await?;
     let mut batch: Vec<E::ActiveModel> = Vec::with_capacity(batch_size);
     let mut count = 0u64;
+    let mut next_report = ROW_REPORT_INTERVAL;
     while let Some(model) = stream.try_next().await? {
         batch.push(model.into_active_model());
         if batch.len() >= batch_size {
             count += insert_batch::<E, D>(dst, std::mem::take(&mut batch)).await?;
+            if count >= next_report {
+                progress.table_rows(&table, count);
+                next_report += ROW_REPORT_INTERVAL;
+            }
         }
     }
     if !batch.is_empty() {
