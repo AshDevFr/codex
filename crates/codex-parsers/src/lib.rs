@@ -18,6 +18,6 @@ pub mod pdf;
 pub mod series_json;
 pub mod traits;
 
-pub use comic_info::parse_comic_info;
+pub use comic_info::{decode_comic_info, parse_comic_info};
 pub use error::{ParserError, Result};
 pub use metadata::*;

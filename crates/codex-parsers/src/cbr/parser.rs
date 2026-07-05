@@ -1,7 +1,7 @@
 use crate::error::{ParserError, Result};
 use crate::image_utils::{create_page_info, is_image_file, process_image_data};
 use crate::traits::FormatParser;
-use crate::{BookMetadata, FileFormat, parse_comic_info};
+use crate::{BookMetadata, FileFormat, decode_comic_info, parse_comic_info};
 use chrono::{DateTime, Utc};
 use codex_utils::hash_file;
 use std::path::Path;
@@ -76,7 +76,7 @@ impl FormatParser for CbrParser {
                     ParserError::ParseError(format!("Failed to read ComicInfo.xml: {}", e))
                 })?;
 
-                let xml_str = String::from_utf8_lossy(&xml_content).to_string();
+                let xml_str = decode_comic_info(&xml_content);
                 if let Ok(info) = parse_comic_info(&xml_str) {
                     comic_info = Some(info);
                 }

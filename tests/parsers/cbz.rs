@@ -71,6 +71,43 @@ fn test_cbz_parser_parse_with_comic_info() {
 }
 
 #[test]
+fn test_cbz_parser_parse_with_windows_1252_comic_info() {
+    use std::io::Write;
+    use zip::write::FileOptions;
+
+    // ComicRack-style archive: ComicInfo.xml declares utf-8 but encodes a
+    // curly apostrophe as the Windows-1252 byte 0x92. This must not abort the
+    // whole parse (previously failed with "stream did not contain valid UTF-8").
+    let temp_dir = TempDir::new().unwrap();
+    let cbz_path = temp_dir.path().join("cp1252.cbz");
+    let file = std::fs::File::create(&cbz_path).unwrap();
+    let mut zip = zip::ZipWriter::new(file);
+    let options: FileOptions<'_, ()> =
+        FileOptions::default().compression_method(zip::CompressionMethod::Stored);
+
+    let mut xml = b"<?xml version='1.0' encoding='utf-8'?><ComicInfo><Title>There".to_vec();
+    xml.push(0x92); // Windows-1252 right single quotation mark
+    xml.extend_from_slice(b"s Always Someone Stronger</Title><Number>323</Number></ComicInfo>");
+    zip.start_file("ComicInfo.xml", options).unwrap();
+    zip.write_all(&xml).unwrap();
+
+    let page = common::create_test_png(10, 10);
+    zip.start_file("page001.png", options).unwrap();
+    zip.write_all(&page).unwrap();
+    zip.finish().unwrap();
+
+    let parser = CbzParser::new();
+    let metadata = parser.parse(&cbz_path).unwrap();
+
+    assert_eq!(metadata.page_count, 1);
+    let comic_info = metadata.comic_info.expect("comic info should be parsed");
+    assert_eq!(
+        comic_info.title.as_deref(),
+        Some("There\u{2019}s Always Someone Stronger")
+    );
+}
+
+#[test]
 fn test_cbz_parser_parse_page_dimensions() {
     let temp_dir = TempDir::new().unwrap();
     let cbz_path = common::create_test_cbz(&temp_dir, 3, false);

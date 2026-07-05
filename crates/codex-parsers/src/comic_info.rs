@@ -113,6 +113,22 @@ fn build_authors_json(
     }
 }
 
+/// Decode raw ComicInfo.xml bytes into a string.
+///
+/// Many comic tagging tools (notably ComicRack on Windows) declare
+/// `encoding='utf-8'` in the XML prolog while actually writing Windows-1252
+/// bytes, e.g. `0x92` for a curly apostrophe. Strict UTF-8 decoding rejects
+/// those files ("stream did not contain valid UTF-8"), which would otherwise
+/// abort the entire book parse over a cosmetic metadata quirk. We prefer UTF-8
+/// and fall back to Windows-1252, which maps every byte and recovers the
+/// intended text.
+pub fn decode_comic_info(bytes: &[u8]) -> String {
+    match std::str::from_utf8(bytes) {
+        Ok(s) => s.to_string(),
+        Err(_) => encoding_rs::WINDOWS_1252.decode(bytes).0.into_owned(),
+    }
+}
+
 /// Parse ComicInfo.xml content
 pub fn parse_comic_info(xml_content: &str) -> Result<ComicInfo, quick_xml::DeError> {
     let xml_info: ComicInfoXml = from_str(xml_content)?;
@@ -170,6 +186,31 @@ pub fn parse_comic_info(xml_content: &str) -> Result<ComicInfo, quick_xml::DeErr
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_decode_comic_info_windows_1252_apostrophe() {
+        // ComicRack-style file: declares utf-8 in the prolog but actually
+        // encodes a curly apostrophe as the Windows-1252 byte 0x92, which is
+        // invalid UTF-8. Strict UTF-8 decoding would reject the whole file.
+        let mut bytes = b"<?xml version='1.0' encoding='utf-8'?><ComicInfo><Title>There".to_vec();
+        bytes.push(0x92); // Windows-1252 right single quotation mark
+        bytes.extend_from_slice(b"s Always Someone Stronger</Title></ComicInfo>");
+
+        let xml = decode_comic_info(&bytes);
+        assert!(xml.contains("There\u{2019}s Always Someone Stronger"));
+
+        let info = parse_comic_info(&xml).expect("cp1252 comic info should parse");
+        assert_eq!(
+            info.title.as_deref(),
+            Some("There\u{2019}s Always Someone Stronger")
+        );
+    }
+
+    #[test]
+    fn test_decode_comic_info_valid_utf8_is_unchanged() {
+        let bytes = "<Title>Café Society</Title>".as_bytes();
+        assert_eq!(decode_comic_info(bytes), "<Title>Café Society</Title>");
+    }
 
     #[test]
     fn test_parse_comic_info_full() {

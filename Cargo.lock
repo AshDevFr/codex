@@ -1009,6 +1009,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "codex-utils",
+ "encoding_rs",
  "image",
  "infer",
  "jxl-oxide",

@@ -1,7 +1,7 @@
 use crate::error::Result;
 use crate::image_utils::{create_page_info, is_image_file, process_image_data};
 use crate::traits::FormatParser;
-use crate::{BookMetadata, FileFormat, parse_comic_info};
+use crate::{BookMetadata, FileFormat, decode_comic_info, parse_comic_info};
 use chrono::{DateTime, Utc};
 use codex_utils::hash_file;
 use std::fs::File;
@@ -44,10 +44,15 @@ impl FormatParser for CbzParser {
         // Look for ComicInfo.xml
         let mut comic_info = None;
         if let Ok(mut comic_info_file) = archive.by_name("ComicInfo.xml") {
-            let mut xml_content = String::new();
-            comic_info_file.read_to_string(&mut xml_content)?;
-            if let Ok(info) = parse_comic_info(&xml_content) {
-                comic_info = Some(info);
+            // Read as raw bytes and decode leniently: a malformed or mislabeled
+            // ComicInfo.xml (e.g. cp1252 bytes under a `utf-8` declaration) must
+            // never abort parsing the whole archive.
+            let mut xml_bytes = Vec::new();
+            if comic_info_file.read_to_end(&mut xml_bytes).is_ok() {
+                let xml_content = decode_comic_info(&xml_bytes);
+                if let Ok(info) = parse_comic_info(&xml_content) {
+                    comic_info = Some(info);
+                }
             }
         }
 
