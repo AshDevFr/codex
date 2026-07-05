@@ -65,10 +65,10 @@ cannot be decrypted after the move.
 :::
 
 :::note PostgreSQL privileges
-`import` temporarily disables foreign-key enforcement during the bulk load
-(`SET session_replication_role = replica`), which requires the target
-connection to be a **superuser or the database owner**. This is normally the
-case when you provision the database yourself.
+`import` suppresses foreign-key enforcement during the bulk load by dropping and
+recreating the FK constraints, which requires only that the target role **owns
+the tables** (it does, because it ran the migrations). No superuser is needed,
+so this works on managed PostgreSQL.
 :::
 
 ## Library files

@@ -33,11 +33,12 @@ result.
   from that single list. A drift-guard test fails if a migration adds a table
   that isn't registered.
 - **Foreign keys** — a 1:1 load inserts tables in arbitrary order, so FK
-  enforcement is disabled for the duration of the load (SQLite
-  `defer_foreign_keys`; PostgreSQL `session_replication_role = replica`, which
-  needs owner/superuser) and the whole load runs in one destination
-  transaction. On SQLite the commit re-validates FKs; on PostgreSQL integrity
-  rests on source consistency plus a post-load row-count check.
+  enforcement is suppressed for the load. SQLite uses `defer_foreign_keys` (the
+  commit re-validates). PostgreSQL **drops the FK constraints and recreates
+  them** after the load — recreating revalidates the rows, and it needs only
+  table ownership (not a superuser, unlike `session_replication_role`), so it
+  works on managed PostgreSQL. The whole load runs in one destination
+  transaction, so a failure rolls back cleanly.
 - **Truncate before load** — migrations seed rows (e.g. `settings`), so a
   freshly-migrated target is *not* empty. A faithful mirror therefore truncates
   every table before loading. The CLI's fresh-target guard (refuse a target
@@ -49,6 +50,24 @@ result.
   a query that coerces UUID columns back to blobs
   (`text → unhex(replace(col,'-',''))`, blobs pass through), so mixed storage
   decodes correctly and is canonicalized on the way out.
+- **Batch sizing** — a multi-row insert binds `rows × columns` parameters, and
+  PostgreSQL caps a statement at 65535 (SQLite at 32766). The batch size is
+  capped per table so a wide table (e.g. `book_metadata`, ~66 columns) can't
+  overflow the destination's limit.
+
+## Verification
+
+Two levels, both surfaced by the CLI:
+
+- **Row-count parity** (`registry::count_all` + `verify::compare`) runs by
+  default after `import`/`copy` and fails the command on any mismatch.
+- **Full verification** (`full_verify`) is opt-in and reports (does not fail):
+  each table is reduced to an order-independent digest of every row's
+  *canonical* value — integer-valued floats normalize (`1.0` == `1`), JSON keys
+  are sorted (jsonb reorders), and timestamps truncate to microseconds. Digests
+  are computed identically from a connection or the archive's NDJSON, so it
+  streams and stays O(1) memory. Genuine content differences (or a tampered
+  target) change the digest; representation differences do not.
 
 ## Archive format
 
