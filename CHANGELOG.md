@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.39.15] - 2026-07-05
+
+### 🐛 Bug Fixes
+
+- *(parsers)* Decode mislabeled Windows-1252 ComicInfo.xml
+
 ## [1.39.14] - 2026-06-30
 
 ### 🐛 Bug Fixes
