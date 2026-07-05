@@ -44,6 +44,7 @@ covers**, and **plugin data**. Flags:
 | `--no-thumbnails` | Skip generated thumbnails |
 | `--no-uploads` | Skip uploaded/extracted covers |
 | `--no-plugins` | Skip plugin data |
+| `--progress` | Log per-table progress while exporting |
 
 The archive contains a `manifest.json` (format and schema version, per-table row
 counts, bundled artifact groups), one `db/<table>.ndjson` per table, and the
@@ -105,6 +106,28 @@ To avoid leaking a password via the process list, prefer the env vars or
 `--from-config` / `--to-config` over a `postgres://user:pass@…` URL on the
 command line.
 
+## Progress & verification
+
+`import` and `copy` accept:
+
+| Flag | Effect |
+|------|--------|
+| `--progress` | Log per-table progress (and a periodic row count for large tables) — reads the same in a terminal or in captured logs |
+| `--no-verify` | Skip the row-count verification |
+| `--full-verification` | Additionally compare every record's content (see below) |
+
+**Row-count verification runs by default.** After the load, the source and
+target are re-counted per table and compared; a mismatch **fails the command**.
+This is your confirmation that no rows were dropped.
+
+**`--full-verification`** is an opt-in deeper check: it compares every record's
+*canonical* content on both sides and prints a **report** (it does not fail the
+command). "Canonical" means representation differences that don't change meaning
+are ignored — `1.0` equals `1`, JSON object key order is normalized (PostgreSQL
+`jsonb` reorders keys), and timestamps are compared at microsecond precision
+(PostgreSQL truncates). It streams rows, so it stays memory-cheap even on large
+tables, but it does re-read everything, so it adds time.
+
 ## Setting up the target
 
 You never create tables — `import` and `copy` run the migrations themselves.
@@ -121,7 +144,7 @@ What you need to prepare depends on the engine:
   ```sql
   CREATE DATABASE codex;
   CREATE USER codex WITH PASSWORD '...';
-  ALTER DATABASE codex OWNER TO codex;   -- owner/superuser: see the privilege note below
+  ALTER DATABASE codex OWNER TO codex;   -- the role must own the database (see the note below)
   ```
 
   Then point the config/env at it and import — the schema and data are created
@@ -163,7 +186,9 @@ encryption key** as the source, or those values cannot be decrypted afterwards.
 :::
 
 :::note PostgreSQL privileges
-`import` and `copy` temporarily disable foreign-key enforcement during the bulk
-load, which requires the target connection to be a **superuser or the database
-owner**. This is normally the case when you provision the database yourself.
+`import` and `copy` suppress foreign-key enforcement during the bulk load by
+dropping and recreating the FK constraints, which requires only that the target
+role **owns the tables** — no superuser needed. This works on managed
+PostgreSQL, where you typically get a database owner but not a superuser. (The
+role owns the tables because it ran the migrations that created them.)
 :::
