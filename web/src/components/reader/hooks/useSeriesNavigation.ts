@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   selectIsFirstPage,
   selectIsLastPage,
@@ -65,6 +65,20 @@ export function useSeriesNavigation(
   const { onBoundaryChange, clearNotification, onBeforeNavigateToNext } =
     options;
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  // Preserve incognito mode across chapter boundaries: navigating to an
+  // adjacent book must not silently re-enable progress tracking.
+  const incognito = searchParams.get("incognito") === "true";
+  const buildReaderUrl = useCallback(
+    (bookId: string, page: number) => {
+      const params = new URLSearchParams();
+      params.set("page", String(page));
+      if (incognito) params.set("incognito", "true");
+      return `/reader/${bookId}?${params.toString()}`;
+    },
+    [incognito],
+  );
 
   // Store state
   const adjacentBooks = useReaderStore((state) => state.adjacentBooks);
@@ -91,9 +105,9 @@ export function useSeriesNavigation(
     const prevBook = adjacentBooks?.prev;
     if (prevBook) {
       clearBoundaryState();
-      navigate(`/reader/${prevBook.id}?page=${prevBook.pageCount}`);
+      navigate(buildReaderUrl(prevBook.id, prevBook.pageCount));
     }
-  }, [adjacentBooks?.prev, navigate, clearBoundaryState]);
+  }, [adjacentBooks?.prev, navigate, clearBoundaryState, buildReaderUrl]);
 
   // Navigate to next book at page 1, marking current book as read first
   const goToNextBook = useCallback(() => {
@@ -101,13 +115,14 @@ export function useSeriesNavigation(
     if (nextBook) {
       onBeforeNavigateToNext?.();
       clearBoundaryState();
-      navigate(`/reader/${nextBook.id}?page=1`);
+      navigate(buildReaderUrl(nextBook.id, 1));
     }
   }, [
     adjacentBooks?.next,
     navigate,
     clearBoundaryState,
     onBeforeNavigateToNext,
+    buildReaderUrl,
   ]);
 
   // Boundary logic for end-of-book

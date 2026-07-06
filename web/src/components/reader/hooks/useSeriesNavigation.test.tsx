@@ -19,6 +19,15 @@ function wrapper({ children }: { children: ReactNode }) {
   return <MemoryRouter>{children}</MemoryRouter>;
 }
 
+// Wrapper that seeds the router with a specific URL (e.g. to carry ?incognito=true)
+function makeWrapper(initialEntry: string) {
+  return function Wrapper({ children }: { children: ReactNode }) {
+    return (
+      <MemoryRouter initialEntries={[initialEntry]}>{children}</MemoryRouter>
+    );
+  };
+}
+
 describe("useSeriesNavigation", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -185,6 +194,69 @@ describe("useSeriesNavigation", () => {
 
       expect(onBeforeNavigateToNext).not.toHaveBeenCalled();
       expect(mockNavigate).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("incognito parameter persistence", () => {
+    it("preserves incognito=true when navigating to next book", () => {
+      act(() => {
+        useReaderStore.getState().setAdjacentBooks({
+          prev: null,
+          next: { id: "book-2", title: "Next Book", pageCount: 100 },
+        });
+      });
+
+      const { result } = renderHook(() => useSeriesNavigation(), {
+        wrapper: makeWrapper("/reader/book-1?page=10&incognito=true"),
+      });
+
+      act(() => {
+        result.current.goToNextBook();
+      });
+
+      expect(mockNavigate).toHaveBeenCalledWith(
+        "/reader/book-2?page=1&incognito=true",
+      );
+    });
+
+    it("preserves incognito=true when navigating to prev book", () => {
+      act(() => {
+        useReaderStore.getState().setAdjacentBooks({
+          prev: { id: "book-0", title: "Prev Book", pageCount: 50 },
+          next: null,
+        });
+      });
+
+      const { result } = renderHook(() => useSeriesNavigation(), {
+        wrapper: makeWrapper("/reader/book-1?page=1&incognito=true"),
+      });
+
+      act(() => {
+        result.current.goToPrevBook();
+      });
+
+      expect(mockNavigate).toHaveBeenCalledWith(
+        "/reader/book-0?page=50&incognito=true",
+      );
+    });
+
+    it("does not add incognito when not in incognito mode", () => {
+      act(() => {
+        useReaderStore.getState().setAdjacentBooks({
+          prev: null,
+          next: { id: "book-2", title: "Next Book", pageCount: 100 },
+        });
+      });
+
+      const { result } = renderHook(() => useSeriesNavigation(), {
+        wrapper: makeWrapper("/reader/book-1?page=10"),
+      });
+
+      act(() => {
+        result.current.goToNextBook();
+      });
+
+      expect(mockNavigate).toHaveBeenCalledWith("/reader/book-2?page=1");
     });
   });
 
