@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.40.6] - 2026-07-06
+
+### 🐛 Bug Fixes
+
+- *(reader)* Persist incognito mode across chapter boundaries
+
 ## [1.40.5] - 2026-07-06
 
 ### 🐛 Bug Fixes
