@@ -8,8 +8,8 @@ use super::types::{EntityChangeEvent, EntityEvent, TaskProgressEvent};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, RwLock};
-use tokio::sync::broadcast;
-use tracing::{debug, warn};
+use tokio::sync::{broadcast, mpsc};
+use tracing::debug;
 
 /// Recorded event for cross-process replay in distributed deployments
 ///
@@ -39,6 +39,11 @@ pub struct EventBroadcaster {
     task_sender: broadcast::Sender<TaskProgressEvent>,
     /// Optional event recording for cross-process bridging in distributed deployments
     recorded_events: Option<Arc<RwLock<Vec<RecordedEvent>>>>,
+    /// Optional out-of-process sink for task progress events. In distributed
+    /// deployments the worker process has no local SSE subscribers, so task
+    /// progress is forwarded here (lossy, non-blocking) to be re-published to
+    /// the web server via PostgreSQL LISTEN/NOTIFY.
+    task_notifier: Option<mpsc::Sender<TaskProgressEvent>>,
     /// Flag to track if the broadcaster has been shut down
     shutdown: Arc<std::sync::atomic::AtomicBool>,
 }
@@ -72,8 +77,21 @@ impl EventBroadcaster {
             } else {
                 None
             },
+            task_notifier: None,
             shutdown: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
+    }
+
+    /// Attach an out-of-process sink for task progress events.
+    ///
+    /// When set, every `emit_task` call also forwards a clone of the event to
+    /// `notifier`. This is used in distributed worker processes to bridge task
+    /// progress to the web server (which has the live SSE subscribers) via
+    /// PostgreSQL LISTEN/NOTIFY. Forwarding is lossy and non-blocking: if the
+    /// channel is full the event is dropped, which is acceptable for progress.
+    pub fn with_task_notifier(mut self, notifier: mpsc::Sender<TaskProgressEvent>) -> Self {
+        self.task_notifier = Some(notifier);
+        self
     }
 
     /// Subscribe to entity change events
@@ -134,6 +152,13 @@ impl EventBroadcaster {
         &self,
         event: TaskProgressEvent,
     ) -> Result<usize, Box<broadcast::error::SendError<TaskProgressEvent>>> {
+        // Forward to the out-of-process sink first (distributed mode). This is
+        // lossy by design: a full channel drops the event rather than blocking
+        // the task, since progress is a best-effort UI hint.
+        if let Some(ref notifier) = self.task_notifier {
+            let _ = notifier.try_send(event.clone());
+        }
+
         match self.task_sender.send(event.clone()) {
             Ok(count) => {
                 debug!(
@@ -143,7 +168,11 @@ impl EventBroadcaster {
                 Ok(count)
             }
             Err(e) => {
-                warn!("Failed to broadcast task event: {:?}", e);
+                // No active receivers is expected, not an error: worker
+                // processes have no local task-event subscribers (those live in
+                // the web server). Cross-process delivery goes through the
+                // task_notifier sink above, so log at debug to avoid spam.
+                debug!("No subscribers for task event: {:?}", e);
                 Err(Box::new(e))
             }
         }
@@ -404,6 +433,44 @@ mod tests {
             deserialized.event,
             EntityEvent::CoverUpdated { .. }
         ));
+    }
+
+    #[tokio::test]
+    async fn test_emit_task_forwards_to_notifier_without_subscribers() {
+        // Simulates a distributed worker: no local task-event subscribers, but
+        // an out-of-process sink is attached. The event must reach the sink even
+        // though the local broadcast has zero receivers.
+        let (tx, mut rx) = mpsc::channel(8);
+        let broadcaster = EventBroadcaster::new(100).with_task_notifier(tx);
+
+        let task_id = Uuid::new_v4();
+        let event = TaskProgressEvent::progress(
+            task_id,
+            "scan_library",
+            3,
+            10,
+            Some("scanning".to_string()),
+            None,
+            None,
+            None,
+        );
+
+        // No local subscribers -> emit_task returns Err, but that is expected
+        // and must not prevent forwarding to the sink.
+        assert!(broadcaster.emit_task(event).is_err());
+
+        let forwarded = rx.recv().await.expect("event should reach the sink");
+        assert_eq!(forwarded.task_id, task_id);
+        assert_eq!(forwarded.task_type, "scan_library");
+    }
+
+    #[tokio::test]
+    async fn test_emit_task_without_notifier_is_noop_forward() {
+        // Without a notifier the method still works and simply reports no
+        // subscribers; nothing to forward.
+        let broadcaster = EventBroadcaster::new(100);
+        let event = TaskProgressEvent::started(Uuid::new_v4(), "scan_library", None, None, None);
+        assert!(broadcaster.emit_task(event).is_err());
     }
 
     #[tokio::test]

@@ -78,11 +78,14 @@ impl TaskListener {
         })
     }
 
-    /// Start listening for task completion notifications
+    /// Start listening for task completion and progress notifications
     ///
     /// This runs indefinitely and should be spawned as a background task.
     pub async fn start(self) -> Result<()> {
-        info!("Starting PostgreSQL task listener on channel 'task_completion'");
+        info!(
+            "Starting PostgreSQL task listener on channels 'task_completion' and '{}'",
+            crate::task_progress_publisher::TASK_PROGRESS_CHANNEL
+        );
 
         let mut listener = PgListener::connect_with(&self.pool)
             .await
@@ -93,16 +96,29 @@ impl TaskListener {
             .await
             .context("Failed to listen on 'task_completion' channel")?;
 
+        listener
+            .listen(crate::task_progress_publisher::TASK_PROGRESS_CHANNEL)
+            .await
+            .context("Failed to listen on 'task_progress' channel")?;
+
         info!("Task listener connected and listening");
 
         loop {
             match listener.recv().await {
                 Ok(notification) => {
+                    let channel = notification.channel();
                     let payload = notification.payload();
-                    debug!("Received task notification: {}", payload);
+                    debug!("Received notification on '{}': {}", channel, payload);
 
-                    if let Err(e) = self.handle_notification(payload).await {
-                        error!("Error handling task notification: {}", e);
+                    let result = if channel == crate::task_progress_publisher::TASK_PROGRESS_CHANNEL
+                    {
+                        self.handle_progress(payload)
+                    } else {
+                        self.handle_notification(payload).await
+                    };
+
+                    if let Err(e) = result {
+                        error!("Error handling '{}' notification: {}", channel, e);
                     }
                 }
                 Err(e) => {
@@ -111,6 +127,22 @@ impl TaskListener {
                 }
             }
         }
+    }
+
+    /// Handle a task progress notification.
+    ///
+    /// The payload is a full [`TaskProgressEvent`] serialized as JSON by the
+    /// worker-side publisher. It is re-broadcast verbatim to local SSE
+    /// subscribers. Unlike completion, progress is never persisted, so there is
+    /// nothing to replay here.
+    fn handle_progress(&self, payload: &str) -> Result<()> {
+        let event: TaskProgressEvent = serde_json::from_str(payload)
+            .context("Failed to parse task progress notification payload")?;
+
+        // No local subscribers is expected when nobody is watching; emit_task
+        // logs that at debug internally, so ignore the error here.
+        let _ = self.broadcaster.emit_task(event);
+        Ok(())
     }
 
     /// Handle a task completion notification
@@ -166,17 +198,9 @@ impl TaskListener {
             book_id,
         };
 
-        match self.broadcaster.emit_task(event) {
-            Ok(count) => {
-                debug!(
-                    "Broadcast task event to {} subscribers: task_id={}, type={}, status={:?}",
-                    count, task_id, notification.task_type, status
-                );
-            }
-            Err(e) => {
-                warn!("Failed to broadcast task event: {:?}", e);
-            }
-        }
+        // No local subscribers is expected when nobody is watching the UI;
+        // emit_task logs that at debug internally, so ignore the error here.
+        let _ = self.broadcaster.emit_task(event);
 
         // Replay any recorded entity events from the task result. This bridges
         // events from worker processes to the web server. Failed tasks can

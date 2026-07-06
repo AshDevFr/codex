@@ -55,7 +55,29 @@ pub async fn worker_command(config_path: PathBuf) -> anyhow::Result<()> {
     info!("Starting {} task queue worker(s)...", worker_count);
 
     // Create event broadcaster for real-time updates (workers don't need to emit events, but handlers might)
-    let event_broadcaster = Arc::new(codex_events::EventBroadcaster::new(1000));
+    //
+    // In a distributed (PostgreSQL) deployment the worker runs in a separate
+    // process from the web server and has no local SSE subscribers. Task
+    // completion is bridged by a DB trigger, but progress is high-frequency and
+    // ephemeral: we bridge it by forwarding progress events into a channel that
+    // a publisher drains and re-emits via `pg_notify('task_progress', ...)`.
+    let (task_progress_notifier, event_broadcaster) =
+        if config.database.db_type == codex_config::DatabaseType::Postgres {
+            // Bounded channel: progress is best-effort, so a full channel drops
+            // events rather than applying backpressure to task execution.
+            let (tx, rx) = tokio::sync::mpsc::channel(1024);
+            codex_services::task_progress_publisher::spawn(
+                db.sea_orm_connection().clone(),
+                rx,
+                codex_services::task_progress_publisher::DEFAULT_THROTTLE,
+            );
+            info!("Task progress publisher started (PostgreSQL LISTEN/NOTIFY bridge)");
+            let broadcaster =
+                Arc::new(codex_events::EventBroadcaster::new(1000).with_task_notifier(tx.clone()));
+            (Some(tx), broadcaster)
+        } else {
+            (None, Arc::new(codex_events::EventBroadcaster::new(1000)))
+        };
     info!("Event broadcaster initialized");
 
     // Initialize thumbnail service
@@ -182,6 +204,7 @@ pub async fn worker_command(config_path: PathBuf) -> anyhow::Result<()> {
         Some(plugin_manager),
         None, // No OAuth state manager in standalone worker (no API state to clean)
         export_storage,
+        task_progress_notifier,
     );
 
     info!("All {} task workers started successfully", worker_count);

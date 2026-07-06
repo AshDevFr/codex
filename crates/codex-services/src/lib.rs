@@ -37,6 +37,7 @@ pub mod series_export_writer;
 pub mod settings;
 pub mod task_listener;
 pub mod task_metrics;
+pub mod task_progress_publisher;
 pub mod thumbnail;
 pub mod user_plugin;
 
@@ -58,6 +59,7 @@ pub use refresh_token::{IssuedRefreshToken, RefreshTokenError, RefreshTokenServi
 pub use settings::SettingsService;
 pub use task_listener::TaskListener;
 pub use task_metrics::TaskMetricsService;
+pub use task_progress_publisher::TASK_PROGRESS_CHANNEL;
 pub use thumbnail::ThumbnailService;
 
 // Historical alias. The canonical location is `codex_utils::credential_encryption`.

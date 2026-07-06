@@ -11,7 +11,7 @@ use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, mpsc};
 use tokio::time::sleep;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
@@ -131,6 +131,10 @@ pub struct TaskWorker {
     /// Exposed via [`Self::release_backoff`] so the scheduler can read the
     /// same multipliers when picking next-poll intervals.
     release_backoff: codex_services::release::backoff::HostBackoff,
+    /// Out-of-process sink for task progress events. Set in distributed
+    /// (multi-container) deployments so per-task recording broadcasters forward
+    /// progress to the web server via PostgreSQL LISTEN/NOTIFY.
+    task_progress_notifier: Option<mpsc::Sender<TaskProgressEvent>>,
     shutdown_tx: Option<broadcast::Sender<()>>,
 }
 
@@ -218,6 +222,7 @@ impl TaskWorker {
             plugin_manager: None,
             pdf_handle_cache: None,
             release_backoff: codex_services::release::backoff::HostBackoff::new(),
+            task_progress_notifier: None,
             shutdown_tx: None,
         }
     }
@@ -262,6 +267,19 @@ impl TaskWorker {
     /// Set the event broadcaster for task progress events
     pub fn with_event_broadcaster(mut self, broadcaster: Arc<EventBroadcaster>) -> Self {
         self.event_broadcaster = Some(broadcaster);
+        self
+    }
+
+    /// Set the out-of-process task progress sink used in distributed mode.
+    ///
+    /// When set, per-task recording broadcasters forward progress events to this
+    /// channel so a publisher can bridge them to the web server via
+    /// PostgreSQL LISTEN/NOTIFY.
+    pub fn with_task_progress_notifier(
+        mut self,
+        notifier: mpsc::Sender<TaskProgressEvent>,
+    ) -> Self {
+        self.task_progress_notifier = Some(notifier);
         self
     }
 
@@ -792,8 +810,14 @@ impl TaskWorker {
             Option<Arc<EventBroadcaster>>,
             Option<Vec<RecordedEvent>>,
         ) = if self.is_distributed_mode() {
-            // Create a recording broadcaster for this task
-            let recording_broadcaster = Arc::new(EventBroadcaster::new_with_recording(1000, true));
+            // Create a recording broadcaster for this task. In distributed mode
+            // it also forwards task progress to the web server via the progress
+            // notifier (PostgreSQL LISTEN/NOTIFY) when one is configured.
+            let mut recording = EventBroadcaster::new_with_recording(1000, true);
+            if let Some(ref notifier) = self.task_progress_notifier {
+                recording = recording.with_task_notifier(notifier.clone());
+            }
+            let recording_broadcaster = Arc::new(recording);
             let broadcaster_clone = recording_broadcaster.clone();
 
             // Execute the handler inside task-local scopes that expose the

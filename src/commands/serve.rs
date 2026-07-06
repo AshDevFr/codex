@@ -478,6 +478,10 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
             Some(plugin_manager.clone()),
             Some(oauth_state_manager.clone()),
             export_storage.clone(),
+            // Single-process mode: workers share this process's broadcaster,
+            // which already has the live SSE subscribers, so no cross-process
+            // progress bridge is needed (and would double-deliver).
+            None,
         );
         worker_handles = handles;
         worker_shutdown_channels = channels;

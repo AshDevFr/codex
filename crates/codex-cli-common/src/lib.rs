@@ -1,7 +1,7 @@
 use codex_api::observability::ObservabilityHandle;
 use codex_config::{Config, DatabaseConfig, DatabaseType, EnvOverride};
 use codex_db::Database;
-use codex_events::EventBroadcaster;
+use codex_events::{EventBroadcaster, TaskProgressEvent};
 use codex_services::{SettingsService, TaskMetricsService};
 use codex_tasks::TaskWorker;
 use sea_orm::DatabaseConnection;
@@ -475,6 +475,7 @@ pub fn spawn_workers(
     plugin_manager: Option<Arc<codex_services::plugin::PluginManager>>,
     oauth_state_manager: Option<Arc<codex_services::user_plugin::OAuthStateManager>>,
     export_storage: Arc<codex_services::ExportStorage>,
+    task_progress_notifier: Option<tokio::sync::mpsc::Sender<TaskProgressEvent>>,
 ) -> (
     Vec<tokio::task::JoinHandle<()>>,
     Vec<tokio::sync::broadcast::Sender<()>>,
@@ -526,6 +527,11 @@ pub fn spawn_workers(
 
         // Add export storage for series export tasks
         task_worker = task_worker.with_export_storage(export_storage.clone());
+
+        // Bridge task progress to the web server in distributed deployments.
+        if let Some(ref notifier) = task_progress_notifier {
+            task_worker = task_worker.with_task_progress_notifier(notifier.clone());
+        }
 
         let (mut task_worker, worker_shutdown_tx) = task_worker.with_shutdown();
         worker_shutdown_channels.push(worker_shutdown_tx);
