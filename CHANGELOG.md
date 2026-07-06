@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.40.4] - 2026-07-06
+
+### 🐛 Bug Fixes
+
+- *(api)* Bound concurrent image decode to prevent serve OOM
+
 ## [1.40.3] - 2026-07-06
 
 ### 🚀 Features
