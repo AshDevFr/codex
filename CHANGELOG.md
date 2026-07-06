@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.40.5] - 2026-07-06
+
+### 🐛 Bug Fixes
+
+- *(reader)* Keep book completion sticky in double-page mode
+
 ## [1.40.4] - 2026-07-06
 
 ### 🐛 Bug Fixes
