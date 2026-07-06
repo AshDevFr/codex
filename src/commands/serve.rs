@@ -242,6 +242,22 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         info!("PDF page cache disabled");
     }
 
+    // Bound concurrent image decode/resize/render work so a burst of page
+    // requests (a reader prefetching many pages) can't hold many full-resolution
+    // bitmaps in memory at once. Each permit maps to one in-flight uncompressed
+    // bitmap, so peak image memory ≈ permits × per-decode footprint. Small by
+    // default; env-tunable for larger boxes.
+    let image_decode_concurrency = std::env::var("CODEX_IMAGE_DECODE_CONCURRENCY")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok())
+        .filter(|n| *n > 0)
+        .unwrap_or(3);
+    codex_api::image_limit::init_image_decode_limiter(image_decode_concurrency);
+    info!(
+        "Image decode limiter initialized (max concurrent decode/resize/render: {})",
+        image_decode_concurrency
+    );
+
     // Initialize PDF handle (open-document) cache and its idle sweeper.
     // Bounded by capacity (hard cap) and an idle TTL applied by a background
     // task. The cache stays empty until the page handler wires `get_or_open`

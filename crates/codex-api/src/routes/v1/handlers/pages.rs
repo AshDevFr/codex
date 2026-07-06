@@ -195,9 +195,11 @@ async fn downscale_to_width(
     image_data: Vec<u8>,
     target_width: u32,
 ) -> anyhow::Result<Option<Vec<u8>>> {
-    tokio::task::spawn_blocking(move || downscale_to_width_sync(&image_data, target_width))
-        .await
-        .map_err(|e| anyhow::anyhow!("Task join error: {}", e))?
+    let limiter = crate::image_limit::image_decode_limiter();
+    crate::image_limit::run_bounded_image_job(&limiter, move || {
+        downscale_to_width_sync(&image_data, target_width)
+    })
+    .await
 }
 
 /// Synchronous core of {@link downscale_to_width} (runs inside `spawn_blocking`).
@@ -205,7 +207,10 @@ fn downscale_to_width_sync(
     image_data: &[u8],
     target_width: u32,
 ) -> anyhow::Result<Option<Vec<u8>>> {
-    let img = image::load_from_memory(image_data)?;
+    let img = crate::image_limit::decode_image_limited(
+        image_data,
+        crate::image_limit::MAX_DECODE_ALLOC_BYTES,
+    )?;
     if img.width() <= target_width {
         return Ok(None);
     }
@@ -330,11 +335,15 @@ async fn serve_pdf_page_with_streaming(
     // same book skip the per-page PDFium open. If PDFium isn't initialised
     // (no library binding available), fall back to the legacy path which can
     // serve embedded JPEGs directly via lopdf.
+    // Bounded by the shared image-decode limiter: a PDF render holds an open
+    // document (the whole file) plus a full-page bitmap, so it competes for the
+    // same peak-memory budget as comic downscales and thumbnails.
+    let limiter = crate::image_limit::image_decode_limiter();
     let render_result = if codex_parsers::pdf::static_pdfium().is_some() {
         let cache = state.pdf_handle_cache.clone();
         let opener_path = path.clone();
         let lookup_path = path.clone();
-        tokio::task::spawn_blocking(move || -> anyhow::Result<Vec<u8>> {
+        crate::image_limit::run_bounded_image_job(&limiter, move || {
             let doc_arc = cache.get_or_open(book_id, lookup_path, move || {
                 codex_parsers::pdf::open_pdf_document(&opener_path)
             })?;
@@ -342,13 +351,11 @@ async fn serve_pdf_page_with_streaming(
             codex_parsers::pdf::render_page_from_doc(&doc, page_number, dpi)
         })
         .await
-        .map_err(|e| ApiError::Internal(format!("Task join error: {}", e)))?
     } else {
-        tokio::task::spawn_blocking(move || {
+        crate::image_limit::run_bounded_image_job(&limiter, move || {
             codex_parsers::pdf::extract_page_from_pdf_with_dpi(&path, page_number, dpi)
         })
         .await
-        .map_err(|e| ApiError::Internal(format!("Task join error: {}", e)))?
     };
 
     let image_data = match render_result {
@@ -709,7 +716,10 @@ fn serve_placeholder_response() -> Response {
 /// Resizes the image to fit within max_dimension x max_dimension while maintaining aspect ratio
 fn generate_thumbnail_sync(image_data: &[u8], max_dimension: u32) -> anyhow::Result<Vec<u8>> {
     // Load image from bytes
-    let img = image::load_from_memory(image_data)?;
+    let img = crate::image_limit::decode_image_limited(
+        image_data,
+        crate::image_limit::MAX_DECODE_ALLOC_BYTES,
+    )?;
 
     // Calculate new dimensions while maintaining aspect ratio
     let (width, height) = (img.width(), img.height());
@@ -736,9 +746,11 @@ fn generate_thumbnail_sync(image_data: &[u8], max_dimension: u32) -> anyhow::Res
 /// Uses spawn_blocking to avoid blocking the async runtime during CPU-intensive
 /// image decoding, resizing (Lanczos3), and JPEG encoding operations
 async fn generate_thumbnail(image_data: Vec<u8>, max_dimension: u32) -> anyhow::Result<Vec<u8>> {
-    tokio::task::spawn_blocking(move || generate_thumbnail_sync(&image_data, max_dimension))
-        .await
-        .map_err(|e| anyhow::anyhow!("Task join error: {}", e))?
+    let limiter = crate::image_limit::image_decode_limiter();
+    crate::image_limit::run_bounded_image_job(&limiter, move || {
+        generate_thumbnail_sync(&image_data, max_dimension)
+    })
+    .await
 }
 
 /// Detect content type from image data using magic bytes

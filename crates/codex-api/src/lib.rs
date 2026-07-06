@@ -2,6 +2,7 @@ pub mod db_batch;
 pub mod docs;
 pub mod error;
 pub mod extractors;
+pub mod image_limit;
 pub mod middleware;
 pub mod observability;
 pub mod permissions;
