@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.40.3] - 2026-07-06
+
+### 🚀 Features
+
+- *(events)* Bridge task progress across processes via LISTEN/NOTIFY
+
 ## [1.40.2] - 2026-07-05
 
 ### 🚀 Features
