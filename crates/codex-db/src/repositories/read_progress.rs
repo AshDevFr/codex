@@ -143,9 +143,13 @@ impl ReadProgressRepository {
             active_model.r2_progression = Set(r2_progression);
         }
 
-        // Set completed_at if just marked as completed
+        // Keep completed_at consistent with the completed flag: set it on the
+        // transition to completed, and clear it when a book is un-completed so
+        // a downgraded record never keeps a stale completion timestamp.
         if completed && existing_model.completed_at.is_none() {
             active_model.completed_at = Set(Some(now));
+        } else if !completed && existing_model.completed_at.is_some() {
+            active_model.completed_at = Set(None);
         }
 
         let result = active_model.update(db).await?;
@@ -444,6 +448,28 @@ mod tests {
 
         assert!(completed.completed);
         assert!(completed.completed_at.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_uncomplete_clears_completed_at() {
+        let db = setup_test_db().await;
+        let user = create_test_user(&db).await;
+        let book = create_test_book(&db).await;
+
+        // Mark as completed so completed_at is populated.
+        let completed = ReadProgressRepository::upsert(&db, user.id, book.id, 50, true)
+            .await
+            .unwrap();
+        assert!(completed.completed);
+        assert!(completed.completed_at.is_some());
+
+        // A subsequent save that reports not-completed must clear completed_at
+        // so the record stays consistent (completed_at is set iff completed).
+        let uncompleted = ReadProgressRepository::upsert(&db, user.id, book.id, 10, false)
+            .await
+            .unwrap();
+        assert!(!uncompleted.completed);
+        assert!(uncompleted.completed_at.is_none());
     }
 
     #[tokio::test]

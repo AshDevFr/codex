@@ -51,8 +51,21 @@ export function useReadProgress({
   const bookIdRef = useRef(bookId);
   const totalPagesRef = useRef(totalPages);
 
-  // Keep refs up to date
+  // Completion latches for the reading session. Once a book is marked
+  // complete, a later position save must not flip it back to in-progress.
+  // This matters for double-page mode, where the final spread leaves
+  // currentPage one short of the last page: the end-of-book overlay saves
+  // completion via saveProgress(totalPages), but the debounced/unmount saves
+  // report the raw spread page (e.g. 173 of 174) and would otherwise clobber
+  // it back to `completed: false`. Reset when switching books.
+  const completedRef = useRef(false);
+
+  // Keep refs up to date, and reset the completion latch when the book
+  // changes (series navigation) so book B never inherits book A's completion.
   useEffect(() => {
+    if (bookIdRef.current !== bookId) {
+      completedRef.current = false;
+    }
     bookIdRef.current = bookId;
     totalPagesRef.current = totalPages;
   }, [bookId, totalPages]);
@@ -71,10 +84,19 @@ export function useReadProgress({
       const currentBookId = bookIdRef.current;
       const currentTotalPages = totalPagesRef.current;
 
+      // Completion is sticky for the session: once complete, a later position
+      // save cannot downgrade it. A completed book is pinned to its last page
+      // so progress displays read 100%, not 99% (double-page final spread).
+      const completed = completedRef.current || page >= currentTotalPages;
+      if (completed) {
+        completedRef.current = true;
+      }
+      const savedPage = completed ? Math.max(page, currentTotalPages) : page;
+
       readProgressApi
         .update(currentBookId, {
-          currentPage: page,
-          completed: page >= currentTotalPages,
+          currentPage: savedPage,
+          completed,
         })
         .then((updatedProgress) => {
           // Update cache directly instead of refetching

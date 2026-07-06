@@ -415,6 +415,116 @@ describe("useReadProgress", () => {
     });
   });
 
+  describe("sticky completion", () => {
+    it("does not downgrade completion when a later save reports an earlier page", async () => {
+      const { result } = renderHook(
+        () =>
+          useReadProgress({
+            bookId: "test-book",
+            totalPages: 174,
+          }),
+        { wrapper: createWrapper() },
+      );
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      // Reaching the end (double-page overlay) marks the book complete.
+      act(() => {
+        result.current.saveProgress(174);
+      });
+      expect(mockUpdate).toHaveBeenLastCalledWith("test-book", {
+        currentPage: 174,
+        completed: true,
+      });
+
+      // A subsequent position save reporting the final spread's left page
+      // (173) must not revert completion; the book stays pinned to the last
+      // page so displays read 100%, not 99%.
+      act(() => {
+        result.current.saveProgress(173);
+      });
+      expect(mockUpdate).toHaveBeenLastCalledWith("test-book", {
+        currentPage: 174,
+        completed: true,
+      });
+    });
+
+    it("keeps completion on the unmount save (last book of a series in double-page mode)", async () => {
+      vi.useFakeTimers();
+
+      const { result, unmount } = renderHook(
+        () =>
+          useReadProgress({
+            bookId: "test-book",
+            totalPages: 174,
+            debounceMs: 5000,
+          }),
+        { wrapper: createWrapper() },
+      );
+
+      await act(async () => {
+        await vi.runAllTimersAsync();
+      });
+
+      // End-of-book overlay saves completion.
+      act(() => {
+        result.current.saveProgress(174);
+      });
+
+      // Reader's currentPage stays on the final spread's left page (173).
+      act(() => {
+        useReaderStore.setState({ currentPage: 173 });
+      });
+
+      // Closing the reader (no next book to navigate to) unmounts the hook.
+      unmount();
+
+      // The unmount save must not un-complete the book.
+      expect(mockUpdate).toHaveBeenLastCalledWith("test-book", {
+        currentPage: 174,
+        completed: true,
+      });
+
+      vi.useRealTimers();
+    });
+
+    it("resets completion latch when switching books", async () => {
+      const { result, rerender } = renderHook(
+        ({ bookId }) =>
+          useReadProgress({
+            bookId,
+            totalPages: 174,
+          }),
+        {
+          wrapper: createWrapper(),
+          initialProps: { bookId: "book-a" },
+        },
+      );
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      // Finish book A.
+      act(() => {
+        result.current.saveProgress(174);
+      });
+
+      // Navigate to book B and save an early page: it must NOT inherit A's
+      // completion.
+      rerender({ bookId: "book-b" });
+      act(() => {
+        result.current.saveProgress(5);
+      });
+      expect(mockUpdate).toHaveBeenLastCalledWith("book-b", {
+        currentPage: 5,
+        completed: false,
+      });
+    });
+  });
+
   describe("cleanup", () => {
     it("should save final progress on unmount", async () => {
       vi.useFakeTimers();
