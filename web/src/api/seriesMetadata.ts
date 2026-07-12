@@ -134,7 +134,7 @@ export const seriesMetadataApi = {
   ): Promise<ExternalRating> => {
     const response = await api.post<ExternalRating>(
       `/series/${seriesId}/external-ratings`,
-      { source_name: sourceName, rating, vote_count: voteCount },
+      { sourceName, rating, voteCount },
     );
     return response.data;
   },
@@ -162,7 +162,7 @@ export const seriesMetadataApi = {
   ): Promise<ExternalLink> => {
     const response = await api.post<ExternalLink>(
       `/series/${seriesId}/external-links`,
-      { source_name: sourceName, url, external_id: externalId },
+      { sourceName, url, externalId },
     );
     return response.data;
   },

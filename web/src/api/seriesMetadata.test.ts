@@ -275,9 +275,9 @@ describe("seriesMetadataApi", () => {
         expect(api.post).toHaveBeenCalledWith(
           "/series/series-123/external-ratings",
           {
-            source_name: "Goodreads",
+            sourceName: "Goodreads",
             rating: 78,
-            vote_count: 2000,
+            voteCount: 2000,
           },
         );
         expect(result).toEqual(mockRating);
@@ -302,9 +302,9 @@ describe("seriesMetadataApi", () => {
         expect(api.post).toHaveBeenCalledWith(
           "/series/series-123/external-ratings",
           {
-            source_name: "Custom",
+            sourceName: "Custom",
             rating: 90,
-            vote_count: undefined,
+            voteCount: undefined,
           },
         );
         expect(result).toEqual(mockRating);
@@ -376,9 +376,9 @@ describe("seriesMetadataApi", () => {
         expect(api.post).toHaveBeenCalledWith(
           "/series/series-123/external-links",
           {
-            source_name: "MangaUpdates",
+            sourceName: "MangaUpdates",
             url: "https://mangaupdates.com/series/xyz",
-            external_id: "xyz",
+            externalId: "xyz",
           },
         );
         expect(result).toEqual(mockLink);
@@ -403,9 +403,9 @@ describe("seriesMetadataApi", () => {
         expect(api.post).toHaveBeenCalledWith(
           "/series/series-123/external-links",
           {
-            source_name: "Custom",
+            sourceName: "Custom",
             url: "https://example.com/series",
-            external_id: undefined,
+            externalId: undefined,
           },
         );
         expect(result).toEqual(mockLink);

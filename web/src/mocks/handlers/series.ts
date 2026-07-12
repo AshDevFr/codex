@@ -1066,18 +1066,18 @@ export const seriesHandlers = [
     async ({ params, request }) => {
       await delay(100);
       const body = (await request.json()) as {
-        source_name: string;
+        sourceName: string;
         rating: number;
-        vote_count?: number;
+        voteCount?: number;
       };
       const now = new Date().toISOString();
 
       return HttpResponse.json({
         id: `ext-rating-${params.id}-${Date.now()}`,
         seriesId: params.id,
-        sourceName: body.source_name,
+        sourceName: body.sourceName,
         rating: body.rating,
-        voteCount: body.vote_count || null,
+        voteCount: body.voteCount || null,
         fetchedAt: now,
         createdAt: now,
         updatedAt: now,
@@ -1151,18 +1151,18 @@ export const seriesHandlers = [
     async ({ params, request }) => {
       await delay(100);
       const body = (await request.json()) as {
-        source_name: string;
+        sourceName: string;
         url: string;
-        external_id?: string;
+        externalId?: string;
       };
       const now = new Date().toISOString();
 
       return HttpResponse.json({
         id: `ext-link-${params.id}-${Date.now()}`,
         seriesId: params.id,
-        sourceName: body.source_name,
+        sourceName: body.sourceName,
         url: body.url,
-        externalId: body.external_id || null,
+        externalId: body.externalId || null,
         createdAt: now,
         updatedAt: now,
       });
