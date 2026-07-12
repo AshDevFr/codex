@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.40.7] - 2026-07-12
+
+### 🐛 Bug Fixes
+
+- *(web)* Send camelCase keys for series external links and ratings
+
 ## [1.40.6] - 2026-07-06
 
 ### 🐛 Bug Fixes
