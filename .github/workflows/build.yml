@@ -111,13 +111,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-      # Note: We remove package-lock.json and use npm install instead of npm ci
-      # because Biome updates frequently and we want to use the latest compatible version
       - name: Install dependencies
         working-directory: web
-        run: |
-          rm -rf node_modules package-lock.json
-          npm install
+        run: npm ci
       - name: Lint check
         working-directory: web
         run: npm run lint
@@ -168,14 +164,11 @@ jobs:
         if: matrix.plugin != 'sdk-typescript'
         working-directory: plugins/sdk-typescript
         run: |
-          rm -rf node_modules package-lock.json
-          npm install
+          npm ci
           npm run build
       - name: Install dependencies
         working-directory: plugins/${{ matrix.plugin }}
-        run: |
-          rm -rf node_modules package-lock.json
-          npm install
+        run: npm ci
       - name: Lint
         working-directory: plugins/${{ matrix.plugin }}
         run: npm run lint
@@ -549,13 +542,10 @@ jobs:
       # module (nodejs/node#62425), and (b) keep the publish step reproducible.
       - name: Install npm 11.5.1 (minimum for Trusted Publishing)
         run: npm install -g npm@11.5.1
-      # Note: We remove package-lock.json and use npm install instead of npm ci
-      # because Biome updates frequently and we want to use the latest compatible version
       - name: Install dependencies and build
         working-directory: plugins/sdk-typescript
         run: |
-          rm -rf node_modules package-lock.json
-          npm install
+          npm ci
           npm run build
       # Auth via npm Trusted Publishing (OIDC). NODE_AUTH_TOKEN is intentionally
       # absent: its presence would force npm into token auth and bypass OIDC.
@@ -612,6 +602,9 @@ jobs:
           jq --arg v "^$SDK_VERSION" '.dependencies["@ashdev/codex-plugin-sdk"] = $v' package.json > tmp.json
           mv tmp.json package.json
           cat package.json | grep -A2 '"dependencies"'
+      # The step above rewrites the SDK dependency (file: -> published version),
+      # which desyncs the committed lockfile. npm ci would fail here, so this
+      # publish-only step must use npm install to regenerate the lockfile.
       - name: Install plugin dependencies
         working-directory: plugins/${{ matrix.plugin }}
         run: |
