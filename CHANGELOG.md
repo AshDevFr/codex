@@ -2,6 +2,16 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.40.8] - 2026-07-12
+
+### 🐛 Bug Fixes
+
+- *(plugins)* Drop unsafe optional chaining flagged by biome in tests
+
+### ⚙️ Miscellaneous Tasks
+
+- Use npm ci for install-to-verify steps in build.yml
+
 ## [1.40.7] - 2026-07-12
 
 ### 🐛 Bug Fixes

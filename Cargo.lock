@@ -809,7 +809,7 @@ dependencies = [
 
 [[package]]
 name = "codex"
-version = "1.40.7"
+version = "1.40.8"
 dependencies = [
  "anyhow",
  "axum",
@@ -861,7 +861,7 @@ dependencies = [
 
 [[package]]
 name = "codex-api"
-version = "1.40.7"
+version = "1.40.8"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -921,7 +921,7 @@ dependencies = [
 
 [[package]]
 name = "codex-cli-common"
-version = "1.40.7"
+version = "1.40.8"
 dependencies = [
  "anyhow",
  "codex-api",
@@ -943,7 +943,7 @@ dependencies = [
 
 [[package]]
 name = "codex-config"
-version = "1.40.7"
+version = "1.40.8"
 dependencies = [
  "anyhow",
  "serde",
@@ -954,7 +954,7 @@ dependencies = [
 
 [[package]]
 name = "codex-db"
-version = "1.40.7"
+version = "1.40.8"
 dependencies = [
  "anyhow",
  "chrono",
@@ -980,7 +980,7 @@ dependencies = [
 
 [[package]]
 name = "codex-events"
-version = "1.40.7"
+version = "1.40.8"
 dependencies = [
  "chrono",
  "serde",
@@ -993,7 +993,7 @@ dependencies = [
 
 [[package]]
 name = "codex-migrate"
-version = "1.40.7"
+version = "1.40.8"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1015,7 +1015,7 @@ dependencies = [
 
 [[package]]
 name = "codex-models"
-version = "1.40.7"
+version = "1.40.8"
 dependencies = [
  "chrono",
  "lazy_static",
@@ -1027,7 +1027,7 @@ dependencies = [
 
 [[package]]
 name = "codex-parsers"
-version = "1.40.7"
+version = "1.40.8"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1053,7 +1053,7 @@ dependencies = [
 
 [[package]]
 name = "codex-scanner"
-version = "1.40.7"
+version = "1.40.8"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1081,7 +1081,7 @@ dependencies = [
 
 [[package]]
 name = "codex-scheduler"
-version = "1.40.7"
+version = "1.40.8"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1104,7 +1104,7 @@ dependencies = [
 
 [[package]]
 name = "codex-search"
-version = "1.40.7"
+version = "1.40.8"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1124,7 +1124,7 @@ dependencies = [
 
 [[package]]
 name = "codex-services"
-version = "1.40.7"
+version = "1.40.8"
 dependencies = [
  "anyhow",
  "axum",
@@ -1176,7 +1176,7 @@ dependencies = [
 
 [[package]]
 name = "codex-tasks"
-version = "1.40.7"
+version = "1.40.8"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1202,7 +1202,7 @@ dependencies = [
 
 [[package]]
 name = "codex-utils"
-version = "1.40.7"
+version = "1.40.8"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -3413,7 +3413,7 @@ dependencies = [
 
 [[package]]
 name = "migration"
-version = "1.40.7"
+version = "1.40.8"
 dependencies = [
  "chrono",
  "lazy_static",
