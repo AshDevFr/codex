@@ -368,7 +368,7 @@ describe("poll", () => {
 
     const countCalls = calls.filter((c) => c.method === "releases/count_tracked");
     expect(countCalls).toHaveLength(1);
-    expect((countCalls[0]?.params as { sourceId: string }).sourceId).toBe("src-1");
+    expect((countCalls[0].params as { sourceId: string }).sourceId).toBe("src-1");
 
     const progressCalls = calls.filter((c) => c.method === "releases/report_progress");
     // One emit per tracked series: 2 total. Denominator equals count.

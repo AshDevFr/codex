@@ -243,7 +243,7 @@ describe("pollSubscription", () => {
     });
     const record = calls.find((c) => c.method === "releases/record");
     expect(record).toBeDefined();
-    const cand = (record?.params as { candidate: Record<string, unknown> }).candidate;
+    const cand = (record.params as { candidate: Record<string, unknown> }).candidate;
     expect(cand.payloadUrl).toBe("https://nyaa.si/download/99.torrent");
     // Both fields would point at the same URL — skip the duplicate.
     expect(cand.mediaUrl).toBeUndefined();
@@ -317,7 +317,7 @@ describe("registerSources", () => {
     // Round-trip data: config carries the original (case-preserving) subscription.
     const userSrc = payload.sources[0];
     expect(
-      (userSrc?.config as { subscription: { identifier: string } }).subscription.identifier,
+      (userSrc.config as { subscription: { identifier: string } }).subscription.identifier,
     ).toBe("tsuna69");
   });
 
@@ -352,6 +352,6 @@ describe("registerSources", () => {
     expect(result).toEqual({ registered: 0, pruned: 2 });
     const reg = calls.find((c) => c.method === "releases/register_sources");
     expect(reg).toBeDefined();
-    expect((reg?.params as { sources: unknown[] }).sources).toEqual([]);
+    expect((reg.params as { sources: unknown[] }).sources).toEqual([]);
   });
 });
