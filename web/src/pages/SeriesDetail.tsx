@@ -287,12 +287,7 @@ export function SeriesDetail() {
       queryClient.refetchQueries({
         predicate: (query) => {
           const key = query.queryKey[0] as string;
-          return (
-            key === "books" ||
-            key === "series" ||
-            key === "series-books" ||
-            key === "book-detail"
-          );
+          return key === "books" || key === "series" || key === "series-books";
         },
       });
     },
@@ -318,12 +313,7 @@ export function SeriesDetail() {
       queryClient.refetchQueries({
         predicate: (query) => {
           const key = query.queryKey[0] as string;
-          return (
-            key === "books" ||
-            key === "series" ||
-            key === "series-books" ||
-            key === "book-detail"
-          );
+          return key === "books" || key === "series" || key === "series-books";
         },
       });
     },

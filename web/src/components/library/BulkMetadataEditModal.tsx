@@ -542,7 +542,6 @@ export function BulkMetadataEditModal({
             key === "books" ||
             key === "series" ||
             key === "series-books" ||
-            key === "book-detail" ||
             key === "genres" ||
             key === "tags"
           );

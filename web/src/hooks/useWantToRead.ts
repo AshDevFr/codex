@@ -30,7 +30,9 @@ export function useWantToReadQueue(sort: WantToReadSort = "newest") {
  *
  *  - the queue (`["want-to-read"]`);
  *  - the entity's detail query — prefix-based, so `["series", id]` matches
- *    `["series", id, "full"]`, which drives the detail-page toggle;
+ *    `["series", id, "full"]` and `["books", id]` matches
+ *    `["books", id, "detail"]` (see `bookKeys` in `@/api/queryKeys`), which
+ *    drive the detail-page toggles;
  *  - the LIST/grid/home sections. Cards source `wantToRead` from list queries
  *    keyed `["series"/"books", <section>, ...]`, whose slot 2 is a section
  *    string, not an id — so the detail-id prefix above never reaches them.

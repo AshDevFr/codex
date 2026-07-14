@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { bookKeys } from "@/api/queryKeys";
 import { wantToReadApi } from "@/api/wantToRead";
 import { useAddToWantToRead, useRemoveFromWantToRead } from "./useWantToRead";
 
@@ -76,5 +77,34 @@ describe("useWantToRead invalidation", () => {
     expect(keys).toContainEqual(["books", "book-1"]);
     expect(keys).toContainEqual(["books", "in-progress"]);
     expect(keys).toContainEqual(["books", "on-deck"]);
+  });
+
+  it("invalidates the book detail page query after toggling a book", async () => {
+    // Regression: the detail page was once keyed under a "book-detail" root,
+    // which the ["books", id] prefix invalidation never matched, so the
+    // bookmark icon stayed stale. The page's key (bookKeys.detail) must live
+    // under the invalidated prefix.
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+    queryClient.setQueryData(bookKeys.detail("book-1"), { wantToRead: false });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useAddToWantToRead(), { wrapper });
+
+    await act(async () => {
+      result.current.mutate({ itemType: "book", id: "book-1" });
+    });
+    await waitFor(() =>
+      expect(wantToReadApi.addBook).toHaveBeenCalledWith("book-1"),
+    );
+
+    expect(
+      queryClient.getQueryState(bookKeys.detail("book-1"))?.isInvalidated,
+    ).toBe(true);
   });
 });

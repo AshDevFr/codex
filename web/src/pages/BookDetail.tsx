@@ -46,6 +46,7 @@ import {
   pluginActionsApi,
   pluginsApi,
 } from "@/api/plugins";
+import { bookKeys } from "@/api/queryKeys";
 import { seriesApi } from "@/api/series";
 import { settingsApi } from "@/api/settings";
 import {
@@ -150,7 +151,7 @@ export function BookDetail() {
     isLoading,
     error,
   } = useQuery({
-    queryKey: ["book-detail", bookId],
+    queryKey: bookKeys.detail(bookId),
     queryFn: () => booksApi.getDetail(bookId!, { full: true }),
     enabled: !!bookId,
   });
@@ -161,21 +162,21 @@ export function BookDetail() {
 
   // Fetch adjacent books for series navigation
   const { data: adjacentBooks } = useQuery({
-    queryKey: ["adjacent-books", bookId],
+    queryKey: bookKeys.adjacent(bookId),
     queryFn: () => booksApi.getAdjacent(bookId!),
     enabled: !!bookId,
   });
 
   // Fetch external IDs for this book
   const { data: externalIds } = useQuery({
-    queryKey: ["books", bookId, "external-ids"],
+    queryKey: bookKeys.externalIds(bookId),
     queryFn: () => booksApi.listExternalIds(bookId!),
     enabled: !!bookId,
   });
 
   // Fetch external links for this book
   const { data: externalLinks } = useQuery({
-    queryKey: ["books", bookId, "external-links"],
+    queryKey: bookKeys.externalLinks(bookId),
     queryFn: () => booksApi.listExternalLinks(bookId!),
     enabled: !!bookId,
   });
@@ -220,13 +221,8 @@ export function BookDetail() {
 
   // Handler for metadata apply success
   const handleMetadataApplySuccess = () => {
-    queryClient.invalidateQueries({ queryKey: ["book-detail", bookId] });
-    queryClient.invalidateQueries({
-      queryKey: ["books", bookId, "external-ids"],
-    });
-    queryClient.invalidateQueries({
-      queryKey: ["books", bookId, "external-links"],
-    });
+    // Prefix invalidation covers detail, external-ids, and external-links.
+    queryClient.invalidateQueries({ queryKey: bookKeys.all(bookId) });
   };
 
   // Auto-match mutation - enqueues a task for the book's parent series
@@ -272,12 +268,7 @@ export function BookDetail() {
       queryClient.refetchQueries({
         predicate: (query) => {
           const key = query.queryKey[0] as string;
-          return (
-            key === "books" ||
-            key === "series" ||
-            key === "series-books" ||
-            key === "book-detail"
-          );
+          return key === "books" || key === "series" || key === "series-books";
         },
       });
     },
@@ -303,12 +294,7 @@ export function BookDetail() {
       queryClient.refetchQueries({
         predicate: (query) => {
           const key = query.queryKey[0] as string;
-          return (
-            key === "books" ||
-            key === "series" ||
-            key === "series-books" ||
-            key === "book-detail"
-          );
+          return key === "books" || key === "series" || key === "series-books";
         },
       });
     },
