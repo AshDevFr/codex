@@ -5,7 +5,7 @@ import {
   createSeries,
 } from "@/mocks/data/factories";
 import { useAuthStore } from "@/store/authStore";
-import { renderWithProviders, screen, userEvent } from "@/test/utils";
+import { renderWithProviders, screen, userEvent, waitFor } from "@/test/utils";
 import type { User } from "@/types";
 import { MediaCard } from "./MediaCard";
 
@@ -650,6 +650,69 @@ describe("MediaCard", () => {
       await user.hover(cover as Element);
 
       expect(await screen.findByText(/Vol 3/)).toBeInTheDocument();
+    });
+
+    it("does not reveal the panel on touch devices", async () => {
+      // Simulate a coarse-pointer / no-hover device: the panel would fire on
+      // tap and cover the grid, so the card must not render it at all.
+      const originalMatchMedia = window.matchMedia;
+      window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+        matches: query.includes("hover: none"),
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })) as unknown as typeof window.matchMedia;
+
+      try {
+        const user = userEvent.setup();
+        const series = createSeries({
+          title: "Berserk",
+          summary: "Guts, a lone mercenary, wanders a brutal medieval world.",
+        });
+        renderWithProviders(<MediaCard type="series" data={series} />);
+
+        const cover = document.querySelector(".media-card-cover");
+        await user.hover(cover as Element);
+        // Outlast the HoverCard's 400ms open delay before asserting absence.
+        await new Promise((resolve) => setTimeout(resolve, 500));
+
+        expect(
+          screen.queryByText(/Guts, a lone mercenary/),
+        ).not.toBeInTheDocument();
+      } finally {
+        window.matchMedia = originalMatchMedia;
+      }
+    });
+
+    it("closes the hover panel when the actions menu opens", async () => {
+      const user = userEvent.setup();
+      const series = createSeries({
+        title: "Berserk",
+        summary: "Guts, a lone mercenary, wanders a brutal medieval world.",
+      });
+
+      renderWithProviders(<MediaCard type="series" data={series} />);
+
+      const cover = document.querySelector(".media-card-cover");
+      await user.hover(cover as Element);
+      expect(
+        await screen.findByText(/Guts, a lone mercenary/),
+      ).toBeInTheDocument();
+
+      // Opening the three-dot menu must dismiss the hover panel — both are
+      // portaled popovers and would otherwise stack on top of each other.
+      await user.click(screen.getByRole("button", { name: "Card actions" }));
+
+      expect(await screen.findByText("Mark as Read")).toBeInTheDocument();
+      await waitFor(() =>
+        expect(
+          screen.queryByText(/Guts, a lone mercenary/),
+        ).not.toBeInTheDocument(),
+      );
     });
   });
 

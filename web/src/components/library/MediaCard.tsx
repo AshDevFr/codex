@@ -12,6 +12,7 @@ import {
   Text,
   Tooltip,
 } from "@mantine/core";
+import { useMediaQuery } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
 import {
   IconAnalyze,
@@ -88,6 +89,12 @@ export const MediaCard = memo(function MediaCard({
   // would unmount a modal living inside the dropdown before it could open.
   const [createCollectionOpen, setCreateCollectionOpen] = useState(false);
   const [createReadListOpen, setCreateReadListOpen] = useState(false);
+  const [menuOpened, setMenuOpened] = useState(false);
+  // On devices without a real hover (phones, tablets) the hover panel would
+  // fire on tap and cover the grid, so it is disabled there entirely — the
+  // detail page one tap away carries the same information.
+  const isTouchDevice =
+    useMediaQuery("(hover: none), (pointer: coarse)") ?? false;
   // Separate mutation instances drive "create then auto-add" from the modals;
   // the submenus own their own add/remove for toggling existing memberships.
   const addSeriesToCollection = useAddSeriesToCollection();
@@ -504,7 +511,10 @@ export const MediaCard = memo(function MediaCard({
         {/* HoverCard surfaces the title, description and volume/chapter counts
             on hover so users don't have to open the detail page. The target is
             the whole card body (cover + footer) so hovering anywhere reveals
-            it; the card stays clickable and the dropdown renders lazily. */}
+            it; the card stays clickable and the dropdown renders lazily.
+            Disabled on touch devices (no hover to trigger it intentionally)
+            and while the actions menu is open (both are portaled popovers and
+            would otherwise stack on top of each other). */}
         <HoverCard
           openDelay={400}
           closeDelay={100}
@@ -512,6 +522,7 @@ export const MediaCard = memo(function MediaCard({
           withinPortal
           width={300}
           shadow="md"
+          disabled={isTouchDevice || menuOpened}
         >
           <HoverCard.Target>
             <Stack gap={0} style={{ height: "100%", minHeight: 0 }}>
@@ -715,7 +726,13 @@ export const MediaCard = memo(function MediaCard({
                     zIndex: 3,
                   }}
                 >
-                  <Menu position="top-end" shadow="md" withinPortal>
+                  <Menu
+                    position="top-end"
+                    shadow="md"
+                    withinPortal
+                    opened={menuOpened}
+                    onChange={setMenuOpened}
+                  >
                     <Menu.Target>
                       <ActionIcon
                         variant="filled"
