@@ -1857,7 +1857,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get the series in a collection (visibility-filtered, in stored order). */
+        /**
+         * Get the series in a collection (visibility-filtered).
+         * @description Ordered collections return manual order; unordered ones honor the `sort`
+         *     query param (title by default).
+         */
         get: operations["get_collection_series"];
         /** Set the manual order of a collection's series. */
         put: operations["reorder_collection_series"];
@@ -2937,7 +2941,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get the books in a read list (visibility-filtered, in stored order). */
+        /**
+         * Get the books in a read list (visibility-filtered).
+         * @description Ordered read lists return manual reading order; unordered ones honor the
+         *     `sort` query param (release date by default).
+         */
         get: operations["get_readlist_books"];
         /** Set the manual order of a read list's books. */
         put: operations["reorder_readlist_books"];
@@ -25217,7 +25225,13 @@ export interface operations {
     };
     get_collection_series: {
         parameters: {
-            query?: never;
+            query?: {
+                /**
+                 * @description Sort for unordered collections: `title` (default), `added`, or `year`.
+                 *     Ignored when the collection is manually ordered.
+                 */
+                sort?: "title" | "added" | "year";
+            };
             header?: never;
             path: {
                 collection_id: string;
@@ -27565,7 +27579,13 @@ export interface operations {
     };
     get_readlist_books: {
         parameters: {
-            query?: never;
+            query?: {
+                /**
+                 * @description Sort for unordered read lists: `release` (default), `title`, or `added`.
+                 *     Ignored when the read list is manually ordered.
+                 */
+                sort?: "release" | "title" | "added";
+            };
             header?: never;
             path: {
                 read_list_id: string;

@@ -177,6 +177,86 @@ impl fmt::Display for SeriesSortParam {
     }
 }
 
+/// Sort options for a collection's member series.
+///
+/// Only honored when the collection is *not* manually ordered
+/// (`collections.ordered = false`); manual order always wins otherwise.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum CollectionSeriesSort {
+    /// Sort by displayed series title (`title_sort`, falling back to `title`,
+    /// then the scan-derived series name).
+    #[default]
+    Title,
+    /// Sort by when the series was added to the collection.
+    Added,
+    /// Sort by series release year (unknown years last).
+    Year,
+}
+
+impl fmt::Display for CollectionSeriesSort {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CollectionSeriesSort::Title => write!(f, "title"),
+            CollectionSeriesSort::Added => write!(f, "added"),
+            CollectionSeriesSort::Year => write!(f, "year"),
+        }
+    }
+}
+
+impl FromStr for CollectionSeriesSort {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "title" => Ok(CollectionSeriesSort::Title),
+            "added" => Ok(CollectionSeriesSort::Added),
+            "year" => Ok(CollectionSeriesSort::Year),
+            _ => Err(format!("Invalid collection series sort: {}", s)),
+        }
+    }
+}
+
+/// Sort options for a read list's member books.
+///
+/// Only honored when the read list is *not* manually ordered
+/// (`read_lists.ordered = false`); manual reading order always wins otherwise.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ReadListBookSort {
+    /// Sort by release date (year/month/day, unknown dates last).
+    #[default]
+    Release,
+    /// Sort by displayed book title (`title_sort`, falling back to `title`,
+    /// then the file name).
+    Title,
+    /// Sort by when the book was added to the read list.
+    Added,
+}
+
+impl fmt::Display for ReadListBookSort {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ReadListBookSort::Release => write!(f, "release"),
+            ReadListBookSort::Title => write!(f, "title"),
+            ReadListBookSort::Added => write!(f, "added"),
+        }
+    }
+}
+
+impl FromStr for ReadListBookSort {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "release" | "release_date" => Ok(ReadListBookSort::Release),
+            "title" => Ok(ReadListBookSort::Title),
+            "added" => Ok(ReadListBookSort::Added),
+            _ => Err(format!("Invalid read list book sort: {}", s)),
+        }
+    }
+}
+
 /// Sort field options for book list queries
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]

@@ -462,7 +462,7 @@ pub async fn collection_series(
     let visibility = content_filter.to_visibility();
 
     let series_list =
-        CollectionRepository::get_series(&state.db, collection_id, visibility.as_ref())
+        CollectionRepository::get_series(&state.db, &collection, visibility.as_ref(), None)
             .await
             .map_err(|e| ApiError::Internal(format!("Failed to fetch collection series: {}", e)))?;
 
@@ -623,7 +623,7 @@ pub async fn readlist_books(
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
     let visibility = content_filter.to_visibility();
 
-    let books = ReadListRepository::get_books(&state.db, read_list_id, visibility.as_ref())
+    let books = ReadListRepository::get_books(&state.db, &read_list, visibility.as_ref(), None)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch read list books: {}", e)))?;
 

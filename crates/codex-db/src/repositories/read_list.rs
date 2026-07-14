@@ -1,9 +1,9 @@
 //! Repository for read lists and the read_list_books junction.
 //!
 //! Read lists are shared, ordered groupings of books across series. Membership
-//! order is held by the `position` column on the junction; whether it is honored
-//! (vs. a release-date fallback) is decided by the caller based on the read
-//! list's `ordered` flag.
+//! order is held by the `position` column on the junction; it is honored only
+//! when the read list's `ordered` flag is set. Unordered read lists sort by
+//! release date by default (see [`ReadListRepository::get_books`]).
 
 #![allow(dead_code)]
 
@@ -12,16 +12,18 @@ use std::collections::HashMap;
 use anyhow::Result;
 use chrono::Utc;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, IntoActiveModel,
-    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set,
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, IntoActiveModel, JoinType,
+    Order, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, RelationTrait, Set,
+    sea_query::{Expr, Func, NullOrdering},
 };
 use uuid::Uuid;
 
 use crate::entities::{
-    books, books::Entity as Books, read_list_books, read_list_books::Entity as ReadListBooks,
-    read_lists, read_lists::Entity as ReadLists,
+    book_metadata, books, books::Entity as Books, read_list_books,
+    read_list_books::Entity as ReadListBooks, read_lists, read_lists::Entity as ReadLists,
 };
 use crate::repositories::visibility::{SeriesVisibility, apply_book_visibility};
+use codex_models::sort::ReadListBookSort;
 
 /// Repository for read list operations.
 pub struct ReadListRepository;
@@ -190,21 +192,40 @@ impl ReadListRepository {
         Ok(())
     }
 
-    /// Get the member books of a read list in stored order (by position, then
-    /// insertion time), filtered by the caller's (series-based) visibility.
+    /// Get the member books of a read list, filtered by the caller's
+    /// (series-based) visibility.
+    ///
+    /// Ordered read lists always return manual reading order (position, then
+    /// insertion time); `sort` is ignored for them. Unordered read lists honor
+    /// `sort`, defaulting to release date (year/month/day, unknown dates last).
     pub async fn get_books(
         db: &DatabaseConnection,
-        read_list_id: Uuid,
+        read_list: &read_lists::Model,
         vis: Option<&SeriesVisibility>,
+        sort: Option<ReadListBookSort>,
     ) -> Result<Vec<books::Model>> {
         if matches!(vis, Some(v) if v.is_empty_whitelist()) {
             return Ok(vec![]);
         }
 
-        let ordered_ids: Vec<Uuid> = ReadListBooks::find()
-            .filter(read_list_books::Column::ReadListId.eq(read_list_id))
-            .order_by_asc(read_list_books::Column::Position)
-            .order_by_asc(read_list_books::Column::CreatedAt)
+        // Manual reading order wins on ordered read lists.
+        let sort = (!read_list.ordered).then_some(sort.unwrap_or_default());
+
+        let mut junction =
+            ReadListBooks::find().filter(read_list_books::Column::ReadListId.eq(read_list.id));
+        junction = match sort {
+            None => junction
+                .order_by_asc(read_list_books::Column::Position)
+                .order_by_asc(read_list_books::Column::CreatedAt),
+            Some(ReadListBookSort::Added) => junction
+                .order_by_asc(read_list_books::Column::CreatedAt)
+                .order_by_asc(read_list_books::Column::Position),
+            // Release/title order lives on the books side; junction order is
+            // irrelevant for those.
+            Some(_) => junction,
+        };
+
+        let ordered_ids: Vec<Uuid> = junction
             .all(db)
             .await?
             .into_iter()
@@ -215,21 +236,55 @@ impl ReadListRepository {
         }
 
         // Visibility is series-based; apply it to the books query.
-        let query = apply_book_visibility(
+        let base = apply_book_visibility(
             Books::find().filter(books::Column::Id.is_in(ordered_ids.clone())),
             vis,
         );
-        let by_id: HashMap<Uuid, books::Model> = query
-            .all(db)
-            .await?
-            .into_iter()
-            .map(|b| (b.id, b))
-            .collect();
 
-        Ok(ordered_ids
-            .iter()
-            .filter_map(|id| by_id.get(id).cloned())
-            .collect())
+        match sort {
+            Some(ReadListBookSort::Release) | Some(ReadListBookSort::Title) => {
+                let title_expr = Expr::expr(Func::coalesce([
+                    Expr::col((book_metadata::Entity, book_metadata::Column::TitleSort)).into(),
+                    Expr::col((book_metadata::Entity, book_metadata::Column::Title)).into(),
+                    Expr::col((books::Entity, books::Column::FileName)).into(),
+                ]));
+                let mut query = base.join(JoinType::LeftJoin, books::Relation::BookMetadata.def());
+                if matches!(sort, Some(ReadListBookSort::Release)) {
+                    query = query
+                        .order_by_with_nulls(
+                            book_metadata::Column::Year,
+                            Order::Asc,
+                            NullOrdering::Last,
+                        )
+                        .order_by_with_nulls(
+                            book_metadata::Column::Month,
+                            Order::Asc,
+                            NullOrdering::Last,
+                        )
+                        .order_by_with_nulls(
+                            book_metadata::Column::Day,
+                            Order::Asc,
+                            NullOrdering::Last,
+                        );
+                }
+                Ok(query
+                    .order_by(title_expr, Order::Asc)
+                    .order_by(books::Column::Id, Order::Asc)
+                    .all(db)
+                    .await?)
+            }
+            // Manual position / date-added order comes from the junction query;
+            // re-project the hydrated models into that order.
+            _ => {
+                let by_id: HashMap<Uuid, books::Model> =
+                    base.all(db).await?.into_iter().map(|b| (b.id, b)).collect();
+
+                Ok(ordered_ids
+                    .iter()
+                    .filter_map(|id| by_id.get(id).cloned())
+                    .collect())
+            }
+        }
     }
 
     /// Count the visible member books of a read list.
@@ -295,8 +350,11 @@ mod tests {
     use super::*;
     use crate::ScanningStrategy;
     use crate::entities::series;
-    use crate::repositories::{BookRepository, LibraryRepository, SeriesRepository};
+    use crate::repositories::{
+        BookMetadataRepository, BookRepository, LibraryRepository, SeriesRepository,
+    };
     use crate::test_helpers::create_test_db;
+    use codex_models::sort::ReadListBookSort;
 
     async fn make_book(db: &DatabaseConnection, series_id: Uuid, library_id: Uuid) -> books::Model {
         let book = books::Model {
@@ -416,7 +474,7 @@ mod tests {
             .await
             .unwrap();
 
-        let members = ReadListRepository::get_books(conn, rl.id, None)
+        let members = ReadListRepository::get_books(conn, &rl, None, None)
             .await
             .unwrap();
         assert_eq!(members.len(), 3);
@@ -426,7 +484,13 @@ mod tests {
         ReadListRepository::reorder(conn, rl.id, &reversed)
             .await
             .unwrap();
-        let members = ReadListRepository::get_books(conn, rl.id, None)
+        let members = ReadListRepository::get_books(conn, &rl, None, None)
+            .await
+            .unwrap();
+        assert_eq!(members[0].id, books[2].id);
+
+        // A sort param must not override manual order on an ordered read list.
+        let members = ReadListRepository::get_books(conn, &rl, None, Some(ReadListBookSort::Title))
             .await
             .unwrap();
         assert_eq!(members[0].id, books[2].id);
@@ -437,6 +501,74 @@ mod tests {
             .unwrap();
         assert_eq!(lists.len(), 1);
         assert_eq!(lists[0].id, rl.id);
+    }
+
+    async fn set_release(
+        db: &DatabaseConnection,
+        book_id: Uuid,
+        year: Option<i32>,
+        month: Option<i32>,
+        day: Option<i32>,
+    ) {
+        let mut md = BookMetadataRepository::get_by_book_id(db, book_id)
+            .await
+            .unwrap()
+            .unwrap();
+        md.year = year;
+        md.month = month;
+        md.day = day;
+        BookMetadataRepository::update(db, &md).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_unordered_read_list_sorts_by_release_date() {
+        let (db, _t) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let (_series, books) = setup(conn).await;
+        for (book, title) in books.iter().zip(["Banana", "Cherry", "Apple"]) {
+            BookMetadataRepository::create_with_title_and_number(
+                conn,
+                book.id,
+                Some(title.to_string()),
+                None,
+            )
+            .await
+            .unwrap();
+        }
+
+        // books[0] = 2020-03-01, books[1] = 1999 (year only), books[2] = unknown.
+        set_release(conn, books[0].id, Some(2020), Some(3), Some(1)).await;
+        set_release(conn, books[1].id, Some(1999), None, None).await;
+
+        let rl = ReadListRepository::create(conn, "List", None, false)
+            .await
+            .unwrap();
+        for b in &books {
+            ReadListRepository::add_book(conn, rl.id, b.id)
+                .await
+                .unwrap();
+        }
+
+        // Default sort for an unordered read list is by release date, unknown last.
+        let members = ReadListRepository::get_books(conn, &rl, None, None)
+            .await
+            .unwrap();
+        let ids: Vec<Uuid> = members.iter().map(|b| b.id).collect();
+        assert_eq!(ids, [books[1].id, books[0].id, books[2].id]);
+
+        // Title sort follows metadata title (Apple, Banana, Cherry).
+        let members = ReadListRepository::get_books(conn, &rl, None, Some(ReadListBookSort::Title))
+            .await
+            .unwrap();
+        let ids: Vec<Uuid> = members.iter().map(|b| b.id).collect();
+        assert_eq!(ids, [books[2].id, books[0].id, books[1].id]);
+
+        // "added" follows insertion order.
+        let members = ReadListRepository::get_books(conn, &rl, None, Some(ReadListBookSort::Added))
+            .await
+            .unwrap();
+        let ids: Vec<Uuid> = members.iter().map(|b| b.id).collect();
+        assert_eq!(ids, [books[0].id, books[1].id, books[2].id]);
     }
 
     #[tokio::test]
@@ -460,7 +592,7 @@ mod tests {
             allowed_series_ids: None,
         };
         assert!(
-            ReadListRepository::get_books(conn, rl.id, Some(&vis))
+            ReadListRepository::get_books(conn, &rl, Some(&vis), None)
                 .await
                 .unwrap()
                 .is_empty()

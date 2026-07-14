@@ -1,9 +1,21 @@
 //! DTOs for collections (shared, ordered groupings of series).
 
 use chrono::{DateTime, Utc};
+use codex_models::sort::CollectionSeriesSort;
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
+
+/// Query parameters for listing a collection's series.
+#[derive(Debug, Default, Deserialize, IntoParams)]
+#[serde(rename_all = "camelCase")]
+#[into_params(parameter_in = Query)]
+pub struct CollectionSeriesQuery {
+    /// Sort for unordered collections: `title` (default), `added`, or `year`.
+    /// Ignored when the collection is manually ordered.
+    #[param(inline)]
+    pub sort: Option<CollectionSeriesSort>,
+}
 
 /// A collection of series.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

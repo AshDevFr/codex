@@ -277,6 +277,108 @@ async fn test_member_management_order_and_count() {
 }
 
 #[tokio::test]
+async fn test_unordered_collection_series_sorting() {
+    use codex::db::repositories::SeriesMetadataRepository;
+
+    let (db, _t) = setup_test_db().await;
+    // Insertion order deliberately differs from title order.
+    let series = make_series_in_library(&db, &["Bravo", "Charlie", "Alpha"]).await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let (_uid, token) = user_and_token(&db, &state, "admin", true).await;
+    let app = create_test_router(state).await;
+
+    let req = post_json_request_with_auth(
+        "/api/v1/collections",
+        &serde_json::json!({ "name": "Coll", "ordered": false }),
+        &token,
+    );
+    let (_s, coll): (StatusCode, Option<CollectionDto>) = make_json_request(app.clone(), req).await;
+    let coll_id = coll.unwrap().id;
+
+    let req = post_json_request_with_auth(
+        &format!("/api/v1/collections/{coll_id}/series"),
+        &serde_json::json!({ "seriesIds": series.iter().map(|s| s.id).collect::<Vec<_>>() }),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<CollectionDto>) =
+        make_json_request(app.clone(), req).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // Default: sorted by title, not insertion order.
+    let req = get_request_with_auth(&format!("/api/v1/collections/{coll_id}/series"), &token);
+    let (status, members): (StatusCode, Option<Vec<SeriesDto>>) =
+        make_json_request(app.clone(), req).await;
+    assert_eq!(status, StatusCode::OK);
+    let ids: Vec<_> = members.unwrap().iter().map(|s| s.id).collect();
+    assert_eq!(ids, [series[2].id, series[0].id, series[1].id]);
+
+    // sort=added: insertion order.
+    let req = get_request_with_auth(
+        &format!("/api/v1/collections/{coll_id}/series?sort=added"),
+        &token,
+    );
+    let (status, members): (StatusCode, Option<Vec<SeriesDto>>) =
+        make_json_request(app.clone(), req).await;
+    assert_eq!(status, StatusCode::OK);
+    let ids: Vec<_> = members.unwrap().iter().map(|s| s.id).collect();
+    assert_eq!(ids, [series[0].id, series[1].id, series[2].id]);
+
+    // sort=year: release year ascending, unknown years last.
+    SeriesMetadataRepository::update_year(&db, series[0].id, Some(2020))
+        .await
+        .unwrap();
+    SeriesMetadataRepository::update_year(&db, series[1].id, Some(1999))
+        .await
+        .unwrap();
+    let req = get_request_with_auth(
+        &format!("/api/v1/collections/{coll_id}/series?sort=year"),
+        &token,
+    );
+    let (status, members): (StatusCode, Option<Vec<SeriesDto>>) = make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::OK);
+    let ids: Vec<_> = members.unwrap().iter().map(|s| s.id).collect();
+    assert_eq!(ids, [series[1].id, series[0].id, series[2].id]);
+}
+
+#[tokio::test]
+async fn test_ordered_collection_ignores_sort_param() {
+    let (db, _t) = setup_test_db().await;
+    let series = make_series_in_library(&db, &["Bravo", "Charlie", "Alpha"]).await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let (_uid, token) = user_and_token(&db, &state, "admin", true).await;
+    let app = create_test_router(state).await;
+
+    let req = post_json_request_with_auth(
+        "/api/v1/collections",
+        &serde_json::json!({ "name": "Coll", "ordered": true }),
+        &token,
+    );
+    let (_s, coll): (StatusCode, Option<CollectionDto>) = make_json_request(app.clone(), req).await;
+    let coll_id = coll.unwrap().id;
+
+    let req = post_json_request_with_auth(
+        &format!("/api/v1/collections/{coll_id}/series"),
+        &serde_json::json!({ "seriesIds": series.iter().map(|s| s.id).collect::<Vec<_>>() }),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<CollectionDto>) =
+        make_json_request(app.clone(), req).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // Manual order wins even with an explicit sort param.
+    let req = get_request_with_auth(
+        &format!("/api/v1/collections/{coll_id}/series?sort=title"),
+        &token,
+    );
+    let (status, members): (StatusCode, Option<Vec<SeriesDto>>) = make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::OK);
+    let ids: Vec<_> = members.unwrap().iter().map(|s| s.id).collect();
+    assert_eq!(ids, [series[0].id, series[1].id, series[2].id]);
+}
+
+#[tokio::test]
 async fn test_update_and_not_found() {
     let (db, _t) = setup_test_db().await;
     let state = create_test_auth_state(db.clone()).await;

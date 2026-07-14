@@ -45,7 +45,7 @@ async fn build_readlist_dto(
     model: codex_db::entities::read_lists::Model,
     vis: Option<&SeriesVisibility>,
 ) -> Result<KomgaReadListDto, ApiError> {
-    let members = ReadListRepository::get_books(&state.db, model.id, vis)
+    let members = ReadListRepository::get_books(&state.db, &model, vis, None)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch read list books: {e}")))?;
     Ok(KomgaReadListDto {
@@ -139,16 +139,13 @@ pub async fn get_readlist_books(
 ) -> Result<Json<KomgaPage<KomgaBookDto>>, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
     let id = parse_id(&read_list_id)?;
-    if ReadListRepository::get_by_id(&state.db, id)
+    let model = ReadListRepository::get_by_id(&state.db, id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch read list: {e}")))?
-        .is_none()
-    {
-        return Err(ApiError::NotFound("Read list not found".to_string()));
-    }
+        .ok_or_else(|| ApiError::NotFound("Read list not found".to_string()))?;
 
     let vis = user_visibility(&state, auth.user_id).await?;
-    let members = ReadListRepository::get_books(&state.db, id, vis.as_ref())
+    let members = ReadListRepository::get_books(&state.db, &model, vis.as_ref(), None)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch read list books: {e}")))?;
     let total = members.len() as i64;
@@ -207,8 +204,12 @@ pub async fn get_readlist_thumbnail(
 ) -> Result<Redirect, ApiError> {
     auth.require_permission(&Permission::BooksRead)?;
     let id = parse_id(&read_list_id)?;
+    let model = ReadListRepository::get_by_id(&state.db, id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch read list: {e}")))?
+        .ok_or_else(|| ApiError::NotFound("Read list not found".to_string()))?;
     let vis = user_visibility(&state, auth.user_id).await?;
-    let members = ReadListRepository::get_books(&state.db, id, vis.as_ref())
+    let members = ReadListRepository::get_books(&state.db, &model, vis.as_ref(), None)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch read list books: {e}")))?;
     let first = members

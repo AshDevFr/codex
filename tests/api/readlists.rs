@@ -75,6 +75,128 @@ async fn make_books(
     out
 }
 
+/// Create book metadata with a title and release date parts.
+async fn set_book_metadata(
+    db: &sea_orm::DatabaseConnection,
+    book_id: uuid::Uuid,
+    title: &str,
+    year: Option<i32>,
+    month: Option<i32>,
+    day: Option<i32>,
+) {
+    use codex::db::repositories::BookMetadataRepository;
+    let mut md = BookMetadataRepository::create_with_title_and_number(
+        db,
+        book_id,
+        Some(title.to_string()),
+        None,
+    )
+    .await
+    .unwrap();
+    md.year = year;
+    md.month = month;
+    md.day = day;
+    BookMetadataRepository::update(db, &md).await.unwrap();
+}
+
+#[tokio::test]
+async fn test_unordered_readlist_books_sorting() {
+    let (db, _t) = setup_test_db().await;
+    let books = make_books(&db, 3).await;
+    // books[0] = "Banana" 2020-03-01, books[1] = "Cherry" 1999, books[2] = "Apple" unknown.
+    set_book_metadata(&db, books[0].id, "Banana", Some(2020), Some(3), Some(1)).await;
+    set_book_metadata(&db, books[1].id, "Cherry", Some(1999), None, None).await;
+    set_book_metadata(&db, books[2].id, "Apple", None, None, None).await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let (_uid, token) = user_and_token(&db, &state, "admin", true).await;
+    let app = create_test_router(state).await;
+
+    let req = post_json_request_with_auth(
+        "/api/v1/readlists",
+        &serde_json::json!({ "name": "List", "ordered": false }),
+        &token,
+    );
+    let (_s, rl): (StatusCode, Option<ReadListDto>) = make_json_request(app.clone(), req).await;
+    let rl_id = rl.unwrap().id;
+
+    let req = post_json_request_with_auth(
+        &format!("/api/v1/readlists/{rl_id}/books"),
+        &serde_json::json!({ "bookIds": books.iter().map(|b| b.id).collect::<Vec<_>>() }),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<ReadListDto>) = make_json_request(app.clone(), req).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // Default: release date ascending, unknown dates last.
+    let req = get_request_with_auth(&format!("/api/v1/readlists/{rl_id}/books"), &token);
+    let (status, members): (StatusCode, Option<Vec<BookDto>>) =
+        make_json_request(app.clone(), req).await;
+    assert_eq!(status, StatusCode::OK);
+    let ids: Vec<_> = members.unwrap().iter().map(|b| b.id).collect();
+    assert_eq!(ids, [books[1].id, books[0].id, books[2].id]);
+
+    // sort=title: Apple, Banana, Cherry.
+    let req = get_request_with_auth(
+        &format!("/api/v1/readlists/{rl_id}/books?sort=title"),
+        &token,
+    );
+    let (status, members): (StatusCode, Option<Vec<BookDto>>) =
+        make_json_request(app.clone(), req).await;
+    assert_eq!(status, StatusCode::OK);
+    let ids: Vec<_> = members.unwrap().iter().map(|b| b.id).collect();
+    assert_eq!(ids, [books[2].id, books[0].id, books[1].id]);
+
+    // sort=added: insertion order.
+    let req = get_request_with_auth(
+        &format!("/api/v1/readlists/{rl_id}/books?sort=added"),
+        &token,
+    );
+    let (status, members): (StatusCode, Option<Vec<BookDto>>) = make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::OK);
+    let ids: Vec<_> = members.unwrap().iter().map(|b| b.id).collect();
+    assert_eq!(ids, [books[0].id, books[1].id, books[2].id]);
+}
+
+#[tokio::test]
+async fn test_ordered_readlist_ignores_sort_param() {
+    let (db, _t) = setup_test_db().await;
+    let books = make_books(&db, 3).await;
+    set_book_metadata(&db, books[0].id, "Banana", None, None, None).await;
+    set_book_metadata(&db, books[1].id, "Cherry", None, None, None).await;
+    set_book_metadata(&db, books[2].id, "Apple", None, None, None).await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let (_uid, token) = user_and_token(&db, &state, "admin", true).await;
+    let app = create_test_router(state).await;
+
+    let req = post_json_request_with_auth(
+        "/api/v1/readlists",
+        &serde_json::json!({ "name": "List", "ordered": true }),
+        &token,
+    );
+    let (_s, rl): (StatusCode, Option<ReadListDto>) = make_json_request(app.clone(), req).await;
+    let rl_id = rl.unwrap().id;
+
+    let req = post_json_request_with_auth(
+        &format!("/api/v1/readlists/{rl_id}/books"),
+        &serde_json::json!({ "bookIds": books.iter().map(|b| b.id).collect::<Vec<_>>() }),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<ReadListDto>) = make_json_request(app.clone(), req).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // Manual reading order wins even with an explicit sort param.
+    let req = get_request_with_auth(
+        &format!("/api/v1/readlists/{rl_id}/books?sort=title"),
+        &token,
+    );
+    let (status, members): (StatusCode, Option<Vec<BookDto>>) = make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::OK);
+    let ids: Vec<_> = members.unwrap().iter().map(|b| b.id).collect();
+    assert_eq!(ids, [books[0].id, books[1].id, books[2].id]);
+}
+
 #[tokio::test]
 async fn test_create_with_summary_get_and_list() {
     let (db, _t) = setup_test_db().await;

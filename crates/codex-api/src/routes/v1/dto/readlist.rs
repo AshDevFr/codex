@@ -1,9 +1,21 @@
 //! DTOs for read lists (shared, ordered groupings of books across series).
 
 use chrono::{DateTime, Utc};
+use codex_models::sort::ReadListBookSort;
 use serde::{Deserialize, Deserializer, Serialize};
-use utoipa::ToSchema;
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
+
+/// Query parameters for listing a read list's books.
+#[derive(Debug, Default, Deserialize, IntoParams)]
+#[serde(rename_all = "camelCase")]
+#[into_params(parameter_in = Query)]
+pub struct ReadListBooksQuery {
+    /// Sort for unordered read lists: `release` (default), `title`, or `added`.
+    /// Ignored when the read list is manually ordered.
+    #[param(inline)]
+    pub sort: Option<ReadListBookSort>,
+}
 
 /// Deserialize a nullable field into a "double option" so the handler can tell
 /// "field absent" (`None` → leave unchanged) from "field present and null"

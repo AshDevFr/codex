@@ -6,8 +6,8 @@
 //! requesting user's sharing-tag visibility.
 
 use super::super::dto::{
-    AddBooksToReadListRequest, BookDto, CreateReadListRequest, ReadListDto, ReadListListResponse,
-    ReorderReadListBooksRequest, UpdateReadListRequest,
+    AddBooksToReadListRequest, BookDto, CreateReadListRequest, ReadListBooksQuery, ReadListDto,
+    ReadListListResponse, ReorderReadListBooksRequest, UpdateReadListRequest,
 };
 use crate::require_permission;
 use crate::{
@@ -17,10 +17,11 @@ use crate::{
 };
 use axum::{
     Json,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::Redirect,
 };
+use codex_db::entities::read_lists;
 use codex_db::repositories::{BookRepository, ReadListRepository, visibility::SeriesVisibility};
 use std::sync::Arc;
 use utoipa::OpenApi;
@@ -82,14 +83,17 @@ async fn user_visibility(
 }
 
 async fn ensure_readlist_exists(state: &AuthState, read_list_id: Uuid) -> Result<(), ApiError> {
-    if ReadListRepository::get_by_id(&state.db, read_list_id)
+    get_readlist_or_404(state, read_list_id).await.map(|_| ())
+}
+
+async fn get_readlist_or_404(
+    state: &AuthState,
+    read_list_id: Uuid,
+) -> Result<read_lists::Model, ApiError> {
+    ReadListRepository::get_by_id(&state.db, read_list_id)
         .await
         .map_err(internal("Failed to fetch read list"))?
-        .is_none()
-    {
-        return Err(ApiError::NotFound("Read list not found".to_string()));
-    }
-    Ok(())
+        .ok_or_else(|| ApiError::NotFound("Read list not found".to_string()))
 }
 
 /// List all read lists.
@@ -277,10 +281,14 @@ pub async fn delete_readlist(
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// Get the books in a read list (visibility-filtered, in stored order).
+/// Get the books in a read list (visibility-filtered).
+///
+/// Ordered read lists return manual reading order; unordered ones honor the
+/// `sort` query param (release date by default).
 #[utoipa::path(
     get,
     path = "/api/v1/readlists/{read_list_id}/books",
+    params(ReadListBooksQuery),
     responses(
         (status = 200, description = "Member books", body = [BookDto]),
         (status = 403, description = "Forbidden"),
@@ -293,12 +301,13 @@ pub async fn get_readlist_books(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
     Path(read_list_id): Path<Uuid>,
+    Query(query): Query<ReadListBooksQuery>,
 ) -> Result<Json<Vec<BookDto>>, ApiError> {
     require_permission!(auth, Permission::ReadListsRead)?;
-    ensure_readlist_exists(&state, read_list_id).await?;
+    let read_list = get_readlist_or_404(&state, read_list_id).await?;
 
     let vis = user_visibility(&state, auth.user_id).await?;
-    let members = ReadListRepository::get_books(&state.db, read_list_id, vis.as_ref())
+    let members = ReadListRepository::get_books(&state.db, &read_list, vis.as_ref(), query.sort)
         .await
         .map_err(internal("Failed to fetch read list books"))?;
 
@@ -415,8 +424,9 @@ pub async fn get_readlist_thumbnail(
     Path(read_list_id): Path<Uuid>,
 ) -> Result<Redirect, ApiError> {
     auth.require_permission(&Permission::ReadListsRead)?;
+    let read_list = get_readlist_or_404(&state, read_list_id).await?;
     let vis = user_visibility(&state, auth.user_id).await?;
-    let members = ReadListRepository::get_books(&state.db, read_list_id, vis.as_ref())
+    let members = ReadListRepository::get_books(&state.db, &read_list, vis.as_ref(), None)
         .await
         .map_err(internal("Failed to fetch read list books"))?;
     let first = members

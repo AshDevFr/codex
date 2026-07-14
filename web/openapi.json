@@ -5793,9 +5793,25 @@
         "tags": [
           "Collections"
         ],
-        "summary": "Get the series in a collection (visibility-filtered, in stored order).",
+        "summary": "Get the series in a collection (visibility-filtered).",
+        "description": "Ordered collections return manual order; unordered ones honor the `sort`\nquery param (title by default).",
         "operationId": "get_collection_series",
         "parameters": [
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "Sort for unordered collections: `title` (default), `added`, or `year`.\nIgnored when the collection is manually ordered.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Sort options for a collection's member series.\n\nOnly honored when the collection is *not* manually ordered\n(`collections.ordered = false`); manual order always wins otherwise.",
+              "enum": [
+                "title",
+                "added",
+                "year"
+              ]
+            }
+          },
           {
             "name": "collection_id",
             "in": "path",
@@ -8978,9 +8994,25 @@
         "tags": [
           "Read Lists"
         ],
-        "summary": "Get the books in a read list (visibility-filtered, in stored order).",
+        "summary": "Get the books in a read list (visibility-filtered).",
+        "description": "Ordered read lists return manual reading order; unordered ones honor the\n`sort` query param (release date by default).",
         "operationId": "get_readlist_books",
         "parameters": [
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "Sort for unordered read lists: `release` (default), `title`, or `added`.\nIgnored when the read list is manually ordered.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Sort options for a read list's member books.\n\nOnly honored when the read list is *not* manually ordered\n(`read_lists.ordered = false`); manual reading order always wins otherwise.",
+              "enum": [
+                "release",
+                "title",
+                "added"
+              ]
+            }
+          },
           {
             "name": "read_list_id",
             "in": "path",

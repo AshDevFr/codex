@@ -6,8 +6,8 @@
 //! the requesting user's sharing-tag visibility.
 
 use super::super::dto::{
-    AddSeriesToCollectionRequest, CollectionDto, CollectionListResponse, CreateCollectionRequest,
-    ReorderCollectionSeriesRequest, SeriesDto, UpdateCollectionRequest,
+    AddSeriesToCollectionRequest, CollectionDto, CollectionListResponse, CollectionSeriesQuery,
+    CreateCollectionRequest, ReorderCollectionSeriesRequest, SeriesDto, UpdateCollectionRequest,
 };
 use crate::require_permission;
 use crate::{
@@ -17,10 +17,11 @@ use crate::{
 };
 use axum::{
     Json,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::Redirect,
 };
+use codex_db::entities::collections;
 use codex_db::repositories::{
     CollectionRepository, SeriesRepository, visibility::SeriesVisibility,
 };
@@ -269,10 +270,14 @@ pub async fn delete_collection(
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// Get the series in a collection (visibility-filtered, in stored order).
+/// Get the series in a collection (visibility-filtered).
+///
+/// Ordered collections return manual order; unordered ones honor the `sort`
+/// query param (title by default).
 #[utoipa::path(
     get,
     path = "/api/v1/collections/{collection_id}/series",
+    params(CollectionSeriesQuery),
     responses(
         (status = 200, description = "Member series", body = [SeriesDto]),
         (status = 403, description = "Forbidden"),
@@ -285,14 +290,16 @@ pub async fn get_collection_series(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
     Path(collection_id): Path<Uuid>,
+    Query(query): Query<CollectionSeriesQuery>,
 ) -> Result<Json<Vec<SeriesDto>>, ApiError> {
     require_permission!(auth, Permission::CollectionsRead)?;
-    ensure_collection_exists(&state, collection_id).await?;
+    let collection = get_collection_or_404(&state, collection_id).await?;
 
     let vis = user_visibility(&state, auth.user_id).await?;
-    let members = CollectionRepository::get_series(&state.db, collection_id, vis.as_ref())
-        .await
-        .map_err(internal("Failed to fetch collection series"))?;
+    let members =
+        CollectionRepository::get_series(&state.db, &collection, vis.as_ref(), query.sort)
+            .await
+            .map_err(internal("Failed to fetch collection series"))?;
 
     let dtos =
         super::series::series_to_dtos_batched(&state.db, members, Some(auth.user_id)).await?;
@@ -408,8 +415,9 @@ pub async fn get_collection_thumbnail(
     Path(collection_id): Path<Uuid>,
 ) -> Result<Redirect, ApiError> {
     auth.require_permission(&Permission::CollectionsRead)?;
+    let collection = get_collection_or_404(&state, collection_id).await?;
     let vis = user_visibility(&state, auth.user_id).await?;
-    let members = CollectionRepository::get_series(&state.db, collection_id, vis.as_ref())
+    let members = CollectionRepository::get_series(&state.db, &collection, vis.as_ref(), None)
         .await
         .map_err(internal("Failed to fetch collection series"))?;
     let first = members
@@ -453,12 +461,17 @@ pub async fn get_series_collections(
 }
 
 async fn ensure_collection_exists(state: &AuthState, collection_id: Uuid) -> Result<(), ApiError> {
-    if CollectionRepository::get_by_id(&state.db, collection_id)
+    get_collection_or_404(state, collection_id)
+        .await
+        .map(|_| ())
+}
+
+async fn get_collection_or_404(
+    state: &AuthState,
+    collection_id: Uuid,
+) -> Result<collections::Model, ApiError> {
+    CollectionRepository::get_by_id(&state.db, collection_id)
         .await
         .map_err(internal("Failed to fetch collection"))?
-        .is_none()
-    {
-        return Err(ApiError::NotFound("Collection not found".to_string()));
-    }
-    Ok(())
+        .ok_or_else(|| ApiError::NotFound("Collection not found".to_string()))
 }
