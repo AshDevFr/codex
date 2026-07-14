@@ -64,6 +64,8 @@ interface MediaCardProps {
   canBeSelected?: boolean;
   /** Index of this item in the grid (for range selection) */
   index?: number;
+  /** Force the hover summary panel off (e.g. while a drag is in progress). */
+  disableHoverPanel?: boolean;
 }
 
 export const MediaCard = memo(function MediaCard({
@@ -75,6 +77,7 @@ export const MediaCard = memo(function MediaCard({
   isSelectionMode = false,
   canBeSelected = true,
   index,
+  disableHoverPanel = false,
 }: MediaCardProps) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -522,7 +525,7 @@ export const MediaCard = memo(function MediaCard({
           withinPortal
           width={300}
           shadow="md"
-          disabled={isTouchDevice || menuOpened}
+          disabled={isTouchDevice || menuOpened || disableHoverPanel}
         >
           <HoverCard.Target>
             <Stack gap={0} style={{ height: "100%", minHeight: 0 }}>

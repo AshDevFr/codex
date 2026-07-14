@@ -1,89 +1,59 @@
 import {
-  Button,
   Center,
   Container,
   Group,
   SegmentedControl,
-  SimpleGrid,
-  Skeleton,
   Stack,
   Text,
   Title,
 } from "@mantine/core";
-import { IconBookmark, IconX } from "@tabler/icons-react";
-import { useQuery } from "@tanstack/react-query";
+import { IconBookmark } from "@tabler/icons-react";
+import { useQueries } from "@tanstack/react-query";
 import { useState } from "react";
 import { booksApi } from "@/api/books";
 import { seriesApi } from "@/api/series";
-import type { WantToReadEntry, WantToReadSort } from "@/api/wantToRead";
-import { MediaCard } from "@/components/library/MediaCard";
+import type { WantToReadSort } from "@/api/wantToRead";
+import { MediaGrid, type MediaGridItem } from "@/components/library/MediaGrid";
 import {
   useRemoveFromWantToRead,
   useWantToReadQueue,
-  type WantToReadTarget,
 } from "@/hooks/useWantToRead";
-
-interface QueueItemProps {
-  entry: WantToReadEntry;
-  onRemove: (target: WantToReadTarget) => void;
-  removing: boolean;
-}
-
-/**
- * Renders one queue entry. The queue only carries IDs, so we fetch the series
- * or book on demand (React Query caches/dedupes) and reuse the standard
- * MediaCard. Entries whose target is gone (deleted / inaccessible) render
- * nothing.
- */
-function QueueItem({ entry, onRemove, removing }: QueueItemProps) {
-  const isSeries = entry.itemType === "series";
-  const id = (isSeries ? entry.seriesId : entry.bookId) ?? "";
-
-  const seriesQuery = useQuery({
-    queryKey: ["series", id],
-    queryFn: () => seriesApi.getById(id),
-    enabled: isSeries && Boolean(id),
-  });
-  const bookQuery = useQuery({
-    queryKey: ["books", id],
-    queryFn: () => booksApi.getById(id),
-    enabled: !isSeries && Boolean(id),
-  });
-
-  const isLoading = isSeries ? seriesQuery.isLoading : bookQuery.isLoading;
-  const data = isSeries ? seriesQuery.data : bookQuery.data;
-
-  if (isLoading) {
-    return <Skeleton height={300} radius="md" />;
-  }
-  if (!data) {
-    return null;
-  }
-
-  return (
-    <Stack gap={4}>
-      <MediaCard type={isSeries ? "series" : "book"} data={data} />
-      <Button
-        variant="subtle"
-        color="gray"
-        size="xs"
-        leftSection={<IconX size={14} />}
-        loading={removing}
-        onClick={() => onRemove({ itemType: entry.itemType, id })}
-      >
-        Remove
-      </Button>
-    </Stack>
-  );
-}
+import type { Book, Series } from "@/types";
 
 export function WantToRead() {
   const [sort, setSort] = useState<WantToReadSort>("newest");
   const { data: entries, isLoading } = useWantToReadQueue(sort);
   const removeMutation = useRemoveFromWantToRead();
-  const removingId = removeMutation.isPending
-    ? removeMutation.variables?.id
-    : undefined;
+
+  // The queue only carries IDs, so each entry's series/book is fetched on
+  // demand (React Query caches/dedupes across the app). Order follows the
+  // queue; entries whose target is gone (deleted / inaccessible) render
+  // nothing.
+  const entryQueries = useQueries({
+    queries: (entries ?? []).map((entry) => {
+      const isSeries = entry.itemType === "series";
+      const id = (isSeries ? entry.seriesId : entry.bookId) ?? "";
+      return {
+        queryKey: isSeries ? ["series", id] : ["books", id],
+        queryFn: (): Promise<Series | Book> =>
+          isSeries ? seriesApi.getById(id) : booksApi.getById(id),
+        enabled: Boolean(id),
+      };
+    }),
+  });
+
+  const items: MediaGridItem[] = [];
+  (entries ?? []).forEach((entry, i) => {
+    const isSeries = entry.itemType === "series";
+    const id = (isSeries ? entry.seriesId : entry.bookId) ?? "";
+    if (!id) return;
+    const query = entryQueries[i];
+    if (query?.isLoading) {
+      items.push({ id, type: isSeries ? "series" : "book" });
+    } else if (query?.data) {
+      items.push({ id, type: isSeries ? "series" : "book", data: query.data });
+    }
+  });
 
   return (
     <Container size="xl" py="md">
@@ -104,12 +74,7 @@ export function WantToRead() {
       </Group>
 
       {isLoading ? (
-        <SimpleGrid cols={{ base: 2, sm: 3, md: 4, lg: 6 }} spacing="md">
-          {Array.from({ length: 6 }).map((_, i) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton placeholders
-            <Skeleton key={i} height={340} radius="md" />
-          ))}
-        </SimpleGrid>
+        <MediaGrid items={[]} loading />
       ) : !entries || entries.length === 0 ? (
         <Center mih={240}>
           <Stack align="center" gap="xs">
@@ -121,19 +86,16 @@ export function WantToRead() {
           </Stack>
         </Center>
       ) : (
-        <SimpleGrid cols={{ base: 2, sm: 3, md: 4, lg: 6 }} spacing="md">
-          {entries.map((entry) => (
-            <QueueItem
-              key={entry.id}
-              entry={entry}
-              onRemove={(target) => removeMutation.mutate(target)}
-              removing={
-                removingId ===
-                (entry.itemType === "series" ? entry.seriesId : entry.bookId)
-              }
-            />
-          ))}
-        </SimpleGrid>
+        <MediaGrid
+          items={items}
+          onRemove={(item) =>
+            removeMutation.mutate({ itemType: item.type, id: item.id })
+          }
+          removeLabel="Remove from Want to Read"
+          removingId={
+            removeMutation.isPending ? removeMutation.variables?.id : undefined
+          }
+        />
       )}
     </Container>
   );

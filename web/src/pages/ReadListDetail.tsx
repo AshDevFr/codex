@@ -1,28 +1,21 @@
 import {
-  ActionIcon,
   Badge,
   Button,
   Center,
   Container,
   Group,
   Modal,
-  SimpleGrid,
+  SegmentedControl,
   Skeleton,
   Stack,
   Text,
   Title,
-  Tooltip,
 } from "@mantine/core";
-import {
-  IconChevronDown,
-  IconChevronUp,
-  IconEdit,
-  IconTrash,
-  IconX,
-} from "@tabler/icons-react";
+import { IconEdit, IconTrash } from "@tabler/icons-react";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { MediaCard } from "@/components/library/MediaCard";
+import type { ReadListBookSort } from "@/api/readlists";
+import { MediaGrid, type MediaGridItem } from "@/components/library/MediaGrid";
 import { ReadListFormModal } from "@/components/readlists/ReadListFormModal";
 import { usePermissions } from "@/hooks/usePermissions";
 import {
@@ -42,8 +35,14 @@ export function ReadListDetail() {
   const canWrite = hasPermission(PERMISSIONS.READLISTS_WRITE);
   const canDelete = hasPermission(PERMISSIONS.READLISTS_DELETE);
 
+  const [sort, setSort] = useState<ReadListBookSort>("release");
   const { data: readList, isLoading } = useReadList(readListId);
-  const { data: books } = useReadListBooks(readListId);
+  // The server ignores sort for manually ordered read lists; skip the param
+  // there so the query cache doesn't fragment per sort.
+  const { data: books } = useReadListBooks(
+    readListId,
+    readList?.ordered ? undefined : sort,
+  );
 
   const removeMutation = useRemoveBookFromReadList(readListId ?? "");
   const reorderMutation = useReorderReadList(readListId ?? "");
@@ -54,25 +53,17 @@ export function ReadListDetail() {
 
   const members: Book[] = books ?? [];
   const reorderable = canWrite && Boolean(readList?.ordered);
-
-  const move = (index: number, delta: number) => {
-    const target = index + delta;
-    if (target < 0 || target >= members.length) return;
-    const ids = members.map((b) => b.id);
-    [ids[index], ids[target]] = [ids[target], ids[index]];
-    reorderMutation.mutate(ids);
-  };
+  const items: MediaGridItem[] = members.map((b) => ({
+    id: b.id,
+    type: "book",
+    data: b,
+  }));
 
   if (isLoading) {
     return (
       <Container size="xl" py="md">
         <Skeleton height={32} width={240} mb="lg" />
-        <SimpleGrid cols={{ base: 2, sm: 3, md: 4, lg: 6 }} spacing="md">
-          {Array.from({ length: 6 }).map((_, i) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: static skeletons
-            <Skeleton key={i} height={300} radius="md" />
-          ))}
-        </SimpleGrid>
+        <MediaGrid items={[]} loading />
       </Container>
     );
   }
@@ -108,29 +99,39 @@ export function ReadListDetail() {
             </Text>
           )}
         </Stack>
-        {(canWrite || canDelete) && (
-          <Group gap="xs" wrap="nowrap">
-            {canWrite && (
-              <Button
-                variant="default"
-                leftSection={<IconEdit size={16} />}
-                onClick={() => setEditOpen(true)}
-              >
-                Edit
-              </Button>
-            )}
-            {canDelete && (
-              <Button
-                color="red"
-                variant="light"
-                leftSection={<IconTrash size={16} />}
-                onClick={() => setDeleteOpen(true)}
-              >
-                Delete
-              </Button>
-            )}
-          </Group>
-        )}
+        <Group gap="xs" wrap="nowrap">
+          {!readList.ordered && members.length > 1 && (
+            <SegmentedControl
+              value={sort}
+              onChange={(value) => setSort(value as ReadListBookSort)}
+              data={[
+                { label: "Release", value: "release" },
+                { label: "Title", value: "title" },
+                { label: "Date added", value: "added" },
+              ]}
+              aria-label="Sort books"
+            />
+          )}
+          {canWrite && (
+            <Button
+              variant="default"
+              leftSection={<IconEdit size={16} />}
+              onClick={() => setEditOpen(true)}
+            >
+              Edit
+            </Button>
+          )}
+          {canDelete && (
+            <Button
+              color="red"
+              variant="light"
+              leftSection={<IconTrash size={16} />}
+              onClick={() => setDeleteOpen(true)}
+            >
+              Delete
+            </Button>
+          )}
+        </Group>
       </Group>
 
       {members.length === 0 ? (
@@ -145,61 +146,19 @@ export function ReadListDetail() {
           </Stack>
         </Center>
       ) : (
-        <SimpleGrid cols={{ base: 2, sm: 3, md: 4, lg: 6 }} spacing="md">
-          {members.map((b, index) => (
-            <Stack key={b.id} gap={4}>
-              <MediaCard type="book" data={b} />
-              {canWrite && (
-                <Group gap={4} justify="center">
-                  {reorderable && (
-                    <>
-                      <Tooltip label="Move up">
-                        <ActionIcon
-                          variant="subtle"
-                          size="sm"
-                          disabled={index === 0 || reorderMutation.isPending}
-                          onClick={() => move(index, -1)}
-                          aria-label="Move up"
-                        >
-                          <IconChevronUp size={16} />
-                        </ActionIcon>
-                      </Tooltip>
-                      <Tooltip label="Move down">
-                        <ActionIcon
-                          variant="subtle"
-                          size="sm"
-                          disabled={
-                            index === members.length - 1 ||
-                            reorderMutation.isPending
-                          }
-                          onClick={() => move(index, 1)}
-                          aria-label="Move down"
-                        >
-                          <IconChevronDown size={16} />
-                        </ActionIcon>
-                      </Tooltip>
-                    </>
-                  )}
-                  <Tooltip label="Remove from read list">
-                    <ActionIcon
-                      variant="subtle"
-                      color="red"
-                      size="sm"
-                      loading={
-                        removeMutation.isPending &&
-                        removeMutation.variables === b.id
-                      }
-                      onClick={() => removeMutation.mutate(b.id)}
-                      aria-label="Remove from read list"
-                    >
-                      <IconX size={16} />
-                    </ActionIcon>
-                  </Tooltip>
-                </Group>
-              )}
-            </Stack>
-          ))}
-        </SimpleGrid>
+        <MediaGrid
+          items={items}
+          onRemove={
+            canWrite ? (item) => removeMutation.mutate(item.id) : undefined
+          }
+          removeLabel="Remove from read list"
+          removingId={
+            removeMutation.isPending ? removeMutation.variables : undefined
+          }
+          reorderable={reorderable}
+          onReorder={(ids) => reorderMutation.mutate(ids)}
+          reorderPending={reorderMutation.isPending}
+        />
       )}
 
       <ReadListFormModal

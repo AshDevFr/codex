@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   type CreateReadListRequest,
   type ReadList,
+  type ReadListBookSort,
   readListsApi,
   type UpdateReadListRequest,
 } from "@/api/readlists";
@@ -25,10 +26,15 @@ export function useReadList(id: string | undefined) {
   });
 }
 
-export function useReadListBooks(id: string | undefined) {
+export function useReadListBooks(
+  id: string | undefined,
+  sort?: ReadListBookSort,
+) {
   return useQuery<Book[]>({
-    queryKey: [READLISTS_KEY, id, "books"],
-    queryFn: () => readListsApi.getBooks(id ?? ""),
+    // Sort lives in slot 4 so the [key, id, "books"] prefix used by the
+    // add/remove/reorder invalidations still matches every sort variant.
+    queryKey: [READLISTS_KEY, id, "books", sort ?? "default"],
+    queryFn: () => readListsApi.getBooks(id ?? "", sort),
     enabled: Boolean(id),
   });
 }

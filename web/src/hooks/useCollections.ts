@@ -2,6 +2,7 @@ import { notifications } from "@mantine/notifications";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   type Collection,
+  type CollectionSeriesSort,
   type CreateCollectionRequest,
   collectionsApi,
   type UpdateCollectionRequest,
@@ -25,10 +26,15 @@ export function useCollection(id: string | undefined) {
   });
 }
 
-export function useCollectionSeries(id: string | undefined) {
+export function useCollectionSeries(
+  id: string | undefined,
+  sort?: CollectionSeriesSort,
+) {
   return useQuery<Series[]>({
-    queryKey: [COLLECTIONS_KEY, id, "series"],
-    queryFn: () => collectionsApi.getSeries(id ?? ""),
+    // Sort lives in slot 4 so the [key, id, "series"] prefix used by the
+    // add/remove/reorder invalidations still matches every sort variant.
+    queryKey: [COLLECTIONS_KEY, id, "series", sort ?? "default"],
+    queryFn: () => collectionsApi.getSeries(id ?? "", sort),
     enabled: Boolean(id),
   });
 }

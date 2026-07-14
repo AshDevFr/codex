@@ -10,6 +10,12 @@ export type UpdateReadListRequest =
 
 type ReadListListResponse = components["schemas"]["ReadListListResponse"];
 
+/**
+ * Sort for an unordered read list's members (ignored by the server when the
+ * read list is manually ordered). Matches the API's `sort` query param.
+ */
+export type ReadListBookSort = "release" | "title" | "added";
+
 export const readListsApi = {
   /** All read lists (with each read list's visible book count). */
   list: async (): Promise<ReadList[]> => {
@@ -22,9 +28,14 @@ export const readListsApi = {
     return response.data;
   },
 
-  /** Member books, in stored order, filtered by the user's visibility. */
-  getBooks: async (id: string): Promise<Book[]> => {
-    const response = await api.get<Book[]>(`/readlists/${id}/books`);
+  /**
+   * Member books, filtered by the user's visibility. Ordered read lists
+   * return manual reading order; unordered ones honor `sort` (release date
+   * by default).
+   */
+  getBooks: async (id: string, sort?: ReadListBookSort): Promise<Book[]> => {
+    const query = sort ? `?sort=${sort}` : "";
+    const response = await api.get<Book[]>(`/readlists/${id}/books${query}`);
     return response.data;
   },
 
