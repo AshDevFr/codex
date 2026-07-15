@@ -10,6 +10,7 @@ import {
   type ReadList,
   type ReadListBookSort,
   readListsApi,
+  type SortDirection,
   type UpdateReadListRequest,
 } from "@/api/readlists";
 import type { Book } from "@/types";
@@ -34,12 +35,19 @@ export function useReadList(id: string | undefined) {
 export function useReadListBooks(
   id: string | undefined,
   sort?: ReadListBookSort,
+  direction?: SortDirection,
 ) {
   return useQuery<Book[]>({
-    // Sort lives in slot 4 so the [key, id, "books"] prefix used by the
-    // add/remove/reorder invalidations still matches every sort variant.
-    queryKey: [READLISTS_KEY, id, "books", sort ?? "default"],
-    queryFn: () => readListsApi.getBooks(id ?? "", sort),
+    // Sort/direction live after slot 3 so the [key, id, "books"] prefix used
+    // by the add/remove/reorder invalidations still matches every variant.
+    queryKey: [
+      READLISTS_KEY,
+      id,
+      "books",
+      sort ?? "default",
+      direction ?? "asc",
+    ],
+    queryFn: () => readListsApi.getBooks(id ?? "", sort, direction),
     enabled: Boolean(id),
     // Switching sort changes the key; keep the previous list on screen so the
     // grid re-sorts in place instead of unmounting (which reloads every cover).

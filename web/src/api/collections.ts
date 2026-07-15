@@ -17,6 +17,9 @@ type CollectionListResponse = components["schemas"]["CollectionListResponse"];
  */
 export type CollectionSeriesSort = "title" | "added" | "year" | "manual";
 
+/** Direction for a chosen sort; the server ignores it for `manual`. */
+export type SortDirection = "asc" | "desc";
+
 export const collectionsApi = {
   /** All collections (with each collection's visible series count). */
   list: async (): Promise<Collection[]> => {
@@ -36,8 +39,12 @@ export const collectionsApi = {
   getSeries: async (
     id: string,
     sort?: CollectionSeriesSort,
+    direction?: SortDirection,
   ): Promise<Series[]> => {
-    const query = sort ? `?sort=${sort}` : "";
+    const params = new URLSearchParams();
+    if (sort) params.set("sort", sort);
+    if (direction) params.set("direction", direction);
+    const query = params.size > 0 ? `?${params}` : "";
     const response = await api.get<Series[]>(
       `/collections/${id}/series${query}`,
     );

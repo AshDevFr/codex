@@ -37,6 +37,7 @@ import {
   booksApi,
 } from "@/api/books";
 import { genresApi } from "@/api/genres";
+import { bookKeys } from "@/api/queryKeys";
 import { tagsApi } from "@/api/tags";
 import { CoverEditor } from "@/components/forms/CoverEditor";
 import { CustomMetadataEditor } from "@/components/forms/CustomMetadataEditor";
@@ -268,7 +269,7 @@ export function BookMetadataEditModal({
 
   // Fetch book detail
   const { data: bookDetail, isLoading: isLoadingBook } = useQuery({
-    queryKey: ["books", bookId, "detail"],
+    queryKey: bookKeys.detail(bookId),
     queryFn: () => booksApi.getDetail(bookId),
     enabled: opened,
   });

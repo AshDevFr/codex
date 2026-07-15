@@ -16,6 +16,7 @@ use codex_db::repositories::{
     ReadListRepository, ReadProgressRepository, SeriesMetadataRepository, SeriesRepository,
     SettingsRepository,
 };
+use codex_models::sort::SortDirection;
 use serde::Deserialize;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -461,10 +462,15 @@ pub async fn collection_series(
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
     let visibility = content_filter.to_visibility();
 
-    let series_list =
-        CollectionRepository::get_series(&state.db, &collection, visibility.as_ref(), None)
-            .await
-            .map_err(|e| ApiError::Internal(format!("Failed to fetch collection series: {}", e)))?;
+    let series_list = CollectionRepository::get_series(
+        &state.db,
+        &collection,
+        visibility.as_ref(),
+        None,
+        SortDirection::default(),
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to fetch collection series: {}", e)))?;
 
     let mut feed = OpdsFeed::with_author(
         format!("urn:uuid:collection-{}", collection_id),
@@ -623,9 +629,15 @@ pub async fn readlist_books(
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
     let visibility = content_filter.to_visibility();
 
-    let books = ReadListRepository::get_books(&state.db, &read_list, visibility.as_ref(), None)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to fetch read list books: {}", e)))?;
+    let books = ReadListRepository::get_books(
+        &state.db,
+        &read_list,
+        visibility.as_ref(),
+        None,
+        SortDirection::default(),
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to fetch read list books: {}", e)))?;
 
     let mut feed = OpdsFeed::with_author(
         format!("urn:uuid:readlist-{}", read_list_id),

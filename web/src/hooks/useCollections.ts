@@ -10,6 +10,7 @@ import {
   type CollectionSeriesSort,
   type CreateCollectionRequest,
   collectionsApi,
+  type SortDirection,
   type UpdateCollectionRequest,
 } from "@/api/collections";
 import type { Series } from "@/types";
@@ -34,12 +35,19 @@ export function useCollection(id: string | undefined) {
 export function useCollectionSeries(
   id: string | undefined,
   sort?: CollectionSeriesSort,
+  direction?: SortDirection,
 ) {
   return useQuery<Series[]>({
-    // Sort lives in slot 4 so the [key, id, "series"] prefix used by the
-    // add/remove/reorder invalidations still matches every sort variant.
-    queryKey: [COLLECTIONS_KEY, id, "series", sort ?? "default"],
-    queryFn: () => collectionsApi.getSeries(id ?? "", sort),
+    // Sort/direction live after slot 3 so the [key, id, "series"] prefix used
+    // by the add/remove/reorder invalidations still matches every variant.
+    queryKey: [
+      COLLECTIONS_KEY,
+      id,
+      "series",
+      sort ?? "default",
+      direction ?? "asc",
+    ],
+    queryFn: () => collectionsApi.getSeries(id ?? "", sort, direction),
     enabled: Boolean(id),
     // Switching sort changes the key; keep the previous list on screen so the
     // grid re-sorts in place instead of unmounting (which reloads every cover).

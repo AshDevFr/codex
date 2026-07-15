@@ -17,6 +17,9 @@ type ReadListListResponse = components["schemas"]["ReadListListResponse"];
  */
 export type ReadListBookSort = "release" | "title" | "added" | "manual";
 
+/** Direction for a chosen sort; the server ignores it for `manual`. */
+export type SortDirection = "asc" | "desc";
+
 export const readListsApi = {
   /** All read lists (with each read list's visible book count). */
   list: async (): Promise<ReadList[]> => {
@@ -33,8 +36,15 @@ export const readListsApi = {
    * Member books, filtered by the user's visibility. An explicit sort always
    * wins; otherwise the `ordered` flag picks the default order.
    */
-  getBooks: async (id: string, sort?: ReadListBookSort): Promise<Book[]> => {
-    const query = sort ? `?sort=${sort}` : "";
+  getBooks: async (
+    id: string,
+    sort?: ReadListBookSort,
+    direction?: SortDirection,
+  ): Promise<Book[]> => {
+    const params = new URLSearchParams();
+    if (sort) params.set("sort", sort);
+    if (direction) params.set("direction", direction);
+    const query = params.size > 0 ? `?${params}` : "";
     const response = await api.get<Book[]>(`/readlists/${id}/books${query}`);
     return response.data;
   },

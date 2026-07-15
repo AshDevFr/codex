@@ -23,7 +23,7 @@ use crate::entities::{
     read_list_books::Entity as ReadListBooks, read_lists, read_lists::Entity as ReadLists,
 };
 use crate::repositories::visibility::{SeriesVisibility, apply_book_visibility};
-use codex_models::sort::ReadListBookSort;
+use codex_models::sort::{ReadListBookSort, SortDirection};
 
 /// Repository for read list operations.
 pub struct ReadListRepository;
@@ -197,12 +197,15 @@ impl ReadListRepository {
     ///
     /// An explicit `sort` always wins. When omitted, the read list's `ordered`
     /// flag picks the default: manual reading order when set, release date
-    /// (year/month/day, unknown dates last) otherwise.
+    /// (year/month/day, unknown dates last) otherwise. `direction` applies to
+    /// every sort except `Manual`, whose order is exactly what the user
+    /// arranged.
     pub async fn get_books(
         db: &DatabaseConnection,
         read_list: &read_lists::Model,
         vis: Option<&SeriesVisibility>,
         sort: Option<ReadListBookSort>,
+        direction: SortDirection,
     ) -> Result<Vec<books::Model>> {
         if matches!(vis, Some(v) if v.is_empty_whitelist()) {
             return Ok(vec![]);
@@ -213,6 +216,10 @@ impl ReadListRepository {
         } else {
             ReadListBookSort::Release
         });
+        let order = match direction {
+            SortDirection::Asc => Order::Asc,
+            SortDirection::Desc => Order::Desc,
+        };
 
         let mut junction =
             ReadListBooks::find().filter(read_list_books::Column::ReadListId.eq(read_list.id));
@@ -221,8 +228,8 @@ impl ReadListRepository {
                 .order_by_asc(read_list_books::Column::Position)
                 .order_by_asc(read_list_books::Column::CreatedAt),
             ReadListBookSort::Added => junction
-                .order_by_asc(read_list_books::Column::CreatedAt)
-                .order_by_asc(read_list_books::Column::Position),
+                .order_by(read_list_books::Column::CreatedAt, order.clone())
+                .order_by(read_list_books::Column::Position, order.clone()),
             // Release/title order lives on the books side; junction order is
             // irrelevant for those.
             _ => junction,
@@ -246,32 +253,38 @@ impl ReadListRepository {
 
         match sort {
             ReadListBookSort::Release | ReadListBookSort::Title => {
-                let title_expr = Expr::expr(Func::coalesce([
+                // LOWER makes the order case-insensitive: binary collation would
+                // sort every uppercase title ahead of any lowercase one.
+                let title_expr = Expr::expr(Func::lower(Func::coalesce([
                     Expr::col((book_metadata::Entity, book_metadata::Column::TitleSort)).into(),
                     Expr::col((book_metadata::Entity, book_metadata::Column::Title)).into(),
                     Expr::col((books::Entity, books::Column::FileName)).into(),
-                ]));
+                ])));
                 let mut query = base.join(JoinType::LeftJoin, books::Relation::BookMetadata.def());
                 if matches!(sort, ReadListBookSort::Release) {
+                    // Unknown dates stay last in both directions.
                     query = query
                         .order_by_with_nulls(
                             book_metadata::Column::Year,
-                            Order::Asc,
+                            order.clone(),
                             NullOrdering::Last,
                         )
                         .order_by_with_nulls(
                             book_metadata::Column::Month,
-                            Order::Asc,
+                            order.clone(),
                             NullOrdering::Last,
                         )
                         .order_by_with_nulls(
                             book_metadata::Column::Day,
-                            Order::Asc,
+                            order.clone(),
                             NullOrdering::Last,
                         );
+                    // Tie-break dates by title ascending regardless of direction.
+                    query = query.order_by(title_expr, Order::Asc);
+                } else {
+                    query = query.order_by(title_expr, order);
                 }
                 Ok(query
-                    .order_by(title_expr, Order::Asc)
                     .order_by(books::Column::Id, Order::Asc)
                     .all(db)
                     .await?)
@@ -357,7 +370,7 @@ mod tests {
         BookMetadataRepository, BookRepository, LibraryRepository, SeriesRepository,
     };
     use crate::test_helpers::create_test_db;
-    use codex_models::sort::ReadListBookSort;
+    use codex_models::sort::{ReadListBookSort, SortDirection};
 
     async fn make_book(db: &DatabaseConnection, series_id: Uuid, library_id: Uuid) -> books::Model {
         let book = books::Model {
@@ -477,7 +490,7 @@ mod tests {
             .await
             .unwrap();
 
-        let members = ReadListRepository::get_books(conn, &rl, None, None)
+        let members = ReadListRepository::get_books(conn, &rl, None, None, SortDirection::Asc)
             .await
             .unwrap();
         assert_eq!(members.len(), 3);
@@ -487,17 +500,22 @@ mod tests {
         ReadListRepository::reorder(conn, rl.id, &reversed)
             .await
             .unwrap();
-        let members = ReadListRepository::get_books(conn, &rl, None, None)
+        let members = ReadListRepository::get_books(conn, &rl, None, None, SortDirection::Asc)
             .await
             .unwrap();
         assert_eq!(members[0].id, books[2].id);
 
         // An explicit manual sort returns position order regardless of the
         // flag; the flag only picks the default when no sort is requested.
-        let members =
-            ReadListRepository::get_books(conn, &rl, None, Some(ReadListBookSort::Manual))
-                .await
-                .unwrap();
+        let members = ReadListRepository::get_books(
+            conn,
+            &rl,
+            None,
+            Some(ReadListBookSort::Manual),
+            SortDirection::Asc,
+        )
+        .await
+        .unwrap();
         assert_eq!(members[0].id, books[2].id);
 
         // Containers-for-book lookup.
@@ -555,23 +573,35 @@ mod tests {
         }
 
         // Default sort for an unordered read list is by release date, unknown last.
-        let members = ReadListRepository::get_books(conn, &rl, None, None)
+        let members = ReadListRepository::get_books(conn, &rl, None, None, SortDirection::Asc)
             .await
             .unwrap();
         let ids: Vec<Uuid> = members.iter().map(|b| b.id).collect();
         assert_eq!(ids, [books[1].id, books[0].id, books[2].id]);
 
         // Title sort follows metadata title (Apple, Banana, Cherry).
-        let members = ReadListRepository::get_books(conn, &rl, None, Some(ReadListBookSort::Title))
-            .await
-            .unwrap();
+        let members = ReadListRepository::get_books(
+            conn,
+            &rl,
+            None,
+            Some(ReadListBookSort::Title),
+            SortDirection::Asc,
+        )
+        .await
+        .unwrap();
         let ids: Vec<Uuid> = members.iter().map(|b| b.id).collect();
         assert_eq!(ids, [books[2].id, books[0].id, books[1].id]);
 
         // "added" follows insertion order.
-        let members = ReadListRepository::get_books(conn, &rl, None, Some(ReadListBookSort::Added))
-            .await
-            .unwrap();
+        let members = ReadListRepository::get_books(
+            conn,
+            &rl,
+            None,
+            Some(ReadListBookSort::Added),
+            SortDirection::Asc,
+        )
+        .await
+        .unwrap();
         let ids: Vec<Uuid> = members.iter().map(|b| b.id).collect();
         assert_eq!(ids, [books[0].id, books[1].id, books[2].id]);
     }
@@ -597,7 +627,7 @@ mod tests {
             allowed_series_ids: None,
         };
         assert!(
-            ReadListRepository::get_books(conn, &rl, Some(&vis), None)
+            ReadListRepository::get_books(conn, &rl, Some(&vis), None, SortDirection::Asc)
                 .await
                 .unwrap()
                 .is_empty()

@@ -1,7 +1,7 @@
 //! DTOs for collections (shared, ordered groupings of series).
 
 use chrono::{DateTime, Utc};
-use codex_models::sort::CollectionSeriesSort;
+use codex_models::sort::{CollectionSeriesSort, SortDirection};
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
@@ -16,6 +16,10 @@ pub struct CollectionSeriesQuery {
     /// `title` otherwise).
     #[param(inline)]
     pub sort: Option<CollectionSeriesSort>,
+    /// Direction for the chosen sort (`asc` default). Ignored for `manual`,
+    /// which always returns the user's arranged order.
+    #[param(inline)]
+    pub direction: Option<SortDirection>,
 }
 
 /// A collection of series.
@@ -26,7 +30,8 @@ pub struct CollectionDto {
     pub id: Uuid,
     #[schema(example = "Batman")]
     pub name: String,
-    /// When true, members are kept in manual order; otherwise sorted by title.
+    /// Default presentation order when no sort is requested: manual when
+    /// true, title otherwise.
     #[schema(example = false)]
     pub ordered: bool,
     /// Optional description.

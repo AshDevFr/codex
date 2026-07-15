@@ -324,6 +324,17 @@ async fn test_unordered_collection_series_sorting() {
     let ids: Vec<_> = members.unwrap().iter().map(|s| s.id).collect();
     assert_eq!(ids, [series[0].id, series[1].id, series[2].id]);
 
+    // direction=desc reverses the title order.
+    let req = get_request_with_auth(
+        &format!("/api/v1/collections/{coll_id}/series?sort=title&direction=desc"),
+        &token,
+    );
+    let (status, members): (StatusCode, Option<Vec<SeriesDto>>) =
+        make_json_request(app.clone(), req).await;
+    assert_eq!(status, StatusCode::OK);
+    let ids: Vec<_> = members.unwrap().iter().map(|s| s.id).collect();
+    assert_eq!(ids, [series[1].id, series[0].id, series[2].id]);
+
     // sort=year: release year ascending, unknown years last.
     SeriesMetadataRepository::update_year(&db, series[0].id, Some(2020))
         .await

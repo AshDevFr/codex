@@ -5814,6 +5814,20 @@
             }
           },
           {
+            "name": "direction",
+            "in": "query",
+            "description": "Direction for the chosen sort (`asc` default). Ignored for `manual`,\nwhich always returns the user's arranged order.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Sort direction for list queries",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          },
+          {
             "name": "collection_id",
             "in": "path",
             "required": true,
@@ -9012,6 +9026,20 @@
                 "title",
                 "added",
                 "manual"
+              ]
+            }
+          },
+          {
+            "name": "direction",
+            "in": "query",
+            "description": "Direction for the chosen sort (`asc` default). Ignored for `manual`,\nwhich always returns the user's arranged order.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Sort direction for list queries",
+              "enum": [
+                "asc",
+                "desc"
               ]
             }
           },
@@ -25927,7 +25955,7 @@
           },
           "ordered": {
             "type": "boolean",
-            "description": "When true, members are kept in manual order; otherwise sorted by title.",
+            "description": "Default presentation order when no sort is requested: manual when\ntrue, title otherwise.",
             "example": false
           },
           "seriesCount": {
@@ -37686,7 +37714,7 @@
           },
           "ordered": {
             "type": "boolean",
-            "description": "When true, members are kept in manual reading order; otherwise sorted by\nrelease date.",
+            "description": "Default presentation order when no sort is requested: manual reading\norder when true, release date otherwise.",
             "example": true
           },
           "summary": {

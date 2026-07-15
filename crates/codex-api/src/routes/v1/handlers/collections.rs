@@ -25,6 +25,7 @@ use codex_db::entities::collections;
 use codex_db::repositories::{
     CollectionRepository, SeriesRepository, visibility::SeriesVisibility,
 };
+use codex_models::sort::SortDirection;
 use std::sync::Arc;
 use utoipa::OpenApi;
 use uuid::Uuid;
@@ -300,10 +301,15 @@ pub async fn get_collection_series(
     let collection = get_collection_or_404(&state, collection_id).await?;
 
     let vis = user_visibility(&state, auth.user_id).await?;
-    let members =
-        CollectionRepository::get_series(&state.db, &collection, vis.as_ref(), query.sort)
-            .await
-            .map_err(internal("Failed to fetch collection series"))?;
+    let members = CollectionRepository::get_series(
+        &state.db,
+        &collection,
+        vis.as_ref(),
+        query.sort,
+        query.direction.unwrap_or_default(),
+    )
+    .await
+    .map_err(internal("Failed to fetch collection series"))?;
 
     let dtos =
         super::series::series_to_dtos_batched(&state.db, members, Some(auth.user_id)).await?;
@@ -421,9 +427,15 @@ pub async fn get_collection_thumbnail(
     auth.require_permission(&Permission::CollectionsRead)?;
     let collection = get_collection_or_404(&state, collection_id).await?;
     let vis = user_visibility(&state, auth.user_id).await?;
-    let members = CollectionRepository::get_series(&state.db, &collection, vis.as_ref(), None)
-        .await
-        .map_err(internal("Failed to fetch collection series"))?;
+    let members = CollectionRepository::get_series(
+        &state.db,
+        &collection,
+        vis.as_ref(),
+        None,
+        SortDirection::default(),
+    )
+    .await
+    .map_err(internal("Failed to fetch collection series"))?;
     let first = members
         .first()
         .ok_or_else(|| ApiError::NotFound("Collection has no visible series".to_string()))?;

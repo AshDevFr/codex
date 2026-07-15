@@ -1,7 +1,7 @@
 //! DTOs for read lists (shared, ordered groupings of books across series).
 
 use chrono::{DateTime, Utc};
-use codex_models::sort::ReadListBookSort;
+use codex_models::sort::{ReadListBookSort, SortDirection};
 use serde::{Deserialize, Deserializer, Serialize};
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
@@ -16,6 +16,10 @@ pub struct ReadListBooksQuery {
     /// `release` otherwise).
     #[param(inline)]
     pub sort: Option<ReadListBookSort>,
+    /// Direction for the chosen sort (`asc` default). Ignored for `manual`,
+    /// which always returns the user's arranged order.
+    #[param(inline)]
+    pub direction: Option<SortDirection>,
 }
 
 /// Deserialize a nullable field into a "double option" so the handler can tell
@@ -41,8 +45,8 @@ pub struct ReadListDto {
     /// Optional description (Komga read lists carry a summary).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub summary: Option<String>,
-    /// When true, members are kept in manual reading order; otherwise sorted by
-    /// release date.
+    /// Default presentation order when no sort is requested: manual reading
+    /// order when true, release date otherwise.
     #[schema(example = true)]
     pub ordered: bool,
     /// Number of member books visible to the requesting user.

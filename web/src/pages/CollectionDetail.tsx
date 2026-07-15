@@ -17,11 +17,13 @@ import {
   IconEdit,
   IconLock,
   IconLockOpen,
+  IconSortAscending,
+  IconSortDescending,
   IconTrash,
 } from "@tabler/icons-react";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import type { CollectionSeriesSort } from "@/api/collections";
+import type { CollectionSeriesSort, SortDirection } from "@/api/collections";
 import { CollectionFormModal } from "@/components/collections/CollectionFormModal";
 import { MediaGrid, type MediaGridItem } from "@/components/library/MediaGrid";
 import {
@@ -47,10 +49,12 @@ export function CollectionDetail() {
   const [sortOverride, setSortOverride] = useState<CollectionSeriesSort | null>(
     null,
   );
+  const [direction, setDirection] = useState<SortDirection>("asc");
   const { data: collection, isLoading } = useCollection(collectionId);
   const { data: series } = useCollectionSeries(
     collectionId,
     sortOverride ?? undefined,
+    direction === "desc" ? "desc" : undefined,
   );
   const sort: CollectionSeriesSort =
     sortOverride ?? (collection?.ordered ? "manual" : "title");
@@ -130,6 +134,28 @@ export function CollectionDetail() {
               ]}
               aria-label="Sort series"
             />
+          )}
+          {sort !== "manual" && members.length > 1 && (
+            <Tooltip label={direction === "asc" ? "Ascending" : "Descending"}>
+              <ActionIcon
+                variant="default"
+                size="lg"
+                onClick={() =>
+                  setDirection((d) => (d === "asc" ? "desc" : "asc"))
+                }
+                aria-label={
+                  direction === "asc"
+                    ? "Sort ascending (click for descending)"
+                    : "Sort descending (click for ascending)"
+                }
+              >
+                {direction === "asc" ? (
+                  <IconSortAscending size={16} />
+                ) : (
+                  <IconSortDescending size={16} />
+                )}
+              </ActionIcon>
+            </Tooltip>
           )}
           {canReorder && members.length > 1 && (
             <Tooltip

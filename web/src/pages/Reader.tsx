@@ -2,6 +2,7 @@ import { Center, Loader, Text } from "@mantine/core";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { booksApi } from "@/api/books";
+import { bookKeys } from "@/api/queryKeys";
 import { ReaderRouter } from "@/components/reader";
 import { useDynamicDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useViewportZoomLock } from "@/hooks/useViewportZoomLock";
@@ -30,7 +31,7 @@ export function Reader() {
     isLoading: bookLoading,
     error: bookError,
   } = useQuery({
-    queryKey: ["book", bookId],
+    queryKey: bookKeys.detail(bookId),
     queryFn: () => booksApi.getDetail(bookId as string),
     enabled: !!bookId,
   });

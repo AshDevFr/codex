@@ -302,10 +302,12 @@ impl SeriesRepository {
             Some(SeriesSortFieldRepo::Title) | None => {
                 // Use COALESCE(title_sort, title) so that series with NULL title_sort
                 // are sorted by title rather than clustering at the start/end
-                let sort_expr = Func::coalesce([
+                // LOWER keeps the order case-insensitive (binary collation sorts
+                // all uppercase titles ahead of any lowercase one).
+                let sort_expr = Func::lower(Func::coalesce([
                     Expr::col((series_metadata::Entity, series_metadata::Column::TitleSort)).into(),
                     Expr::col((series_metadata::Entity, series_metadata::Column::Title)).into(),
-                ]);
+                ]));
                 query.order_by(Expr::expr(sort_expr), order)
             }
             Some(SeriesSortFieldRepo::DateAdded) => {
@@ -1362,10 +1364,12 @@ impl SeriesRepository {
                 // wanting relevance order must hydrate from the ranked id list directly.
                 // We accept the variant here so the param round-trips through generic code
                 // paths and fall back to a stable name sort.
-                let sort_expr = Func::coalesce([
+                // LOWER keeps the order case-insensitive (binary collation sorts
+                // all uppercase titles ahead of any lowercase one).
+                let sort_expr = Func::lower(Func::coalesce([
                     Expr::col((series_metadata::Entity, series_metadata::Column::TitleSort)).into(),
                     Expr::col((series_metadata::Entity, series_metadata::Column::Title)).into(),
-                ]);
+                ]));
                 Series::find()
                     .filter(base_condition)
                     .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def())

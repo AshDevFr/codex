@@ -91,6 +91,9 @@ describe("useWantToRead invalidation", () => {
       },
     });
     queryClient.setQueryData(bookKeys.detail("book-1"), { wantToRead: false });
+    queryClient.setQueryData(bookKeys.detailFull("book-1"), {
+      wantToRead: false,
+    });
     const wrapper = ({ children }: { children: ReactNode }) => (
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     );
@@ -105,6 +108,9 @@ describe("useWantToRead invalidation", () => {
 
     expect(
       queryClient.getQueryState(bookKeys.detail("book-1"))?.isInvalidated,
+    ).toBe(true);
+    expect(
+      queryClient.getQueryState(bookKeys.detailFull("book-1"))?.isInvalidated,
     ).toBe(true);
   });
 });

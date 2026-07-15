@@ -23,7 +23,7 @@ use crate::entities::{
     collections::Entity as Collections, series, series::Entity as Series, series_metadata,
 };
 use crate::repositories::visibility::{SeriesVisibility, visibility_predicate};
-use codex_models::sort::CollectionSeriesSort;
+use codex_models::sort::{CollectionSeriesSort, SortDirection};
 
 /// Repository for collection operations.
 pub struct CollectionRepository;
@@ -203,12 +203,14 @@ impl CollectionRepository {
     /// An explicit `sort` always wins. When omitted, the collection's
     /// `ordered` flag picks the default: manual position order when set,
     /// displayed title (metadata `title_sort`, falling back to `title`, then
-    /// the scan-derived series name) otherwise.
+    /// the scan-derived series name) otherwise. `direction` applies to every
+    /// sort except `Manual`, whose order is exactly what the user arranged.
     pub async fn get_series(
         db: &DatabaseConnection,
         collection: &collections::Model,
         vis: Option<&SeriesVisibility>,
         sort: Option<CollectionSeriesSort>,
+        direction: SortDirection,
     ) -> Result<Vec<series::Model>> {
         if matches!(vis, Some(v) if v.is_empty_whitelist()) {
             return Ok(vec![]);
@@ -219,6 +221,10 @@ impl CollectionRepository {
         } else {
             CollectionSeriesSort::Title
         });
+        let order = match direction {
+            SortDirection::Asc => Order::Asc,
+            SortDirection::Desc => Order::Desc,
+        };
 
         let mut junction = CollectionSeries::find()
             .filter(collection_series::Column::CollectionId.eq(collection.id));
@@ -227,8 +233,8 @@ impl CollectionRepository {
                 .order_by_asc(collection_series::Column::Position)
                 .order_by_asc(collection_series::Column::CreatedAt),
             CollectionSeriesSort::Added => junction
-                .order_by_asc(collection_series::Column::CreatedAt)
-                .order_by_asc(collection_series::Column::Position),
+                .order_by(collection_series::Column::CreatedAt, order.clone())
+                .order_by(collection_series::Column::Position, order.clone()),
             // Title/year order lives on the series side; junction order is
             // irrelevant for those.
             _ => junction,
@@ -251,23 +257,29 @@ impl CollectionRepository {
 
         match sort {
             CollectionSeriesSort::Title | CollectionSeriesSort::Year => {
-                let title_expr = Expr::expr(Func::coalesce([
+                // LOWER makes the order case-insensitive: binary collation would
+                // sort every uppercase title ahead of any lowercase one.
+                let title_expr = Expr::expr(Func::lower(Func::coalesce([
                     Expr::col((series_metadata::Entity, series_metadata::Column::TitleSort)).into(),
                     Expr::col((series_metadata::Entity, series_metadata::Column::Title)).into(),
                     Expr::col((series::Entity, series::Column::Name)).into(),
-                ]));
+                ])));
                 let mut query = Series::find()
                     .filter(series::Column::Id.is_in(ordered_ids))
                     .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def());
                 if matches!(sort, CollectionSeriesSort::Year) {
+                    // Unknown years stay last in both directions.
                     query = query.order_by_with_nulls(
                         series_metadata::Column::Year,
-                        Order::Asc,
+                        order.clone(),
                         NullOrdering::Last,
                     );
+                    // Tie-break years by title ascending regardless of direction.
+                    query = query.order_by(title_expr, Order::Asc);
+                } else {
+                    query = query.order_by(title_expr, order);
                 }
                 Ok(query
-                    .order_by(title_expr, Order::Asc)
                     .order_by(series::Column::Id, Order::Asc)
                     .all(db)
                     .await?)
@@ -350,7 +362,7 @@ mod tests {
     use crate::ScanningStrategy;
     use crate::repositories::{LibraryRepository, SeriesMetadataRepository, SeriesRepository};
     use crate::test_helpers::create_test_db;
-    use codex_models::sort::CollectionSeriesSort;
+    use codex_models::sort::{CollectionSeriesSort, SortDirection};
 
     async fn lib_and_series(db: &DatabaseConnection) -> (Uuid, Vec<series::Model>) {
         let library = LibraryRepository::create(db, "Lib", "/lib", ScanningStrategy::Default)
@@ -423,7 +435,7 @@ mod tests {
             .unwrap();
         assert_eq!(again.position, 0);
 
-        let members = CollectionRepository::get_series(conn, &coll, None, None)
+        let members = CollectionRepository::get_series(conn, &coll, None, None, SortDirection::Asc)
             .await
             .unwrap();
         assert_eq!(members.len(), 3);
@@ -435,7 +447,7 @@ mod tests {
         CollectionRepository::reorder(conn, coll.id, &reversed)
             .await
             .unwrap();
-        let members = CollectionRepository::get_series(conn, &coll, None, None)
+        let members = CollectionRepository::get_series(conn, &coll, None, None, SortDirection::Asc)
             .await
             .unwrap();
         assert_eq!(members[0].id, series[2].id);
@@ -443,18 +455,28 @@ mod tests {
 
         // An explicit sort always wins, even on an ordered collection; the
         // flag only picks the default. Series names are Alpha/Bravo/Charlie.
-        let members =
-            CollectionRepository::get_series(conn, &coll, None, Some(CollectionSeriesSort::Title))
-                .await
-                .unwrap();
+        let members = CollectionRepository::get_series(
+            conn,
+            &coll,
+            None,
+            Some(CollectionSeriesSort::Title),
+            SortDirection::Asc,
+        )
+        .await
+        .unwrap();
         assert_eq!(members[0].id, series[0].id);
         assert_eq!(members[2].id, series[2].id);
 
         // And manual order can be requested explicitly regardless of the flag.
-        let members =
-            CollectionRepository::get_series(conn, &coll, None, Some(CollectionSeriesSort::Manual))
-                .await
-                .unwrap();
+        let members = CollectionRepository::get_series(
+            conn,
+            &coll,
+            None,
+            Some(CollectionSeriesSort::Manual),
+            SortDirection::Asc,
+        )
+        .await
+        .unwrap();
         assert_eq!(members[0].id, series[2].id);
         assert_eq!(members[2].id, series[0].id);
 
@@ -500,7 +522,7 @@ mod tests {
         }
 
         // Default sort for an unordered collection is by title.
-        let members = CollectionRepository::get_series(conn, &coll, None, None)
+        let members = CollectionRepository::get_series(conn, &coll, None, None, SortDirection::Asc)
             .await
             .unwrap();
         let names: Vec<&str> = members.iter().map(|s| s.name.as_str()).collect();
@@ -516,11 +538,36 @@ mod tests {
         )
         .await
         .unwrap();
-        let members = CollectionRepository::get_series(conn, &coll, None, None)
+        let members = CollectionRepository::get_series(conn, &coll, None, None, SortDirection::Asc)
             .await
             .unwrap();
         let names: Vec<&str> = members.iter().map(|s| s.name.as_str()).collect();
         assert_eq!(names, ["Cherry", "Apple", "Banana"]);
+
+        // Case-insensitive: a lowercase title must not sort after every
+        // uppercase one (binary collation would put "apple" last).
+        SeriesMetadataRepository::update_title(
+            conn,
+            by_name["Apple"].id,
+            "apple".to_string(),
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+        let members = CollectionRepository::get_series(conn, &coll, None, None, SortDirection::Asc)
+            .await
+            .unwrap();
+        let names: Vec<&str> = members.iter().map(|s| s.name.as_str()).collect();
+        assert_eq!(names, ["Cherry", "Apple", "Banana"]);
+
+        // Descending direction reverses the title order.
+        let members =
+            CollectionRepository::get_series(conn, &coll, None, None, SortDirection::Desc)
+                .await
+                .unwrap();
+        let names: Vec<&str> = members.iter().map(|s| s.name.as_str()).collect();
+        assert_eq!(names, ["Banana", "Apple", "Cherry"]);
     }
 
     #[tokio::test]
@@ -548,10 +595,15 @@ mod tests {
         }
 
         // "added" follows insertion order, not title order.
-        let members =
-            CollectionRepository::get_series(conn, &coll, None, Some(CollectionSeriesSort::Added))
-                .await
-                .unwrap();
+        let members = CollectionRepository::get_series(
+            conn,
+            &coll,
+            None,
+            Some(CollectionSeriesSort::Added),
+            SortDirection::Asc,
+        )
+        .await
+        .unwrap();
         let names: Vec<&str> = members.iter().map(|s| s.name.as_str()).collect();
         assert_eq!(names, ["Banana", "Cherry", "Apple"]);
 
@@ -562,10 +614,15 @@ mod tests {
         SeriesMetadataRepository::update_year(conn, by_name["Cherry"].id, Some(1999))
             .await
             .unwrap();
-        let members =
-            CollectionRepository::get_series(conn, &coll, None, Some(CollectionSeriesSort::Year))
-                .await
-                .unwrap();
+        let members = CollectionRepository::get_series(
+            conn,
+            &coll,
+            None,
+            Some(CollectionSeriesSort::Year),
+            SortDirection::Asc,
+        )
+        .await
+        .unwrap();
         let names: Vec<&str> = members.iter().map(|s| s.name.as_str()).collect();
         assert_eq!(names, ["Cherry", "Banana", "Apple"]);
     }
@@ -630,9 +687,10 @@ mod tests {
             excluded_series_ids: vec![series[1].id],
             allowed_series_ids: None,
         };
-        let visible = CollectionRepository::get_series(conn, &coll, Some(&vis), None)
-            .await
-            .unwrap();
+        let visible =
+            CollectionRepository::get_series(conn, &coll, Some(&vis), None, SortDirection::Asc)
+                .await
+                .unwrap();
         assert_eq!(visible.len(), 2);
         assert!(visible.iter().all(|s| s.id != series[1].id));
         assert_eq!(
@@ -648,7 +706,7 @@ mod tests {
             allowed_series_ids: Some(vec![]),
         };
         assert!(
-            CollectionRepository::get_series(conn, &coll, Some(&empty), None)
+            CollectionRepository::get_series(conn, &coll, Some(&empty), None, SortDirection::Asc)
                 .await
                 .unwrap()
                 .is_empty()

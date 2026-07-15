@@ -20,6 +20,7 @@ use axum::{
     response::Redirect,
 };
 use codex_db::repositories::{CollectionRepository, visibility::SeriesVisibility};
+use codex_models::sort::SortDirection;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -42,9 +43,10 @@ async fn build_collection_dto(
     model: codex_db::entities::collections::Model,
     vis: Option<&SeriesVisibility>,
 ) -> Result<KomgaCollectionDto, ApiError> {
-    let members = CollectionRepository::get_series(&state.db, &model, vis, None)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to fetch collection series: {e}")))?;
+    let members =
+        CollectionRepository::get_series(&state.db, &model, vis, None, SortDirection::default())
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to fetch collection series: {e}")))?;
     Ok(KomgaCollectionDto {
         id: model.id.to_string(),
         name: model.name,
@@ -143,9 +145,15 @@ pub async fn get_collection_series(
         .ok_or_else(|| ApiError::NotFound("Collection not found".to_string()))?;
 
     let vis = user_visibility(&state, auth.user_id).await?;
-    let members = CollectionRepository::get_series(&state.db, &model, vis.as_ref(), None)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to fetch collection series: {e}")))?;
+    let members = CollectionRepository::get_series(
+        &state.db,
+        &model,
+        vis.as_ref(),
+        None,
+        SortDirection::default(),
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to fetch collection series: {e}")))?;
     let total = members.len() as i64;
 
     let page = query.page.max(0);
@@ -185,9 +193,15 @@ pub async fn get_collection_thumbnail(
         .map_err(|e| ApiError::Internal(format!("Failed to fetch collection: {e}")))?
         .ok_or_else(|| ApiError::NotFound("Collection not found".to_string()))?;
     let vis = user_visibility(&state, auth.user_id).await?;
-    let members = CollectionRepository::get_series(&state.db, &model, vis.as_ref(), None)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to fetch collection series: {e}")))?;
+    let members = CollectionRepository::get_series(
+        &state.db,
+        &model,
+        vis.as_ref(),
+        None,
+        SortDirection::default(),
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to fetch collection series: {e}")))?;
     let first = members
         .first()
         .ok_or_else(|| ApiError::NotFound("Collection has no visible series".to_string()))?;

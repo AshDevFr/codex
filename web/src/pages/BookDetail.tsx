@@ -151,7 +151,7 @@ export function BookDetail() {
     isLoading,
     error,
   } = useQuery({
-    queryKey: bookKeys.detail(bookId),
+    queryKey: bookKeys.detailFull(bookId),
     queryFn: () => booksApi.getDetail(bookId!, { full: true }),
     enabled: !!bookId,
   });

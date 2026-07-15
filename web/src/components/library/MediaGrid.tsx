@@ -164,16 +164,9 @@ export function MediaGrid({
     </Stack>
   );
 
-  if (!reorderable) {
-    return (
-      <div style={gridStyle}>
-        {orderedItems.map((item, index) => (
-          <div key={item.id}>{renderItem(item, index)}</div>
-        ))}
-      </div>
-    );
-  }
-
+  // The dnd wrappers render in both modes (sorting merely disabled) so that
+  // toggling reorderability never changes the tree shape: a remount would
+  // reset every card's image-loaded state and flash the whole grid.
   return (
     <DndContext
       sensors={sensors}
@@ -188,7 +181,12 @@ export function MediaGrid({
       >
         <div style={gridStyle}>
           {orderedItems.map((item, index) => (
-            <SortableGridItem key={item.id} id={item.id} dragging={dragging}>
+            <SortableGridItem
+              key={item.id}
+              id={item.id}
+              dragging={dragging}
+              disabled={!reorderable}
+            >
               {renderItem(item, index)}
             </SortableGridItem>
           ))}
@@ -209,10 +207,12 @@ const gridStyle: React.CSSProperties = {
 function SortableGridItem({
   id,
   dragging,
+  disabled,
   children,
 }: {
   id: string;
   dragging: boolean;
+  disabled: boolean;
   children: ReactNode;
 }) {
   const {
@@ -222,7 +222,7 @@ function SortableGridItem({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id });
+  } = useSortable({ id, disabled });
 
   return (
     <div
@@ -235,8 +235,9 @@ function SortableGridItem({
         // events (or trigger their own hover panels) under the moving card.
         pointerEvents: dragging && !isDragging ? "none" : undefined,
       }}
-      {...attributes}
-      {...listeners}
+      // Skip the aria/interaction attributes when sorting is off so plain
+      // grids don't read as draggable to assistive tech.
+      {...(disabled ? {} : { ...attributes, ...listeners })}
     >
       {children}
     </div>

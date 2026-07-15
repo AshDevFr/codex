@@ -10273,7 +10273,8 @@ export interface components {
             /** @example Batman */
             name: string;
             /**
-             * @description When true, members are kept in manual order; otherwise sorted by title.
+             * @description Default presentation order when no sort is requested: manual when
+             *     true, title otherwise.
              * @example false
              */
             ordered: boolean;
@@ -16528,8 +16529,8 @@ export interface components {
             /** @example Civil War */
             name: string;
             /**
-             * @description When true, members are kept in manual reading order; otherwise sorted by
-             *     release date.
+             * @description Default presentation order when no sort is requested: manual reading
+             *     order when true, release date otherwise.
              * @example true
              */
             ordered: boolean;
@@ -25243,6 +25244,11 @@ export interface operations {
                  *     `title` otherwise).
                  */
                 sort?: "title" | "added" | "year" | "manual";
+                /**
+                 * @description Direction for the chosen sort (`asc` default). Ignored for `manual`,
+                 *     which always returns the user's arranged order.
+                 */
+                direction?: "asc" | "desc";
             };
             header?: never;
             path: {
@@ -27598,6 +27604,11 @@ export interface operations {
                  *     `release` otherwise).
                  */
                 sort?: "release" | "title" | "added" | "manual";
+                /**
+                 * @description Direction for the chosen sort (`asc` default). Ignored for `manual`,
+                 *     which always returns the user's arranged order.
+                 */
+                direction?: "asc" | "desc";
             };
             header?: never;
             path: {

@@ -170,26 +170,34 @@ export const MediaCard = memo(function MediaCard({
     ((series.unreadCount ?? 0) > 0 ||
       (series.bookCount ?? 0) > (series.unreadCount ?? 0));
 
-  // Track image loading state for skeleton placeholder
-  const [imageLoaded, setImageLoaded] = useState(false);
-  const [_imageError, setImageError] = useState(false);
-
-  // Reset loading state when the item ID or cover cache buster changes
-  // (e.g., different book/series, or cover was regenerated via SSE event or data refetch)
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally reset on ID/cache buster change
-  useEffect(() => {
-    setImageLoaded(false);
-    setImageError(false);
-  }, [data.id, coverCacheBuster]);
+  // Skeleton state is derived: the cover is "loaded" iff the URL that last
+  // finished (load or error) is the URL currently rendered. Deriving from the
+  // URL instead of resetting a boolean sidesteps the races that left covers
+  // stuck at opacity 0 (a reset effect racing the load event, or a
+  // cache-complete image whose load event fired before React attached its
+  // listener). When the cache buster changes, the URLs stop matching and the
+  // skeleton returns until the new image settles.
+  const [settledUrl, setSettledUrl] = useState<string | null>(null);
+  const imageLoaded = settledUrl === coverUrl;
 
   const handleImageLoad = useCallback(() => {
-    setImageLoaded(true);
-  }, []);
+    setSettledUrl(coverUrl);
+  }, [coverUrl]);
 
   const handleImageError = useCallback(() => {
-    setImageError(true);
-    setImageLoaded(true); // Stop showing skeleton on error
-  }, []);
+    setSettledUrl(coverUrl); // Stop showing skeleton on error
+  }, [coverUrl]);
+
+  // Cache-complete images may never fire `load` after a remount; checking
+  // `complete` when the ref attaches (or the URL changes) covers that path.
+  const handleImageRef = useCallback(
+    (node: HTMLImageElement | null) => {
+      if (node?.complete && node.naturalWidth > 0) {
+        setSettledUrl(coverUrl);
+      }
+    },
+    [coverUrl],
+  );
 
   // Track if item is newly created (for animation)
   const [isNew, setIsNew] = useState(false);
@@ -580,6 +588,11 @@ export const MediaCard = memo(function MediaCard({
                       />
                     )}
                     <Image
+                      // Cache-complete images can fire `load` before React
+                      // attaches the listener (e.g. right after the card
+                      // remounts), which would leave the cover stuck at
+                      // opacity 0; the ref check catches that case.
+                      ref={handleImageRef}
                       src={coverUrl}
                       alt={altText}
                       fit="cover"

@@ -23,6 +23,7 @@ use axum::{
 };
 use codex_db::entities::read_lists;
 use codex_db::repositories::{BookRepository, ReadListRepository, visibility::SeriesVisibility};
+use codex_models::sort::SortDirection;
 use std::sync::Arc;
 use utoipa::OpenApi;
 use uuid::Uuid;
@@ -307,9 +308,15 @@ pub async fn get_readlist_books(
     let read_list = get_readlist_or_404(&state, read_list_id).await?;
 
     let vis = user_visibility(&state, auth.user_id).await?;
-    let members = ReadListRepository::get_books(&state.db, &read_list, vis.as_ref(), query.sort)
-        .await
-        .map_err(internal("Failed to fetch read list books"))?;
+    let members = ReadListRepository::get_books(
+        &state.db,
+        &read_list,
+        vis.as_ref(),
+        query.sort,
+        query.direction.unwrap_or_default(),
+    )
+    .await
+    .map_err(internal("Failed to fetch read list books"))?;
 
     let dtos = super::books::books_to_dtos(&state.db, auth.user_id, members).await?;
     Ok(Json(dtos))
@@ -426,9 +433,15 @@ pub async fn get_readlist_thumbnail(
     auth.require_permission(&Permission::ReadListsRead)?;
     let read_list = get_readlist_or_404(&state, read_list_id).await?;
     let vis = user_visibility(&state, auth.user_id).await?;
-    let members = ReadListRepository::get_books(&state.db, &read_list, vis.as_ref(), None)
-        .await
-        .map_err(internal("Failed to fetch read list books"))?;
+    let members = ReadListRepository::get_books(
+        &state.db,
+        &read_list,
+        vis.as_ref(),
+        None,
+        SortDirection::default(),
+    )
+    .await
+    .map_err(internal("Failed to fetch read list books"))?;
     let first = members
         .first()
         .ok_or_else(|| ApiError::NotFound("Read list has no visible books".to_string()))?;

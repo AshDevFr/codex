@@ -147,6 +147,17 @@ async fn test_unordered_readlist_books_sorting() {
     let ids: Vec<_> = members.unwrap().iter().map(|b| b.id).collect();
     assert_eq!(ids, [books[2].id, books[0].id, books[1].id]);
 
+    // direction=desc reverses the title order (Cherry, Banana, Apple).
+    let req = get_request_with_auth(
+        &format!("/api/v1/readlists/{rl_id}/books?sort=title&direction=desc"),
+        &token,
+    );
+    let (status, members): (StatusCode, Option<Vec<BookDto>>) =
+        make_json_request(app.clone(), req).await;
+    assert_eq!(status, StatusCode::OK);
+    let ids: Vec<_> = members.unwrap().iter().map(|b| b.id).collect();
+    assert_eq!(ids, [books[1].id, books[0].id, books[2].id]);
+
     // sort=added: insertion order.
     let req = get_request_with_auth(
         &format!("/api/v1/readlists/{rl_id}/books?sort=added"),
