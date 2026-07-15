@@ -2,6 +2,23 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.41.0] - 2026-07-15
+
+### 🚀 Features
+
+- *(web)* Shared media grid with sort selectors and drag-and-drop reorder
+- Manual ordering everywhere, collection summaries, persisted queue sort
+
+### 🐛 Bug Fixes
+
+- *(api)* Honor the ordered flag when listing collection and read list members
+- *(web)* Refresh want-to-read state on the book page by fixing its query key
+- *(web)* Keep the card hover panel off touch devices and out of the menu's way
+- *(docker)* Add codex-migrate to the dev image's dependency cache layer
+- Stuck covers, case-insensitive sorts, detail-key collision; add sort direction
+- Fluid index grids, persisted list sorts, fresh redirect thumbnails
+- *(api)* Case-insensitive name sort on the series list endpoint too
+
 ## [1.40.8] - 2026-07-12
 
 ### 🐛 Bug Fixes
