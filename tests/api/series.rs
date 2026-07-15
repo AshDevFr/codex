@@ -4881,13 +4881,13 @@ async fn test_list_series_sort_by_name_with_null_title_sort() {
             "+Anima",
             "01 Locke & Key",
             "A Couple of Cuckoos",
-            "ALIVE: The Final Evolution",
             "Air Gear",
+            "ALIVE: The Final Evolution",
             "Fairy Tail's Fairy Girls",
             "Kaiju No. 8",
             "Shinobi Life",
         ],
-        "Series should be sorted alphabetically by title when title_sort is NULL"
+        "Series should sort case-insensitively by title when title_sort is NULL"
     );
 }
 

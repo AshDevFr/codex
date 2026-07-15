@@ -4621,9 +4621,10 @@ async fn test_komga_search_series_sort_by_title_with_null_title_sort() {
     let page = response.unwrap();
     assert_eq!(page.content.len(), 8);
 
-    // When title_sort is NULL for all series, the sort should fall back to title.
-    // The database sorts case-sensitively by default (uppercase before lowercase in SQLite),
-    // so the expected order is based on raw byte/codepoint ordering.
+    // When title_sort is NULL for all series, the sort should fall back to
+    // title, case-insensitively: the sort expression goes through LOWER(), so
+    // "Air Gear" precedes "ALIVE..." ("air" < "alive"), unlike the binary
+    // collation which would put every uppercase title first.
     let titles: Vec<&str> = page.content.iter().map(|s| s.name.as_str()).collect();
     assert_eq!(
         titles,
@@ -4631,8 +4632,8 @@ async fn test_komga_search_series_sort_by_title_with_null_title_sort() {
             "+Anima",
             "01 Locke & Key",
             "A Couple of Cuckoos",
-            "ALIVE: The Final Evolution",
             "Air Gear",
+            "ALIVE: The Final Evolution",
             "Fairy Tail's Fairy Girls",
             "Kaiju No. 8",
             "Shinobi Life",

@@ -1270,9 +1270,11 @@ impl SeriesRepository {
                 // Apply sort
                 let query = match sort.field {
                     SeriesSortField::Name => {
-                        // Use COALESCE(title_sort, title) so that series with NULL title_sort
-                        // are sorted by title rather than clustering at the start/end
-                        let sort_expr = Func::coalesce([
+                        // COALESCE(title_sort, title) so that series with NULL title_sort
+                        // sort by title rather than clustering at the start/end; LOWER
+                        // keeps the order case-insensitive (binary collation sorts all
+                        // uppercase titles ahead of any lowercase one).
+                        let sort_expr = Func::lower(Func::coalesce([
                             Expr::col((
                                 series_metadata::Entity,
                                 series_metadata::Column::TitleSort,
@@ -1280,7 +1282,7 @@ impl SeriesRepository {
                             .into(),
                             Expr::col((series_metadata::Entity, series_metadata::Column::Title))
                                 .into(),
-                        ]);
+                        ]));
                         query
                             .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def())
                             .order_by(Expr::expr(sort_expr), order)
