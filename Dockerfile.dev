@@ -59,6 +59,7 @@ COPY crates/codex-cli-common/Cargo.toml ./crates/codex-cli-common/
 COPY crates/codex-config/Cargo.toml ./crates/codex-config/
 COPY crates/codex-db/Cargo.toml ./crates/codex-db/
 COPY crates/codex-events/Cargo.toml ./crates/codex-events/
+COPY crates/codex-migrate/Cargo.toml ./crates/codex-migrate/
 COPY crates/codex-models/Cargo.toml ./crates/codex-models/
 COPY crates/codex-parsers/Cargo.toml ./crates/codex-parsers/
 COPY crates/codex-scanner/Cargo.toml ./crates/codex-scanner/
@@ -76,7 +77,7 @@ ENV RUSTFLAGS="-C target-feature=-crt-static"
 RUN mkdir -p src migration/src && \
     echo "fn main() {}" > src/main.rs && \
     echo "pub use sea_orm_migration::prelude::*; pub struct Migrator; impl MigratorTrait for Migrator { fn migrations() -> Vec<Box<dyn MigrationTrait>> { vec![] } }" > migration/src/lib.rs && \
-    for crate in codex-api codex-cli-common codex-config codex-db codex-events codex-models codex-parsers codex-scanner codex-scheduler codex-search codex-services codex-tasks codex-utils; do \
+    for crate in codex-api codex-cli-common codex-config codex-db codex-events codex-migrate codex-models codex-parsers codex-scanner codex-scheduler codex-search codex-services codex-tasks codex-utils; do \
         mkdir -p "crates/$crate/src" && : > "crates/$crate/src/lib.rs"; \
     done && \
     cargo build && \
