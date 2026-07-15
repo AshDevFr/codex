@@ -205,9 +205,13 @@ pub async fn get_collection_thumbnail(
     let first = members
         .first()
         .ok_or_else(|| ApiError::NotFound("Collection has no visible series".to_string()))?;
+    // Cache-bust with the member's update time so browsers refetch the image
+    // after its cover is regenerated (the target URL is otherwise cached
+    // indefinitely; the card grids bust their own image URLs the same way).
     Ok(Redirect::temporary(&format!(
-        "/api/v1/series/{}/thumbnail",
-        first.id
+        "/api/v1/series/{}/thumbnail?v={}",
+        first.id,
+        first.updated_at.timestamp_millis()
     )))
 }
 

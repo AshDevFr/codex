@@ -229,9 +229,13 @@ pub async fn get_readlist_thumbnail(
     let first = members
         .first()
         .ok_or_else(|| ApiError::NotFound("Read list has no visible books".to_string()))?;
+    // Cache-bust with the member's update time so browsers refetch the image
+    // after its cover is regenerated (the target URL is otherwise cached
+    // indefinitely; the card grids bust their own image URLs the same way).
     Ok(Redirect::temporary(&format!(
-        "/api/v1/books/{}/thumbnail",
-        first.id
+        "/api/v1/books/{}/thumbnail?v={}",
+        first.id,
+        first.updated_at.timestamp_millis()
     )))
 }
 

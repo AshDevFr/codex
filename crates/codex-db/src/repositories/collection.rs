@@ -625,6 +625,19 @@ mod tests {
         .unwrap();
         let names: Vec<&str> = members.iter().map(|s| s.name.as_str()).collect();
         assert_eq!(names, ["Cherry", "Banana", "Apple"]);
+
+        // Descending year reverses the dated members; unknown years stay last.
+        let members = CollectionRepository::get_series(
+            conn,
+            &coll,
+            None,
+            Some(CollectionSeriesSort::Year),
+            SortDirection::Desc,
+        )
+        .await
+        .unwrap();
+        let names: Vec<&str> = members.iter().map(|s| s.name.as_str()).collect();
+        assert_eq!(names, ["Banana", "Cherry", "Apple"]);
     }
 
     #[tokio::test]

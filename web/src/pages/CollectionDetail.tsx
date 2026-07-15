@@ -34,6 +34,7 @@ import {
   useReorderCollection,
 } from "@/hooks/useCollections";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useListSortPreferencesStore } from "@/store/listSortPreferencesStore";
 import type { Series } from "@/types";
 import { PERMISSIONS } from "@/types/permissions";
 
@@ -44,12 +45,21 @@ export function CollectionDetail() {
   const canWrite = hasPermission(PERMISSIONS.COLLECTIONS_WRITE);
   const canDelete = hasPermission(PERMISSIONS.COLLECTIONS_DELETE);
 
-  // No override sends no sort param: the server then applies the collection's
-  // default order (manual when `ordered`, title otherwise).
-  const [sortOverride, setSortOverride] = useState<CollectionSeriesSort | null>(
-    null,
+  // The per-list choice persists in localStorage; "no explicit choice" sends
+  // no sort param and the server applies the collection's default (manual
+  // when `ordered`, title otherwise).
+  const stored = useListSortPreferencesStore(
+    (state) => state.collections[collectionId ?? ""],
   );
-  const [direction, setDirection] = useState<SortDirection>("asc");
+  const setCollectionSort = useListSortPreferencesStore(
+    (state) => state.setCollectionSort,
+  );
+  const sortOverride = stored?.sort ?? null;
+  const direction: SortDirection = stored?.direction ?? "asc";
+  const setSortOverride = (sort: CollectionSeriesSort) =>
+    setCollectionSort(collectionId ?? "", { sort });
+  const setDirection = (direction: SortDirection) =>
+    setCollectionSort(collectionId ?? "", { direction });
   const { data: collection, isLoading } = useCollection(collectionId);
   const { data: series } = useCollectionSeries(
     collectionId,
@@ -129,7 +139,9 @@ export function CollectionDetail() {
               data={[
                 { label: "Title", value: "title" },
                 { label: "Date added", value: "added" },
-                { label: "Year", value: "year" },
+                // Series only carry a release year; label matches the read
+                // list page so the two selectors read as one control.
+                { label: "Release", value: "year" },
                 { label: "Manual", value: "manual" },
               ]}
               aria-label="Sort series"
@@ -141,7 +153,7 @@ export function CollectionDetail() {
                 variant="default"
                 size="lg"
                 onClick={() =>
-                  setDirection((d) => (d === "asc" ? "desc" : "asc"))
+                  setDirection(direction === "asc" ? "desc" : "asc")
                 }
                 aria-label={
                   direction === "asc"

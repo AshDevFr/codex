@@ -6,7 +6,6 @@ import {
   Container,
   Group,
   Image,
-  SimpleGrid,
   Skeleton,
   Stack,
   Text,
@@ -81,12 +80,18 @@ export function ReadLists() {
       </Group>
 
       {isLoading ? (
-        <SimpleGrid cols={{ base: 2, sm: 3, md: 4, lg: 6 }} spacing="md">
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
+            gap: "var(--mantine-spacing-md)",
+          }}
+        >
           {Array.from({ length: 6 }).map((_, i) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: static skeletons
             <Skeleton key={i} height={300} radius="md" />
           ))}
-        </SimpleGrid>
+        </div>
       ) : !readLists || readLists.length === 0 ? (
         <Center mih={240}>
           <Stack align="center" gap="xs">
@@ -100,11 +105,17 @@ export function ReadLists() {
           </Stack>
         </Center>
       ) : (
-        <SimpleGrid cols={{ base: 2, sm: 3, md: 4, lg: 6 }} spacing="md">
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
+            gap: "var(--mantine-spacing-md)",
+          }}
+        >
           {readLists.map((readList) => (
             <ReadListCard key={readList.id} readList={readList} />
           ))}
-        </SimpleGrid>
+        </div>
       )}
 
       <ReadListFormModal

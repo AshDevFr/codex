@@ -34,6 +34,7 @@ import {
   useRemoveBookFromReadList,
   useReorderReadList,
 } from "@/hooks/useReadLists";
+import { useListSortPreferencesStore } from "@/store/listSortPreferencesStore";
 import type { Book } from "@/types";
 import { PERMISSIONS } from "@/types/permissions";
 
@@ -44,12 +45,21 @@ export function ReadListDetail() {
   const canWrite = hasPermission(PERMISSIONS.READLISTS_WRITE);
   const canDelete = hasPermission(PERMISSIONS.READLISTS_DELETE);
 
-  // No override sends no sort param: the server then applies the read list's
-  // default order (manual when `ordered`, release date otherwise).
-  const [sortOverride, setSortOverride] = useState<ReadListBookSort | null>(
-    null,
+  // The per-list choice persists in localStorage; "no explicit choice" sends
+  // no sort param and the server applies the read list's default (manual
+  // when `ordered`, release date otherwise).
+  const stored = useListSortPreferencesStore(
+    (state) => state.readLists[readListId ?? ""],
   );
-  const [direction, setDirection] = useState<SortDirection>("asc");
+  const setReadListSort = useListSortPreferencesStore(
+    (state) => state.setReadListSort,
+  );
+  const sortOverride = stored?.sort ?? null;
+  const direction: SortDirection = stored?.direction ?? "asc";
+  const setSortOverride = (sort: ReadListBookSort) =>
+    setReadListSort(readListId ?? "", { sort });
+  const setDirection = (direction: SortDirection) =>
+    setReadListSort(readListId ?? "", { direction });
   const { data: readList, isLoading } = useReadList(readListId);
   const { data: books } = useReadListBooks(
     readListId,
@@ -125,9 +135,9 @@ export function ReadListDetail() {
               value={sort}
               onChange={(value) => setSortOverride(value as ReadListBookSort)}
               data={[
-                { label: "Release", value: "release" },
                 { label: "Title", value: "title" },
                 { label: "Date added", value: "added" },
+                { label: "Release", value: "release" },
                 { label: "Manual", value: "manual" },
               ]}
               aria-label="Sort books"
@@ -139,7 +149,7 @@ export function ReadListDetail() {
                 variant="default"
                 size="lg"
                 onClick={() =>
-                  setDirection((d) => (d === "asc" ? "desc" : "asc"))
+                  setDirection(direction === "asc" ? "desc" : "asc")
                 }
                 aria-label={
                   direction === "asc"
