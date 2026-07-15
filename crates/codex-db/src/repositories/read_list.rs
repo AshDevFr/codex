@@ -1,9 +1,9 @@
 //! Repository for read lists and the read_list_books junction.
 //!
-//! Read lists are shared, ordered groupings of books across series. Membership
-//! order is held by the `position` column on the junction; it is honored only
-//! when the read list's `ordered` flag is set. Unordered read lists sort by
-//! release date by default (see [`ReadListRepository::get_books`]).
+//! Read lists are shared, ordered groupings of books across series. Manual
+//! order is held by the `position` column on the junction and is always
+//! maintained; the `ordered` flag only picks the default sort when a caller
+//! requests none (see [`ReadListRepository::get_books`]).
 
 #![allow(dead_code)]
 
@@ -195,9 +195,9 @@ impl ReadListRepository {
     /// Get the member books of a read list, filtered by the caller's
     /// (series-based) visibility.
     ///
-    /// Ordered read lists always return manual reading order (position, then
-    /// insertion time); `sort` is ignored for them. Unordered read lists honor
-    /// `sort`, defaulting to release date (year/month/day, unknown dates last).
+    /// An explicit `sort` always wins. When omitted, the read list's `ordered`
+    /// flag picks the default: manual reading order when set, release date
+    /// (year/month/day, unknown dates last) otherwise.
     pub async fn get_books(
         db: &DatabaseConnection,
         read_list: &read_lists::Model,
@@ -208,21 +208,24 @@ impl ReadListRepository {
             return Ok(vec![]);
         }
 
-        // Manual reading order wins on ordered read lists.
-        let sort = (!read_list.ordered).then_some(sort.unwrap_or_default());
+        let sort = sort.unwrap_or(if read_list.ordered {
+            ReadListBookSort::Manual
+        } else {
+            ReadListBookSort::Release
+        });
 
         let mut junction =
             ReadListBooks::find().filter(read_list_books::Column::ReadListId.eq(read_list.id));
         junction = match sort {
-            None => junction
+            ReadListBookSort::Manual => junction
                 .order_by_asc(read_list_books::Column::Position)
                 .order_by_asc(read_list_books::Column::CreatedAt),
-            Some(ReadListBookSort::Added) => junction
+            ReadListBookSort::Added => junction
                 .order_by_asc(read_list_books::Column::CreatedAt)
                 .order_by_asc(read_list_books::Column::Position),
             // Release/title order lives on the books side; junction order is
             // irrelevant for those.
-            Some(_) => junction,
+            _ => junction,
         };
 
         let ordered_ids: Vec<Uuid> = junction
@@ -242,14 +245,14 @@ impl ReadListRepository {
         );
 
         match sort {
-            Some(ReadListBookSort::Release) | Some(ReadListBookSort::Title) => {
+            ReadListBookSort::Release | ReadListBookSort::Title => {
                 let title_expr = Expr::expr(Func::coalesce([
                     Expr::col((book_metadata::Entity, book_metadata::Column::TitleSort)).into(),
                     Expr::col((book_metadata::Entity, book_metadata::Column::Title)).into(),
                     Expr::col((books::Entity, books::Column::FileName)).into(),
                 ]));
                 let mut query = base.join(JoinType::LeftJoin, books::Relation::BookMetadata.def());
-                if matches!(sort, Some(ReadListBookSort::Release)) {
+                if matches!(sort, ReadListBookSort::Release) {
                     query = query
                         .order_by_with_nulls(
                             book_metadata::Column::Year,
@@ -489,10 +492,12 @@ mod tests {
             .unwrap();
         assert_eq!(members[0].id, books[2].id);
 
-        // A sort param must not override manual order on an ordered read list.
-        let members = ReadListRepository::get_books(conn, &rl, None, Some(ReadListBookSort::Title))
-            .await
-            .unwrap();
+        // An explicit manual sort returns position order regardless of the
+        // flag; the flag only picks the default when no sort is requested.
+        let members =
+            ReadListRepository::get_books(conn, &rl, None, Some(ReadListBookSort::Manual))
+                .await
+                .unwrap();
         assert_eq!(members[0].id, books[2].id);
 
         // Containers-for-book lookup.

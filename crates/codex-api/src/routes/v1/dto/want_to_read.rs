@@ -109,15 +109,33 @@ pub struct BulkAddWantToReadResponse {
 #[serde(rename_all = "camelCase")]
 #[into_params(parameter_in = Query)]
 pub struct WantToReadListQuery {
-    /// Sort by add time. Accepts `added_at:asc` for oldest-first; any other
-    /// value (or omitted) yields newest-first (`added_at:desc`).
-    #[param(example = "added_at:desc")]
+    /// Sort order: `newest` (default), `oldest`, or `custom` (the user's
+    /// manual order). The legacy values `added_at:desc` / `added_at:asc` are
+    /// still accepted for `newest` / `oldest`.
+    #[param(example = "newest")]
     pub sort: Option<String>,
 }
 
 impl WantToReadListQuery {
-    /// Whether to sort ascending (oldest-first). Defaults to descending.
-    pub fn ascending(&self) -> bool {
-        matches!(self.sort.as_deref(), Some("added_at:asc") | Some("asc"))
+    /// Parsed sort order; unknown values fall back to newest-first.
+    pub fn order(&self) -> codex_models::sort::WantToReadSort {
+        // Keep the historical leniency: "asc" meant oldest-first.
+        if matches!(self.sort.as_deref(), Some("asc")) {
+            return codex_models::sort::WantToReadSort::Oldest;
+        }
+        self.sort
+            .as_deref()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or_default()
     }
+}
+
+/// Request to set the manual (`custom`) order of the queue.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ReorderWantToReadRequest {
+    /// Every entry ID of the queue in the desired order. Entries not listed
+    /// keep their old positions; unknown IDs are ignored.
+    #[schema(example = json!(["550e8400-e29b-41d4-a716-446655440001"]))]
+    pub entry_ids: Vec<Uuid>,
 }

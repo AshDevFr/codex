@@ -11,10 +11,11 @@ export type UpdateCollectionRequest =
 type CollectionListResponse = components["schemas"]["CollectionListResponse"];
 
 /**
- * Sort for an unordered collection's members (ignored by the server when the
- * collection is manually ordered). Matches the API's `sort` query param.
+ * Sort for a collection's members. An explicit sort always wins; when
+ * omitted, the collection's `ordered` flag picks the default (`manual` when
+ * set, `title` otherwise). Matches the API's `sort` query param.
  */
-export type CollectionSeriesSort = "title" | "added" | "year";
+export type CollectionSeriesSort = "title" | "added" | "year" | "manual";
 
 export const collectionsApi = {
   /** All collections (with each collection's visible series count). */
@@ -29,8 +30,8 @@ export const collectionsApi = {
   },
 
   /**
-   * Member series, filtered by the user's visibility. Ordered collections
-   * return manual order; unordered ones honor `sort` (title by default).
+   * Member series, filtered by the user's visibility. An explicit sort always
+   * wins; otherwise the `ordered` flag picks the default order.
    */
   getSeries: async (
     id: string,

@@ -6,8 +6,8 @@ export type WantToReadListResponse =
   components["schemas"]["WantToReadListResponse"];
 export type WantToReadItemType = components["schemas"]["WantToReadItemType"];
 
-/** Sort direction for the queue, by add time. */
-export type WantToReadSort = "newest" | "oldest";
+/** Queue sort: by add time, or the user's manual (`custom`) order. */
+export type WantToReadSort = "newest" | "oldest" | "custom";
 
 export type BulkAddWantToReadResponse =
   components["schemas"]["BulkAddWantToReadResponse"];
@@ -18,11 +18,16 @@ export const wantToReadApi = {
    * `newest` (default) returns most-recently-added first.
    */
   list: async (sort: WantToReadSort = "newest"): Promise<WantToReadEntry[]> => {
-    const query = sort === "oldest" ? "?sort=added_at:asc" : "";
+    const query = sort === "newest" ? "" : `?sort=${sort}`;
     const response = await api.get<WantToReadListResponse>(
       `/want-to-read${query}`,
     );
     return response.data.items;
+  },
+
+  /** Set the manual (`custom`) order of the queue by entry IDs. */
+  reorder: async (entryIds: string[]): Promise<void> => {
+    await api.put("/want-to-read/order", { entryIds });
   },
 
   /** Add a series to the queue. Idempotent. */

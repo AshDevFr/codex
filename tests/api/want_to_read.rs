@@ -379,6 +379,69 @@ async fn test_list_sort_direction() {
 }
 
 #[tokio::test]
+async fn test_custom_order_reorder_roundtrip() {
+    let (db, _t) = setup_test_db().await;
+    let library = LibraryRepository::create(&db, "Lib", "/test", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let mut series = Vec::new();
+    for name in ["S1", "S2", "S3"] {
+        series.push(
+            SeriesRepository::create(&db, library.id, name, None)
+                .await
+                .unwrap(),
+        );
+    }
+
+    let state = create_test_auth_state(db.clone()).await;
+    let (_uid, token) = user_and_token(&db, &state, "alice", false).await;
+    let app = create_test_router(state).await;
+
+    for s in &series {
+        let req = post_json_request_with_auth(
+            "/api/v1/want-to-read",
+            &serde_json::json!({ "seriesId": s.id }),
+            &token,
+        );
+        let _: (StatusCode, Option<WantToReadEntryDto>) = make_json_request(app.clone(), req).await;
+    }
+
+    // Custom order before any reorder follows insertion order.
+    let req = get_request_with_auth("/api/v1/want-to-read?sort=custom", &token);
+    let (status, list): (StatusCode, Option<WantToReadListResponse>) =
+        make_json_request(app.clone(), req).await;
+    assert_eq!(status, StatusCode::OK);
+    let entries = list.unwrap().items;
+    assert_eq!(entries[0].series_id, Some(series[0].id));
+    assert_eq!(entries[2].series_id, Some(series[2].id));
+
+    // Reverse the queue.
+    let reversed: Vec<_> = entries.iter().rev().map(|e| e.id).collect();
+    let req = put_json_request_with_auth(
+        "/api/v1/want-to-read/order",
+        &serde_json::json!({ "entryIds": reversed }),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<String>) = make_json_request(app.clone(), req).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+
+    // Custom sort reflects the new order.
+    let req = get_request_with_auth("/api/v1/want-to-read?sort=custom", &token);
+    let (_s, list): (StatusCode, Option<WantToReadListResponse>) =
+        make_json_request(app.clone(), req).await;
+    let entries = list.unwrap().items;
+    assert_eq!(entries[0].series_id, Some(series[2].id));
+    assert_eq!(entries[2].series_id, Some(series[0].id));
+
+    // Add-time sorts are unaffected by the manual order.
+    let req = get_request_with_auth("/api/v1/want-to-read?sort=oldest", &token);
+    let (_s, list): (StatusCode, Option<WantToReadListResponse>) =
+        make_json_request(app, req).await;
+    let entries = list.unwrap().items;
+    assert_eq!(entries[0].series_id, Some(series[0].id));
+}
+
+#[tokio::test]
 async fn test_requires_authentication() {
     let (db, _t) = setup_test_db().await;
     let state = create_test_auth_state(db.clone()).await;

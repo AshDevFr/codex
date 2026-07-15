@@ -3201,7 +3201,7 @@ mod tests {
             let (_lib, series) = lib_with_series(&db, 3).await;
 
             // Only series[0] is in a collection.
-            let coll = CollectionRepository::create(&db, "Coll", false)
+            let coll = CollectionRepository::create(&db, "Coll", None, false)
                 .await
                 .unwrap();
             CollectionRepository::add_series(&db, coll.id, series[0])
@@ -3238,7 +3238,7 @@ mod tests {
             let db = setup_test_db().await;
             let (_lib, series) = lib_with_series(&db, 3).await;
 
-            let coll = CollectionRepository::create(&db, "Coll", false)
+            let coll = CollectionRepository::create(&db, "Coll", None, false)
                 .await
                 .unwrap();
             CollectionRepository::add_series(&db, coll.id, series[0])

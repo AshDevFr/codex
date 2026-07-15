@@ -283,8 +283,8 @@ pub async fn delete_readlist(
 
 /// Get the books in a read list (visibility-filtered).
 ///
-/// Ordered read lists return manual reading order; unordered ones honor the
-/// `sort` query param (release date by default).
+/// An explicit `sort` always wins; otherwise the read list's `ordered` flag
+/// picks the default (manual reading order when set, release date otherwise).
 #[utoipa::path(
     get,
     path = "/api/v1/readlists/{read_list_id}/books",

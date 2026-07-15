@@ -11,8 +11,9 @@ use uuid::Uuid;
 #[serde(rename_all = "camelCase")]
 #[into_params(parameter_in = Query)]
 pub struct ReadListBooksQuery {
-    /// Sort for unordered read lists: `release` (default), `title`, or `added`.
-    /// Ignored when the read list is manually ordered.
+    /// Sort: `release`, `title`, `added`, or `manual`. When omitted, the
+    /// read list's `ordered` flag picks the default (`manual` when set,
+    /// `release` otherwise).
     #[param(inline)]
     pub sort: Option<ReadListBookSort>,
 }

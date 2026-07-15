@@ -159,7 +159,7 @@ async fn test_unordered_readlist_books_sorting() {
 }
 
 #[tokio::test]
-async fn test_ordered_readlist_ignores_sort_param() {
+async fn test_ordered_readlist_defaults_to_manual_and_honors_explicit_sort() {
     let (db, _t) = setup_test_db().await;
     let books = make_books(&db, 3).await;
     set_book_metadata(&db, books[0].id, "Banana", None, None, None).await;
@@ -186,9 +186,28 @@ async fn test_ordered_readlist_ignores_sort_param() {
     let (status, _): (StatusCode, Option<ReadListDto>) = make_json_request(app.clone(), req).await;
     assert_eq!(status, StatusCode::OK);
 
-    // Manual reading order wins even with an explicit sort param.
+    // No sort param: the ordered flag picks manual (insertion) order.
+    let req = get_request_with_auth(&format!("/api/v1/readlists/{rl_id}/books"), &token);
+    let (status, members): (StatusCode, Option<Vec<BookDto>>) =
+        make_json_request(app.clone(), req).await;
+    assert_eq!(status, StatusCode::OK);
+    let ids: Vec<_> = members.unwrap().iter().map(|b| b.id).collect();
+    assert_eq!(ids, [books[0].id, books[1].id, books[2].id]);
+
+    // An explicit sort overrides the flag's default (titles: Banana/Cherry/Apple).
     let req = get_request_with_auth(
         &format!("/api/v1/readlists/{rl_id}/books?sort=title"),
+        &token,
+    );
+    let (status, members): (StatusCode, Option<Vec<BookDto>>) =
+        make_json_request(app.clone(), req).await;
+    assert_eq!(status, StatusCode::OK);
+    let ids: Vec<_> = members.unwrap().iter().map(|b| b.id).collect();
+    assert_eq!(ids, [books[2].id, books[0].id, books[1].id]);
+
+    // And manual order can be requested explicitly.
+    let req = get_request_with_auth(
+        &format!("/api/v1/readlists/{rl_id}/books?sort=manual"),
         &token,
     );
     let (status, members): (StatusCode, Option<Vec<BookDto>>) = make_json_request(app, req).await;

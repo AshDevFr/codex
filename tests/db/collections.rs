@@ -38,6 +38,7 @@ async fn exercise_collections(db: &DatabaseConnection) {
         id: Set(Uuid::new_v4()),
         name: Set(format!("Batman-{}", Uuid::new_v4())),
         normalized_name: Set(format!("batman-{}", Uuid::new_v4())),
+        summary: Set(None),
         ordered: Set(true),
         created_at: Set(Utc::now()),
         updated_at: Set(Utc::now()),
@@ -256,6 +257,7 @@ async fn exercise_want_to_read(db: &DatabaseConnection) {
         series_id: Set(Some(series.id)),
         book_id: Set(None),
         added_at: Set(Utc::now()),
+        position: Set(0),
     }
     .insert(db)
     .await
@@ -267,6 +269,7 @@ async fn exercise_want_to_read(db: &DatabaseConnection) {
         series_id: Set(None),
         book_id: Set(Some(book.id)),
         added_at: Set(Utc::now()),
+        position: Set(0),
     }
     .insert(db)
     .await
@@ -290,6 +293,7 @@ async fn exercise_want_to_read(db: &DatabaseConnection) {
         series_id: Set(None),
         book_id: Set(None),
         added_at: Set(Utc::now()),
+        position: Set(0),
     }
     .insert(db)
     .await;
@@ -305,6 +309,7 @@ async fn exercise_want_to_read(db: &DatabaseConnection) {
         series_id: Set(Some(series.id)),
         book_id: Set(Some(book2.id)),
         added_at: Set(Utc::now()),
+        position: Set(0),
     }
     .insert(db)
     .await;
@@ -320,6 +325,7 @@ async fn exercise_want_to_read(db: &DatabaseConnection) {
         series_id: Set(Some(series.id)),
         book_id: Set(None),
         added_at: Set(Utc::now()),
+        position: Set(0),
     }
     .insert(db)
     .await;
@@ -336,6 +342,7 @@ async fn exercise_want_to_read(db: &DatabaseConnection) {
         series_id: Set(None),
         book_id: Set(Some(book2.id)),
         added_at: Set(Utc::now()),
+        position: Set(0),
     }
     .insert(db)
     .await

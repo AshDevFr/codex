@@ -179,8 +179,8 @@ impl fmt::Display for SeriesSortParam {
 
 /// Sort options for a collection's member series.
 ///
-/// Only honored when the collection is *not* manually ordered
-/// (`collections.ordered = false`); manual order always wins otherwise.
+/// An explicit sort always wins; when omitted, the collection's `ordered`
+/// flag picks the default (`Manual` when set, `Title` otherwise).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum CollectionSeriesSort {
@@ -192,6 +192,8 @@ pub enum CollectionSeriesSort {
     Added,
     /// Sort by series release year (unknown years last).
     Year,
+    /// The collection's manual order (`position` on the membership row).
+    Manual,
 }
 
 impl fmt::Display for CollectionSeriesSort {
@@ -200,6 +202,7 @@ impl fmt::Display for CollectionSeriesSort {
             CollectionSeriesSort::Title => write!(f, "title"),
             CollectionSeriesSort::Added => write!(f, "added"),
             CollectionSeriesSort::Year => write!(f, "year"),
+            CollectionSeriesSort::Manual => write!(f, "manual"),
         }
     }
 }
@@ -212,6 +215,7 @@ impl FromStr for CollectionSeriesSort {
             "title" => Ok(CollectionSeriesSort::Title),
             "added" => Ok(CollectionSeriesSort::Added),
             "year" => Ok(CollectionSeriesSort::Year),
+            "manual" | "position" => Ok(CollectionSeriesSort::Manual),
             _ => Err(format!("Invalid collection series sort: {}", s)),
         }
     }
@@ -219,8 +223,8 @@ impl FromStr for CollectionSeriesSort {
 
 /// Sort options for a read list's member books.
 ///
-/// Only honored when the read list is *not* manually ordered
-/// (`read_lists.ordered = false`); manual reading order always wins otherwise.
+/// An explicit sort always wins; when omitted, the read list's `ordered`
+/// flag picks the default (`Manual` when set, `Release` otherwise).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ReadListBookSort {
@@ -232,6 +236,8 @@ pub enum ReadListBookSort {
     Title,
     /// Sort by when the book was added to the read list.
     Added,
+    /// The read list's manual reading order (`position` on the membership row).
+    Manual,
 }
 
 impl fmt::Display for ReadListBookSort {
@@ -240,6 +246,7 @@ impl fmt::Display for ReadListBookSort {
             ReadListBookSort::Release => write!(f, "release"),
             ReadListBookSort::Title => write!(f, "title"),
             ReadListBookSort::Added => write!(f, "added"),
+            ReadListBookSort::Manual => write!(f, "manual"),
         }
     }
 }
@@ -252,7 +259,46 @@ impl FromStr for ReadListBookSort {
             "release" | "release_date" => Ok(ReadListBookSort::Release),
             "title" => Ok(ReadListBookSort::Title),
             "added" => Ok(ReadListBookSort::Added),
+            "manual" | "position" => Ok(ReadListBookSort::Manual),
             _ => Err(format!("Invalid read list book sort: {}", s)),
+        }
+    }
+}
+
+/// Sort options for a user's want-to-read queue.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum WantToReadSort {
+    /// Most recently added first.
+    #[default]
+    Newest,
+    /// Oldest additions first.
+    Oldest,
+    /// The user's manual order (`position`); rows never reordered tie-break
+    /// on `added_at`.
+    Custom,
+}
+
+impl fmt::Display for WantToReadSort {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            WantToReadSort::Newest => write!(f, "newest"),
+            WantToReadSort::Oldest => write!(f, "oldest"),
+            WantToReadSort::Custom => write!(f, "custom"),
+        }
+    }
+}
+
+impl FromStr for WantToReadSort {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            // Legacy API values kept for existing clients.
+            "newest" | "added_at:desc" => Ok(WantToReadSort::Newest),
+            "oldest" | "added_at:asc" => Ok(WantToReadSort::Oldest),
+            "custom" | "position" => Ok(WantToReadSort::Custom),
+            _ => Err(format!("Invalid want-to-read sort: {}", s)),
         }
     }
 }

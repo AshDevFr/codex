@@ -17,7 +17,10 @@ pub struct Model {
     pub name: String,
     #[sea_orm(unique)]
     pub normalized_name: String,
-    /// false => members sorted by series title; true => use `position`.
+    #[sea_orm(column_type = "Text", nullable)]
+    pub summary: Option<String>,
+    /// Default presentation order when no sort is requested: false => by
+    /// series title; true => manual `position`.
     pub ordered: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,

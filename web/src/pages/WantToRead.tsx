@@ -1,4 +1,5 @@
 import {
+  ActionIcon,
   Center,
   Container,
   Group,
@@ -6,8 +7,9 @@ import {
   Stack,
   Text,
   Title,
+  Tooltip,
 } from "@mantine/core";
-import { IconBookmark } from "@tabler/icons-react";
+import { IconBookmark, IconLock, IconLockOpen } from "@tabler/icons-react";
 import { useQueries } from "@tanstack/react-query";
 import { useState } from "react";
 import { booksApi } from "@/api/books";
@@ -16,14 +18,27 @@ import type { WantToReadSort } from "@/api/wantToRead";
 import { MediaGrid, type MediaGridItem } from "@/components/library/MediaGrid";
 import {
   useRemoveFromWantToRead,
+  useReorderWantToRead,
   useWantToReadQueue,
 } from "@/hooks/useWantToRead";
+import { useUserPreferencesStore } from "@/store/userPreferencesStore";
 import type { Book, Series } from "@/types";
 
 export function WantToRead() {
-  const [sort, setSort] = useState<WantToReadSort>("newest");
+  // The chosen sort persists as a per-user preference, so the page reopens in
+  // the same order (e.g. a manually curated queue stays on Manual).
+  const sort = useUserPreferencesStore((state) =>
+    state.getPreference("want_to_read.sort"),
+  );
+  const setPreference = useUserPreferencesStore((state) => state.setPreference);
+  const setSort = (value: WantToReadSort) =>
+    setPreference("want_to_read.sort", value);
+  // Reordering rewrites the manual queue order with no undo, so it stays
+  // locked until explicitly enabled to keep stray drags harmless.
+  const [reorderUnlocked, setReorderUnlocked] = useState(false);
   const { data: entries, isLoading } = useWantToReadQueue(sort);
   const removeMutation = useRemoveFromWantToRead();
+  const reorderMutation = useReorderWantToRead();
 
   // The queue only carries IDs, so each entry's series/book is fetched on
   // demand (React Query caches/dedupes across the app). Order follows the
@@ -43,10 +58,14 @@ export function WantToRead() {
   });
 
   const items: MediaGridItem[] = [];
+  // Grid items are keyed by target (series/book) id; map back to the queue
+  // entry ids that the remove/reorder endpoints expect.
+  const entryIdByTarget = new Map<string, string>();
   (entries ?? []).forEach((entry, i) => {
     const isSeries = entry.itemType === "series";
     const id = (isSeries ? entry.seriesId : entry.bookId) ?? "";
     if (!id) return;
+    entryIdByTarget.set(id, entry.id);
     const query = entryQueries[i];
     if (query?.isLoading) {
       items.push({ id, type: isSeries ? "series" : "book" });
@@ -55,22 +74,57 @@ export function WantToRead() {
     }
   });
 
+  const manualView = sort === "custom";
+  const handleReorder = (targetIds: string[]) => {
+    const entryIds = targetIds
+      .map((id) => entryIdByTarget.get(id))
+      .filter((id): id is string => Boolean(id));
+    reorderMutation.mutate(entryIds);
+  };
+
   return (
-    <Container size="xl" py="md">
+    <Container fluid py="md">
       <Group justify="space-between" align="center" mb="lg">
         <Group gap="xs">
           <IconBookmark size={28} />
           <Title order={2}>Want to Read</Title>
         </Group>
-        <SegmentedControl
-          value={sort}
-          onChange={(value) => setSort(value as WantToReadSort)}
-          data={[
-            { label: "Newest", value: "newest" },
-            { label: "Oldest", value: "oldest" },
-          ]}
-          aria-label="Sort order"
-        />
+        <Group gap="xs">
+          <SegmentedControl
+            value={sort}
+            onChange={(value) => setSort(value as WantToReadSort)}
+            data={[
+              { label: "Newest", value: "newest" },
+              { label: "Oldest", value: "oldest" },
+              { label: "Manual", value: "custom" },
+            ]}
+            aria-label="Sort order"
+          />
+          {manualView && items.length > 1 && (
+            <Tooltip
+              label={
+                reorderUnlocked
+                  ? "Lock reordering"
+                  : "Unlock reordering (drag & drop)"
+              }
+            >
+              <ActionIcon
+                variant={reorderUnlocked ? "filled" : "default"}
+                size="lg"
+                onClick={() => setReorderUnlocked((v) => !v)}
+                aria-label={
+                  reorderUnlocked ? "Lock reordering" : "Unlock reordering"
+                }
+              >
+                {reorderUnlocked ? (
+                  <IconLockOpen size={16} />
+                ) : (
+                  <IconLock size={16} />
+                )}
+              </ActionIcon>
+            </Tooltip>
+          )}
+        </Group>
       </Group>
 
       {isLoading ? (
@@ -95,6 +149,9 @@ export function WantToRead() {
           removingId={
             removeMutation.isPending ? removeMutation.variables?.id : undefined
           }
+          reorderable={manualView && reorderUnlocked}
+          onReorder={handleReorder}
+          reorderPending={reorderMutation.isPending}
         />
       )}
     </Container>

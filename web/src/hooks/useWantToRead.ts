@@ -1,5 +1,10 @@
 import { notifications } from "@mantine/notifications";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   type WantToReadEntry,
   type WantToReadSort,
@@ -22,6 +27,9 @@ export function useWantToReadQueue(sort: WantToReadSort = "newest") {
   return useQuery<WantToReadEntry[]>({
     queryKey: [QUEUE_KEY, sort],
     queryFn: () => wantToReadApi.list(sort),
+    // Switching sort changes the key; keep the previous list on screen so the
+    // grid re-sorts in place instead of unmounting (which reloads every cover).
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -96,6 +104,23 @@ export function useBulkAddToWantToRead() {
     onError: (error: Error) =>
       notifications.show({
         title: "Failed to add to Want to Read",
+        message: error.message || "Unknown error",
+        color: "red",
+      }),
+  });
+}
+
+/** Set the manual (`custom`) order of the queue. Takes entry IDs in order. */
+export function useReorderWantToRead() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (entryIds: string[]) => wantToReadApi.reorder(entryIds),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [QUEUE_KEY] });
+    },
+    onError: (error: Error) =>
+      notifications.show({
+        title: "Failed to reorder Want to Read",
         message: error.message || "Unknown error",
         color: "red",
       }),

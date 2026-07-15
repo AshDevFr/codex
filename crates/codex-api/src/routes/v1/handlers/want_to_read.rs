@@ -5,8 +5,9 @@
 //! their own queue.
 
 use super::super::dto::{
-    AddWantToReadRequest, BulkAddWantToReadRequest, BulkAddWantToReadResponse, WantToReadEntryDto,
-    WantToReadItemType, WantToReadListQuery, WantToReadListResponse,
+    AddWantToReadRequest, BulkAddWantToReadRequest, BulkAddWantToReadResponse,
+    ReorderWantToReadRequest, WantToReadEntryDto, WantToReadItemType, WantToReadListQuery,
+    WantToReadListResponse,
 };
 use crate::{AppState, error::ApiError, extractors::AuthContext};
 use axum::{
@@ -25,6 +26,7 @@ use uuid::Uuid;
         list_want_to_read,
         add_want_to_read,
         bulk_add_want_to_read,
+        reorder_want_to_read,
         remove_want_to_read_series,
         remove_want_to_read_book,
     ),
@@ -34,6 +36,7 @@ use uuid::Uuid;
         AddWantToReadRequest,
         BulkAddWantToReadRequest,
         BulkAddWantToReadResponse,
+        ReorderWantToReadRequest,
         WantToReadItemType,
     )),
     tags(
@@ -63,7 +66,7 @@ pub async fn list_want_to_read(
     auth: AuthContext,
     Query(query): Query<WantToReadListQuery>,
 ) -> Result<Json<WantToReadListResponse>, ApiError> {
-    let entries = WantToReadRepository::list(&state.db, auth.user_id, query.ascending())
+    let entries = WantToReadRepository::list(&state.db, auth.user_id, query.order())
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to list want-to-read queue: {e}")))?;
 
@@ -198,6 +201,36 @@ pub async fn bulk_add_want_to_read(
         added,
         already_present,
     }))
+}
+
+/// Set the manual (`custom`) order of the authenticated user's queue.
+///
+/// Positions are assigned by index of `entryIds`; entries not listed keep
+/// their old positions and unknown IDs are ignored. The order is visible via
+/// `GET /want-to-read?sort=custom`.
+#[utoipa::path(
+    put,
+    path = "/api/v1/want-to-read/order",
+    request_body = ReorderWantToReadRequest,
+    responses(
+        (status = 204, description = "Order updated"),
+        (status = 401, description = "Unauthorized"),
+    ),
+    security(
+        ("bearer_auth" = []),
+        ("api_key" = [])
+    ),
+    tag = "Want to Read"
+)]
+pub async fn reorder_want_to_read(
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+    Json(request): Json<ReorderWantToReadRequest>,
+) -> Result<StatusCode, ApiError> {
+    WantToReadRepository::reorder(&state.db, auth.user_id, &request.entry_ids)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to reorder want-to-read queue: {e}")))?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// Remove a series from the authenticated user's queue.

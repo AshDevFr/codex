@@ -16,6 +16,10 @@ export interface TypedPreferences {
   // Library preferences
   "library.show_deleted_books": boolean;
 
+  // Want to Read preferences
+  /** Default sort for the Want to Read queue page. */
+  "want_to_read.sort": "newest" | "oldest" | "custom";
+
   // Release-tracking preferences
   /**
    * Series IDs whose `release_announced` events should NOT bump the badge or
@@ -37,6 +41,7 @@ export type PreferenceKey = keyof TypedPreferences;
 export const PREFERENCE_DEFAULTS: TypedPreferences = {
   "ui.theme": "system",
   "library.show_deleted_books": false,
+  "want_to_read.sort": "newest",
   "release_tracking.muted_series_ids": [],
 };
 

@@ -1859,8 +1859,8 @@ export interface paths {
         };
         /**
          * Get the series in a collection (visibility-filtered).
-         * @description Ordered collections return manual order; unordered ones honor the `sort`
-         *     query param (title by default).
+         * @description An explicit `sort` always wins; otherwise the collection's `ordered` flag
+         *     picks the default (manual order when set, title otherwise).
          */
         get: operations["get_collection_series"];
         /** Set the manual order of a collection's series. */
@@ -2943,8 +2943,8 @@ export interface paths {
         };
         /**
          * Get the books in a read list (visibility-filtered).
-         * @description Ordered read lists return manual reading order; unordered ones honor the
-         *     `sort` query param (release date by default).
+         * @description An explicit `sort` always wins; otherwise the read list's `ordered` flag
+         *     picks the default (manual reading order when set, release date otherwise).
          */
         get: operations["get_readlist_books"];
         /** Set the manual order of a read list's books. */
@@ -10283,6 +10283,11 @@ export interface components {
              * @example 12
              */
             seriesCount: number;
+            /**
+             * @description Optional description.
+             * @example The Dark Knight's essential arcs.
+             */
+            summary?: string | null;
             /** Format: date-time */
             updatedAt: string;
         };
@@ -10438,10 +10443,12 @@ export interface components {
             /** @example Batman */
             name: string;
             /**
-             * @description Defaults to `false` (members sorted by title).
+             * @description Defaults to `false` (members default to sorting by title).
              * @example false
              */
             ordered?: boolean;
+            /** @description Optional description. */
+            summary?: string | null;
         };
         /** @description Request to create or update an external link for a series */
         CreateExternalLinkRequest: {
@@ -19896,10 +19903,14 @@ export interface components {
             /** @description Whether to lock year */
             yearLock?: boolean | null;
         };
-        /** @description Request to update a collection. Absent fields are left unchanged. */
+        /**
+         * @description Request to update a collection. Absent fields are left unchanged. To clear
+         *     the summary, send `summary: null` explicitly.
+         */
         UpdateCollectionRequest: {
             name?: string | null;
             ordered?: boolean | null;
+            summary?: string | null;
         };
         /**
          * @description Request body for updating an existing filter preset.
@@ -25227,10 +25238,11 @@ export interface operations {
         parameters: {
             query?: {
                 /**
-                 * @description Sort for unordered collections: `title` (default), `added`, or `year`.
-                 *     Ignored when the collection is manually ordered.
+                 * @description Sort: `title`, `added`, `year`, or `manual`. When omitted, the
+                 *     collection's `ordered` flag picks the default (`manual` when set,
+                 *     `title` otherwise).
                  */
-                sort?: "title" | "added" | "year";
+                sort?: "title" | "added" | "year" | "manual";
             };
             header?: never;
             path: {
@@ -27581,10 +27593,11 @@ export interface operations {
         parameters: {
             query?: {
                 /**
-                 * @description Sort for unordered read lists: `release` (default), `title`, or `added`.
-                 *     Ignored when the read list is manually ordered.
+                 * @description Sort: `release`, `title`, `added`, or `manual`. When omitted, the
+                 *     read list's `ordered` flag picks the default (`manual` when set,
+                 *     `release` otherwise).
                  */
-                sort?: "release" | "title" | "added";
+                sort?: "release" | "title" | "added" | "manual";
             };
             header?: never;
             path: {
@@ -34028,9 +34041,10 @@ export interface operations {
         parameters: {
             query?: {
                 /**
-                 * @description Sort by add time. Accepts `added_at:asc` for oldest-first; any other
-                 *     value (or omitted) yields newest-first (`added_at:desc`).
-                 * @example added_at:desc
+                 * @description Sort order: `newest` (default), `oldest`, or `custom` (the user's
+                 *     manual order). The legacy values `added_at:desc` / `added_at:asc` are
+                 *     still accepted for `newest` / `oldest`.
+                 * @example newest
                  */
                 sort?: string;
             };

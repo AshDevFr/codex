@@ -4,6 +4,7 @@ import {
   Group,
   Modal,
   Stack,
+  Textarea,
   TextInput,
 } from "@mantine/core";
 import { useEffect, useState } from "react";
@@ -30,12 +31,14 @@ export function CollectionFormModal({
 }: CollectionFormModalProps) {
   const isEdit = Boolean(collection);
   const [name, setName] = useState("");
+  const [summary, setSummary] = useState("");
   const [ordered, setOrdered] = useState(false);
 
   // Seed fields when (re)opening.
   useEffect(() => {
     if (opened) {
       setName(collection?.name ?? "");
+      setSummary(collection?.summary ?? "");
       setOrdered(collection?.ordered ?? false);
     }
   }, [opened, collection]);
@@ -47,14 +50,15 @@ export function CollectionFormModal({
   const submit = () => {
     const trimmed = name.trim();
     if (!trimmed) return;
+    const trimmedSummary = summary.trim();
     if (isEdit) {
       updateMutation.mutate(
-        { name: trimmed, ordered },
+        { name: trimmed, summary: trimmedSummary || null, ordered },
         { onSuccess: () => onClose() },
       );
     } else {
       createMutation.mutate(
-        { name: trimmed, ordered },
+        { name: trimmed, summary: trimmedSummary || undefined, ordered },
         {
           onSuccess: (created) => {
             onCreated?.(created);
@@ -81,9 +85,17 @@ export function CollectionFormModal({
           data-autofocus
           required
         />
+        <Textarea
+          label="Summary"
+          placeholder="Optional description"
+          value={summary}
+          onChange={(e) => setSummary(e.currentTarget.value)}
+          autosize
+          minRows={2}
+        />
         <Checkbox
-          label="Keep series in manual order"
-          description="When off, members are sorted by title."
+          label="Default to manual order"
+          description="When off, members default to sorting by title. Either way, every sort (including Manual) stays available on the collection page."
           checked={ordered}
           onChange={(e) => setOrdered(e.currentTarget.checked)}
         />

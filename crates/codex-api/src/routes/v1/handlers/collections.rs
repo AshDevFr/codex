@@ -153,9 +153,10 @@ pub async fn create_collection(
         )));
     }
 
-    let model = CollectionRepository::create(&state.db, name, request.ordered)
-        .await
-        .map_err(internal("Failed to create collection"))?;
+    let model =
+        CollectionRepository::create(&state.db, name, request.summary.as_deref(), request.ordered)
+            .await
+            .map_err(internal("Failed to create collection"))?;
     Ok((
         StatusCode::CREATED,
         Json(CollectionDto::from_model(model, 0)),
@@ -229,10 +230,13 @@ pub async fn update_collection(
         }
     }
 
+    // Outer None = leave unchanged; inner None = clear the summary.
+    let summary = request.summary.as_ref().map(|inner| inner.as_deref());
     let model = CollectionRepository::update(
         &state.db,
         collection_id,
         request.name.as_deref().map(str::trim),
+        summary,
         request.ordered,
     )
     .await
@@ -272,8 +276,8 @@ pub async fn delete_collection(
 
 /// Get the series in a collection (visibility-filtered).
 ///
-/// Ordered collections return manual order; unordered ones honor the `sort`
-/// query param (title by default).
+/// An explicit `sort` always wins; otherwise the collection's `ordered` flag
+/// picks the default (manual order when set, title otherwise).
 #[utoipa::path(
     get,
     path = "/api/v1/collections/{collection_id}/series",

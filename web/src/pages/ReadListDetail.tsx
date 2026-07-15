@@ -1,4 +1,5 @@
 import {
+  ActionIcon,
   Badge,
   Button,
   Center,
@@ -10,8 +11,14 @@ import {
   Stack,
   Text,
   Title,
+  Tooltip,
 } from "@mantine/core";
-import { IconEdit, IconTrash } from "@tabler/icons-react";
+import {
+  IconEdit,
+  IconLock,
+  IconLockOpen,
+  IconTrash,
+} from "@tabler/icons-react";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import type { ReadListBookSort } from "@/api/readlists";
@@ -35,14 +42,18 @@ export function ReadListDetail() {
   const canWrite = hasPermission(PERMISSIONS.READLISTS_WRITE);
   const canDelete = hasPermission(PERMISSIONS.READLISTS_DELETE);
 
-  const [sort, setSort] = useState<ReadListBookSort>("release");
+  // No override sends no sort param: the server then applies the read list's
+  // default order (manual when `ordered`, release date otherwise).
+  const [sortOverride, setSortOverride] = useState<ReadListBookSort | null>(
+    null,
+  );
   const { data: readList, isLoading } = useReadList(readListId);
-  // The server ignores sort for manually ordered read lists; skip the param
-  // there so the query cache doesn't fragment per sort.
   const { data: books } = useReadListBooks(
     readListId,
-    readList?.ordered ? undefined : sort,
+    sortOverride ?? undefined,
   );
+  const sort: ReadListBookSort =
+    sortOverride ?? (readList?.ordered ? "manual" : "release");
 
   const removeMutation = useRemoveBookFromReadList(readListId ?? "");
   const reorderMutation = useReorderReadList(readListId ?? "");
@@ -50,9 +61,14 @@ export function ReadListDetail() {
 
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  // Reordering rewrites the manual reading order with no undo, so it stays
+  // locked until explicitly enabled to keep stray drags harmless.
+  const [reorderUnlocked, setReorderUnlocked] = useState(false);
 
   const members: Book[] = books ?? [];
-  const reorderable = canWrite && Boolean(readList?.ordered);
+  // Dragging edits the shared reading order, so it is only offered in the
+  // Manual view (any read list maintains positions, ordered or not).
+  const canReorder = canWrite && sort === "manual";
   const items: MediaGridItem[] = members.map((b) => ({
     id: b.id,
     type: "book",
@@ -61,7 +77,7 @@ export function ReadListDetail() {
 
   if (isLoading) {
     return (
-      <Container size="xl" py="md">
+      <Container fluid py="md">
         <Skeleton height={32} width={240} mb="lg" />
         <MediaGrid items={[]} loading />
       </Container>
@@ -70,7 +86,7 @@ export function ReadListDetail() {
 
   if (!readList) {
     return (
-      <Container size="xl" py="md">
+      <Container fluid py="md">
         <Center mih={240}>
           <Text c="dimmed">Read list not found.</Text>
         </Center>
@@ -79,7 +95,7 @@ export function ReadListDetail() {
   }
 
   return (
-    <Container size="xl" py="md">
+    <Container fluid py="md">
       <Group justify="space-between" align="flex-start" mb="md" wrap="nowrap">
         <Stack gap={4} style={{ minWidth: 0 }}>
           <Group gap="sm" align="center">
@@ -100,17 +116,42 @@ export function ReadListDetail() {
           )}
         </Stack>
         <Group gap="xs" wrap="nowrap">
-          {!readList.ordered && members.length > 1 && (
+          {members.length > 1 && (
             <SegmentedControl
               value={sort}
-              onChange={(value) => setSort(value as ReadListBookSort)}
+              onChange={(value) => setSortOverride(value as ReadListBookSort)}
               data={[
                 { label: "Release", value: "release" },
                 { label: "Title", value: "title" },
                 { label: "Date added", value: "added" },
+                { label: "Manual", value: "manual" },
               ]}
               aria-label="Sort books"
             />
+          )}
+          {canReorder && members.length > 1 && (
+            <Tooltip
+              label={
+                reorderUnlocked
+                  ? "Lock reordering"
+                  : "Unlock reordering (drag & drop)"
+              }
+            >
+              <ActionIcon
+                variant={reorderUnlocked ? "filled" : "default"}
+                size="lg"
+                onClick={() => setReorderUnlocked((v) => !v)}
+                aria-label={
+                  reorderUnlocked ? "Lock reordering" : "Unlock reordering"
+                }
+              >
+                {reorderUnlocked ? (
+                  <IconLockOpen size={16} />
+                ) : (
+                  <IconLock size={16} />
+                )}
+              </ActionIcon>
+            </Tooltip>
           )}
           {canWrite && (
             <Button
@@ -155,7 +196,7 @@ export function ReadListDetail() {
           removingId={
             removeMutation.isPending ? removeMutation.variables : undefined
           }
-          reorderable={reorderable}
+          reorderable={canReorder && reorderUnlocked}
           onReorder={(ids) => reorderMutation.mutate(ids)}
           reorderPending={reorderMutation.isPending}
         />

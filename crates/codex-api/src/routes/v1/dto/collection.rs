@@ -11,8 +11,9 @@ use uuid::Uuid;
 #[serde(rename_all = "camelCase")]
 #[into_params(parameter_in = Query)]
 pub struct CollectionSeriesQuery {
-    /// Sort for unordered collections: `title` (default), `added`, or `year`.
-    /// Ignored when the collection is manually ordered.
+    /// Sort: `title`, `added`, `year`, or `manual`. When omitted, the
+    /// collection's `ordered` flag picks the default (`manual` when set,
+    /// `title` otherwise).
     #[param(inline)]
     pub sort: Option<CollectionSeriesSort>,
 }
@@ -28,6 +29,9 @@ pub struct CollectionDto {
     /// When true, members are kept in manual order; otherwise sorted by title.
     #[schema(example = false)]
     pub ordered: bool,
+    /// Optional description.
+    #[schema(example = "The Dark Knight's essential arcs.")]
+    pub summary: Option<String>,
     /// Number of member series visible to the requesting user.
     #[schema(example = 12)]
     pub series_count: u64,
@@ -41,6 +45,7 @@ impl CollectionDto {
             id: model.id,
             name: model.name,
             ordered: model.ordered,
+            summary: model.summary,
             series_count,
             created_at: model.created_at,
             updated_at: model.updated_at,
@@ -63,18 +68,41 @@ pub struct CollectionListResponse {
 pub struct CreateCollectionRequest {
     #[schema(example = "Batman")]
     pub name: String,
-    /// Defaults to `false` (members sorted by title).
+    /// Optional description.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
+    /// Defaults to `false` (members default to sorting by title).
     #[serde(default)]
     #[schema(example = false)]
     pub ordered: bool,
 }
 
-/// Request to update a collection. Absent fields are left unchanged.
+/// Deserialize a nullable field into a "double option" so the handler can tell
+/// "field absent" (`None` → leave unchanged) from "field present and null"
+/// (`Some(None)` → clear). Without this, serde collapses an explicit `null`
+/// into the outer `None`.
+fn double_option<'de, T, D>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
+where
+    T: serde::Deserialize<'de>,
+    D: serde::Deserializer<'de>,
+{
+    serde::Deserialize::deserialize(deserializer).map(Some)
+}
+
+/// Request to update a collection. Absent fields are left unchanged. To clear
+/// the summary, send `summary: null` explicitly.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateCollectionRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "double_option"
+    )]
+    #[schema(value_type = Option<String>)]
+    pub summary: Option<Option<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ordered: Option<bool>,
 }

@@ -19,6 +19,10 @@ pub struct Model {
     /// Set when this entry flags a book; mutually exclusive with `series_id`.
     pub book_id: Option<Uuid>,
     pub added_at: DateTime<Utc>,
+    /// Manual queue order, honored by the `custom` sort. New entries append at
+    /// max+1; rows predating the column default to 0 and tie-break on
+    /// `added_at` until the user reorders.
+    pub position: i32,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

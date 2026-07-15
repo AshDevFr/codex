@@ -10,11 +10,13 @@ use std::collections::HashSet;
 use anyhow::Result;
 use chrono::Utc;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, Set,
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, IntoActiveModel, QueryFilter,
+    QueryOrder, Set,
 };
 use uuid::Uuid;
 
 use crate::entities::{want_to_read, want_to_read::Entity as WantToRead};
+use codex_models::sort::WantToReadSort;
 
 /// Repository for want-to-read operations.
 pub struct WantToReadRepository;
@@ -41,6 +43,7 @@ impl WantToReadRepository {
             series_id: Set(Some(series_id)),
             book_id: Set(None),
             added_at: Set(Utc::now()),
+            position: Set(Self::next_position(db, user_id).await?),
         };
         Ok(model.insert(db).await?)
     }
@@ -65,6 +68,7 @@ impl WantToReadRepository {
             series_id: Set(None),
             book_id: Set(Some(book_id)),
             added_at: Set(Utc::now()),
+            position: Set(Self::next_position(db, user_id).await?),
         };
         Ok(model.insert(db).await?)
     }
@@ -84,17 +88,20 @@ impl WantToReadRepository {
         }
         let already = Self::series_ids_in_queue(db, user_id, series_ids).await?;
         let now = Utc::now();
+        let next = Self::next_position(db, user_id).await?;
         let mut seen = HashSet::new();
         let models: Vec<want_to_read::ActiveModel> = series_ids
             .iter()
             .copied()
             .filter(|id| !already.contains(id) && seen.insert(*id))
-            .map(|series_id| want_to_read::ActiveModel {
+            .enumerate()
+            .map(|(offset, series_id)| want_to_read::ActiveModel {
                 id: Set(Uuid::new_v4()),
                 user_id: Set(user_id),
                 series_id: Set(Some(series_id)),
                 book_id: Set(None),
                 added_at: Set(now),
+                position: Set(next + offset as i32),
             })
             .collect();
         let added = models.len();
@@ -118,17 +125,20 @@ impl WantToReadRepository {
         }
         let already = Self::book_ids_in_queue(db, user_id, book_ids).await?;
         let now = Utc::now();
+        let next = Self::next_position(db, user_id).await?;
         let mut seen = HashSet::new();
         let models: Vec<want_to_read::ActiveModel> = book_ids
             .iter()
             .copied()
             .filter(|id| !already.contains(id) && seen.insert(*id))
-            .map(|book_id| want_to_read::ActiveModel {
+            .enumerate()
+            .map(|(offset, book_id)| want_to_read::ActiveModel {
                 id: Set(Uuid::new_v4()),
                 user_id: Set(user_id),
                 series_id: Set(None),
                 book_id: Set(Some(book_id)),
                 added_at: Set(now),
+                position: Set(next + offset as i32),
             })
             .collect();
         let added = models.len();
@@ -166,19 +176,60 @@ impl WantToReadRepository {
         Ok(result.rows_affected > 0)
     }
 
-    /// List a user's queue ordered by when each entry was added.
+    /// List a user's queue.
+    ///
+    /// `Newest`/`Oldest` order by add time; `Custom` orders by the manual
+    /// `position` (with `added_at` as the tie-break for rows never reordered).
     pub async fn list(
         db: &DatabaseConnection,
         user_id: Uuid,
-        ascending: bool,
+        sort: WantToReadSort,
     ) -> Result<Vec<want_to_read::Model>> {
         let query = WantToRead::find().filter(want_to_read::Column::UserId.eq(user_id));
-        let query = if ascending {
-            query.order_by_asc(want_to_read::Column::AddedAt)
-        } else {
-            query.order_by_desc(want_to_read::Column::AddedAt)
+        let query = match sort {
+            WantToReadSort::Newest => query.order_by_desc(want_to_read::Column::AddedAt),
+            WantToReadSort::Oldest => query.order_by_asc(want_to_read::Column::AddedAt),
+            WantToReadSort::Custom => query
+                .order_by_asc(want_to_read::Column::Position)
+                .order_by_asc(want_to_read::Column::AddedAt)
+                .order_by_asc(want_to_read::Column::Id),
         };
         Ok(query.all(db).await?)
+    }
+
+    /// Set explicit positions for the given entries in the order provided.
+    /// Entries not in the user's queue are skipped (the user_id scope prevents
+    /// touching another user's rows).
+    pub async fn reorder(
+        db: &DatabaseConnection,
+        user_id: Uuid,
+        ordered_entry_ids: &[Uuid],
+    ) -> Result<()> {
+        for (idx, entry_id) in ordered_entry_ids.iter().enumerate() {
+            if let Some(entry) = WantToRead::find()
+                .filter(want_to_read::Column::UserId.eq(user_id))
+                .filter(want_to_read::Column::Id.eq(*entry_id))
+                .one(db)
+                .await?
+            {
+                let mut active = entry.into_active_model();
+                active.position = Set(idx as i32);
+                active.update(db).await?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Next position value for a new entry (max existing + 1, or 0 when empty).
+    async fn next_position(db: &DatabaseConnection, user_id: Uuid) -> Result<i32> {
+        let positions: Vec<i32> = WantToRead::find()
+            .filter(want_to_read::Column::UserId.eq(user_id))
+            .all(db)
+            .await?
+            .into_iter()
+            .map(|e| e.position)
+            .collect();
+        Ok(positions.into_iter().max().map(|m| m + 1).unwrap_or(0))
     }
 
     /// Whether a series is in the user's queue.
@@ -331,7 +382,7 @@ mod tests {
             .await
             .unwrap();
 
-        let queue = WantToReadRepository::list(conn, user.id, false)
+        let queue = WantToReadRepository::list(conn, user.id, WantToReadSort::Newest)
             .await
             .unwrap();
         assert_eq!(queue.len(), 2);
@@ -358,7 +409,7 @@ mod tests {
                 .unwrap()
         );
         assert_eq!(
-            WantToReadRepository::list(conn, user.id, false)
+            WantToReadRepository::list(conn, user.id, WantToReadSort::Newest)
                 .await
                 .unwrap()
                 .len(),
@@ -398,7 +449,7 @@ mod tests {
         // s1 already present, s2 deduped to one insert, s3 new -> 2 newly added.
         assert_eq!(added, 2);
         assert_eq!(
-            WantToReadRepository::list(conn, user.id, false)
+            WantToReadRepository::list(conn, user.id, WantToReadSort::Newest)
                 .await
                 .unwrap()
                 .len(),
@@ -417,6 +468,82 @@ mod tests {
                 .await
                 .unwrap(),
             0
+        );
+    }
+
+    #[tokio::test]
+    async fn test_custom_sort_and_reorder() {
+        let (db, _t) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let user = make_user(conn, "alice").await;
+        let library = LibraryRepository::create(conn, "Lib", "/lib", ScanningStrategy::Default)
+            .await
+            .unwrap();
+        let mut series_ids = Vec::new();
+        for name in ["S1", "S2", "S3"] {
+            series_ids.push(
+                SeriesRepository::create(conn, library.id, name, None)
+                    .await
+                    .unwrap()
+                    .id,
+            );
+        }
+        for id in &series_ids {
+            WantToReadRepository::add_series(conn, user.id, *id)
+                .await
+                .unwrap();
+        }
+
+        // Before any reorder, custom falls back to insertion order (positions
+        // are already max+1 per add, and added_at tie-breaks legacy zeros).
+        let queue = WantToReadRepository::list(conn, user.id, WantToReadSort::Custom)
+            .await
+            .unwrap();
+        let entry_ids: Vec<Uuid> = queue.iter().map(|e| e.id).collect();
+        assert_eq!(
+            queue
+                .iter()
+                .map(|e| e.series_id.unwrap())
+                .collect::<Vec<_>>(),
+            series_ids
+        );
+
+        // Reverse the queue and re-read in custom order.
+        let reversed: Vec<Uuid> = entry_ids.iter().rev().copied().collect();
+        WantToReadRepository::reorder(conn, user.id, &reversed)
+            .await
+            .unwrap();
+        let queue = WantToReadRepository::list(conn, user.id, WantToReadSort::Custom)
+            .await
+            .unwrap();
+        assert_eq!(queue[0].series_id.unwrap(), series_ids[2]);
+        assert_eq!(queue[2].series_id.unwrap(), series_ids[0]);
+
+        // A newly added entry appends at the end of the custom order.
+        let s4 = SeriesRepository::create(conn, library.id, "S4", None)
+            .await
+            .unwrap()
+            .id;
+        WantToReadRepository::add_series(conn, user.id, s4)
+            .await
+            .unwrap();
+        let queue = WantToReadRepository::list(conn, user.id, WantToReadSort::Custom)
+            .await
+            .unwrap();
+        assert_eq!(queue.len(), 4);
+        assert_eq!(queue[3].series_id.unwrap(), s4);
+
+        // Another user's reorder cannot touch this queue.
+        let mallory = make_user(conn, "mallory").await;
+        WantToReadRepository::reorder(conn, mallory.id, &entry_ids)
+            .await
+            .unwrap();
+        let queue_after = WantToReadRepository::list(conn, user.id, WantToReadSort::Custom)
+            .await
+            .unwrap();
+        assert_eq!(
+            queue_after.iter().map(|e| e.id).collect::<Vec<_>>(),
+            queue.iter().map(|e| e.id).collect::<Vec<_>>()
         );
     }
 

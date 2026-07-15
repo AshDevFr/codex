@@ -1,9 +1,9 @@
 //! Repository for collections and the collection_series junction.
 //!
-//! Collections are shared, named groupings of series. Membership order is held
-//! by the `position` column on the junction; it is honored only when the
-//! collection's `ordered` flag is set. Unordered collections sort by the
-//! displayed series title by default (see [`CollectionRepository::get_series`]).
+//! Collections are shared, named groupings of series. Manual order is held by
+//! the `position` column on the junction and is always maintained; the
+//! collection's `ordered` flag only picks the default sort when a caller
+//! requests none (see [`CollectionRepository::get_series`]).
 
 #![allow(dead_code)]
 
@@ -83,6 +83,7 @@ impl CollectionRepository {
     pub async fn create(
         db: &DatabaseConnection,
         name: &str,
+        summary: Option<&str>,
         ordered: bool,
     ) -> Result<collections::Model> {
         let now = Utc::now();
@@ -90,6 +91,7 @@ impl CollectionRepository {
             id: Set(Uuid::new_v4()),
             name: Set(name.trim().to_string()),
             normalized_name: Set(name.trim().to_lowercase()),
+            summary: Set(summary.map(|s| s.to_string())),
             ordered: Set(ordered),
             created_at: Set(now),
             updated_at: Set(now),
@@ -97,12 +99,14 @@ impl CollectionRepository {
         Ok(model.insert(db).await?)
     }
 
-    /// Update a collection's name and/or ordered flag. Returns `None` if the
-    /// collection does not exist.
+    /// Update a collection's name, summary, and/or ordered flag. Returns
+    /// `None` if the collection does not exist. `summary = Some(None)` clears
+    /// it.
     pub async fn update(
         db: &DatabaseConnection,
         id: Uuid,
         name: Option<&str>,
+        summary: Option<Option<&str>>,
         ordered: Option<bool>,
     ) -> Result<Option<collections::Model>> {
         let Some(existing) = Collections::find_by_id(id).one(db).await? else {
@@ -112,6 +116,9 @@ impl CollectionRepository {
         if let Some(name) = name {
             active.name = Set(name.trim().to_string());
             active.normalized_name = Set(name.trim().to_lowercase());
+        }
+        if let Some(summary) = summary {
+            active.summary = Set(summary.map(|s| s.to_string()));
         }
         if let Some(ordered) = ordered {
             active.ordered = Set(ordered);
@@ -193,10 +200,10 @@ impl CollectionRepository {
     /// Get the member series of a collection, filtered by the caller's
     /// visibility.
     ///
-    /// Ordered collections always return manual order (position, then insertion
-    /// time); `sort` is ignored for them. Unordered collections honor `sort`,
-    /// defaulting to the displayed title (metadata `title_sort`, falling back
-    /// to `title`, then the scan-derived series name).
+    /// An explicit `sort` always wins. When omitted, the collection's
+    /// `ordered` flag picks the default: manual position order when set,
+    /// displayed title (metadata `title_sort`, falling back to `title`, then
+    /// the scan-derived series name) otherwise.
     pub async fn get_series(
         db: &DatabaseConnection,
         collection: &collections::Model,
@@ -207,21 +214,24 @@ impl CollectionRepository {
             return Ok(vec![]);
         }
 
-        // Manual order wins on ordered collections.
-        let sort = (!collection.ordered).then_some(sort.unwrap_or_default());
+        let sort = sort.unwrap_or(if collection.ordered {
+            CollectionSeriesSort::Manual
+        } else {
+            CollectionSeriesSort::Title
+        });
 
         let mut junction = CollectionSeries::find()
             .filter(collection_series::Column::CollectionId.eq(collection.id));
         junction = match sort {
-            None => junction
+            CollectionSeriesSort::Manual => junction
                 .order_by_asc(collection_series::Column::Position)
                 .order_by_asc(collection_series::Column::CreatedAt),
-            Some(CollectionSeriesSort::Added) => junction
+            CollectionSeriesSort::Added => junction
                 .order_by_asc(collection_series::Column::CreatedAt)
                 .order_by_asc(collection_series::Column::Position),
             // Title/year order lives on the series side; junction order is
             // irrelevant for those.
-            Some(_) => junction,
+            _ => junction,
         };
         if let Some(vis) = vis
             && let Some(expr) = visibility_predicate(collection_series::Column::SeriesId, vis)
@@ -240,7 +250,7 @@ impl CollectionRepository {
         }
 
         match sort {
-            Some(CollectionSeriesSort::Title) | Some(CollectionSeriesSort::Year) => {
+            CollectionSeriesSort::Title | CollectionSeriesSort::Year => {
                 let title_expr = Expr::expr(Func::coalesce([
                     Expr::col((series_metadata::Entity, series_metadata::Column::TitleSort)).into(),
                     Expr::col((series_metadata::Entity, series_metadata::Column::Title)).into(),
@@ -249,7 +259,7 @@ impl CollectionRepository {
                 let mut query = Series::find()
                     .filter(series::Column::Id.is_in(ordered_ids))
                     .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def());
-                if matches!(sort, Some(CollectionSeriesSort::Year)) {
+                if matches!(sort, CollectionSeriesSort::Year) {
                     query = query.order_by_with_nulls(
                         series_metadata::Column::Year,
                         Order::Asc,
@@ -362,7 +372,7 @@ mod tests {
         let (db, _t) = create_test_db().await;
         let conn = db.sea_orm_connection();
 
-        let coll = CollectionRepository::create(conn, "  Batman  ", false)
+        let coll = CollectionRepository::create(conn, "  Batman  ", None, false)
             .await
             .unwrap();
         assert_eq!(coll.name, "Batman");
@@ -374,10 +384,11 @@ mod tests {
             .unwrap();
         assert_eq!(found.unwrap().id, coll.id);
 
-        let updated = CollectionRepository::update(conn, coll.id, Some("Dark Knight"), Some(true))
-            .await
-            .unwrap()
-            .unwrap();
+        let updated =
+            CollectionRepository::update(conn, coll.id, Some("Dark Knight"), None, Some(true))
+                .await
+                .unwrap()
+                .unwrap();
         assert_eq!(updated.name, "Dark Knight");
         assert!(updated.ordered);
 
@@ -396,7 +407,7 @@ mod tests {
         let conn = db.sea_orm_connection();
         let (_lib, series) = lib_and_series(conn).await;
 
-        let coll = CollectionRepository::create(conn, "Coll", true)
+        let coll = CollectionRepository::create(conn, "Coll", None, true)
             .await
             .unwrap();
 
@@ -430,9 +441,18 @@ mod tests {
         assert_eq!(members[0].id, series[2].id);
         assert_eq!(members[2].id, series[0].id);
 
-        // A sort param must not override manual order on an ordered collection.
+        // An explicit sort always wins, even on an ordered collection; the
+        // flag only picks the default. Series names are Alpha/Bravo/Charlie.
         let members =
             CollectionRepository::get_series(conn, &coll, None, Some(CollectionSeriesSort::Title))
+                .await
+                .unwrap();
+        assert_eq!(members[0].id, series[0].id);
+        assert_eq!(members[2].id, series[2].id);
+
+        // And manual order can be requested explicitly regardless of the flag.
+        let members =
+            CollectionRepository::get_series(conn, &coll, None, Some(CollectionSeriesSort::Manual))
                 .await
                 .unwrap();
         assert_eq!(members[0].id, series[2].id);
@@ -470,7 +490,7 @@ mod tests {
             by_name.insert(name, s);
         }
 
-        let coll = CollectionRepository::create(conn, "Coll", false)
+        let coll = CollectionRepository::create(conn, "Coll", None, false)
             .await
             .unwrap();
         for name in ["Banana", "Cherry", "Apple"] {
@@ -518,7 +538,7 @@ mod tests {
                 .unwrap();
             by_name.insert(name, s);
         }
-        let coll = CollectionRepository::create(conn, "Coll", false)
+        let coll = CollectionRepository::create(conn, "Coll", None, false)
             .await
             .unwrap();
         for name in ["Banana", "Cherry", "Apple"] {
@@ -563,10 +583,10 @@ mod tests {
         assert!(members.is_empty());
 
         // Two collections, with one series shared between them.
-        let coll_a = CollectionRepository::create(conn, "A", false)
+        let coll_a = CollectionRepository::create(conn, "A", None, false)
             .await
             .unwrap();
-        let coll_b = CollectionRepository::create(conn, "B", false)
+        let coll_b = CollectionRepository::create(conn, "B", None, false)
             .await
             .unwrap();
         CollectionRepository::add_series(conn, coll_a.id, series[0].id)
@@ -596,7 +616,7 @@ mod tests {
         let conn = db.sea_orm_connection();
         let (_lib, series) = lib_and_series(conn).await;
 
-        let coll = CollectionRepository::create(conn, "Coll", false)
+        let coll = CollectionRepository::create(conn, "Coll", None, false)
             .await
             .unwrap();
         for s in &series {

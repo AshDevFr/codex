@@ -64,7 +64,7 @@ export function Collections() {
   const [createOpen, setCreateOpen] = useState(false);
 
   return (
-    <Container size="xl" py="md">
+    <Container fluid py="md">
       <Group justify="space-between" align="center" mb="lg">
         <Group gap="xs">
           <IconLayoutGrid size={28} />

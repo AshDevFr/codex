@@ -1,4 +1,5 @@
 import {
+  ActionIcon,
   Badge,
   Button,
   Center,
@@ -10,8 +11,14 @@ import {
   Stack,
   Text,
   Title,
+  Tooltip,
 } from "@mantine/core";
-import { IconEdit, IconTrash } from "@tabler/icons-react";
+import {
+  IconEdit,
+  IconLock,
+  IconLockOpen,
+  IconTrash,
+} from "@tabler/icons-react";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import type { CollectionSeriesSort } from "@/api/collections";
@@ -35,14 +42,18 @@ export function CollectionDetail() {
   const canWrite = hasPermission(PERMISSIONS.COLLECTIONS_WRITE);
   const canDelete = hasPermission(PERMISSIONS.COLLECTIONS_DELETE);
 
-  const [sort, setSort] = useState<CollectionSeriesSort>("title");
+  // No override sends no sort param: the server then applies the collection's
+  // default order (manual when `ordered`, title otherwise).
+  const [sortOverride, setSortOverride] = useState<CollectionSeriesSort | null>(
+    null,
+  );
   const { data: collection, isLoading } = useCollection(collectionId);
-  // The server ignores sort for manually ordered collections; skip the param
-  // there so the query cache doesn't fragment per sort.
   const { data: series } = useCollectionSeries(
     collectionId,
-    collection?.ordered ? undefined : sort,
+    sortOverride ?? undefined,
   );
+  const sort: CollectionSeriesSort =
+    sortOverride ?? (collection?.ordered ? "manual" : "title");
 
   const removeMutation = useRemoveSeriesFromCollection(collectionId ?? "");
   const reorderMutation = useReorderCollection(collectionId ?? "");
@@ -50,9 +61,14 @@ export function CollectionDetail() {
 
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  // Reordering rewrites the manual order with no undo, so it stays locked
+  // until explicitly enabled to keep stray drags harmless.
+  const [reorderUnlocked, setReorderUnlocked] = useState(false);
 
   const members: Series[] = series ?? [];
-  const reorderable = canWrite && Boolean(collection?.ordered);
+  // Dragging edits the shared manual order, so it is only offered in the
+  // Manual view (any collection maintains positions, ordered or not).
+  const canReorder = canWrite && sort === "manual";
   const items: MediaGridItem[] = members.map((s) => ({
     id: s.id,
     type: "series",
@@ -61,7 +77,7 @@ export function CollectionDetail() {
 
   if (isLoading) {
     return (
-      <Container size="xl" py="md">
+      <Container fluid py="md">
         <Skeleton height={32} width={240} mb="lg" />
         <MediaGrid items={[]} loading />
       </Container>
@@ -70,7 +86,7 @@ export function CollectionDetail() {
 
   if (!collection) {
     return (
-      <Container size="xl" py="md">
+      <Container fluid py="md">
         <Center mih={240}>
           <Text c="dimmed">Collection not found.</Text>
         </Center>
@@ -79,31 +95,65 @@ export function CollectionDetail() {
   }
 
   return (
-    <Container size="xl" py="md">
-      <Group justify="space-between" align="center" mb="lg" wrap="nowrap">
-        <Group gap="sm" align="center" style={{ minWidth: 0 }}>
-          <Title order={2} style={{ wordBreak: "break-word" }}>
-            {collection.name}
-          </Title>
-          <Badge variant="light">{collection.seriesCount} series</Badge>
-          {collection.ordered && (
-            <Badge variant="outline" color="gray">
-              Ordered
-            </Badge>
+    <Container fluid py="md">
+      <Group justify="space-between" align="flex-start" mb="lg" wrap="nowrap">
+        <Stack gap={4} style={{ minWidth: 0 }}>
+          <Group gap="sm" align="center">
+            <Title order={2} style={{ wordBreak: "break-word" }}>
+              {collection.name}
+            </Title>
+            <Badge variant="light">{collection.seriesCount} series</Badge>
+            {collection.ordered && (
+              <Badge variant="outline" color="gray">
+                Ordered
+              </Badge>
+            )}
+          </Group>
+          {collection.summary && (
+            <Text c="dimmed" size="sm">
+              {collection.summary}
+            </Text>
           )}
-        </Group>
+        </Stack>
         <Group gap="xs" wrap="nowrap">
-          {!collection.ordered && members.length > 1 && (
+          {members.length > 1 && (
             <SegmentedControl
               value={sort}
-              onChange={(value) => setSort(value as CollectionSeriesSort)}
+              onChange={(value) =>
+                setSortOverride(value as CollectionSeriesSort)
+              }
               data={[
                 { label: "Title", value: "title" },
                 { label: "Date added", value: "added" },
                 { label: "Year", value: "year" },
+                { label: "Manual", value: "manual" },
               ]}
               aria-label="Sort series"
             />
+          )}
+          {canReorder && members.length > 1 && (
+            <Tooltip
+              label={
+                reorderUnlocked
+                  ? "Lock reordering"
+                  : "Unlock reordering (drag & drop)"
+              }
+            >
+              <ActionIcon
+                variant={reorderUnlocked ? "filled" : "default"}
+                size="lg"
+                onClick={() => setReorderUnlocked((v) => !v)}
+                aria-label={
+                  reorderUnlocked ? "Lock reordering" : "Unlock reordering"
+                }
+              >
+                {reorderUnlocked ? (
+                  <IconLockOpen size={16} />
+                ) : (
+                  <IconLock size={16} />
+                )}
+              </ActionIcon>
+            </Tooltip>
           )}
           {canWrite && (
             <Button
@@ -148,7 +198,7 @@ export function CollectionDetail() {
           removingId={
             removeMutation.isPending ? removeMutation.variables : undefined
           }
-          reorderable={reorderable}
+          reorderable={canReorder && reorderUnlocked}
           onReorder={(ids) => reorderMutation.mutate(ids)}
           reorderPending={reorderMutation.isPending}
         />

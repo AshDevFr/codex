@@ -985,7 +985,7 @@ async fn test_opds2_collections_feed() {
     let series = SeriesRepository::create(&db, library.id, "Batman", None)
         .await
         .unwrap();
-    let coll = CollectionRepository::create(&db, "Batman Collection", true)
+    let coll = CollectionRepository::create(&db, "Batman Collection", None, true)
         .await
         .unwrap();
     CollectionRepository::add_series(&db, coll.id, series.id)

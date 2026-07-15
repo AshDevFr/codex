@@ -7,7 +7,7 @@ use super::super::handlers;
 use crate::extractors::AppState;
 use axum::{
     Router,
-    routing::{delete, get, post},
+    routing::{delete, get, post, put},
 };
 use std::sync::Arc;
 
@@ -17,6 +17,7 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
         .route("/want-to-read", get(handlers::list_want_to_read))
         .route("/want-to-read", post(handlers::add_want_to_read))
         .route("/want-to-read/bulk", post(handlers::bulk_add_want_to_read))
+        .route("/want-to-read/order", put(handlers::reorder_want_to_read))
         .route(
             "/want-to-read/series/{series_id}",
             delete(handlers::remove_want_to_read_series),

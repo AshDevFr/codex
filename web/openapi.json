@@ -5794,21 +5794,22 @@
           "Collections"
         ],
         "summary": "Get the series in a collection (visibility-filtered).",
-        "description": "Ordered collections return manual order; unordered ones honor the `sort`\nquery param (title by default).",
+        "description": "An explicit `sort` always wins; otherwise the collection's `ordered` flag\npicks the default (manual order when set, title otherwise).",
         "operationId": "get_collection_series",
         "parameters": [
           {
             "name": "sort",
             "in": "query",
-            "description": "Sort for unordered collections: `title` (default), `added`, or `year`.\nIgnored when the collection is manually ordered.",
+            "description": "Sort: `title`, `added`, `year`, or `manual`. When omitted, the\ncollection's `ordered` flag picks the default (`manual` when set,\n`title` otherwise).",
             "required": false,
             "schema": {
               "type": "string",
-              "description": "Sort options for a collection's member series.\n\nOnly honored when the collection is *not* manually ordered\n(`collections.ordered = false`); manual order always wins otherwise.",
+              "description": "Sort options for a collection's member series.\n\nAn explicit sort always wins; when omitted, the collection's `ordered`\nflag picks the default (`Manual` when set, `Title` otherwise).",
               "enum": [
                 "title",
                 "added",
-                "year"
+                "year",
+                "manual"
               ]
             }
           },
@@ -8995,21 +8996,22 @@
           "Read Lists"
         ],
         "summary": "Get the books in a read list (visibility-filtered).",
-        "description": "Ordered read lists return manual reading order; unordered ones honor the\n`sort` query param (release date by default).",
+        "description": "An explicit `sort` always wins; otherwise the read list's `ordered` flag\npicks the default (manual reading order when set, release date otherwise).",
         "operationId": "get_readlist_books",
         "parameters": [
           {
             "name": "sort",
             "in": "query",
-            "description": "Sort for unordered read lists: `release` (default), `title`, or `added`.\nIgnored when the read list is manually ordered.",
+            "description": "Sort: `release`, `title`, `added`, or `manual`. When omitted, the\nread list's `ordered` flag picks the default (`manual` when set,\n`release` otherwise).",
             "required": false,
             "schema": {
               "type": "string",
-              "description": "Sort options for a read list's member books.\n\nOnly honored when the read list is *not* manually ordered\n(`read_lists.ordered = false`); manual reading order always wins otherwise.",
+              "description": "Sort options for a read list's member books.\n\nAn explicit sort always wins; when omitted, the read list's `ordered`\nflag picks the default (`Manual` when set, `Release` otherwise).",
               "enum": [
                 "release",
                 "title",
-                "added"
+                "added",
+                "manual"
               ]
             }
           },
@@ -17479,12 +17481,12 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Sort by add time. Accepts `added_at:asc` for oldest-first; any other\nvalue (or omitted) yields newest-first (`added_at:desc`).",
+            "description": "Sort order: `newest` (default), `oldest`, or `custom` (the user's\nmanual order). The legacy values `added_at:desc` / `added_at:asc` are\nstill accepted for `newest` / `oldest`.",
             "required": false,
             "schema": {
               "type": "string"
             },
-            "example": "added_at:desc"
+            "example": "newest"
           }
         ],
         "responses": {
@@ -25935,6 +25937,14 @@
             "example": 12,
             "minimum": 0
           },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional description.",
+            "example": "The Dark Knight's essential arcs."
+          },
           "updatedAt": {
             "type": "string",
             "format": "date-time"
@@ -26253,8 +26263,15 @@
           },
           "ordered": {
             "type": "boolean",
-            "description": "Defaults to `false` (members sorted by title).",
+            "description": "Defaults to `false` (members default to sorting by title).",
             "example": false
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional description."
           }
         }
       },
@@ -43832,7 +43849,7 @@
       },
       "UpdateCollectionRequest": {
         "type": "object",
-        "description": "Request to update a collection. Absent fields are left unchanged.",
+        "description": "Request to update a collection. Absent fields are left unchanged. To clear\nthe summary, send `summary: null` explicitly.",
         "properties": {
           "name": {
             "type": [
@@ -43843,6 +43860,12 @@
           "ordered": {
             "type": [
               "boolean",
+              "null"
+            ]
+          },
+          "summary": {
+            "type": [
+              "string",
               "null"
             ]
           }

@@ -1,5 +1,10 @@
 import { notifications } from "@mantine/notifications";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   type CreateReadListRequest,
   type ReadList,
@@ -36,6 +41,9 @@ export function useReadListBooks(
     queryKey: [READLISTS_KEY, id, "books", sort ?? "default"],
     queryFn: () => readListsApi.getBooks(id ?? "", sort),
     enabled: Boolean(id),
+    // Switching sort changes the key; keep the previous list on screen so the
+    // grid re-sorts in place instead of unmounting (which reloads every cover).
+    placeholderData: keepPreviousData,
   });
 }
 

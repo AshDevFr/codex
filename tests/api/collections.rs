@@ -342,7 +342,7 @@ async fn test_unordered_collection_series_sorting() {
 }
 
 #[tokio::test]
-async fn test_ordered_collection_ignores_sort_param() {
+async fn test_ordered_collection_defaults_to_manual_and_honors_explicit_sort() {
     let (db, _t) = setup_test_db().await;
     let series = make_series_in_library(&db, &["Bravo", "Charlie", "Alpha"]).await;
 
@@ -367,15 +367,72 @@ async fn test_ordered_collection_ignores_sort_param() {
         make_json_request(app.clone(), req).await;
     assert_eq!(status, StatusCode::OK);
 
-    // Manual order wins even with an explicit sort param.
+    // No sort param: the ordered flag picks manual (insertion) order.
+    let req = get_request_with_auth(&format!("/api/v1/collections/{coll_id}/series"), &token);
+    let (status, members): (StatusCode, Option<Vec<SeriesDto>>) =
+        make_json_request(app.clone(), req).await;
+    assert_eq!(status, StatusCode::OK);
+    let ids: Vec<_> = members.unwrap().iter().map(|s| s.id).collect();
+    assert_eq!(ids, [series[0].id, series[1].id, series[2].id]);
+
+    // An explicit sort overrides the flag's default (names: Bravo/Charlie/Alpha).
     let req = get_request_with_auth(
         &format!("/api/v1/collections/{coll_id}/series?sort=title"),
+        &token,
+    );
+    let (status, members): (StatusCode, Option<Vec<SeriesDto>>) =
+        make_json_request(app.clone(), req).await;
+    assert_eq!(status, StatusCode::OK);
+    let ids: Vec<_> = members.unwrap().iter().map(|s| s.id).collect();
+    assert_eq!(ids, [series[2].id, series[0].id, series[1].id]);
+
+    // And manual order can be requested explicitly.
+    let req = get_request_with_auth(
+        &format!("/api/v1/collections/{coll_id}/series?sort=manual"),
         &token,
     );
     let (status, members): (StatusCode, Option<Vec<SeriesDto>>) = make_json_request(app, req).await;
     assert_eq!(status, StatusCode::OK);
     let ids: Vec<_> = members.unwrap().iter().map(|s| s.id).collect();
     assert_eq!(ids, [series[0].id, series[1].id, series[2].id]);
+}
+
+#[tokio::test]
+async fn test_summary_create_update_and_clear() {
+    let (db, _t) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_uid, token) = user_and_token(&db, &state, "admin", true).await;
+    let app = create_test_router(state).await;
+
+    let req = post_json_request_with_auth(
+        "/api/v1/collections",
+        &serde_json::json!({ "name": "Batman", "summary": "Essential arcs" }),
+        &token,
+    );
+    let (status, created): (StatusCode, Option<CollectionDto>) =
+        make_json_request(app.clone(), req).await;
+    assert_eq!(status, StatusCode::CREATED);
+    let created = created.unwrap();
+    assert_eq!(created.summary.as_deref(), Some("Essential arcs"));
+
+    // Absent field leaves the summary unchanged.
+    let req = patch_json_request_with_auth(
+        &format!("/api/v1/collections/{}", created.id),
+        &serde_json::json!({ "name": "Bat" }),
+        &token,
+    );
+    let (_s, updated): (StatusCode, Option<CollectionDto>) =
+        make_json_request(app.clone(), req).await;
+    assert_eq!(updated.unwrap().summary.as_deref(), Some("Essential arcs"));
+
+    // Explicit null clears it.
+    let req = patch_json_request_with_auth(
+        &format!("/api/v1/collections/{}", created.id),
+        &serde_json::json!({ "summary": null }),
+        &token,
+    );
+    let (_s, updated): (StatusCode, Option<CollectionDto>) = make_json_request(app, req).await;
+    assert_eq!(updated.unwrap().summary, None);
 }
 
 #[tokio::test]

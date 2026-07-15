@@ -201,6 +201,8 @@ pub mod m20260615_000097_create_collections;
 pub mod m20260615_000098_create_read_lists;
 // Want to Read: per-user flat queue of series and/or books
 pub mod m20260615_000099_create_want_to_read;
+pub mod m20260714_000100_add_want_to_read_position;
+pub mod m20260714_000101_add_collection_summary;
 
 pub struct Migrator;
 
@@ -374,6 +376,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260615_000098_create_read_lists::Migration),
             // Want to Read: per-user flat queue of series and/or books
             Box::new(m20260615_000099_create_want_to_read::Migration),
+            Box::new(m20260714_000100_add_want_to_read_position::Migration),
+            Box::new(m20260714_000101_add_collection_summary::Migration),
         ]
     }
 }

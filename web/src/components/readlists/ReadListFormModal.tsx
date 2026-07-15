@@ -90,8 +90,8 @@ export function ReadListFormModal({
           minRows={2}
         />
         <Checkbox
-          label="Keep books in manual reading order"
-          description="When off, members are sorted by release date."
+          label="Default to manual reading order"
+          description="When off, members default to sorting by release date. Either way, every sort (including Manual) stays available on the read list page."
           checked={ordered}
           onChange={(e) => setOrdered(e.currentTarget.checked)}
         />
