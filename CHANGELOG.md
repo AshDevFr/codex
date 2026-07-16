@@ -2,6 +2,16 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.41.1] - 2026-07-16
+
+### 🚀 Features
+
+- *(export)* Add collection and read-list membership fields to data exports
+
+### 🐛 Bug Fixes
+
+- *(web)* Show all catalog fields in the export modal field groups
+
 ## [1.41.0] - 2026-07-15
 
 ### 🚀 Features
