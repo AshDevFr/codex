@@ -343,6 +343,50 @@ impl CollectionRepository {
             .await?)
     }
 
+    /// Get the collections containing each of the given series, name-sorted.
+    /// Series with no memberships are absent from the returned map.
+    pub async fn get_collections_for_series_ids(
+        db: &DatabaseConnection,
+        series_ids: &[Uuid],
+    ) -> Result<HashMap<Uuid, Vec<collections::Model>>> {
+        if series_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let links: Vec<collection_series::Model> = CollectionSeries::find()
+            .filter(collection_series::Column::SeriesId.is_in(series_ids.to_vec()))
+            .all(db)
+            .await?;
+        if links.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let collection_ids: Vec<Uuid> = links
+            .iter()
+            .map(|l| l.collection_id)
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
+            .collect();
+        let collections_by_id: HashMap<Uuid, collections::Model> = Collections::find()
+            .filter(collections::Column::Id.is_in(collection_ids))
+            .all(db)
+            .await?
+            .into_iter()
+            .map(|c| (c.id, c))
+            .collect();
+
+        let mut map: HashMap<Uuid, Vec<collections::Model>> = HashMap::new();
+        for link in links {
+            if let Some(coll) = collections_by_id.get(&link.collection_id) {
+                map.entry(link.series_id).or_default().push(coll.clone());
+            }
+        }
+        for members in map.values_mut() {
+            members.sort_by(|a, b| a.name.cmp(&b.name));
+        }
+        Ok(map)
+    }
+
     /// Next position value for a new member (max existing + 1, or 0 when empty).
     async fn next_position(db: &DatabaseConnection, collection_id: Uuid) -> Result<i32> {
         let positions: Vec<i32> = CollectionSeries::find()
@@ -731,5 +775,49 @@ mod tests {
             .unwrap();
         assert_eq!(containers.len(), 1);
         assert_eq!(containers[0].id, coll.id);
+    }
+
+    #[tokio::test]
+    async fn test_get_collections_for_series_ids_batched() {
+        let (db, _t) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let (_lib, series) = lib_and_series(conn).await;
+
+        let zeta = CollectionRepository::create(conn, "Zeta", None, false)
+            .await
+            .unwrap();
+        let alpha = CollectionRepository::create(conn, "Alpha Picks", None, false)
+            .await
+            .unwrap();
+
+        // series[0] in both, series[1] in one, series[2] in none.
+        for (coll_id, series_id) in [
+            (zeta.id, series[0].id),
+            (alpha.id, series[0].id),
+            (zeta.id, series[1].id),
+        ] {
+            CollectionRepository::add_series(conn, coll_id, series_id)
+                .await
+                .unwrap();
+        }
+
+        let ids: Vec<Uuid> = series.iter().map(|s| s.id).collect();
+        let map = CollectionRepository::get_collections_for_series_ids(conn, &ids)
+            .await
+            .unwrap();
+
+        // Memberships come back name-sorted per series.
+        let names: Vec<&str> = map[&series[0].id].iter().map(|c| c.name.as_str()).collect();
+        assert_eq!(names, vec!["Alpha Picks", "Zeta"]);
+        assert_eq!(map[&series[1].id].len(), 1);
+        assert_eq!(map[&series[1].id][0].id, zeta.id);
+        // A series with no membership is absent from the map.
+        assert!(!map.contains_key(&series[2].id));
+
+        // Empty input short-circuits to an empty map.
+        let empty = CollectionRepository::get_collections_for_series_ids(conn, &[])
+            .await
+            .unwrap();
+        assert!(empty.is_empty());
     }
 }

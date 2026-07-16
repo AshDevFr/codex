@@ -14,7 +14,8 @@ use uuid::Uuid;
 use crate::content_filter::ContentFilter;
 use codex_db::entities::{book_metadata, books, read_progress};
 use codex_db::repositories::{
-    GenreRepository, LibraryRepository, ReadProgressRepository, SeriesRepository, TagRepository,
+    GenreRepository, LibraryRepository, ReadListRepository, ReadProgressRepository,
+    SeriesRepository, TagRepository,
 };
 
 // =============================================================================
@@ -53,6 +54,7 @@ pub enum BookExportField {
     Authors,
     Genres,
     Tags,
+    ReadLists,
     // Progress (user-specific)
     Progress,
     CurrentPage,
@@ -85,6 +87,7 @@ impl BookExportField {
         BookExportField::Authors,
         BookExportField::Genres,
         BookExportField::Tags,
+        BookExportField::ReadLists,
         BookExportField::Progress,
         BookExportField::CurrentPage,
         BookExportField::Completed,
@@ -104,6 +107,7 @@ impl BookExportField {
         BookExportField::Genres,
         BookExportField::SeriesName,
         BookExportField::Number,
+        BookExportField::ReadLists,
         BookExportField::Progress,
     ];
 
@@ -131,6 +135,7 @@ impl BookExportField {
             BookExportField::Authors => "authors",
             BookExportField::Genres => "genres",
             BookExportField::Tags => "tags",
+            BookExportField::ReadLists => "read_lists",
             BookExportField::Progress => "progress",
             BookExportField::CurrentPage => "current_page",
             BookExportField::Completed => "completed",
@@ -162,6 +167,7 @@ impl BookExportField {
             "authors" => Some(BookExportField::Authors),
             "genres" => Some(BookExportField::Genres),
             "tags" => Some(BookExportField::Tags),
+            "read_lists" => Some(BookExportField::ReadLists),
             "progress" => Some(BookExportField::Progress),
             "current_page" => Some(BookExportField::CurrentPage),
             "completed" => Some(BookExportField::Completed),
@@ -195,6 +201,7 @@ impl BookExportField {
             BookExportField::Authors => "Authors",
             BookExportField::Genres => "Genres",
             BookExportField::Tags => "Tags",
+            BookExportField::ReadLists => "Read Lists",
             BookExportField::Progress => "Progress",
             BookExportField::CurrentPage => "Current Page",
             BookExportField::Completed => "Completed",
@@ -222,7 +229,10 @@ impl BookExportField {
     pub fn is_multi_value(&self) -> bool {
         matches!(
             self,
-            BookExportField::Authors | BookExportField::Genres | BookExportField::Tags
+            BookExportField::Authors
+                | BookExportField::Genres
+                | BookExportField::Tags
+                | BookExportField::ReadLists
         )
     }
 }
@@ -289,6 +299,8 @@ pub struct BookExportRow {
     pub genres: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tags: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub read_lists: Option<String>,
     // Progress
     #[serde(skip_serializing_if = "Option::is_none")]
     pub progress: Option<f64>,
@@ -330,6 +342,7 @@ impl BookExportRow {
             authors: None,
             genres: None,
             tags: None,
+            read_lists: None,
             progress: None,
             current_page: None,
             completed: None,
@@ -369,6 +382,7 @@ impl BookExportRow {
             BookExportField::Authors => self.authors.clone().unwrap_or_default(),
             BookExportField::Genres => self.genres.clone().unwrap_or_default(),
             BookExportField::Tags => self.tags.clone().unwrap_or_default(),
+            BookExportField::ReadLists => self.read_lists.clone().unwrap_or_default(),
             BookExportField::Progress => {
                 self.progress.map(|p| format!("{p:.1}")).unwrap_or_default()
             }
@@ -510,6 +524,13 @@ pub async fn collect_batched(
             HashMap::new()
         };
 
+        // Load read-list memberships if needed
+        let read_lists_map = if has(BookExportField::ReadLists) {
+            ReadListRepository::get_read_lists_for_book_ids(db, chunk).await?
+        } else {
+            HashMap::new()
+        };
+
         // Load reading progress if needed
         let needs_progress = has(BookExportField::Progress)
             || has(BookExportField::CurrentPage)
@@ -613,6 +634,16 @@ pub async fn collect_batched(
                 let names: Vec<&str> = tags.iter().map(|t| t.name.as_str()).collect();
                 if !names.is_empty() {
                     row.tags = Some(names.join("; "));
+                }
+            }
+
+            // Read lists
+            if has(BookExportField::ReadLists)
+                && let Some(lists) = read_lists_map.get(&bid)
+            {
+                let names: Vec<&str> = lists.iter().map(|l| l.name.as_str()).collect();
+                if !names.is_empty() {
+                    row.read_lists = Some(names.join("; "));
                 }
             }
 
@@ -746,6 +777,7 @@ mod tests {
         assert!(BookExportField::Authors.is_multi_value());
         assert!(BookExportField::Genres.is_multi_value());
         assert!(BookExportField::Tags.is_multi_value());
+        assert!(BookExportField::ReadLists.is_multi_value());
         assert!(!BookExportField::Title.is_multi_value());
     }
 
@@ -760,5 +792,11 @@ mod tests {
         assert_eq!(BookExportField::BookName.label(), "Book Name");
         assert_eq!(BookExportField::Progress.label(), "Progress");
         assert_eq!(BookExportField::CompletedAt.label(), "Completed At");
+        assert_eq!(BookExportField::ReadLists.label(), "Read Lists");
+    }
+
+    #[test]
+    fn test_read_lists_in_llm_select() {
+        assert!(BookExportField::LLM_SELECT.contains(&BookExportField::ReadLists));
     }
 }

@@ -14,8 +14,8 @@ use uuid::Uuid;
 use crate::content_filter::ContentFilter;
 use codex_db::entities::series;
 use codex_db::repositories::{
-    AlternateTitleRepository, BookRepository, ExternalRatingRepository, GenreRepository,
-    LibraryRepository, SeriesMetadataRepository, SeriesRepository, TagRepository,
+    AlternateTitleRepository, BookRepository, CollectionRepository, ExternalRatingRepository,
+    GenreRepository, LibraryRepository, SeriesMetadataRepository, SeriesRepository, TagRepository,
     UserSeriesRatingRepository,
 };
 
@@ -48,6 +48,7 @@ pub enum ExportField {
     Genres,
     Tags,
     AlternateTitles,
+    Collections,
     // Counts
     ExpectedBookCount,
     ExpectedChapterCount,
@@ -82,6 +83,7 @@ impl ExportField {
         ExportField::Genres,
         ExportField::Tags,
         ExportField::AlternateTitles,
+        ExportField::Collections,
         ExportField::ExpectedBookCount,
         ExportField::ExpectedChapterCount,
         ExportField::ActualBookCount,
@@ -105,6 +107,7 @@ impl ExportField {
         ExportField::CreatedAt,
         ExportField::Authors,
         ExportField::Genres,
+        ExportField::Collections,
         ExportField::ActualBookCount,
         ExportField::UnreadBookCount,
         ExportField::CommunityAvgRating,
@@ -133,6 +136,7 @@ impl ExportField {
             ExportField::Genres => "genres",
             ExportField::Tags => "tags",
             ExportField::AlternateTitles => "alternate_titles",
+            ExportField::Collections => "collections",
             ExportField::ExpectedBookCount => "expected_book_count",
             ExportField::ExpectedChapterCount => "expected_chapter_count",
             ExportField::ActualBookCount => "actual_book_count",
@@ -164,6 +168,7 @@ impl ExportField {
             "genres" => Some(ExportField::Genres),
             "tags" => Some(ExportField::Tags),
             "alternate_titles" => Some(ExportField::AlternateTitles),
+            "collections" => Some(ExportField::Collections),
             "expected_book_count" => Some(ExportField::ExpectedBookCount),
             "expected_chapter_count" => Some(ExportField::ExpectedChapterCount),
             "actual_book_count" => Some(ExportField::ActualBookCount),
@@ -197,6 +202,7 @@ impl ExportField {
             ExportField::Genres => "Genres",
             ExportField::Tags => "Tags",
             ExportField::AlternateTitles => "Alternate Titles",
+            ExportField::Collections => "Collections",
             ExportField::ExpectedBookCount => "Expected Book Count",
             ExportField::ExpectedChapterCount => "Expected Chapter Count",
             ExportField::ActualBookCount => "Actual Book Count",
@@ -233,6 +239,7 @@ impl ExportField {
                 | ExportField::Genres
                 | ExportField::Tags
                 | ExportField::AlternateTitles
+                | ExportField::Collections
                 | ExportField::ExternalRatings
         )
     }
@@ -288,6 +295,8 @@ pub struct SeriesExportRow {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub alternate_titles: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub collections: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub expected_book_count: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub expected_chapter_count: Option<f32>,
@@ -327,6 +336,7 @@ impl SeriesExportRow {
             genres: None,
             tags: None,
             alternate_titles: None,
+            collections: None,
             expected_book_count: None,
             expected_chapter_count: None,
             actual_book_count: None,
@@ -360,6 +370,7 @@ impl SeriesExportRow {
             genres: None,
             tags: None,
             alternate_titles: None,
+            collections: None,
             expected_book_count: None,
             expected_chapter_count: None,
             actual_book_count: None,
@@ -393,6 +404,7 @@ impl SeriesExportRow {
             ExportField::Genres => self.genres.clone().unwrap_or_default(),
             ExportField::Tags => self.tags.clone().unwrap_or_default(),
             ExportField::AlternateTitles => self.alternate_titles.clone().unwrap_or_default(),
+            ExportField::Collections => self.collections.clone().unwrap_or_default(),
             ExportField::ExpectedBookCount => self
                 .expected_book_count
                 .map(|c| c.to_string())
@@ -555,6 +567,12 @@ pub async fn collect_batched(
             HashMap::new()
         };
 
+        let collections_map = if has(ExportField::Collections) {
+            CollectionRepository::get_collections_for_series_ids(db, chunk).await?
+        } else {
+            HashMap::new()
+        };
+
         let needs_book_counts = has(ExportField::ActualBookCount) || has(ExportField::Progress);
         let book_counts = if needs_book_counts {
             SeriesRepository::get_book_counts_for_series_ids(db, chunk).await?
@@ -681,6 +699,14 @@ pub async fn collect_batched(
                     .collect();
                 if !titles.is_empty() {
                     row.alternate_titles = Some(titles.join("; "));
+                }
+            }
+            if has(ExportField::Collections)
+                && let Some(colls) = collections_map.get(&sid)
+            {
+                let names: Vec<&str> = colls.iter().map(|c| c.name.as_str()).collect();
+                if !names.is_empty() {
+                    row.collections = Some(names.join("; "));
                 }
             }
 
@@ -835,6 +861,7 @@ mod tests {
         assert!(ExportField::Tags.is_multi_value());
         assert!(ExportField::AlternateTitles.is_multi_value());
         assert!(ExportField::ExternalRatings.is_multi_value());
+        assert!(ExportField::Collections.is_multi_value());
         assert!(!ExportField::Title.is_multi_value());
         assert!(!ExportField::UserRating.is_multi_value());
         assert!(!ExportField::Progress.is_multi_value());
@@ -866,6 +893,24 @@ mod tests {
             ExportField::CommunityAvgRating.label(),
             "Community Avg Rating"
         );
+        assert_eq!(ExportField::Collections.label(), "Collections");
+    }
+
+    #[test]
+    fn test_collections_field_value() {
+        let mut row = SeriesExportRow::from_series_raw("Test", None, None);
+        assert_eq!(row.get_field_value(&ExportField::Collections), "");
+
+        row.collections = Some("Alpha Picks; Zeta".to_string());
+        assert_eq!(
+            row.get_field_value(&ExportField::Collections),
+            "Alpha Picks; Zeta"
+        );
+    }
+
+    #[test]
+    fn test_collections_in_llm_select() {
+        assert!(ExportField::LLM_SELECT.contains(&ExportField::Collections));
     }
 
     #[test]

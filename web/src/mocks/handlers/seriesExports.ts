@@ -192,6 +192,13 @@ const mockSeriesFields: ExportFieldDto[] = [
     isAnchor: false,
   },
   {
+    key: "collections",
+    label: "Collections",
+    multiValue: true,
+    userSpecific: false,
+    isAnchor: false,
+  },
+  {
     key: "expected_book_count",
     label: "Expected Book Count",
     multiValue: false,
@@ -405,6 +412,13 @@ const mockBookFields: ExportFieldDto[] = [
     isAnchor: false,
   },
   {
+    key: "read_lists",
+    label: "Read Lists",
+    multiValue: true,
+    userSpecific: false,
+    isAnchor: false,
+  },
+  {
     key: "progress",
     label: "Progress",
     multiValue: false,
@@ -457,6 +471,7 @@ export const seriesExportsHandlers = [
           "created_at",
           "authors",
           "genres",
+          "collections",
           "actual_book_count",
           "unread_book_count",
           "community_avg_rating",
@@ -474,6 +489,7 @@ export const seriesExportsHandlers = [
           "genres",
           "series_name",
           "number",
+          "read_lists",
           "progress",
         ],
       },

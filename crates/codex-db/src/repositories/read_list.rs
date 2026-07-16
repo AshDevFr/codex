@@ -348,6 +348,50 @@ impl ReadListRepository {
             .await?)
     }
 
+    /// Get the read lists containing each of the given books, name-sorted.
+    /// Books with no memberships are absent from the returned map.
+    pub async fn get_read_lists_for_book_ids(
+        db: &DatabaseConnection,
+        book_ids: &[Uuid],
+    ) -> Result<HashMap<Uuid, Vec<read_lists::Model>>> {
+        if book_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let links: Vec<read_list_books::Model> = ReadListBooks::find()
+            .filter(read_list_books::Column::BookId.is_in(book_ids.to_vec()))
+            .all(db)
+            .await?;
+        if links.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let read_list_ids: Vec<Uuid> = links
+            .iter()
+            .map(|l| l.read_list_id)
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
+            .collect();
+        let lists_by_id: HashMap<Uuid, read_lists::Model> = ReadLists::find()
+            .filter(read_lists::Column::Id.is_in(read_list_ids))
+            .all(db)
+            .await?
+            .into_iter()
+            .map(|l| (l.id, l))
+            .collect();
+
+        let mut map: HashMap<Uuid, Vec<read_lists::Model>> = HashMap::new();
+        for link in links {
+            if let Some(list) = lists_by_id.get(&link.read_list_id) {
+                map.entry(link.book_id).or_default().push(list.clone());
+            }
+        }
+        for members in map.values_mut() {
+            members.sort_by(|a, b| a.name.cmp(&b.name));
+        }
+        Ok(map)
+    }
+
     /// Next position value for a new member (max existing + 1, or 0 when empty).
     async fn next_position(db: &DatabaseConnection, read_list_id: Uuid) -> Result<i32> {
         let positions: Vec<i32> = ReadListBooks::find()
@@ -645,5 +689,49 @@ mod tests {
                 .unwrap(),
             3
         );
+    }
+
+    #[tokio::test]
+    async fn test_get_read_lists_for_book_ids_batched() {
+        let (db, _t) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let (_series, books) = setup(conn).await;
+
+        let omega = ReadListRepository::create(conn, "Omega Run", None, true)
+            .await
+            .unwrap();
+        let arc = ReadListRepository::create(conn, "Arc One", None, true)
+            .await
+            .unwrap();
+
+        // books[0] in both, books[1] in one, books[2] in none.
+        for (list_id, book_id) in [
+            (omega.id, books[0].id),
+            (arc.id, books[0].id),
+            (omega.id, books[1].id),
+        ] {
+            ReadListRepository::add_book(conn, list_id, book_id)
+                .await
+                .unwrap();
+        }
+
+        let ids: Vec<Uuid> = books.iter().map(|b| b.id).collect();
+        let map = ReadListRepository::get_read_lists_for_book_ids(conn, &ids)
+            .await
+            .unwrap();
+
+        // Memberships come back name-sorted per book.
+        let names: Vec<&str> = map[&books[0].id].iter().map(|l| l.name.as_str()).collect();
+        assert_eq!(names, vec!["Arc One", "Omega Run"]);
+        assert_eq!(map[&books[1].id].len(), 1);
+        assert_eq!(map[&books[1].id][0].id, omega.id);
+        // A book with no membership is absent from the map.
+        assert!(!map.contains_key(&books[2].id));
+
+        // Empty input short-circuits to an empty map.
+        let empty = ReadListRepository::get_read_lists_for_book_ids(conn, &[])
+            .await
+            .unwrap();
+        assert!(empty.is_empty());
     }
 }

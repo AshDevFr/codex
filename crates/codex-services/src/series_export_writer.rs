@@ -412,6 +412,7 @@ mod tests {
             genres: Some("action; drama".to_string()),
             tags: Some("tag1; tag2".to_string()),
             alternate_titles: None,
+            collections: Some("Best Picks; Zeta".to_string()),
             expected_book_count: Some(20),
             expected_chapter_count: None,
             actual_book_count: Some(15),
