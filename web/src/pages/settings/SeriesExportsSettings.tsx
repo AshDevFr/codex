@@ -107,12 +107,14 @@ const SERIES_FIELD_GROUPS: FieldGroup[] = [
       "genres",
       "tags",
       "alternate_titles",
+      "collections",
     ],
   },
   {
     label: "Counts & Progress",
     keys: [
       "expected_book_count",
+      "expected_chapter_count",
       "actual_book_count",
       "unread_book_count",
       "progress",
@@ -158,6 +160,7 @@ const BOOK_FIELD_GROUPS: FieldGroup[] = [
       "authors",
       "genres",
       "tags",
+      "read_lists",
     ],
   },
   {
@@ -411,6 +414,17 @@ function FieldSection({
   onClear: () => void;
   error?: string;
 }) {
+  // Catalog fields not covered by any hardcoded group still need a home:
+  // "Select all" and the LLM preset operate on the full catalog, so a field
+  // without a checkbox could be selected invisibly.
+  const coveredKeys = new Set(fieldGroups.flatMap((g) => g.keys));
+  const uncoveredKeys = [...fieldMap.values()]
+    .filter((f) => !f.isAnchor && !coveredKeys.has(f.key))
+    .map((f) => f.key);
+  const groups = uncoveredKeys.length
+    ? [...fieldGroups, { label: "Other", keys: uncoveredKeys }]
+    : fieldGroups;
+
   return (
     <div>
       <Group justify="space-between" mb="xs">
@@ -444,7 +458,7 @@ function FieldSection({
       )}
 
       <Stack gap="sm">
-        {fieldGroups.map((group) => (
+        {groups.map((group) => (
           <Card key={group.label} withBorder padding="xs">
             <Text size="xs" fw={600} c="dimmed" mb="xs">
               {group.label}
@@ -459,19 +473,19 @@ function FieldSection({
               }}
             >
               <Group gap="sm">
-                {group.keys
-                  .filter((k) => fieldMap.has(k))
-                  .map((k) => {
-                    const field = fieldMap.get(k)!;
-                    return (
-                      <Checkbox
-                        key={k}
-                        value={k}
-                        label={field.label}
-                        size="xs"
-                      />
-                    );
-                  })}
+                {group.keys.flatMap((k) => {
+                  const field = fieldMap.get(k);
+                  return field
+                    ? [
+                        <Checkbox
+                          key={k}
+                          value={k}
+                          label={field.label}
+                          size="xs"
+                        />,
+                      ]
+                    : [];
+                })}
               </Group>
             </Checkbox.Group>
           </Card>
