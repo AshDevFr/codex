@@ -25,11 +25,14 @@ export type {
   PluginManifest,
   ReleaseSourceCapability,
   ReleaseSourceKind,
+  SeriesLinkTemplate,
+  WebLinksCapability,
 } from "./manifest.js";
 export {
   hasBookMetadataProvider,
   hasReleaseSource,
   hasSeriesMetadataProvider,
+  hasWebLinks,
 } from "./manifest.js";
 
 // From protocol - metadata protocol types (these match Rust exactly)

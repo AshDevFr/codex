@@ -147,6 +147,44 @@ pub struct PluginCapabilities {
     /// (aliases, external IDs) so the host can scope its responses.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub release_source: Option<ReleaseSourceCapability>,
+    /// Fronts a website users can jump to from a Codex series page.
+    /// A pure manifest declaration: the host resolves `{config.<field>}`
+    /// placeholders from the plugin's admin config and exposes the templates
+    /// to the frontend; the plugin runtime is never involved.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub web_links: Option<WebLinksCapability>,
+}
+
+/// Web-links capability declaration.
+///
+/// Templates carry two placeholder kinds: `{config.<field>}`, resolved
+/// server-side from the plugin's stored admin config, and runtime
+/// placeholders (`{title}` on the search template, `{externalId}` on series
+/// links), resolved client-side per series with URL encoding.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WebLinksCapability {
+    /// Search page template, e.g. `{config.baseUrl}/search?q={title}`.
+    pub search_url_template: String,
+    /// Ordered direct-link templates; the first entry whose `source` the
+    /// series has an external ID for wins. When none match, the frontend
+    /// falls back to `search_url_template`.
+    #[serde(default)]
+    pub series_links: Vec<SeriesLinkTemplate>,
+}
+
+/// A per-source direct-link template for the web-links capability.
+///
+/// `source` uses the *bare Codex* source name (no `api:`/`plugin:` prefix);
+/// the template itself carries the target site's own provider notation as a
+/// literal, so the host never needs to translate names.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SeriesLinkTemplate {
+    /// Bare Codex external-ID source name, e.g. `mangabaka`, `myanimelist`.
+    pub source: String,
+    /// Full URL template for the series page on the target site.
+    pub url_template: String,
 }
 
 /// Release-source capability declaration.
@@ -476,6 +514,93 @@ mod tests {
         }))
         .unwrap();
         assert!(caps.wants_detailed_progress);
+    }
+
+    #[test]
+    fn test_capabilities_web_links_defaults_none() {
+        let caps: PluginCapabilities = serde_json::from_value(serde_json::json!({
+            "userReadSync": true
+        }))
+        .unwrap();
+        assert!(caps.web_links.is_none());
+    }
+
+    #[test]
+    fn test_capabilities_web_links_parses_full_declaration() {
+        let caps: PluginCapabilities = serde_json::from_value(serde_json::json!({
+            "webLinks": {
+                "searchUrlTemplate": "{config.baseUrl}/search?q={title}",
+                "seriesLinks": [
+                    {
+                        "source": "mangabaka",
+                        "urlTemplate": "{config.baseUrl}/series/lookup?source=mangabaka&id={externalId}"
+                    },
+                    {
+                        "source": "myanimelist",
+                        "urlTemplate": "{config.baseUrl}/series/lookup?source=mal&id={externalId}"
+                    }
+                ]
+            }
+        }))
+        .unwrap();
+        let web_links = caps.web_links.expect("webLinks should parse");
+        assert_eq!(
+            web_links.search_url_template,
+            "{config.baseUrl}/search?q={title}"
+        );
+        // Order is significant: it doubles as match priority.
+        assert_eq!(web_links.series_links.len(), 2);
+        assert_eq!(web_links.series_links[0].source, "mangabaka");
+        assert_eq!(web_links.series_links[1].source, "myanimelist");
+        assert_eq!(
+            web_links.series_links[1].url_template,
+            "{config.baseUrl}/series/lookup?source=mal&id={externalId}"
+        );
+    }
+
+    #[test]
+    fn test_capabilities_web_links_series_links_optional() {
+        let caps: PluginCapabilities = serde_json::from_value(serde_json::json!({
+            "webLinks": { "searchUrlTemplate": "https://nyaa.si/?q={title}" }
+        }))
+        .unwrap();
+        let web_links = caps.web_links.expect("webLinks should parse");
+        assert!(web_links.series_links.is_empty());
+    }
+
+    #[test]
+    fn test_capabilities_web_links_round_trips_camel_case() {
+        let caps = PluginCapabilities {
+            web_links: Some(WebLinksCapability {
+                search_url_template: "{config.baseUrl}/search?q={title}".to_string(),
+                series_links: vec![SeriesLinkTemplate {
+                    source: "anilist".to_string(),
+                    url_template: "{config.baseUrl}/series/lookup?source=anilist&id={externalId}"
+                        .to_string(),
+                }],
+            }),
+            ..PluginCapabilities::default()
+        };
+        let value = serde_json::to_value(&caps).unwrap();
+        assert_eq!(
+            value["webLinks"]["searchUrlTemplate"],
+            "{config.baseUrl}/search?q={title}"
+        );
+        assert_eq!(value["webLinks"]["seriesLinks"][0]["source"], "anilist");
+        assert_eq!(
+            value["webLinks"]["seriesLinks"][0]["urlTemplate"],
+            "{config.baseUrl}/series/lookup?source=anilist&id={externalId}"
+        );
+
+        let back: PluginCapabilities = serde_json::from_value(value).unwrap();
+        assert_eq!(back.web_links.unwrap().series_links.len(), 1);
+    }
+
+    #[test]
+    fn test_capabilities_without_web_links_skips_field_on_serialize() {
+        let caps = PluginCapabilities::default();
+        let value = serde_json::to_value(&caps).unwrap();
+        assert!(value.get("webLinks").is_none());
     }
 
     fn manifest_from(extra: serde_json::Value) -> PluginManifest {

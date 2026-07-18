@@ -66,6 +66,49 @@ export interface ReleaseSourceCapability {
 }
 
 /**
+ * A per-source direct-link template for the web-links capability.
+ *
+ * Entries are keyed by *Codex* source names (bare, no `api:`/`plugin:`
+ * prefix); the template itself carries the target site's own notation as a
+ * literal, so the host never needs to know how the target names a provider.
+ * E.g. Codex `myanimelist` may map to a template containing `source=mal`.
+ */
+export interface SeriesLinkTemplate {
+  /** Bare Codex external-ID source name, e.g. "mangabaka", "myanimelist". */
+  source: string;
+  /**
+   * Full URL template for the series page on the target site.
+   * Placeholders: `{config.<field>}` (resolved server-side from the plugin's
+   * admin config) and `{externalId}` (resolved client-side per series).
+   */
+  urlTemplate: string;
+}
+
+/**
+ * Web-links capability declaration.
+ *
+ * A pure manifest declaration (no runtime plugin involvement): the host
+ * resolves `{config.<field>}` placeholders from the plugin's stored admin
+ * config and exposes the resulting templates to the frontend, which renders
+ * an "open on <site>" button per plugin on the series detail page. The
+ * frontend fills the runtime placeholders (`{title}`, `{externalId}`),
+ * URL-encoding the substituted values.
+ *
+ * `seriesLinks` is ordered: the first entry whose source the series has an
+ * external ID for wins; when none match, the button falls back to
+ * `searchUrlTemplate` with the series title.
+ */
+export interface WebLinksCapability {
+  /**
+   * Search page template. Placeholders: `{config.<field>}` and `{title}`.
+   * @example "{config.baseUrl}/search?q={title}"
+   */
+  searchUrlTemplate: string;
+  /** Ordered direct-link templates; first matching source wins. */
+  seriesLinks?: SeriesLinkTemplate[];
+}
+
+/**
  * Plugin capabilities
  */
 export interface PluginCapabilities {
@@ -113,6 +156,11 @@ export interface PluginCapabilities {
    * chapter/volume releases for tracked series via `releases/poll`.
    */
   releaseSource?: ReleaseSourceCapability;
+  /**
+   * Web-links capability. Set when this plugin fronts a website users can
+   * jump to from a Codex series page (search page and/or direct series links).
+   */
+  webLinks?: WebLinksCapability;
 }
 
 /**
@@ -291,4 +339,13 @@ export function hasReleaseSource(manifest: PluginManifest): manifest is PluginMa
     manifest.capabilities.releaseSource !== undefined &&
     manifest.capabilities.releaseSource !== null
   );
+}
+
+/**
+ * Type guard to check if manifest declares the web-links capability.
+ */
+export function hasWebLinks(manifest: PluginManifest): manifest is PluginManifest & {
+  capabilities: { webLinks: WebLinksCapability };
+} {
+  return manifest.capabilities.webLinks !== undefined && manifest.capabilities.webLinks !== null;
 }
