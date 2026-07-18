@@ -110,7 +110,7 @@ export function CollectionDetail() {
 
   return (
     <Container fluid py="md">
-      <Group justify="space-between" align="flex-start" mb="lg" wrap="nowrap">
+      <Group justify="space-between" align="flex-start" mb="lg">
         <Stack gap={4} style={{ minWidth: 0 }}>
           <Group gap="sm" align="center">
             <Title order={2} style={{ wordBreak: "break-word" }}>
@@ -129,7 +129,7 @@ export function CollectionDetail() {
             </Text>
           )}
         </Stack>
-        <Group gap="xs" wrap="nowrap">
+        <Group gap="xs">
           {members.length > 1 && (
             <SegmentedControl
               value={sort}

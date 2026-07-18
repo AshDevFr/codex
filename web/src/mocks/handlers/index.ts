@@ -9,6 +9,7 @@ import { apiKeysHandlers } from "./apiKeys";
 import { authHandlers } from "./auth";
 import { bookHandlers } from "./books";
 import { cleanupHandlers } from "./cleanup";
+import { collectionsHandlers } from "./collections";
 import { duplicatesHandlers } from "./duplicates";
 import { eventHandlers } from "./events";
 import { filterPresetsHandlers } from "./filterPresets";
@@ -19,6 +20,7 @@ import { metricsHandlers } from "./metrics";
 import { pdfCacheHandlers } from "./pdfCache";
 import { pluginStorageHandlers } from "./pluginStorage";
 import { pluginsHandlers } from "./plugins";
+import { readListsHandlers } from "./readlists";
 import { recommendationsHandlers } from "./recommendations";
 import { releasesHandlers } from "./releases";
 import { seriesHandlers } from "./series";
@@ -118,6 +120,8 @@ export const handlers = [
   ...seriesHandlers,
   ...bookHandlers,
   ...cleanupHandlers,
+  ...collectionsHandlers,
+  ...readListsHandlers,
   ...eventHandlers,
   ...metadataHandlers,
   ...pdfCacheHandlers,
@@ -142,6 +146,7 @@ export { apiKeysHandlers } from "./apiKeys";
 export { authHandlers } from "./auth";
 export { bookHandlers } from "./books";
 export { cleanupHandlers } from "./cleanup";
+export { collectionsHandlers } from "./collections";
 export { duplicatesHandlers } from "./duplicates";
 export { eventHandlers } from "./events";
 export { filterPresetsHandlers } from "./filterPresets";
@@ -152,6 +157,7 @@ export { metricsHandlers } from "./metrics";
 export { pdfCacheHandlers } from "./pdfCache";
 export { pluginStorageHandlers } from "./pluginStorage";
 export { pluginsHandlers } from "./plugins";
+export { readListsHandlers } from "./readlists";
 export { recommendationsHandlers } from "./recommendations";
 export { releasesHandlers } from "./releases";
 export { seriesHandlers } from "./series";
