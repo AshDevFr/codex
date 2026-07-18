@@ -29,6 +29,13 @@ export const manifest = {
       canAnnounceChapters: true,
       canAnnounceVolumes: true,
     },
+    // Search only: Nyaa has no per-series pages keyed by external ID (this
+    // plugin matches by title alias). The host falls back to the configSchema
+    // default for `baseUrl` when the admin never stored one, so the button
+    // works out of the box and follows mirror overrides.
+    webLinks: {
+      searchUrlTemplate: "{config.baseUrl}/?q={title}",
+    },
   },
   configSchema: {
     description:

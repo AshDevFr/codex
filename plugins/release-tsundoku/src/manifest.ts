@@ -29,6 +29,21 @@ export const CODEX_TO_TSUNDOKU_PROVIDER: Record<string, string> = {
  */
 export const CODEX_EXTERNAL_ID_SOURCES = Object.keys(CODEX_TO_TSUNDOKU_PROVIDER);
 
+/**
+ * Direct series-link templates for the `webLinks` capability, generated from
+ * `CODEX_TO_TSUNDOKU_PROVIDER` so the feed matcher and the link templates
+ * share one source-name list and can't drift. Each template bakes Tsundoku's
+ * own provider notation (`source=mal`, not `myanimelist`) into the URL; the
+ * host only ever matches on the Codex-side `source` key. Map order doubles as
+ * match priority on the series page.
+ */
+export const TSUNDOKU_SERIES_LOOKUP_LINKS = Object.entries(CODEX_TO_TSUNDOKU_PROVIDER).map(
+  ([codexSource, tsundokuProvider]) => ({
+    source: codexSource,
+    urlTemplate: `{config.baseUrl}/series/lookup?source=${tsundokuProvider}&id={externalId}`,
+  }),
+);
+
 export const manifest = {
   name: "release-tsundoku",
   displayName: "Tsundoku Releases",
@@ -45,6 +60,10 @@ export const manifest = {
       requiresExternalIds: [...CODEX_EXTERNAL_ID_SOURCES],
       canAnnounceChapters: true,
       canAnnounceVolumes: true,
+    },
+    webLinks: {
+      searchUrlTemplate: "{config.baseUrl}/search?q={title}",
+      seriesLinks: TSUNDOKU_SERIES_LOOKUP_LINKS,
     },
   },
   configSchema: {

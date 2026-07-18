@@ -54,6 +54,39 @@ pub struct PluginWebLinksResponse {
     pub providers: Vec<WebLinkProviderDto>,
 }
 
+/// Merge a plugin's stored config over its manifest `configSchema` field
+/// defaults.
+///
+/// Admins rarely store a value for fields whose default is fine (e.g. Nyaa's
+/// `baseUrl` defaulting to `https://nyaa.si`), so a template referencing such
+/// a field must still resolve. The schema is untyped JSON on the Rust side;
+/// entries without a `key` or `default` are simply skipped.
+fn config_with_schema_defaults(
+    config: &serde_json::Value,
+    config_schema: Option<&serde_json::Value>,
+) -> serde_json::Value {
+    let mut merged = serde_json::Map::new();
+    if let Some(fields) = config_schema
+        .and_then(|s| s.get("fields"))
+        .and_then(|f| f.as_array())
+    {
+        for field in fields {
+            if let (Some(key), Some(default)) = (
+                field.get("key").and_then(|k| k.as_str()),
+                field.get("default"),
+            ) {
+                merged.insert(key.to_string(), default.clone());
+            }
+        }
+    }
+    if let Some(stored) = config.as_object() {
+        for (key, value) in stored {
+            merged.insert(key.clone(), value.clone());
+        }
+    }
+    serde_json::Value::Object(merged)
+}
+
 /// Substitute `{config.<field>}` placeholders in `template` from a plugin's
 /// stored config object.
 ///
@@ -140,11 +173,13 @@ pub async fn get_plugin_web_links(
             continue;
         };
 
+        let config = config_with_schema_defaults(&plugin.config, manifest.config_schema.as_ref());
+
         // An unresolvable search template (e.g. baseUrl not configured yet)
         // drops the whole provider: search is the universal fallback, so
         // without it no button can ever render.
         let Some(search_url_template) =
-            resolve_config_placeholders(&web_links.search_url_template, &plugin.config)
+            resolve_config_placeholders(&web_links.search_url_template, &config)
         else {
             continue;
         };
@@ -154,12 +189,12 @@ pub async fn get_plugin_web_links(
             .series_links
             .iter()
             .filter_map(|link| {
-                resolve_config_placeholders(&link.url_template, &plugin.config).map(
-                    |url_template| WebLinkSeriesLinkDto {
+                resolve_config_placeholders(&link.url_template, &config).map(|url_template| {
+                    WebLinkSeriesLinkDto {
                         source: link.source.clone(),
                         url_template,
-                    },
-                )
+                    }
+                })
             })
             .collect();
 
@@ -258,6 +293,39 @@ mod tests {
     fn test_resolve_unterminated_placeholder_returns_none() {
         let config = json!({ "baseUrl": "https://x.io" });
         assert!(resolve_config_placeholders("{config.baseUrl", &config).is_none());
+    }
+
+    #[test]
+    fn test_schema_defaults_fill_missing_config_fields() {
+        let schema = json!({
+            "fields": [
+                { "key": "baseUrl", "default": "https://nyaa.si" },
+                { "key": "timeout", "default": 5000 },
+                { "key": "noDefault" }
+            ]
+        });
+        let merged = config_with_schema_defaults(&json!({}), Some(&schema));
+        assert_eq!(merged["baseUrl"], "https://nyaa.si");
+        assert_eq!(merged["timeout"], 5000);
+        assert!(merged.get("noDefault").is_none());
+    }
+
+    #[test]
+    fn test_stored_config_overrides_schema_default() {
+        let schema = json!({
+            "fields": [{ "key": "baseUrl", "default": "https://nyaa.si" }]
+        });
+        let merged = config_with_schema_defaults(
+            &json!({ "baseUrl": "https://mirror.example.com" }),
+            Some(&schema),
+        );
+        assert_eq!(merged["baseUrl"], "https://mirror.example.com");
+    }
+
+    #[test]
+    fn test_schema_defaults_absent_schema_keeps_config() {
+        let merged = config_with_schema_defaults(&json!({ "a": "b" }), None);
+        assert_eq!(merged, json!({ "a": "b" }));
     }
 
     #[test]

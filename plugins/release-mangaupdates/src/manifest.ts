@@ -28,6 +28,15 @@ export const manifest = {
       canAnnounceChapters: true,
       canAnnounceVolumes: true,
     },
+    // Search only, no seriesLinks: public MangaUpdates series URLs take the
+    // base36 slug form, but stored `mangaupdates` external IDs may be either
+    // the numeric API ID or the slug depending on which source populated them
+    // (see normalizeMangaUpdatesId in fetcher.ts), and link templates have no
+    // transform step. A numeric ID in a slug URL 404s, so the safe deep link
+    // is none at all.
+    webLinks: {
+      searchUrlTemplate: "https://www.mangaupdates.com/series?search={title}",
+    },
   },
   configSchema: {
     description:

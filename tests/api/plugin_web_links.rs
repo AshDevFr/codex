@@ -24,13 +24,15 @@ async fn create_admin_and_token(
 }
 
 /// Insert a plugin row with the given config, manifest capabilities, and
-/// enabled flag.
-async fn make_plugin(
+/// enabled flag. `config_schema`, when provided, is attached to the cached
+/// manifest (its field defaults back-fill unset config keys).
+async fn make_plugin_with_schema(
     db: &DatabaseConnection,
     name: &str,
     display_name: &str,
     config: Option<serde_json::Value>,
     capabilities: serde_json::Value,
+    config_schema: Option<serde_json::Value>,
     enabled: bool,
 ) {
     let plugin = PluginsRepository::create(
@@ -58,16 +60,31 @@ async fn make_plugin(
     .await
     .unwrap();
 
-    let manifest = json!({
+    let mut manifest = json!({
         "name": name,
         "displayName": display_name,
         "version": "1.0.0",
         "protocolVersion": "1.1",
         "capabilities": capabilities
     });
+    if let Some(schema) = config_schema {
+        manifest["configSchema"] = schema;
+    }
     PluginsRepository::update_manifest(db, plugin.id, Some(manifest))
         .await
         .unwrap();
+}
+
+/// Insert a plugin row without a manifest config schema.
+async fn make_plugin(
+    db: &DatabaseConnection,
+    name: &str,
+    display_name: &str,
+    config: Option<serde_json::Value>,
+    capabilities: serde_json::Value,
+    enabled: bool,
+) {
+    make_plugin_with_schema(db, name, display_name, config, capabilities, None, enabled).await;
 }
 
 fn tsundoku_web_links_capabilities() -> serde_json::Value {
@@ -261,6 +278,43 @@ async fn web_links_drops_only_unresolvable_series_link_entries() {
     assert_eq!(
         provider.series_links[0].url_template,
         "https://site.example.com/mu/{externalId}"
+    );
+}
+
+#[tokio::test]
+async fn web_links_falls_back_to_config_schema_defaults() {
+    let (db, _temp) = setup_test_db().await;
+    // Nyaa-style plugin: baseUrl has a schema default and no stored value.
+    make_plugin_with_schema(
+        &db,
+        "release-nyaa",
+        "Nyaa",
+        None,
+        json!({
+            "webLinks": { "searchUrlTemplate": "{config.baseUrl}/?q={title}" }
+        }),
+        Some(json!({
+            "fields": [
+                { "key": "baseUrl", "label": "Base URL", "type": "string", "default": "https://nyaa.si" }
+            ]
+        })),
+        true,
+    )
+    .await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let req = get_request_with_auth("/api/v1/plugins/web-links", &token);
+    let (status, body): (StatusCode, Option<WebLinksResponseDto>) =
+        make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::OK);
+    let body = body.unwrap();
+    assert_eq!(body.providers.len(), 1);
+    assert_eq!(
+        body.providers[0].search_url_template,
+        "https://nyaa.si/?q={title}"
     );
 }
 
