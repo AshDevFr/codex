@@ -8039,6 +8039,8 @@ export interface components {
         } | {
             titleSort: components["schemas"]["FieldOperator"];
         } | {
+            summary: components["schemas"]["FieldOperator"];
+        } | {
             readStatus: components["schemas"]["FieldOperator"];
         } | {
             hasError: components["schemas"]["BoolOperator"];
@@ -17749,6 +17751,8 @@ export interface components {
             title: components["schemas"]["FieldOperator"];
         } | {
             titleSort: components["schemas"]["FieldOperator"];
+        } | {
+            summary: components["schemas"]["FieldOperator"];
         } | {
             readStatus: components["schemas"]["FieldOperator"];
         } | {

@@ -2439,6 +2439,129 @@ async fn test_list_books_title_filter_is_case_insensitive() {
 }
 
 #[tokio::test]
+async fn test_list_books_filtered_by_summary() {
+    use codex::db::entities::book_metadata;
+    use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, IntoActiveModel, QueryFilter, Set};
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Series", None)
+        .await
+        .unwrap();
+
+    let set_summary = |db: sea_orm::DatabaseConnection, book_id: uuid::Uuid, summary: String| async move {
+        let meta = book_metadata::Entity::find()
+            .filter(book_metadata::Column::BookId.eq(book_id))
+            .one(&db)
+            .await
+            .unwrap()
+            .unwrap();
+        let mut active = meta.into_active_model();
+        active.summary = Set(Some(summary));
+        active.update(&db).await.unwrap();
+    };
+
+    let space = create_test_book_with_metadata(
+        &db,
+        series.id,
+        library.id,
+        "/space.cbz",
+        "space.cbz",
+        Some("Chapter 1".to_string()),
+    )
+    .await;
+    set_summary(
+        db.clone(),
+        space.id,
+        "A noir mystery set in deep space.".to_string(),
+    )
+    .await;
+
+    let rocket = create_test_book_with_metadata(
+        &db,
+        series.id,
+        library.id,
+        "/rocket.cbz",
+        "rocket.cbz",
+        Some("Chapter 2".to_string()),
+    )
+    .await;
+    set_summary(
+        db.clone(),
+        rocket.id,
+        "Hard SCIENCE fiction about rockets.".to_string(),
+    )
+    .await;
+
+    // Third book keeps a null summary so IsNull/IsNotNull are meaningful.
+    create_test_book_with_metadata(
+        &db,
+        series.id,
+        library.id,
+        "/tales.cbz",
+        "tales.cbz",
+        Some("Chapter 3".to_string()),
+    )
+    .await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let cases: &[(FieldOperator, usize, &str)] = &[
+        (
+            FieldOperator::Contains {
+                value: "SPACE".to_string(),
+            },
+            1,
+            "contains 'SPACE' matches 'deep space' case-insensitively",
+        ),
+        (
+            FieldOperator::Contains {
+                value: "science".to_string(),
+            },
+            1,
+            "contains 'science' matches 'Hard SCIENCE fiction'",
+        ),
+        (
+            FieldOperator::IsNull,
+            1,
+            "isNull matches the book without a summary",
+        ),
+        (
+            FieldOperator::IsNotNull,
+            2,
+            "isNotNull matches both books with a summary",
+        ),
+        (
+            FieldOperator::Contains {
+                value: "dragons".to_string(),
+            },
+            0,
+            "contains 'dragons' matches nothing",
+        ),
+    ];
+
+    for (op, expected, label) in cases {
+        let request_body = BookListRequest {
+            condition: Some(BookCondition::Summary {
+                summary: op.clone(),
+            }),
+            ..Default::default()
+        };
+        let request = post_json_request_with_auth("/api/v1/books/list", &request_body, &token);
+        let (status, response): (StatusCode, Option<BookListResponse>) =
+            make_json_request(app.clone(), request).await;
+        assert_eq!(status, StatusCode::OK, "{label}: status");
+        let books_list = response.expect(label);
+        assert_eq!(books_list.data.len(), *expected, "{label}");
+    }
+}
+
+#[tokio::test]
 async fn test_list_books_filtered_by_title_sort_begins_with() {
     use codex::db::entities::book_metadata;
     use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, IntoActiveModel, QueryFilter, Set};

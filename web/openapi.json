@@ -22177,6 +22177,18 @@
           },
           {
             "type": "object",
+            "description": "Filter by book summary (`book_metadata.summary`). The summary is\nnullable, so `isNull`/`isNotNull` distinguish books with and without\na description.",
+            "required": [
+              "summary"
+            ],
+            "properties": {
+              "summary": {
+                "$ref": "#/components/schemas/FieldOperator"
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "Filter by read status (unread, in_progress, read)",
             "required": [
               "readStatus"
@@ -39868,6 +39880,18 @@
             ],
             "properties": {
               "titleSort": {
+                "$ref": "#/components/schemas/FieldOperator"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Filter by series summary (`series_metadata.summary`). The summary is\nnullable, so `isNull`/`isNotNull` distinguish series with and without\na description.",
+            "required": [
+              "summary"
+            ],
+            "properties": {
+              "summary": {
                 "$ref": "#/components/schemas/FieldOperator"
               }
             }

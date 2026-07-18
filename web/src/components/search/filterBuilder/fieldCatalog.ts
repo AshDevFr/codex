@@ -114,6 +114,14 @@ export const FIELD_CATALOG: FieldDef[] = [
     hint: "text",
   },
   {
+    key: "summary",
+    label: "Summary",
+    group: "Text",
+    operatorType: "field",
+    targets: ["series", "books"],
+    hint: "text",
+  },
+  {
     key: "path",
     label: "Path",
     group: "Files",

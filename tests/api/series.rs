@@ -3833,6 +3833,96 @@ async fn test_list_series_title_filter_is_case_insensitive() {
 }
 
 #[tokio::test]
+async fn test_list_series_filtered_by_summary() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    use codex::db::repositories::SeriesMetadataRepository;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series1 = SeriesRepository::create(&db, library.id, "Space Detective", None)
+        .await
+        .unwrap();
+    let series2 = SeriesRepository::create(&db, library.id, "Rocket Science", None)
+        .await
+        .unwrap();
+    // Third series keeps a null summary so IsNull/IsNotNull are meaningful.
+    SeriesRepository::create(&db, library.id, "Everyday Tales", None)
+        .await
+        .unwrap();
+
+    SeriesMetadataRepository::update_summary(
+        &db,
+        series1.id,
+        Some("A noir mystery set in deep space.".to_string()),
+    )
+    .await
+    .unwrap();
+    SeriesMetadataRepository::update_summary(
+        &db,
+        series2.id,
+        Some("Hard SCIENCE fiction about rockets.".to_string()),
+    )
+    .await
+    .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let cases: &[(FieldOperator, usize, &str)] = &[
+        (
+            FieldOperator::Contains {
+                value: "SPACE".to_string(),
+            },
+            1,
+            "contains 'SPACE' matches 'deep space' case-insensitively",
+        ),
+        (
+            FieldOperator::Contains {
+                value: "science".to_string(),
+            },
+            1,
+            "contains 'science' matches 'Hard SCIENCE fiction'",
+        ),
+        (
+            FieldOperator::IsNull,
+            1,
+            "isNull matches the series without a summary",
+        ),
+        (
+            FieldOperator::IsNotNull,
+            2,
+            "isNotNull matches both series with a summary",
+        ),
+        (
+            FieldOperator::Contains {
+                value: "dragons".to_string(),
+            },
+            0,
+            "contains 'dragons' matches nothing",
+        ),
+    ];
+
+    for (op, expected, label) in cases {
+        let request_body = SeriesListRequest {
+            condition: Some(SeriesCondition::Summary {
+                summary: op.clone(),
+            }),
+            ..Default::default()
+        };
+        let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &token);
+        let (status, response): (StatusCode, Option<SeriesListResponse>) =
+            make_json_request(app.clone(), request).await;
+        assert_eq!(status, StatusCode::OK, "{label}: status");
+        let series_list = response.expect(label);
+        assert_eq!(series_list.data.len(), *expected, "{label}");
+    }
+}
+
+#[tokio::test]
 async fn test_list_series_filtered_by_status() {
     let (db, _temp_dir) = setup_test_db().await;
 

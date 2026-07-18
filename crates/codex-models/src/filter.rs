@@ -151,6 +151,10 @@ pub enum SeriesCondition {
         #[serde(rename = "titleSort")]
         title_sort: FieldOperator,
     },
+    /// Filter by series summary (`series_metadata.summary`). The summary is
+    /// nullable, so `isNull`/`isNotNull` distinguish series with and without
+    /// a description.
+    Summary { summary: FieldOperator },
     /// Filter by read status (unread, in_progress, read)
     ReadStatus {
         #[serde(rename = "readStatus")]
@@ -249,6 +253,10 @@ pub enum BookCondition {
         #[serde(rename = "titleSort")]
         title_sort: FieldOperator,
     },
+    /// Filter by book summary (`book_metadata.summary`). The summary is
+    /// nullable, so `isNull`/`isNotNull` distinguish books with and without
+    /// a description.
+    Summary { summary: FieldOperator },
     /// Filter by read status (unread, in_progress, read)
     ReadStatus {
         #[serde(rename = "readStatus")]

@@ -91,6 +91,7 @@ export type SeriesCondition =
   | { language: FieldOperator }
   | { title: FieldOperator }
   | { titleSort: FieldOperator }
+  | { summary: FieldOperator }
   | { readStatus: FieldOperator }
   | { sharingTag: FieldOperator }
   | { completion: BoolOperator }
@@ -116,6 +117,7 @@ export type BookCondition =
   | { tag: FieldOperator }
   | { title: FieldOperator }
   | { titleSort: FieldOperator }
+  | { summary: FieldOperator }
   | { readStatus: FieldOperator }
   | { hasError: BoolOperator }
   | { inReadList: BoolOperator }

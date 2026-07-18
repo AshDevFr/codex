@@ -160,6 +160,10 @@ impl FilterService {
                     Self::filter_by_title_sort(db, title_sort, candidate_ids).await
                 }
 
+                SeriesCondition::Summary { summary } => {
+                    Self::filter_by_summary(db, summary, candidate_ids).await
+                }
+
                 SeriesCondition::ReadStatus { read_status } => {
                     Self::filter_by_read_status(db, read_status, candidate_ids, user_id).await
                 }
@@ -1229,6 +1233,40 @@ impl FilterService {
         Ok(result)
     }
 
+    /// Filter series by summary in series_metadata. The summary column is
+    /// nullable, so `IsNull`/`IsNotNull` are meaningful here.
+    async fn filter_by_summary(
+        db: &DatabaseConnection,
+        operator: &FieldOperator,
+        candidate_ids: Option<&HashSet<Uuid>>,
+    ) -> Result<HashSet<Uuid>> {
+        use codex_db::entities::series_metadata;
+        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
+
+        let query = series_metadata::Entity::find();
+        let filtered_query =
+            apply_ci_text_filter!(query, series_metadata::Column::Summary, operator);
+
+        // Select series_id from series_metadata (not the primary key)
+        let series_ids: Vec<Uuid> = filtered_query
+            .select_only()
+            .column(series_metadata::Column::SeriesId)
+            .into_tuple()
+            .all(db)
+            .await?;
+
+        let result: HashSet<Uuid> = if let Some(candidates) = candidate_ids {
+            series_ids
+                .into_iter()
+                .filter(|id| candidates.contains(id))
+                .collect()
+        } else {
+            series_ids.into_iter().collect()
+        };
+
+        Ok(result)
+    }
+
     /// Filter series by title_sort field in series_metadata
     ///
     /// This is used for alphabetical A-Z filtering where we filter by the first letter
@@ -1850,6 +1888,10 @@ impl FilterService {
                     Self::filter_books_by_title_sort(db, title_sort, candidate_ids).await
                 }
 
+                BookCondition::Summary { summary } => {
+                    Self::filter_books_by_summary(db, summary, candidate_ids).await
+                }
+
                 BookCondition::ReadStatus { read_status } => {
                     Self::filter_books_by_read_status(db, read_status, candidate_ids, user_id).await
                 }
@@ -2154,6 +2196,38 @@ impl FilterService {
         let query = book_metadata::Entity::find();
         let filtered_query =
             apply_ci_text_filter!(query, book_metadata::Column::TitleSort, operator);
+
+        let book_ids: Vec<Uuid> = filtered_query
+            .select_only()
+            .column(book_metadata::Column::BookId)
+            .into_tuple()
+            .all(db)
+            .await?;
+
+        let result: HashSet<Uuid> = if let Some(candidates) = candidate_ids {
+            book_ids
+                .into_iter()
+                .filter(|id| candidates.contains(id))
+                .collect()
+        } else {
+            book_ids.into_iter().collect()
+        };
+
+        Ok(result)
+    }
+
+    /// Filter books by `book_metadata.summary`. The summary column is
+    /// nullable, so `IsNull`/`IsNotNull` are meaningful here.
+    async fn filter_books_by_summary(
+        db: &DatabaseConnection,
+        operator: &FieldOperator,
+        candidate_ids: Option<&HashSet<Uuid>>,
+    ) -> Result<HashSet<Uuid>> {
+        use codex_db::entities::book_metadata;
+        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
+
+        let query = book_metadata::Entity::find();
+        let filtered_query = apply_ci_text_filter!(query, book_metadata::Column::Summary, operator);
 
         let book_ids: Vec<Uuid> = filtered_query
             .select_only()

@@ -76,6 +76,19 @@ describe("conditionUtils — newLeaf", () => {
     expect(leafOperator(libLeaf)).toBe("is");
   });
 
+  it("exposes summary as a shared free-text field", () => {
+    const seriesSummary = findField("series", "summary");
+    const bookSummary = findField("books", "summary");
+    expect(seriesSummary).toBeTruthy();
+    expect(bookSummary).toBeTruthy();
+    expect(seriesSummary!.operatorType).toBe("field");
+    expect(seriesSummary!.hint).toBe("text");
+
+    const leaf = newLeaf(seriesSummary!);
+    expect(leafFieldKey(leaf)).toBe("summary");
+    expect(leafOperator(leaf)).toBe("contains");
+  });
+
   it("uses `is` as default for enum-typed Field operators", () => {
     const formatField = findField("books", "format");
     expect(formatField).toBeTruthy();
