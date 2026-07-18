@@ -63,6 +63,7 @@ import {
   ExternalLinks,
   ExternalRatings,
   GenreTagChips,
+  PluginWebLinks,
   SeriesBookList,
   SeriesInfoModal,
   SeriesMetadataEditModal,
@@ -1098,6 +1099,13 @@ export function SeriesDetail() {
               <ExternalLinks links={series.externalLinks} />
             </Group>
           )}
+
+          {/* Open on plugin-provided external sites (renders nothing when
+              no enabled plugin declares web links) */}
+          <PluginWebLinks
+            title={seriesTitle}
+            externalIds={series.externalIds ?? []}
+          />
 
           {/* Ratings Section - Your rating, Community average, External ratings */}
           <Group gap="md" align="flex-start">

@@ -6,6 +6,7 @@ export { ExternalIds } from "./ExternalIds";
 export { ExternalLinks, extractSourceFromUrl } from "./ExternalLinks";
 export { ExternalRatings } from "./ExternalRatings";
 export { GenreTagChips } from "./GenreTagChips";
+export { PluginWebLinks } from "./PluginWebLinks";
 export { SeriesBookList } from "./SeriesBookList";
 export { SeriesInfoModal } from "./SeriesInfoModal";
 export { SeriesMetadata } from "./SeriesMetadata";

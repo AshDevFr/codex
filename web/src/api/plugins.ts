@@ -18,6 +18,13 @@ export type PluginCapabilitiesDto =
 export type CredentialFieldDto = components["schemas"]["CredentialFieldDto"];
 export type EnvVarDto = components["schemas"]["EnvVarDto"];
 
+// Web links types
+export type PluginWebLinksResponse =
+  components["schemas"]["PluginWebLinksResponse"];
+export type WebLinkProviderDto = components["schemas"]["WebLinkProviderDto"];
+export type WebLinkSeriesLinkDto =
+  components["schemas"]["WebLinkSeriesLinkDto"];
+
 // Plugin Actions types
 export type PluginActionDto = components["schemas"]["PluginActionDto"];
 export type PluginActionsResponse =
@@ -277,6 +284,17 @@ export const pluginsApi = {
   // ==========================================================================
   // Plugin Actions API (User-facing)
   // ==========================================================================
+
+  /**
+   * Get web-link providers (plugins declaring the webLinks capability),
+   * with config placeholders already resolved server-side. User-facing:
+   * requires only series read access.
+   */
+  getWebLinks: async (): Promise<PluginWebLinksResponse> => {
+    const response =
+      await api.get<PluginWebLinksResponse>("/plugins/web-links");
+    return response.data;
+  },
 
   /**
    * Get available plugin actions for a specific scope
