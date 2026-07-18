@@ -62,6 +62,7 @@ pub mod pages;
 pub mod pdf_cache;
 pub mod plugin_actions;
 pub mod plugin_storage;
+pub mod plugin_web_links;
 pub mod plugins;
 pub mod read_progress;
 pub mod readlists;

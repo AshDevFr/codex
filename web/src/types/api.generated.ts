@@ -2858,6 +2858,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/plugins/web-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Web-link providers for the series detail page.
+         * @description Read-only, requires only `SeriesRead`: the response carries resolved URL
+         *     templates (config values like the instance base URL are embedded, which
+         *     users could already discover by clicking the resulting links) but no
+         *     credentials, plugin IDs, or other admin-sensitive data. The response only
+         *     changes when an admin edits plugin config, so the frontend caches it per
+         *     session.
+         */
+        get: operations["get_plugin_web_links"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/plugins/{id}/execute": {
         parameters: {
             query?: never;
@@ -16323,6 +16348,14 @@ export interface components {
              */
             success: boolean;
         };
+        /** @description Response shape for `GET /api/v1/plugins/web-links`. */
+        PluginWebLinksResponse: {
+            /**
+             * @description One entry per enabled plugin declaring the `webLinks` capability
+             *     whose search template resolved against its config.
+             */
+            providers: components["schemas"]["WebLinkProviderDto"][];
+        };
         /** @description Response containing a list of plugins */
         PluginsListResponse: {
             /** @description List of plugins */
@@ -20800,6 +20833,37 @@ export interface components {
              * @example 7
              */
             total: number;
+        };
+        /** @description A plugin exposing web links, with config placeholders resolved. */
+        WebLinkProviderDto: {
+            /**
+             * @description Human-readable label for the button; falls back to the plugin name
+             *     when no display name is configured.
+             */
+            displayName: string;
+            /** @description Plugin `name` (stable identifier). */
+            pluginName: string;
+            /**
+             * @description Search page template. The only remaining placeholder is `{title}`,
+             *     filled client-side with the URL-encoded series title.
+             */
+            searchUrlTemplate: string;
+            /**
+             * @description Ordered direct-link templates; the first entry whose `source` the
+             *     series has an external ID for wins. When none match, the frontend
+             *     falls back to `search_url_template`.
+             */
+            seriesLinks: components["schemas"]["WebLinkSeriesLinkDto"][];
+        };
+        /** @description One resolved per-source direct-link template. */
+        WebLinkSeriesLinkDto: {
+            /** @description Bare Codex external-ID source name, e.g. `mangabaka`, `myanimelist`. */
+            source: string;
+            /**
+             * @description URL template with config placeholders already substituted. The only
+             *     remaining placeholder is `{externalId}`, filled client-side.
+             */
+            urlTemplate: string;
         };
     };
     responses: never;
@@ -27300,6 +27364,40 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_plugin_web_links: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resolved web-link providers */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginWebLinksResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description SeriesRead permission required */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

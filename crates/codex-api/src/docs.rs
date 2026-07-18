@@ -502,6 +502,7 @@ The following paths are exempt from rate limiting:
         v1::handlers::plugins::get_plugin_failures,
 
         // Plugin Actions endpoints
+        v1::handlers::plugin_web_links::get_plugin_web_links,
         v1::handlers::plugin_actions::get_plugin_actions,
         v1::handlers::plugin_actions::execute_plugin,
         v1::handlers::plugin_actions::get_series_search_title,
@@ -837,6 +838,9 @@ The following paths are exempt from rate limiting:
             v1::dto::release::BulkReleaseActionResponse,
             v1::dto::release::DeleteReleaseResponse,
             v1::handlers::releases::ApplicabilityResponse,
+            v1::handlers::plugin_web_links::PluginWebLinksResponse,
+            v1::handlers::plugin_web_links::WebLinkProviderDto,
+            v1::handlers::plugin_web_links::WebLinkSeriesLinkDto,
             v1::dto::PaginatedResponse<v1::dto::release::ReleaseLedgerEntryDto>,
 
             // External Rating DTOs

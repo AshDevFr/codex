@@ -38,6 +38,7 @@ mod opds2;
 mod pages;
 mod pdf_cache;
 mod plugin_metrics;
+mod plugin_web_links;
 mod plugins;
 mod pool_contention;
 mod rate_limit;

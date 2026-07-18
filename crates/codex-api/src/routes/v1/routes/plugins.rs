@@ -16,12 +16,17 @@ use std::sync::Arc;
 ///
 /// Routes:
 /// - GET /plugins/actions - Get available plugin actions for a scope
+/// - GET /plugins/web-links - Get resolved web-link providers
 /// - POST /plugins/{id}/execute - Execute a plugin method
 pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
     Router::new()
         .route(
             "/plugins/actions",
             get(handlers::plugin_actions::get_plugin_actions),
+        )
+        .route(
+            "/plugins/web-links",
+            get(handlers::plugin_web_links::get_plugin_web_links),
         )
         .route(
             "/plugins/{id}/execute",
