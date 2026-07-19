@@ -2,6 +2,27 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.42.0] - 2026-07-19
+
+### 🚀 Features
+
+- *(search)* Add summary as a filterable field for series and books
+- *(plugins)* Add webLinks manifest capability schema
+- *(api)* Add plugins/web-links endpoint resolving webLinks templates
+- *(web)* Show plugin web-link buttons on the series detail page
+- *(plugins)* Declare webLinks in the tsundoku, mangaupdates, and nyaa manifests
+- *(plugins)* Make the nyaa search button's category and filter configurable
+- *(web)* Add alternate-link and search dropdown to plugin web-link buttons
+
+### 🐛 Bug Fixes
+
+- *(web)* Wrap collection and read list headers on narrow viewports
+- *(plugins)* Point the tsundoku search link at the root page
+
+### 🧪 Testing
+
+- *(web)* Fix flaky DownloadButton menu assertions under parallel load
+
 ## [1.41.1] - 2026-07-16
 
 ### 🚀 Features
