@@ -62,7 +62,9 @@ export const manifest = {
       canAnnounceVolumes: true,
     },
     webLinks: {
-      searchUrlTemplate: "{config.baseUrl}/search?q={title}",
+      // Tsundoku's search UI lives on the root page (`/?q=...`); a `/search`
+      // path redirects to `/` and drops the query.
+      searchUrlTemplate: "{config.baseUrl}/?q={title}",
       seriesLinks: TSUNDOKU_SERIES_LOOKUP_LINKS,
     },
   },

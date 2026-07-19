@@ -2,10 +2,8 @@ import { describe, expect, it } from "vitest";
 import { CODEX_TO_TSUNDOKU_PROVIDER, manifest, TSUNDOKU_SERIES_LOOKUP_LINKS } from "./manifest.js";
 
 describe("webLinks capability", () => {
-  it("declares a search template with the title runtime placeholder", () => {
-    expect(manifest.capabilities.webLinks.searchUrlTemplate).toBe(
-      "{config.baseUrl}/search?q={title}",
-    );
+  it("declares a search template targeting the root page, where Tsundoku's search lives", () => {
+    expect(manifest.capabilities.webLinks.searchUrlTemplate).toBe("{config.baseUrl}/?q={title}");
   });
 
   it("derives one series link per provider-map entry, in map order", () => {
