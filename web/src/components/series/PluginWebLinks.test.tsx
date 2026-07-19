@@ -1,9 +1,10 @@
 import { screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { WebLinkProviderDto } from "@/api/plugins";
 import { pluginsApi } from "@/api/plugins";
 import { renderWithProviders } from "@/test/utils";
-import { buildWebLinkUrl, PluginWebLinks } from "./PluginWebLinks";
+import { buildWebLinkOptions, PluginWebLinks } from "./PluginWebLinks";
 
 vi.mock("@/api/plugins", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/api/plugins")>();
@@ -34,46 +35,48 @@ const tsundoku: WebLinkProviderDto = {
   ],
 };
 
-describe("buildWebLinkUrl", () => {
-  it("prefers the first declared series link the series has an ID for", () => {
-    const url = buildWebLinkUrl(tsundoku, "Berserk", [
+describe("buildWebLinkOptions", () => {
+  it("orders options as declared direct links first, then search last", () => {
+    const options = buildWebLinkOptions(tsundoku, "Berserk", [
       { source: "api:myanimelist", externalId: "22" },
       { source: "api:mangabaka", externalId: "777" },
     ]);
-    // mangabaka is declared first, so it wins even though the series also
-    // has a myanimelist ID listed earlier.
-    expect(url).toBe(
+    expect(options.map((option) => option.key)).toEqual([
+      "mangabaka",
+      "myanimelist",
+      "search",
+    ]);
+    expect(options[0].url).toBe(
       "https://tsundoku.example.com/series/lookup?source=mangabaka&id=777",
+    );
+    expect(options[1].url).toBe(
+      "https://tsundoku.example.com/series/lookup?source=mal&id=22",
+    );
+    expect(options[2].url).toBe(
+      "https://tsundoku.example.com/search?q=Berserk",
     );
   });
 
-  it("falls through declaration order to the next matching source", () => {
-    const url = buildWebLinkUrl(tsundoku, "Berserk", [
-      { source: "api:myanimelist", externalId: "22" },
+  it("uses human-readable source labels and Search for the fallback", () => {
+    const options = buildWebLinkOptions(tsundoku, "Berserk", [
+      { source: "api:mangabaka", externalId: "777" },
     ]);
-    expect(url).toBe(
-      "https://tsundoku.example.com/series/lookup?source=mal&id=22",
-    );
+    expect(options.map((option) => option.label)).toEqual([
+      "MangaBaka",
+      "Search",
+    ]);
   });
 
   it("matches stored sources regardless of api:/plugin: namespace and case", () => {
-    expect(
-      buildWebLinkUrl(tsundoku, "Berserk", [
-        { source: "plugin:MangaBaka", externalId: "777" },
-      ]),
-    ).toBe(
+    const options = buildWebLinkOptions(tsundoku, "Berserk", [
+      { source: "plugin:MangaBaka", externalId: "777" },
+    ]);
+    expect(options[0].url).toBe(
       "https://tsundoku.example.com/series/lookup?source=mangabaka&id=777",
     );
   });
 
-  it("falls back to the search template with the URL-encoded title", () => {
-    const url = buildWebLinkUrl(tsundoku, "Frieren: Beyond Journey's End", []);
-    expect(url).toBe(
-      "https://tsundoku.example.com/search?q=Frieren%3A%20Beyond%20Journey's%20End",
-    );
-  });
-
-  it("URL-encodes external IDs", () => {
+  it("URL-encodes titles and external IDs", () => {
     const provider: WebLinkProviderDto = {
       ...tsundoku,
       seriesLinks: [
@@ -83,22 +86,28 @@ describe("buildWebLinkUrl", () => {
         },
       ],
     };
-    const url = buildWebLinkUrl(provider, "X", [
-      { source: "api:mangaupdates", externalId: "a/b c" },
-    ]);
-    expect(url).toBe("https://site.example.com/mu/a%2Fb%20c");
+    const options = buildWebLinkOptions(
+      provider,
+      "Frieren: Beyond Journey's End",
+      [{ source: "api:mangaupdates", externalId: "a/b c" }],
+    );
+    expect(options[0].url).toBe("https://site.example.com/mu/a%2Fb%20c");
+    expect(options[1].url).toBe(
+      "https://tsundoku.example.com/search?q=Frieren%3A%20Beyond%20Journey's%20End",
+    );
   });
 
-  it("ignores empty external-ID values", () => {
-    const url = buildWebLinkUrl(tsundoku, "Berserk", [
+  it("ignores empty external-ID values, leaving only search", () => {
+    const options = buildWebLinkOptions(tsundoku, "Berserk", [
       { source: "api:mangabaka", externalId: "" },
     ]);
-    expect(url).toBe("https://tsundoku.example.com/search?q=Berserk");
+    expect(options.map((option) => option.key)).toEqual(["search"]);
   });
 });
 
 describe("PluginWebLinks", () => {
-  it("renders one button per provider with the direct link", async () => {
+  it("renders the primary button with the best direct link and a dropdown with the rest", async () => {
+    const user = userEvent.setup();
     vi.mocked(pluginsApi.getWebLinks).mockResolvedValue({
       providers: [tsundoku],
     });
@@ -106,17 +115,64 @@ describe("PluginWebLinks", () => {
     renderWithProviders(
       <PluginWebLinks
         title="Berserk"
-        externalIds={[{ source: "api:mangabaka", externalId: "777" }]}
+        externalIds={[
+          { source: "api:mangabaka", externalId: "777" },
+          { source: "api:myanimelist", externalId: "22" },
+        ]}
       />,
     );
 
-    const link = await screen.findByRole("link", { name: /tsundoku/i });
-    expect(link).toHaveAttribute(
+    const primary = await screen.findByRole("link", { name: /tsundoku/i });
+    expect(primary).toHaveAttribute(
       "href",
       "https://tsundoku.example.com/series/lookup?source=mangabaka&id=777",
     );
-    expect(link).toHaveAttribute("target", "_blank");
-    expect(link).toHaveAttribute("rel", "noopener noreferrer");
+    expect(primary).toHaveAttribute("target", "_blank");
+    expect(primary).toHaveAttribute("rel", "noopener noreferrer");
+
+    await user.click(
+      screen.getByRole("button", { name: "More Tsundoku links" }),
+    );
+    // Menu items are asserted via text, not role: in jsdom the Mantine menu
+    // transition never fires `transitionend`, so the dropdown keeps
+    // `display: none` and role queries (which filter hidden elements) can't
+    // see the items. Text queries don't filter by visibility; this matches
+    // how other menu tests in the codebase (e.g. MediaCard) assert items.
+    // The dropdown lists every option, including the primary one.
+    const mangabakaItem = (await screen.findByText("MangaBaka")).closest("a");
+    expect(mangabakaItem).toHaveAttribute(
+      "href",
+      "https://tsundoku.example.com/series/lookup?source=mangabaka&id=777",
+    );
+    const malItem = (await screen.findByText("MyAnimeList")).closest("a");
+    expect(malItem).toHaveAttribute(
+      "href",
+      "https://tsundoku.example.com/series/lookup?source=mal&id=22",
+    );
+    const searchItem = (await screen.findByText("Search")).closest("a");
+    expect(searchItem).toHaveAttribute(
+      "href",
+      "https://tsundoku.example.com/search?q=Berserk",
+    );
+    // Direct links are separated from the search fallback by a divider.
+    expect(document.querySelector(".mantine-Menu-divider")).not.toBeNull();
+  });
+
+  it("renders a plain search button without a dropdown when nothing else matches", async () => {
+    vi.mocked(pluginsApi.getWebLinks).mockResolvedValue({
+      providers: [{ ...tsundoku, seriesLinks: [] }],
+    });
+
+    renderWithProviders(<PluginWebLinks title="Berserk" externalIds={[]} />);
+
+    const primary = await screen.findByRole("link", { name: /tsundoku/i });
+    expect(primary).toHaveAttribute(
+      "href",
+      "https://tsundoku.example.com/search?q=Berserk",
+    );
+    expect(
+      screen.queryByRole("button", { name: /more tsundoku links/i }),
+    ).toBeNull();
   });
 
   it("renders nothing when there are no providers", async () => {

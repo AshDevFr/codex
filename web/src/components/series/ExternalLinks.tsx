@@ -14,8 +14,9 @@ interface ExternalLinksProps {
 }
 
 // Map source names to display names and colors
-// Shared between series and books
-const SOURCE_CONFIG: Record<
+// Shared between series and books (and reused by PluginWebLinks for
+// human-readable source labels in its dropdown)
+export const SOURCE_CONFIG: Record<
   string,
   { name: string; color: string; abbrev?: string }
 > = {
