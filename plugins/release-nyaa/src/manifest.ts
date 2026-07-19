@@ -31,10 +31,13 @@ export const manifest = {
     },
     // Search only: Nyaa has no per-series pages keyed by external ID (this
     // plugin matches by title alias). The host falls back to the configSchema
-    // default for `baseUrl` when the admin never stored one, so the button
-    // works out of the box and follows mirror overrides.
+    // defaults for every referenced field when the admin never stored one, so
+    // the button works out of the box (all categories, no filter, nyaa.si)
+    // and follows config overrides for mirrors or a narrower default search
+    // (e.g. searchCategory 3_1 for English-translated literature).
     webLinks: {
-      searchUrlTemplate: "{config.baseUrl}/?q={title}",
+      searchUrlTemplate:
+        "{config.baseUrl}/?f={config.searchFilter}&c={config.searchCategory}&q={title}",
     },
   },
   configSchema: {
@@ -69,6 +72,26 @@ export const manifest = {
         required: false,
         default: "https://nyaa.si",
         example: "https://nyaa.si",
+      },
+      {
+        key: "searchCategory",
+        label: "Search Link Category",
+        description:
+          "Nyaa category for the series-page search button, e.g. `3_1` for Literature → English-translated. `0_0` searches all categories. Only affects the web-link button, not release polling.",
+        type: "string" as const,
+        required: false,
+        default: "0_0",
+        example: "3_1",
+      },
+      {
+        key: "searchFilter",
+        label: "Search Link Filter",
+        description:
+          "Nyaa filter for the series-page search button: `0` = no filter, `1` = no remakes, `2` = trusted only. Only affects the web-link button, not release polling.",
+        type: "string" as const,
+        required: false,
+        default: "0",
+        example: "2",
       },
     ],
   },
