@@ -22,6 +22,25 @@ import { DownloadButton } from "./DownloadButton";
 
 type DownloadFn = typeof downloadManagerModule.downloadSingleFileBook;
 
+/**
+ * Find a Mantine menu item by its label text and return the clickable
+ * element (button or anchor).
+ *
+ * Deliberately text-based, not `findByRole("menuitem", ...)`: in jsdom
+ * Mantine's menu transition never fires `transitionend`, so an open dropdown
+ * can keep `display: none` indefinitely. Role queries filter hidden elements
+ * and only succeed when they race the brief pre-transition window, which
+ * flakes under parallel suite load; text queries don't filter by visibility.
+ */
+async function findMenuItem(label: RegExp | string): Promise<HTMLElement> {
+  const text = await screen.findByText(label, undefined, { timeout: 5000 });
+  const item = text.closest("button, a");
+  if (!(item instanceof HTMLElement)) {
+    throw new Error(`Menu item for ${label} has no clickable ancestor`);
+  }
+  return item;
+}
+
 let downloadSpy: MockInstance<DownloadFn> | null = null;
 
 beforeEach(() => {
@@ -191,14 +210,7 @@ describe(
         name: /^download options$/i,
       });
       await userEvent.click(trigger);
-      // The menu lives in a Mantine portal with a brief transition; under
-      // heavy test load the default 1000ms timeout can flake. Bump it so we
-      // catch the dropdown reliably.
-      const startItem = await screen.findByRole(
-        "menuitem",
-        { name: /save for offline/i },
-        { timeout: 5000 },
-      );
+      const startItem = await findMenuItem(/save for offline/i);
       await userEvent.click(startItem);
 
       expect(downloadSpy).toHaveBeenCalledWith(
@@ -239,9 +251,7 @@ describe(
           name: /^download options$/i,
         });
         await userEvent.click(trigger);
-        const startItem = await screen.findByRole("menuitem", {
-          name: /save for offline/i,
-        });
+        const startItem = await findMenuItem(/save for offline/i);
         await userEvent.click(startItem);
 
         expect(comicSpy).toHaveBeenCalledWith(
@@ -279,14 +289,7 @@ describe(
         name: /^download options$/i,
       });
       await userEvent.click(trigger);
-      // The menu lives in a Mantine portal with a brief transition; under
-      // heavy test load the default 1000ms timeout can flake. Bump it so we
-      // catch the dropdown reliably.
-      const startItem = await screen.findByRole(
-        "menuitem",
-        { name: /save for offline/i },
-        { timeout: 5000 },
-      );
+      const startItem = await findMenuItem(/save for offline/i);
       await userEvent.click(startItem);
 
       const cancel = await screen.findByRole("button", {
@@ -323,11 +326,7 @@ describe("DownloadButton: remove flow", { timeout: 20000 }, () => {
     });
     await userEvent.click(menuTarget);
 
-    const removeItem = await screen.findByRole(
-      "menuitem",
-      { name: /remove offline copy/i },
-      { timeout: 5000 },
-    );
+    const removeItem = await findMenuItem(/remove offline copy/i);
     await userEvent.click(removeItem);
 
     await waitFor(() => {
@@ -425,11 +424,7 @@ describe("DownloadButton: file URL fallback", { timeout: 20000 }, () => {
     });
     await userEvent.click(trigger);
 
-    const fileItem = await screen.findByRole(
-      "menuitem",
-      { name: /download file/i },
-      { timeout: 5000 },
-    );
+    const fileItem = await findMenuItem(/download file/i);
     expect(fileItem).toHaveAttribute("href", "/api/v1/books/book-1/file");
   });
 
@@ -446,16 +441,10 @@ describe("DownloadButton: file URL fallback", { timeout: 20000 }, () => {
     });
     await userEvent.click(trigger);
 
-    expect(
-      await screen.findByRole(
-        "menuitem",
-        { name: /download file/i },
-        { timeout: 5000 },
-      ),
-    ).toBeInTheDocument();
-    // No offline-save entry for unsupported formats.
-    expect(
-      screen.queryByRole("menuitem", { name: /save for offline/i }),
-    ).toBeNull();
+    expect(await findMenuItem(/download file/i)).toBeInTheDocument();
+    // No offline-save entry for unsupported formats. Text query for the same
+    // reason as findMenuItem: hidden-element filtering makes role queries
+    // unreliable for Mantine menu content in jsdom.
+    expect(screen.queryByText(/save for offline/i)).toBeNull();
   });
 });
