@@ -13,6 +13,7 @@ import { IconAdjustmentsHorizontal, IconSearch } from "@tabler/icons-react";
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSearch } from "@/hooks/useSearch";
+import { useVisualViewportHeight } from "@/hooks/useVisualViewportHeight";
 import classes from "./MobileSearchSheet.module.css";
 import { BookResultContent, SeriesResultContent } from "./SearchResultItem";
 
@@ -25,6 +26,11 @@ export function MobileSearchSheet({ opened, onClose }: MobileSearchSheetProps) {
   const [query, setQuery] = useState("");
   const navigate = useNavigate();
   const { results, isLoading } = useSearch(query);
+  // The iOS keyboard shrinks only the visual viewport, so a size="100%"
+  // drawer keeps full layout height and results behind the keyboard become
+  // unreachable (the ScrollArea never overflows its oversized bounds). Pin
+  // the sheet to the visual viewport height so the list shrinks and scrolls.
+  const viewportHeight = useVisualViewportHeight(opened);
 
   const series = results?.series ?? [];
   const books = results?.books ?? [];
@@ -65,6 +71,11 @@ export function MobileSearchSheet({ opened, onClose }: MobileSearchSheetProps) {
       withCloseButton
       title="Search"
       classNames={{ body: classes.body, content: "is-translucent-drawer" }}
+      styles={
+        viewportHeight !== null
+          ? { content: { height: viewportHeight } }
+          : undefined
+      }
     >
       <Stack gap="md" h="100%">
         <TextInput

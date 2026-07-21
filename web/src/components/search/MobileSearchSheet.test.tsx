@@ -1,3 +1,4 @@
+import { act } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderWithProviders, screen, userEvent, waitFor } from "@/test/utils";
 import { MobileSearchSheet } from "./MobileSearchSheet";
@@ -221,6 +222,54 @@ describe("MobileSearchSheet", () => {
     await waitFor(() => {
       expect(screen.getByText("No results found")).toBeInTheDocument();
     });
+  });
+
+  it("sizes the sheet to the visual viewport so results stay scrollable above the keyboard", async () => {
+    // On iOS the on-screen keyboard shrinks only the visual viewport; a
+    // `size="100%"` drawer keeps full layout height, so results hidden
+    // behind the keyboard become unreachable. The sheet must follow
+    // `visualViewport.height` instead.
+    const listeners = new Set<() => void>();
+    const viewport = {
+      height: 800,
+      addEventListener: vi.fn((event: string, handler: () => void) => {
+        if (event === "resize") listeners.add(handler);
+      }),
+      removeEventListener: vi.fn((event: string, handler: () => void) => {
+        if (event === "resize") listeners.delete(handler);
+      }),
+    };
+    Object.defineProperty(window, "visualViewport", {
+      configurable: true,
+      value: viewport,
+    });
+
+    try {
+      renderWithProviders(
+        <MobileSearchSheet opened={true} onClose={vi.fn()} />,
+      );
+
+      const content = document.querySelector<HTMLElement>(
+        ".mantine-Drawer-content",
+      );
+      expect(content).not.toBeNull();
+      expect(content?.style.height).toBe("800px");
+
+      // Simulate the keyboard opening.
+      act(() => {
+        viewport.height = 450;
+        for (const handler of listeners) handler();
+      });
+
+      await waitFor(() => {
+        expect(content?.style.height).toBe("450px");
+      });
+    } finally {
+      Object.defineProperty(window, "visualViewport", {
+        configurable: true,
+        value: undefined,
+      });
+    }
   });
 
   it("opens advanced search from the sheet (the header icon is hidden on mobile)", async () => {
