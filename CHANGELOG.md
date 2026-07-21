@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.42.1] - 2026-07-21
+
+### 🐛 Bug Fixes
+
+- *(web)* Make the mobile search sheet scrollable above the iOS keyboard
+
 ## [1.42.0] - 2026-07-19
 
 ### 🚀 Features
