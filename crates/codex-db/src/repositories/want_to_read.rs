@@ -5,7 +5,7 @@
 
 #![allow(dead_code)]
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use anyhow::Result;
 use chrono::Utc;
@@ -15,7 +15,13 @@ use sea_orm::{
 };
 use uuid::Uuid;
 
-use crate::entities::{want_to_read, want_to_read::Entity as WantToRead};
+use crate::entities::{
+    books, books::Entity as Books, series, series::Entity as Series, want_to_read,
+    want_to_read::Entity as WantToRead,
+};
+use crate::repositories::visibility::{
+    SeriesVisibility, apply_book_visibility, apply_series_visibility,
+};
 use codex_models::sort::WantToReadSort;
 
 /// Repository for want-to-read operations.
@@ -218,6 +224,73 @@ impl WantToReadRepository {
             }
         }
         Ok(())
+    }
+
+    /// Hydrate the series entries of a user's queue, in custom queue order,
+    /// filtered by the caller's visibility. Book entries are ignored.
+    pub async fn queued_series(
+        db: &DatabaseConnection,
+        user_id: Uuid,
+        vis: Option<&SeriesVisibility>,
+    ) -> Result<Vec<series::Model>> {
+        if matches!(vis, Some(v) if v.is_empty_whitelist()) {
+            return Ok(vec![]);
+        }
+        let ordered_ids: Vec<Uuid> = Self::list(db, user_id, WantToReadSort::Custom)
+            .await?
+            .into_iter()
+            .filter_map(|e| e.series_id)
+            .collect();
+        if ordered_ids.is_empty() {
+            return Ok(vec![]);
+        }
+        let by_id: HashMap<Uuid, series::Model> = apply_series_visibility(
+            Series::find().filter(series::Column::Id.is_in(ordered_ids.clone())),
+            vis,
+        )
+        .all(db)
+        .await?
+        .into_iter()
+        .map(|s| (s.id, s))
+        .collect();
+        Ok(ordered_ids
+            .iter()
+            .filter_map(|id| by_id.get(id).cloned())
+            .collect())
+    }
+
+    /// Hydrate the book entries of a user's queue, in custom queue order,
+    /// filtered by the caller's visibility (series-based). Series entries are
+    /// ignored.
+    pub async fn queued_books(
+        db: &DatabaseConnection,
+        user_id: Uuid,
+        vis: Option<&SeriesVisibility>,
+    ) -> Result<Vec<books::Model>> {
+        if matches!(vis, Some(v) if v.is_empty_whitelist()) {
+            return Ok(vec![]);
+        }
+        let ordered_ids: Vec<Uuid> = Self::list(db, user_id, WantToReadSort::Custom)
+            .await?
+            .into_iter()
+            .filter_map(|e| e.book_id)
+            .collect();
+        if ordered_ids.is_empty() {
+            return Ok(vec![]);
+        }
+        let by_id: HashMap<Uuid, books::Model> = apply_book_visibility(
+            Books::find().filter(books::Column::Id.is_in(ordered_ids.clone())),
+            vis,
+        )
+        .all(db)
+        .await?
+        .into_iter()
+        .map(|b| (b.id, b))
+        .collect();
+        Ok(ordered_ids
+            .iter()
+            .filter_map(|id| by_id.get(id).cloned())
+            .collect())
     }
 
     /// Next position value for a new entry (max existing + 1, or 0 when empty).
@@ -568,6 +641,131 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(again, 0);
+    }
+
+    #[tokio::test]
+    async fn test_queued_series_preserves_order_and_applies_visibility() {
+        let (db, _t) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let user = make_user(conn, "alice").await;
+        let library = LibraryRepository::create(conn, "Lib", "/lib", ScanningStrategy::Default)
+            .await
+            .unwrap();
+        let s1 = SeriesRepository::create(conn, library.id, "S1", None)
+            .await
+            .unwrap()
+            .id;
+        let s2 = SeriesRepository::create(conn, library.id, "S2", None)
+            .await
+            .unwrap()
+            .id;
+        // s3 exists but is never queued.
+        let _s3 = SeriesRepository::create(conn, library.id, "S3", None)
+            .await
+            .unwrap()
+            .id;
+        // A queued book must not leak into the series view.
+        let (_series_id, book_id) = make_series_and_book(conn).await;
+        WantToReadRepository::add_book(conn, user.id, book_id)
+            .await
+            .unwrap();
+
+        WantToReadRepository::add_series(conn, user.id, s2)
+            .await
+            .unwrap();
+        WantToReadRepository::add_series(conn, user.id, s1)
+            .await
+            .unwrap();
+
+        // Queue order (insertion): s2 then s1.
+        let queued = WantToReadRepository::queued_series(conn, user.id, None)
+            .await
+            .unwrap();
+        assert_eq!(
+            queued.iter().map(|s| s.id).collect::<Vec<_>>(),
+            vec![s2, s1]
+        );
+
+        // Reorder flips the custom order.
+        let entries = WantToReadRepository::list(conn, user.id, WantToReadSort::Custom)
+            .await
+            .unwrap();
+        let reversed: Vec<Uuid> = entries.iter().rev().map(|e| e.id).collect();
+        WantToReadRepository::reorder(conn, user.id, &reversed)
+            .await
+            .unwrap();
+        let queued = WantToReadRepository::queued_series(conn, user.id, None)
+            .await
+            .unwrap();
+        let ordered_ids: Vec<Uuid> = queued.iter().map(|s| s.id).collect();
+        assert_eq!(ordered_ids.last(), Some(&s2));
+
+        // Visibility: excluding s2 hides it.
+        let vis = crate::repositories::visibility::SeriesVisibility {
+            excluded_series_ids: vec![s2],
+            allowed_series_ids: None,
+        };
+        let queued = WantToReadRepository::queued_series(conn, user.id, Some(&vis))
+            .await
+            .unwrap();
+        assert_eq!(queued.iter().map(|s| s.id).collect::<Vec<_>>(), vec![s1]);
+
+        // Empty whitelist hides everything.
+        let vis = crate::repositories::visibility::SeriesVisibility {
+            excluded_series_ids: vec![],
+            allowed_series_ids: Some(vec![]),
+        };
+        assert!(
+            WantToReadRepository::queued_series(conn, user.id, Some(&vis))
+                .await
+                .unwrap()
+                .is_empty()
+        );
+
+        // Another user's queue is empty.
+        let bob = make_user(conn, "bob").await;
+        assert!(
+            WantToReadRepository::queued_series(conn, bob.id, None)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_queued_books_preserves_order_and_applies_visibility() {
+        let (db, _t) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let user = make_user(conn, "alice").await;
+        let (series_id, book_id) = make_series_and_book(conn).await;
+
+        // A queued series must not leak into the book view.
+        WantToReadRepository::add_series(conn, user.id, series_id)
+            .await
+            .unwrap();
+        WantToReadRepository::add_book(conn, user.id, book_id)
+            .await
+            .unwrap();
+
+        let queued = WantToReadRepository::queued_books(conn, user.id, None)
+            .await
+            .unwrap();
+        assert_eq!(
+            queued.iter().map(|b| b.id).collect::<Vec<_>>(),
+            vec![book_id]
+        );
+
+        // Visibility is series-based: excluding the parent series hides the book.
+        let vis = crate::repositories::visibility::SeriesVisibility {
+            excluded_series_ids: vec![series_id],
+            allowed_series_ids: None,
+        };
+        assert!(
+            WantToReadRepository::queued_books(conn, user.id, Some(&vis))
+                .await
+                .unwrap()
+                .is_empty()
+        );
     }
 
     #[tokio::test]

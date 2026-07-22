@@ -3,11 +3,17 @@
 //! Backs the `KomgaReadListDto` shape third-party Komga apps expect, sourced
 //! from real Codex read lists. Member books are filtered through the requesting
 //! user's sharing-tag visibility.
+//!
+//! A virtual, per-user "Want to Read" read list (sentinel ID `want-to-read`)
+//! is prepended to the list and exposes the book entries of the user's
+//! want-to-read queue; the queue's series entries are exposed through the
+//! matching virtual collection (see the collections handler).
 
 use super::super::dto::book::KomgaBookDto;
 use super::super::dto::pagination::KomgaPage;
 use super::super::dto::stubs::{KomgaReadListDto, StubPaginationQuery};
 use super::books::get_series_title;
+use super::collections::{WANT_TO_READ_ID, WANT_TO_READ_NAME, queue_dates};
 use crate::require_permission;
 use crate::{
     error::ApiError,
@@ -20,10 +26,10 @@ use axum::{
     response::Redirect,
 };
 use codex_db::repositories::{
-    BookMetadataRepository, ReadListRepository, ReadProgressRepository,
+    BookMetadataRepository, ReadListRepository, ReadProgressRepository, WantToReadRepository,
     visibility::SeriesVisibility,
 };
-use codex_models::sort::SortDirection;
+use codex_models::sort::{SortDirection, WantToReadSort};
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -39,6 +45,30 @@ async fn user_visibility(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {e}")))?;
     Ok(filter.to_visibility())
+}
+
+async fn build_want_to_read_dto(
+    state: &AuthState,
+    user_id: Uuid,
+    vis: Option<&SeriesVisibility>,
+) -> Result<KomgaReadListDto, ApiError> {
+    let entries = WantToReadRepository::list(&state.db, user_id, WantToReadSort::Custom)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch want-to-read queue: {e}")))?;
+    let members = WantToReadRepository::queued_books(&state.db, user_id, vis)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch want-to-read books: {e}")))?;
+    let (created_date, last_modified_date) = queue_dates(&entries);
+    Ok(KomgaReadListDto {
+        id: WANT_TO_READ_ID.to_string(),
+        name: WANT_TO_READ_NAME.to_string(),
+        summary: "Books flagged as want to read".to_string(),
+        ordered: true,
+        book_ids: members.iter().map(|b| b.id.to_string()).collect(),
+        created_date,
+        last_modified_date,
+        filtered: false,
+    })
 }
 
 async fn build_readlist_dto(
@@ -82,18 +112,24 @@ pub async fn list_readlists(
     let read_lists = ReadListRepository::list_all(&state.db)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to list read lists: {e}")))?;
-    let total = read_lists.len() as i64;
+    // The virtual want-to-read read list is prepended, so it counts toward
+    // the total and shifts the real read lists' page offsets by one.
+    let total = read_lists.len() as i64 + 1;
 
     let page = query.page.max(0);
     let size = query.size.clamp(1, 500);
-    let start = (page as usize).saturating_mul(size as usize);
-    let page_models: Vec<_> = read_lists
-        .into_iter()
-        .skip(start)
-        .take(size as usize)
-        .collect();
+    let mut content = Vec::new();
+    let (start, take) = if page == 0 {
+        content.push(build_want_to_read_dto(&state, auth.user_id, vis.as_ref()).await?);
+        (0, size as usize - 1)
+    } else {
+        (
+            (page as usize).saturating_mul(size as usize) - 1,
+            size as usize,
+        )
+    };
+    let page_models: Vec<_> = read_lists.into_iter().skip(start).take(take).collect();
 
-    let mut content = Vec::with_capacity(page_models.len());
     for model in page_models {
         content.push(build_readlist_dto(&state, model, vis.as_ref()).await?);
     }
@@ -115,12 +151,17 @@ pub async fn get_readlist(
     Path(read_list_id): Path<String>,
 ) -> Result<Json<KomgaReadListDto>, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
+    let vis = user_visibility(&state, auth.user_id).await?;
+    if read_list_id == WANT_TO_READ_ID {
+        return Ok(Json(
+            build_want_to_read_dto(&state, auth.user_id, vis.as_ref()).await?,
+        ));
+    }
     let id = parse_id(&read_list_id)?;
     let model = ReadListRepository::get_by_id(&state.db, id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch read list: {e}")))?
         .ok_or_else(|| ApiError::NotFound("Read list not found".to_string()))?;
-    let vis = user_visibility(&state, auth.user_id).await?;
     Ok(Json(build_readlist_dto(&state, model, vis.as_ref()).await?))
 }
 
@@ -140,22 +181,27 @@ pub async fn get_readlist_books(
     Query(query): Query<StubPaginationQuery>,
 ) -> Result<Json<KomgaPage<KomgaBookDto>>, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
-    let id = parse_id(&read_list_id)?;
-    let model = ReadListRepository::get_by_id(&state.db, id)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to fetch read list: {e}")))?
-        .ok_or_else(|| ApiError::NotFound("Read list not found".to_string()))?;
-
     let vis = user_visibility(&state, auth.user_id).await?;
-    let members = ReadListRepository::get_books(
-        &state.db,
-        &model,
-        vis.as_ref(),
-        None,
-        SortDirection::default(),
-    )
-    .await
-    .map_err(|e| ApiError::Internal(format!("Failed to fetch read list books: {e}")))?;
+    let members = if read_list_id == WANT_TO_READ_ID {
+        WantToReadRepository::queued_books(&state.db, auth.user_id, vis.as_ref())
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to fetch want-to-read books: {e}")))?
+    } else {
+        let id = parse_id(&read_list_id)?;
+        let model = ReadListRepository::get_by_id(&state.db, id)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to fetch read list: {e}")))?
+            .ok_or_else(|| ApiError::NotFound("Read list not found".to_string()))?;
+        ReadListRepository::get_books(
+            &state.db,
+            &model,
+            vis.as_ref(),
+            None,
+            SortDirection::default(),
+        )
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch read list books: {e}")))?
+    };
     let total = members.len() as i64;
 
     let page = query.page.max(0);
@@ -211,21 +257,27 @@ pub async fn get_readlist_thumbnail(
     Path(read_list_id): Path<String>,
 ) -> Result<Redirect, ApiError> {
     auth.require_permission(&Permission::BooksRead)?;
-    let id = parse_id(&read_list_id)?;
-    let model = ReadListRepository::get_by_id(&state.db, id)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to fetch read list: {e}")))?
-        .ok_or_else(|| ApiError::NotFound("Read list not found".to_string()))?;
     let vis = user_visibility(&state, auth.user_id).await?;
-    let members = ReadListRepository::get_books(
-        &state.db,
-        &model,
-        vis.as_ref(),
-        None,
-        SortDirection::default(),
-    )
-    .await
-    .map_err(|e| ApiError::Internal(format!("Failed to fetch read list books: {e}")))?;
+    let members = if read_list_id == WANT_TO_READ_ID {
+        WantToReadRepository::queued_books(&state.db, auth.user_id, vis.as_ref())
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to fetch want-to-read books: {e}")))?
+    } else {
+        let id = parse_id(&read_list_id)?;
+        let model = ReadListRepository::get_by_id(&state.db, id)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to fetch read list: {e}")))?
+            .ok_or_else(|| ApiError::NotFound("Read list not found".to_string()))?;
+        ReadListRepository::get_books(
+            &state.db,
+            &model,
+            vis.as_ref(),
+            None,
+            SortDirection::default(),
+        )
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch read list books: {e}")))?
+    };
     let first = members
         .first()
         .ok_or_else(|| ApiError::NotFound("Read list has no visible books".to_string()))?;
@@ -261,7 +313,15 @@ pub async fn get_book_readlists(
     let read_lists = ReadListRepository::get_read_lists_for_book(&state.db, bid)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch read lists: {e}")))?;
-    let mut out = Vec::with_capacity(read_lists.len());
+    let mut out = Vec::with_capacity(read_lists.len() + 1);
+    // Queued books also belong to the virtual want-to-read read list, so
+    // clients cross-referencing membership stay consistent with the list view.
+    if WantToReadRepository::is_book_in_queue(&state.db, auth.user_id, bid)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to check want-to-read queue: {e}")))?
+    {
+        out.push(build_want_to_read_dto(&state, auth.user_id, vis.as_ref()).await?);
+    }
     for model in read_lists {
         out.push(build_readlist_dto(&state, model, vis.as_ref()).await?);
     }

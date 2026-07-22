@@ -175,6 +175,8 @@ Shared groupings of series. Read-only over the Komga API; create/manage them in 
 | `/collections/{id}/thumbnail` | GET | Collection thumbnail (first member cover) |
 | `/series/{id}/collections` | GET | Collections containing a series |
 
+In addition to real collections, a virtual **Want to Read** collection (ID `want-to-read`) is always listed first. It is personal to the authenticated user and contains the series entries of their [want-to-read queue](./collections-readlists.md), in queue order, so you can browse and start queued series directly from a Komga app.
+
 ### Read Lists
 
 Shared, ordered groupings of books across series. Read-only over the Komga API.
@@ -186,6 +188,8 @@ Shared, ordered groupings of books across series. Read-only over the Komga API.
 | `/readlists/{id}/books` | GET | List the books in a read list |
 | `/readlists/{id}/thumbnail` | GET | Read list thumbnail (first member cover) |
 | `/books/{id}/readlists` | GET | Read lists containing a book |
+
+A virtual **Want to Read** read list (ID `want-to-read`) is always listed first. It is personal to the authenticated user and contains the individual book entries of their want-to-read queue (series entries appear in the matching virtual collection instead).
 
 ### Pages
 

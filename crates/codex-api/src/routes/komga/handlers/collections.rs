@@ -3,6 +3,12 @@
 //! Backs the `KomgaCollectionDto` shape third-party Komga apps expect, sourced
 //! from real Codex collections. Member series are filtered through the
 //! requesting user's sharing-tag visibility.
+//!
+//! A virtual, per-user "Want to Read" collection (sentinel ID `want-to-read`)
+//! is prepended to the list and exposes the series entries of the user's
+//! want-to-read queue, so Komga clients can browse the queue even though
+//! Komga itself has no such feature. Book entries are exposed through the
+//! matching virtual read list instead (see the readlists handler).
 
 use super::super::dto::pagination::KomgaPage;
 use super::super::dto::series::KomgaSeriesDto;
@@ -19,10 +25,17 @@ use axum::{
     extract::{Path, Query, State},
     response::Redirect,
 };
-use codex_db::repositories::{CollectionRepository, visibility::SeriesVisibility};
-use codex_models::sort::SortDirection;
+use codex_db::repositories::{
+    CollectionRepository, WantToReadRepository, visibility::SeriesVisibility,
+};
+use codex_models::sort::{SortDirection, WantToReadSort};
 use std::sync::Arc;
 use uuid::Uuid;
+
+/// Sentinel ID of the virtual per-user want-to-read collection. Komga clients
+/// treat collection IDs as opaque strings, so a non-UUID value is safe.
+pub(crate) const WANT_TO_READ_ID: &str = "want-to-read";
+pub(crate) const WANT_TO_READ_NAME: &str = "Want to Read";
 
 fn parse_id(value: &str) -> Result<Uuid, ApiError> {
     Uuid::parse_str(value).map_err(|_| ApiError::NotFound("Collection not found".to_string()))
@@ -36,6 +49,41 @@ async fn user_visibility(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {e}")))?;
     Ok(filter.to_visibility())
+}
+
+/// Created/modified dates for a virtual queue-backed DTO: first and last
+/// `added_at` of the user's queue entries, or "now" for an empty queue.
+pub(crate) fn queue_dates(entries: &[codex_db::entities::want_to_read::Model]) -> (String, String) {
+    let created = entries.iter().map(|e| e.added_at).min();
+    let modified = entries.iter().map(|e| e.added_at).max();
+    let now = chrono::Utc::now();
+    (
+        created.unwrap_or(now).to_rfc3339(),
+        modified.unwrap_or(now).to_rfc3339(),
+    )
+}
+
+async fn build_want_to_read_dto(
+    state: &AuthState,
+    user_id: Uuid,
+    vis: Option<&SeriesVisibility>,
+) -> Result<KomgaCollectionDto, ApiError> {
+    let entries = WantToReadRepository::list(&state.db, user_id, WantToReadSort::Custom)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch want-to-read queue: {e}")))?;
+    let members = WantToReadRepository::queued_series(&state.db, user_id, vis)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch want-to-read series: {e}")))?;
+    let (created_date, last_modified_date) = queue_dates(&entries);
+    Ok(KomgaCollectionDto {
+        id: WANT_TO_READ_ID.to_string(),
+        name: WANT_TO_READ_NAME.to_string(),
+        ordered: true,
+        series_ids: members.iter().map(|s| s.id.to_string()).collect(),
+        created_date,
+        last_modified_date,
+        filtered: false,
+    })
 }
 
 async fn build_collection_dto(
@@ -78,18 +126,24 @@ pub async fn list_collections(
     let collections = CollectionRepository::list_all(&state.db)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to list collections: {e}")))?;
-    let total = collections.len() as i64;
+    // The virtual want-to-read collection is prepended, so it counts toward
+    // the total and shifts the real collections' page offsets by one.
+    let total = collections.len() as i64 + 1;
 
     let page = query.page.max(0);
     let size = query.size.clamp(1, 500);
-    let start = (page as usize).saturating_mul(size as usize);
-    let page_models: Vec<_> = collections
-        .into_iter()
-        .skip(start)
-        .take(size as usize)
-        .collect();
+    let mut content = Vec::new();
+    let (start, take) = if page == 0 {
+        content.push(build_want_to_read_dto(&state, auth.user_id, vis.as_ref()).await?);
+        (0, size as usize - 1)
+    } else {
+        (
+            (page as usize).saturating_mul(size as usize) - 1,
+            size as usize,
+        )
+    };
+    let page_models: Vec<_> = collections.into_iter().skip(start).take(take).collect();
 
-    let mut content = Vec::with_capacity(page_models.len());
     for model in page_models {
         content.push(build_collection_dto(&state, model, vis.as_ref()).await?);
     }
@@ -111,12 +165,17 @@ pub async fn get_collection(
     Path(collection_id): Path<String>,
 ) -> Result<Json<KomgaCollectionDto>, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
+    let vis = user_visibility(&state, auth.user_id).await?;
+    if collection_id == WANT_TO_READ_ID {
+        return Ok(Json(
+            build_want_to_read_dto(&state, auth.user_id, vis.as_ref()).await?,
+        ));
+    }
     let id = parse_id(&collection_id)?;
     let model = CollectionRepository::get_by_id(&state.db, id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch collection: {e}")))?
         .ok_or_else(|| ApiError::NotFound("Collection not found".to_string()))?;
-    let vis = user_visibility(&state, auth.user_id).await?;
     Ok(Json(
         build_collection_dto(&state, model, vis.as_ref()).await?,
     ))
@@ -138,22 +197,27 @@ pub async fn get_collection_series(
     Query(query): Query<StubPaginationQuery>,
 ) -> Result<Json<KomgaPage<KomgaSeriesDto>>, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
-    let id = parse_id(&collection_id)?;
-    let model = CollectionRepository::get_by_id(&state.db, id)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to fetch collection: {e}")))?
-        .ok_or_else(|| ApiError::NotFound("Collection not found".to_string()))?;
-
     let vis = user_visibility(&state, auth.user_id).await?;
-    let members = CollectionRepository::get_series(
-        &state.db,
-        &model,
-        vis.as_ref(),
-        None,
-        SortDirection::default(),
-    )
-    .await
-    .map_err(|e| ApiError::Internal(format!("Failed to fetch collection series: {e}")))?;
+    let members = if collection_id == WANT_TO_READ_ID {
+        WantToReadRepository::queued_series(&state.db, auth.user_id, vis.as_ref())
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to fetch want-to-read series: {e}")))?
+    } else {
+        let id = parse_id(&collection_id)?;
+        let model = CollectionRepository::get_by_id(&state.db, id)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to fetch collection: {e}")))?
+            .ok_or_else(|| ApiError::NotFound("Collection not found".to_string()))?;
+        CollectionRepository::get_series(
+            &state.db,
+            &model,
+            vis.as_ref(),
+            None,
+            SortDirection::default(),
+        )
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch collection series: {e}")))?
+    };
     let total = members.len() as i64;
 
     let page = query.page.max(0);
@@ -187,21 +251,27 @@ pub async fn get_collection_thumbnail(
     Path(collection_id): Path<String>,
 ) -> Result<Redirect, ApiError> {
     auth.require_permission(&Permission::SeriesRead)?;
-    let id = parse_id(&collection_id)?;
-    let model = CollectionRepository::get_by_id(&state.db, id)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to fetch collection: {e}")))?
-        .ok_or_else(|| ApiError::NotFound("Collection not found".to_string()))?;
     let vis = user_visibility(&state, auth.user_id).await?;
-    let members = CollectionRepository::get_series(
-        &state.db,
-        &model,
-        vis.as_ref(),
-        None,
-        SortDirection::default(),
-    )
-    .await
-    .map_err(|e| ApiError::Internal(format!("Failed to fetch collection series: {e}")))?;
+    let members = if collection_id == WANT_TO_READ_ID {
+        WantToReadRepository::queued_series(&state.db, auth.user_id, vis.as_ref())
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to fetch want-to-read series: {e}")))?
+    } else {
+        let id = parse_id(&collection_id)?;
+        let model = CollectionRepository::get_by_id(&state.db, id)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to fetch collection: {e}")))?
+            .ok_or_else(|| ApiError::NotFound("Collection not found".to_string()))?;
+        CollectionRepository::get_series(
+            &state.db,
+            &model,
+            vis.as_ref(),
+            None,
+            SortDirection::default(),
+        )
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch collection series: {e}")))?
+    };
     let first = members
         .first()
         .ok_or_else(|| ApiError::NotFound("Collection has no visible series".to_string()))?;
@@ -237,7 +307,15 @@ pub async fn get_series_collections(
     let collections = CollectionRepository::get_collections_for_series(&state.db, sid)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch collections: {e}")))?;
-    let mut out = Vec::with_capacity(collections.len());
+    let mut out = Vec::with_capacity(collections.len() + 1);
+    // Queued series also belong to the virtual want-to-read collection, so
+    // clients cross-referencing membership stay consistent with the list view.
+    if WantToReadRepository::is_series_in_queue(&state.db, auth.user_id, sid)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to check want-to-read queue: {e}")))?
+    {
+        out.push(build_want_to_read_dto(&state, auth.user_id, vis.as_ref()).await?);
+    }
     for model in collections {
         out.push(build_collection_dto(&state, model, vis.as_ref()).await?);
     }

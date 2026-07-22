@@ -38,6 +38,22 @@ async fn create_admin_and_token(
         .unwrap()
 }
 
+// Helper to create an admin user and get both the user model and a token
+async fn create_admin_user_and_token(
+    db: &sea_orm::DatabaseConnection,
+    state: &codex::api::extractors::AuthState,
+) -> (codex::db::entities::users::Model, String) {
+    let password_hash = password::hash_password("admin123").unwrap();
+    let user = create_test_user("admin", "admin@example.com", &password_hash, true);
+    let created = UserRepository::create(db, &user).await.unwrap();
+
+    let token = state
+        .jwt_service
+        .generate_token(created.id, created.username.clone(), created.get_role())
+        .unwrap();
+    (created, token)
+}
+
 // Helper to create an admin user for Basic Auth testing
 async fn create_admin_user(db: &sea_orm::DatabaseConnection) {
     let password_hash = password::hash_password("admin123").unwrap();
@@ -1793,7 +1809,8 @@ async fn test_komga_search_series_post() {
 // Stub Endpoint Tests (Collections, Read Lists, Genres, Tags, Authors)
 // ============================================================================
 
-/// Test that /collections returns empty result (stub)
+/// With no real collections, /collections still lists the virtual
+/// want-to-read collection (empty for a user with an empty queue).
 #[tokio::test]
 async fn test_komga_collections_empty() {
     let (db, temp_dir) = setup_test_db().await;
@@ -1811,11 +1828,15 @@ async fn test_komga_collections_empty() {
 
     assert_eq!(status, StatusCode::OK);
     let page = response.unwrap();
-    assert_eq!(page.content.len(), 0);
-    assert_eq!(page.total_elements, 0);
+    assert_eq!(page.content.len(), 1);
+    assert_eq!(page.total_elements, 1);
+    assert_eq!(page.content[0].id, "want-to-read");
+    assert_eq!(page.content[0].name, "Want to Read");
+    assert!(page.content[0].series_ids.is_empty());
 }
 
-/// Test that /readlists returns empty result (stub)
+/// With no real read lists, /readlists still lists the virtual want-to-read
+/// read list (empty for a user with an empty queue).
 #[tokio::test]
 async fn test_komga_readlists_empty() {
     let (db, temp_dir) = setup_test_db().await;
@@ -1833,8 +1854,11 @@ async fn test_komga_readlists_empty() {
 
     assert_eq!(status, StatusCode::OK);
     let page = response.unwrap();
-    assert_eq!(page.content.len(), 0);
-    assert_eq!(page.total_elements, 0);
+    assert_eq!(page.content.len(), 1);
+    assert_eq!(page.total_elements, 1);
+    assert_eq!(page.content[0].id, "want-to-read");
+    assert_eq!(page.content[0].name, "Want to Read");
+    assert!(page.content[0].book_ids.is_empty());
 }
 
 /// Test that /genres returns empty array (stub)
@@ -4970,7 +4994,7 @@ async fn test_komga_put_progression_book_not_found() {
 // ============================================================================
 
 use codex::api::routes::komga::dto::{KomgaCollectionDto, KomgaReadListDto};
-use codex::db::repositories::{CollectionRepository, ReadListRepository};
+use codex::db::repositories::{CollectionRepository, ReadListRepository, WantToReadRepository};
 
 #[tokio::test]
 async fn test_komga_collections_real_data() {
@@ -4992,15 +5016,16 @@ async fn test_komga_collections_real_data() {
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router_with_komga(state);
 
-    // List
+    // List: the virtual want-to-read collection is prepended to real ones.
     let request = get_request_with_auth("/komga/api/v1/collections", &token);
     let (status, page): (StatusCode, Option<KomgaPage<KomgaCollectionDto>>) =
         make_json_request(app.clone(), request).await;
     assert_eq!(status, StatusCode::OK);
     let page = page.unwrap();
-    assert_eq!(page.total_elements, 1);
-    assert_eq!(page.content[0].name, "Batman Collection");
-    assert_eq!(page.content[0].series_ids, vec![series.id.to_string()]);
+    assert_eq!(page.total_elements, 2);
+    assert_eq!(page.content[0].id, "want-to-read");
+    assert_eq!(page.content[1].name, "Batman Collection");
+    assert_eq!(page.content[1].series_ids, vec![series.id.to_string()]);
 
     // Detail
     let request = get_request_with_auth(&format!("/komga/api/v1/collections/{}", coll.id), &token);
@@ -5061,16 +5086,17 @@ async fn test_komga_readlists_real_data() {
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router_with_komga(state);
 
-    // List
+    // List: the virtual want-to-read read list is prepended to real ones.
     let request = get_request_with_auth("/komga/api/v1/readlists", &token);
     let (status, page): (StatusCode, Option<KomgaPage<KomgaReadListDto>>) =
         make_json_request(app.clone(), request).await;
     assert_eq!(status, StatusCode::OK);
     let page = page.unwrap();
-    assert_eq!(page.total_elements, 1);
-    assert_eq!(page.content[0].name, "Civil War");
-    assert_eq!(page.content[0].summary, "Crossover");
-    assert_eq!(page.content[0].book_ids, vec![book.id.to_string()]);
+    assert_eq!(page.total_elements, 2);
+    assert_eq!(page.content[0].id, "want-to-read");
+    assert_eq!(page.content[1].name, "Civil War");
+    assert_eq!(page.content[1].summary, "Crossover");
+    assert_eq!(page.content[1].book_ids, vec![book.id.to_string()]);
 
     // Members
     let request =
@@ -5091,6 +5117,204 @@ async fn test_komga_readlists_real_data() {
         make_json_request(app, request).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(list.unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn test_komga_want_to_read_virtual_collection() {
+    let (db, temp_dir) = setup_test_db().await;
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let naruto = SeriesRepository::create(&db, library.id, "Naruto", None)
+        .await
+        .unwrap();
+    let bleach = SeriesRepository::create(&db, library.id, "Bleach", None)
+        .await
+        .unwrap();
+    let unqueued = SeriesRepository::create(&db, library.id, "One Piece", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let (admin, token) = create_admin_user_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    // Queue order: Bleach first, then Naruto.
+    WantToReadRepository::add_series(&db, admin.id, bleach.id)
+        .await
+        .unwrap();
+    WantToReadRepository::add_series(&db, admin.id, naruto.id)
+        .await
+        .unwrap();
+
+    // List: virtual collection is first, ordered, with queue-ordered members.
+    let request = get_request_with_auth("/komga/api/v1/collections", &token);
+    let (status, page): (StatusCode, Option<KomgaPage<KomgaCollectionDto>>) =
+        make_json_request(app.clone(), request).await;
+    assert_eq!(status, StatusCode::OK);
+    let page = page.unwrap();
+    assert_eq!(page.total_elements, 1);
+    let wtr = &page.content[0];
+    assert_eq!(wtr.id, "want-to-read");
+    assert_eq!(wtr.name, "Want to Read");
+    assert!(wtr.ordered);
+    assert_eq!(
+        wtr.series_ids,
+        vec![bleach.id.to_string(), naruto.id.to_string()]
+    );
+
+    // Detail by sentinel ID.
+    let request = get_request_with_auth("/komga/api/v1/collections/want-to-read", &token);
+    let (status, dto): (StatusCode, Option<KomgaCollectionDto>) =
+        make_json_request(app.clone(), request).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(dto.unwrap().id, "want-to-read");
+
+    // Members endpoint preserves queue order.
+    let request = get_request_with_auth("/komga/api/v1/collections/want-to-read/series", &token);
+    let (status, members): (StatusCode, Option<KomgaPage<KomgaSeriesDto>>) =
+        make_json_request(app.clone(), request).await;
+    assert_eq!(status, StatusCode::OK);
+    let members = members.unwrap();
+    assert_eq!(members.total_elements, 2);
+    assert_eq!(members.content[0].id, bleach.id.to_string());
+    assert_eq!(members.content[1].id, naruto.id.to_string());
+
+    // Thumbnail redirects to the first queued series.
+    let request = get_request_with_auth("/komga/api/v1/collections/want-to-read/thumbnail", &token);
+    let (status, _) = make_raw_request(app.clone(), request).await;
+    assert_eq!(status, StatusCode::TEMPORARY_REDIRECT);
+
+    // Reverse lookup: queued series report the virtual collection...
+    let request = get_request_with_auth(
+        &format!("/komga/api/v1/series/{}/collections", naruto.id),
+        &token,
+    );
+    let (status, list): (StatusCode, Option<Vec<KomgaCollectionDto>>) =
+        make_json_request(app.clone(), request).await;
+    assert_eq!(status, StatusCode::OK);
+    let list = list.unwrap();
+    assert_eq!(list.len(), 1);
+    assert_eq!(list[0].id, "want-to-read");
+
+    // ...while unqueued series do not.
+    let request = get_request_with_auth(
+        &format!("/komga/api/v1/series/{}/collections", unqueued.id),
+        &token,
+    );
+    let (status, list): (StatusCode, Option<Vec<KomgaCollectionDto>>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(list.unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn test_komga_want_to_read_virtual_readlist() {
+    let (db, temp_dir) = setup_test_db().await;
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Spider-Man", None)
+        .await
+        .unwrap();
+    let queued_book = create_test_book_with_hash(
+        &db,
+        &library,
+        &series,
+        "ASM #1",
+        "/comics/asm1.cbz",
+        "hash_asm1",
+    )
+    .await;
+    let unqueued_book = create_test_book_with_hash(
+        &db,
+        &library,
+        &series,
+        "ASM #2",
+        "/comics/asm2.cbz",
+        "hash_asm2",
+    )
+    .await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let (admin, token) = create_admin_user_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    WantToReadRepository::add_book(&db, admin.id, queued_book.id)
+        .await
+        .unwrap();
+
+    // List: virtual read list is first with the queued book.
+    let request = get_request_with_auth("/komga/api/v1/readlists", &token);
+    let (status, page): (StatusCode, Option<KomgaPage<KomgaReadListDto>>) =
+        make_json_request(app.clone(), request).await;
+    assert_eq!(status, StatusCode::OK);
+    let page = page.unwrap();
+    assert_eq!(page.total_elements, 1);
+    let wtr = &page.content[0];
+    assert_eq!(wtr.id, "want-to-read");
+    assert_eq!(wtr.name, "Want to Read");
+    assert!(wtr.ordered);
+    assert_eq!(wtr.book_ids, vec![queued_book.id.to_string()]);
+
+    // Detail by sentinel ID.
+    let request = get_request_with_auth("/komga/api/v1/readlists/want-to-read", &token);
+    let (status, dto): (StatusCode, Option<KomgaReadListDto>) =
+        make_json_request(app.clone(), request).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(dto.unwrap().id, "want-to-read");
+
+    // Members endpoint returns hydrated book DTOs.
+    let request = get_request_with_auth("/komga/api/v1/readlists/want-to-read/books", &token);
+    let (status, members): (StatusCode, Option<KomgaPage<KomgaBookDto>>) =
+        make_json_request(app.clone(), request).await;
+    assert_eq!(status, StatusCode::OK);
+    let members = members.unwrap();
+    assert_eq!(members.total_elements, 1);
+    assert_eq!(members.content[0].id, queued_book.id.to_string());
+
+    // Thumbnail redirects to the first queued book.
+    let request = get_request_with_auth("/komga/api/v1/readlists/want-to-read/thumbnail", &token);
+    let (status, _) = make_raw_request(app.clone(), request).await;
+    assert_eq!(status, StatusCode::TEMPORARY_REDIRECT);
+
+    // Reverse lookup: the queued book reports the virtual read list...
+    let request = get_request_with_auth(
+        &format!("/komga/api/v1/books/{}/readlists", queued_book.id),
+        &token,
+    );
+    let (status, list): (StatusCode, Option<Vec<KomgaReadListDto>>) =
+        make_json_request(app.clone(), request).await;
+    assert_eq!(status, StatusCode::OK);
+    let list = list.unwrap();
+    assert_eq!(list.len(), 1);
+    assert_eq!(list[0].id, "want-to-read");
+
+    // ...while unqueued books do not.
+    let request = get_request_with_auth(
+        &format!("/komga/api/v1/books/{}/readlists", unqueued_book.id),
+        &token,
+    );
+    let (status, list): (StatusCode, Option<Vec<KomgaReadListDto>>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(list.unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn test_komga_want_to_read_empty_thumbnail_not_found() {
+    let (db, temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    let request = get_request_with_auth("/komga/api/v1/collections/want-to-read/thumbnail", &token);
+    let (status, _) = make_raw_request(app.clone(), request).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    let request = get_request_with_auth("/komga/api/v1/readlists/want-to-read/thumbnail", &token);
+    let (status, _) = make_raw_request(app, request).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
 }
 
 #[tokio::test]
