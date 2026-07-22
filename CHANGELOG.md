@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.42.2] - 2026-07-22
+
+### 🚀 Features
+
+- *(komga)* Expose the want-to-read queue as a virtual collection and read list
+
 ## [1.42.1] - 2026-07-21
 
 ### 🐛 Bug Fixes
