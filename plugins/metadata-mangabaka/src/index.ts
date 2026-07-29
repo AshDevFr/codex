@@ -64,10 +64,11 @@ createMetadataPlugin({
     // Get optional config from admin settings
     const timeout = params.adminConfig?.timeout as number | undefined;
     const sortBy = params.adminConfig?.sort_by as string | undefined;
+    const baseUrl = params.adminConfig?.base_url as string | undefined;
 
-    client = new MangaBakaClient(apiKey, { timeout, sortBy });
+    client = new MangaBakaClient(apiKey, { timeout, sortBy, baseUrl });
     logger.info(
-      `MangaBaka client initialized (timeout: ${timeout ?? "default"}s, sortBy: ${sortBy ?? "default"})`,
+      `MangaBaka client initialized (baseUrl: ${client.baseUrl}, timeout: ${timeout ?? "default"}s, sortBy: ${sortBy ?? "default"})`,
     );
   },
 });

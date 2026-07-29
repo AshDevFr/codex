@@ -1,6 +1,6 @@
 /**
  * MangaBaka API response types
- * Based on: https://api.mangabaka.dev/
+ * Based on: https://api.mangabaka.org/
  */
 
 /**
@@ -13,10 +13,14 @@ export interface MbApiResponse<T> {
 }
 
 export interface MbPagination {
+  /** Total number of matching records across all pages */
+  count: number;
+  /** Absolute URL of the next page, or null when this is the last page */
+  next: string | null;
+  /** Absolute URL of the previous page, or null when this is the first page */
+  previous: string | null;
   page: number;
-  per_page: number;
-  total: number;
-  total_pages: number;
+  limit: number;
 }
 
 /**

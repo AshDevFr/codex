@@ -46,6 +46,16 @@ export const manifest = {
         default: "relevance_desc",
         example: "popularity_asc",
       },
+      {
+        key: "base_url",
+        label: "API Base URL",
+        description:
+          "Override the MangaBaka API base URL. Rarely needed - useful if the API moves hosts or you front it with a proxy.",
+        type: "string",
+        required: false,
+        default: "https://api.mangabaka.org",
+        example: "https://api.mangabaka.org",
+      },
     ],
   },
 } as const satisfies PluginManifest & {

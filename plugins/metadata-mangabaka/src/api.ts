@@ -7,7 +7,7 @@ import { ApiError, AuthError, NotFoundError, RateLimitError } from "@ashdev/code
 import { logger } from "./logger.js";
 import type { MbGetSeriesResponse, MbSearchResponse, MbSeries } from "./types.js";
 
-const BASE_URL = "https://api.mangabaka.dev";
+export const DEFAULT_BASE_URL = "https://api.mangabaka.org";
 const DEFAULT_TIMEOUT_SECONDS = 60;
 
 export interface MangaBakaClientOptions {
@@ -15,12 +15,16 @@ export interface MangaBakaClientOptions {
   timeout?: number;
   /** Sort order for search results (passed as sort_by to the API) */
   sortBy?: string;
+  /** Override the API base URL (default: {@link DEFAULT_BASE_URL}) */
+  baseUrl?: string;
 }
 
 export class MangaBakaClient {
   private readonly apiKey: string;
   private readonly timeoutMs: number;
   private readonly sortBy: string | undefined;
+  /** Resolved API base URL, normalized without a trailing slash. */
+  readonly baseUrl: string;
 
   constructor(apiKey: string, options?: MangaBakaClientOptions) {
     if (!apiKey) {
@@ -29,8 +33,10 @@ export class MangaBakaClient {
     this.apiKey = apiKey;
     this.timeoutMs = (options?.timeout ?? DEFAULT_TIMEOUT_SECONDS) * 1000;
     this.sortBy = options?.sortBy;
+    // Request paths are absolute, so a trailing slash would produce `//v1/...`.
+    this.baseUrl = (options?.baseUrl?.trim() || DEFAULT_BASE_URL).replace(/\/+$/, "");
     logger.debug(
-      `MangaBakaClient initialized with timeout: ${this.timeoutMs}ms, sortBy: ${this.sortBy ?? "default"}`,
+      `MangaBakaClient initialized with baseUrl: ${this.baseUrl}, timeout: ${this.timeoutMs}ms, sortBy: ${this.sortBy ?? "default"}`,
     );
   }
 
@@ -41,7 +47,7 @@ export class MangaBakaClient {
     query: string,
     page = 1,
     perPage = 20,
-  ): Promise<{ data: MbSeries[]; total: number; page: number; totalPages: number }> {
+  ): Promise<{ data: MbSeries[]; total: number; page: number; hasNextPage: boolean }> {
     logger.debug(`Searching for: "${query}" (page ${page})`);
 
     const params = new URLSearchParams({
@@ -58,9 +64,11 @@ export class MangaBakaClient {
 
     return {
       data: response.data,
-      total: response.pagination?.total ?? response.data.length,
+      total: response.pagination?.count ?? response.data.length,
       page: response.pagination?.page ?? page,
-      totalPages: response.pagination?.total_pages ?? 1,
+      // The API reports the next page as an absolute URL (null on the last
+      // page); trust that rather than deriving a page count from the totals.
+      hasNextPage: response.pagination?.next != null,
     };
   }
 
@@ -79,7 +87,7 @@ export class MangaBakaClient {
    * Make an authenticated request to the MangaBaka API
    */
   private async request<T>(path: string): Promise<T> {
-    const url = `${BASE_URL}${path}`;
+    const url = `${this.baseUrl}${path}`;
     const headers: Record<string, string> = {
       "x-api-key": this.apiKey,
       Accept: "application/json",

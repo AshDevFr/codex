@@ -120,12 +120,16 @@ The plugin supports optional parameters to customize behavior:
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `base_url` | string | `https://api.mangabaka.org` | Override the API base URL |
+| `timeout` | number | `60` | HTTP request timeout in seconds for each MangaBaka API call |
+| `sort_by` | string | `relevance_desc` | Sort order for search results. Valid values: `relevance_desc`, `popularity_asc` (recommended; surfaces well-known series first), `popularity_desc`, `title_asc`, `title_desc`, `created_at_desc`, `created_at_asc` |
+| `base_url` | string | `https://api.mangabaka.org` | Override the API base URL (rarely needed) |
 
 Example parameters configuration:
 
 ```json
 {
+  "timeout": 30,
+  "sort_by": "popularity_asc",
   "base_url": "https://api.mangabaka.org"
 }
 ```

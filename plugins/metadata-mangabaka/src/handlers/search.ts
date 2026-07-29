@@ -48,11 +48,10 @@ export async function handleSearch(
     .sort((a, b) => (b.relevanceScore ?? 0) - (a.relevanceScore ?? 0));
 
   // Calculate next cursor (next page number) if there are more results
-  const hasNextPage = response.page < response.totalPages;
-  const nextCursor = hasNextPage ? String(response.page + 1) : undefined;
+  const nextCursor = response.hasNextPage ? String(response.page + 1) : undefined;
 
   logger.debug(
-    `Search "${params.query}" -> ${results.length} result(s), page ${response.page}/${response.totalPages}${nextCursor ? " (more)" : ""}`,
+    `Search "${params.query}" -> ${results.length} result(s), page ${response.page} of ${response.total} total${nextCursor ? " (more)" : ""}`,
   );
   return {
     results,
