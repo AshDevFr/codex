@@ -21,6 +21,7 @@ use codex_db::repositories::{
     SettingsRepository,
 };
 use codex_models::sort::SortDirection;
+use codex_services::CollectionMembershipService;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -571,12 +572,13 @@ pub async fn collection_series(
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
     let visibility = content_filter.to_visibility();
 
-    let series_list = CollectionRepository::get_series(
+    let series_list = CollectionMembershipService::members(
         &state.db,
         &collection,
         visibility.as_ref(),
         None,
         SortDirection::default(),
+        Some(auth.user_id),
     )
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to fetch collection series: {}", e)))?;

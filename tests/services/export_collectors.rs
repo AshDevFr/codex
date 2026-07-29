@@ -20,10 +20,10 @@ async fn test_series_export_includes_collections() {
     let series_a = create_test_series(&db, &library, "Alpha").await;
     let series_b = create_test_series(&db, &library, "Bravo").await;
 
-    let zeta = CollectionRepository::create(&db, "Zeta", None, false)
+    let zeta = CollectionRepository::create(&db, "Zeta", None, false, None)
         .await
         .unwrap();
-    let picks = CollectionRepository::create(&db, "Best Picks", None, false)
+    let picks = CollectionRepository::create(&db, "Best Picks", None, false, None)
         .await
         .unwrap();
     CollectionRepository::add_series(&db, zeta.id, series_a.id)
@@ -58,7 +58,7 @@ async fn test_series_export_collections_not_selected() {
     let library = create_test_library(&db, "Lib", "/lib").await;
     let series = create_test_series(&db, &library, "Alpha").await;
 
-    let coll = CollectionRepository::create(&db, "Zeta", None, false)
+    let coll = CollectionRepository::create(&db, "Zeta", None, false, None)
         .await
         .unwrap();
     CollectionRepository::add_series(&db, coll.id, series.id)
@@ -91,7 +91,7 @@ async fn test_series_export_membership_only_for_visible_rows() {
     let visible = create_test_series(&db, &library, "Visible").await;
     let hidden = create_test_series(&db, &library, "Hidden").await;
 
-    let coll = CollectionRepository::create(&db, "Shared", None, false)
+    let coll = CollectionRepository::create(&db, "Shared", None, false, None)
         .await
         .unwrap();
     for sid in [visible.id, hidden.id] {

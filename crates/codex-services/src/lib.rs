@@ -10,6 +10,7 @@ pub mod metrics;
 pub mod metrics;
 
 pub mod cleanup_subscriber;
+pub mod collection_membership;
 pub mod content_filter;
 pub mod email;
 pub mod export_storage;
@@ -43,6 +44,7 @@ pub mod user_plugin;
 
 pub use auth_tracking::AuthTrackingService;
 pub use cleanup_subscriber::CleanupEventSubscriber;
+pub use collection_membership::CollectionMembershipService;
 pub use export_storage::ExportStorage;
 pub use file_cleanup::{CleanupStats, FileCleanupService, OrphanedFileType};
 pub use filter::FilterService;

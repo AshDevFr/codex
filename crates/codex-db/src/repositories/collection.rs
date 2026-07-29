@@ -66,6 +66,13 @@ impl CollectionRepository {
     ///
     /// Used by the filter service to evaluate the "in collection" membership
     /// filter. Returns distinct series IDs across all collections.
+    ///
+    /// Rule-backed collections are invisible here, and that is what makes rule
+    /// recursion structurally impossible: if `inCollection` could see them, then
+    /// evaluating a rule that itself contains `inCollection` would have to
+    /// resolve every other rule first. Because an automatic collection has no
+    /// junction rows, that exclusion needs no filter of its own; this method
+    /// only ever sees manual membership.
     pub async fn all_member_series_ids(
         db: &DatabaseConnection,
     ) -> Result<std::collections::HashSet<Uuid>> {
@@ -80,37 +87,59 @@ impl CollectionRepository {
     }
 
     /// Create a new collection. Fails if the (normalized) name already exists.
+    ///
+    /// A `condition` makes the collection rule-backed: membership is resolved
+    /// at read time from the stored `SeriesCondition` and no junction rows are
+    /// ever written. `ordered` is forced to `false` in that case, since there is
+    /// no manual arrangement to preserve.
     pub async fn create(
         db: &DatabaseConnection,
         name: &str,
         summary: Option<&str>,
         ordered: bool,
+        condition: Option<serde_json::Value>,
     ) -> Result<collections::Model> {
         let now = Utc::now();
+        let is_auto = condition.is_some();
         let model = collections::ActiveModel {
             id: Set(Uuid::new_v4()),
             name: Set(name.trim().to_string()),
             normalized_name: Set(name.trim().to_lowercase()),
             summary: Set(summary.map(|s| s.to_string())),
-            ordered: Set(ordered),
+            condition: Set(condition),
+            ordered: Set(ordered && !is_auto),
             created_at: Set(now),
             updated_at: Set(now),
         };
         Ok(model.insert(db).await?)
     }
 
-    /// Update a collection's name, summary, and/or ordered flag. Returns
-    /// `None` if the collection does not exist. `summary = Some(None)` clears
-    /// it.
+    /// Update a collection's name, summary, condition, and/or ordered flag.
+    /// Returns `None` if the collection does not exist.
+    ///
+    /// The nullable fields take a tri-state: `None` leaves the field alone,
+    /// `Some(None)` clears it, `Some(Some(v))` sets it. Clearing `condition`
+    /// converts a rule-backed collection to a manual one, which leaves it empty
+    /// because it never had junction rows.
+    ///
+    /// Setting a condition forces `ordered` off for the same reason `create`
+    /// does.
     pub async fn update(
         db: &DatabaseConnection,
         id: Uuid,
         name: Option<&str>,
         summary: Option<Option<&str>>,
         ordered: Option<bool>,
+        condition: Option<Option<serde_json::Value>>,
     ) -> Result<Option<collections::Model>> {
         let Some(existing) = Collections::find_by_id(id).one(db).await? else {
             return Ok(None);
+        };
+        // Whether the collection is rule-backed *after* this update, which is
+        // what decides if `ordered` may be true.
+        let is_auto = match &condition {
+            Some(next) => next.is_some(),
+            None => existing.condition.is_some(),
         };
         let mut active = existing.into_active_model();
         if let Some(name) = name {
@@ -120,8 +149,13 @@ impl CollectionRepository {
         if let Some(summary) = summary {
             active.summary = Set(summary.map(|s| s.to_string()));
         }
+        if let Some(condition) = condition {
+            active.condition = Set(condition);
+        }
         if let Some(ordered) = ordered {
-            active.ordered = Set(ordered);
+            active.ordered = Set(ordered && !is_auto);
+        } else if is_auto {
+            active.ordered = Set(false);
         }
         active.updated_at = Set(Utc::now());
         Ok(Some(active.update(db).await?))
@@ -134,13 +168,36 @@ impl CollectionRepository {
         Ok(result.rows_affected > 0)
     }
 
+    /// Whether the collection exists and is rule-backed.
+    ///
+    /// The mutation guards below use this rather than trusting callers to have
+    /// checked: a stray junction row on an automatic collection would be
+    /// invisible (its members come from the rule) and would resurface the moment
+    /// the rule was cleared.
+    async fn is_rule_backed(db: &DatabaseConnection, collection_id: Uuid) -> Result<bool> {
+        Ok(Collections::find_by_id(collection_id)
+            .one(db)
+            .await?
+            .is_some_and(|c| c.condition.is_some()))
+    }
+
     /// Add a series to a collection at the end of the order. Idempotent: if the
     /// series is already a member, returns the existing link unchanged.
+    ///
+    /// Errors on a rule-backed collection: its membership is the rule, and the
+    /// fix for a series that should or shouldn't be in it is the series'
+    /// metadata, which also corrects search and every other rule.
     pub async fn add_series(
         db: &DatabaseConnection,
         collection_id: Uuid,
         series_id: Uuid,
     ) -> Result<collection_series::Model> {
+        if Self::is_rule_backed(db, collection_id).await? {
+            anyhow::bail!(
+                "collection {collection_id} is automatic: its members come from its rule, so they cannot be added by hand"
+            );
+        }
+
         if let Some(existing) = CollectionSeries::find()
             .filter(collection_series::Column::CollectionId.eq(collection_id))
             .filter(collection_series::Column::SeriesId.eq(series_id))
@@ -162,11 +219,20 @@ impl CollectionRepository {
     }
 
     /// Remove a series from a collection. Returns whether a row was removed.
+    ///
+    /// Errors on a rule-backed collection, for the reasons on
+    /// [`Self::add_series`].
     pub async fn remove_series(
         db: &DatabaseConnection,
         collection_id: Uuid,
         series_id: Uuid,
     ) -> Result<bool> {
+        if Self::is_rule_backed(db, collection_id).await? {
+            anyhow::bail!(
+                "collection {collection_id} is automatic: its members come from its rule, so they cannot be removed by hand"
+            );
+        }
+
         let result = CollectionSeries::delete_many()
             .filter(collection_series::Column::CollectionId.eq(collection_id))
             .filter(collection_series::Column::SeriesId.eq(series_id))
@@ -177,11 +243,20 @@ impl CollectionRepository {
 
     /// Set explicit positions for the given series in the order provided. Series
     /// not currently members are skipped.
+    ///
+    /// Errors on a rule-backed collection: there is no manual order to set, and
+    /// `ordered` is forced off for those collections anyway.
     pub async fn reorder(
         db: &DatabaseConnection,
         collection_id: Uuid,
         ordered_series_ids: &[Uuid],
     ) -> Result<()> {
+        if Self::is_rule_backed(db, collection_id).await? {
+            anyhow::bail!(
+                "collection {collection_id} is automatic: it has no manual order to rearrange"
+            );
+        }
+
         for (idx, series_id) in ordered_series_ids.iter().enumerate() {
             if let Some(link) = CollectionSeries::find()
                 .filter(collection_series::Column::CollectionId.eq(collection_id))
@@ -257,32 +332,7 @@ impl CollectionRepository {
 
         match sort {
             CollectionSeriesSort::Title | CollectionSeriesSort::Year => {
-                // LOWER makes the order case-insensitive: binary collation would
-                // sort every uppercase title ahead of any lowercase one.
-                let title_expr = Expr::expr(Func::lower(Func::coalesce([
-                    Expr::col((series_metadata::Entity, series_metadata::Column::TitleSort)).into(),
-                    Expr::col((series_metadata::Entity, series_metadata::Column::Title)).into(),
-                    Expr::col((series::Entity, series::Column::Name)).into(),
-                ])));
-                let mut query = Series::find()
-                    .filter(series::Column::Id.is_in(ordered_ids))
-                    .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def());
-                if matches!(sort, CollectionSeriesSort::Year) {
-                    // Unknown years stay last in both directions.
-                    query = query.order_by_with_nulls(
-                        series_metadata::Column::Year,
-                        order.clone(),
-                        NullOrdering::Last,
-                    );
-                    // Tie-break years by title ascending regardless of direction.
-                    query = query.order_by(title_expr, Order::Asc);
-                } else {
-                    query = query.order_by(title_expr, order);
-                }
-                Ok(query
-                    .order_by(series::Column::Id, Order::Asc)
-                    .all(db)
-                    .await?)
+                Self::hydrate_by_title_or_year(db, ordered_ids, sort, order).await
             }
             // Manual position / date-added order comes from the junction query;
             // re-project the hydrated models into that order.
@@ -298,6 +348,121 @@ impl CollectionRepository {
                     .iter()
                     .filter_map(|id| by_id.get(id).cloned())
                     .collect())
+            }
+        }
+    }
+
+    /// Hydrate the given series in title or year order.
+    ///
+    /// Shared by the junction-backed and rule-backed read paths: both need the
+    /// same case-insensitive title expression and the same "unknown years last"
+    /// behaviour, and only differ in where the id list came from.
+    async fn hydrate_by_title_or_year(
+        db: &DatabaseConnection,
+        ids: Vec<Uuid>,
+        sort: CollectionSeriesSort,
+        order: Order,
+    ) -> Result<Vec<series::Model>> {
+        // LOWER makes the order case-insensitive: binary collation would
+        // sort every uppercase title ahead of any lowercase one.
+        let title_expr = Expr::expr(Func::lower(Func::coalesce([
+            Expr::col((series_metadata::Entity, series_metadata::Column::TitleSort)).into(),
+            Expr::col((series_metadata::Entity, series_metadata::Column::Title)).into(),
+            Expr::col((series::Entity, series::Column::Name)).into(),
+        ])));
+        let mut query = Series::find()
+            .filter(series::Column::Id.is_in(ids))
+            .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def());
+        if matches!(sort, CollectionSeriesSort::Year) {
+            // Unknown years stay last in both directions.
+            query = query.order_by_with_nulls(
+                series_metadata::Column::Year,
+                order.clone(),
+                NullOrdering::Last,
+            );
+            // Tie-break years by title ascending regardless of direction.
+            query = query.order_by(title_expr, Order::Asc);
+        } else {
+            query = query.order_by(title_expr, order);
+        }
+        Ok(query
+            .order_by(series::Column::Id, Order::Asc)
+            .all(db)
+            .await?)
+    }
+
+    /// Sort and hydrate an explicit set of series, filtered by the caller's
+    /// visibility.
+    ///
+    /// This is the read path for rule-backed collections: the caller (the
+    /// membership service in `codex-services`) resolves the rule to an id set
+    /// and hands it here. The repository stays rule-unaware, because
+    /// `codex-services` depends on `codex-db` and not the reverse, so this
+    /// crate cannot reach the filter engine.
+    ///
+    /// Two sorts mean something different without a junction to read:
+    ///
+    /// * `Manual` has no manual order to honour and falls back to `Title`.
+    /// * `Added` means the date the series entered the *library*
+    ///   (`series.created_at`), not the date it entered the collection, because
+    ///   a rule-backed collection has no per-member join date.
+    ///
+    /// Visibility is applied to the id list in memory before the query, both to
+    /// keep the emitted SQL to a single `IN` and because the visibility sets are
+    /// already in memory. This mirrors
+    /// [`crate::repositories::SeriesRepository::list_by_ids_sorted`].
+    pub async fn get_series_by_ids(
+        db: &DatabaseConnection,
+        series_ids: &[Uuid],
+        vis: Option<&SeriesVisibility>,
+        sort: CollectionSeriesSort,
+        direction: SortDirection,
+    ) -> Result<Vec<series::Model>> {
+        if matches!(vis, Some(v) if v.is_empty_whitelist()) {
+            return Ok(vec![]);
+        }
+
+        let visible_ids: Vec<Uuid> = match vis {
+            None => series_ids.to_vec(),
+            Some(v) => series_ids
+                .iter()
+                .copied()
+                .filter(|id| {
+                    if v.excluded_series_ids.contains(id) {
+                        return false;
+                    }
+                    if let Some(allowed) = &v.allowed_series_ids {
+                        return allowed.contains(id);
+                    }
+                    true
+                })
+                .collect(),
+        };
+
+        if visible_ids.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let order = match direction {
+            SortDirection::Asc => Order::Asc,
+            SortDirection::Desc => Order::Desc,
+        };
+
+        match sort {
+            CollectionSeriesSort::Year => {
+                Self::hydrate_by_title_or_year(db, visible_ids, CollectionSeriesSort::Year, order)
+                    .await
+            }
+            CollectionSeriesSort::Added => Ok(Series::find()
+                .filter(series::Column::Id.is_in(visible_ids))
+                .order_by(series::Column::CreatedAt, order)
+                .order_by(series::Column::Id, Order::Asc)
+                .all(db)
+                .await?),
+            // Title, and Manual which has nothing to fall back on but title.
+            _ => {
+                Self::hydrate_by_title_or_year(db, visible_ids, CollectionSeriesSort::Title, order)
+                    .await
             }
         }
     }
@@ -322,6 +487,14 @@ impl CollectionRepository {
     }
 
     /// Get the collections that contain a given series, sorted by name.
+    ///
+    /// Reports manual membership only. A rule-backed collection is a view over
+    /// the library rather than a container that holds anything, so "which
+    /// collections is this series in?" has no answer for one: it would mean
+    /// evaluating every stored rule on every series page, and the answer could
+    /// differ per viewer for a rule over personal ratings. The explicit
+    /// `condition IS NULL` filter is belt-and-braces on top of the fact that an
+    /// automatic collection has no junction rows.
     pub async fn get_collections_for_series(
         db: &DatabaseConnection,
         series_id: Uuid,
@@ -338,6 +511,7 @@ impl CollectionRepository {
         }
         Ok(Collections::find()
             .filter(collections::Column::Id.is_in(collection_ids))
+            .filter(collections::Column::Condition.is_null())
             .order_by_asc(collections::Column::Name)
             .all(db)
             .await?)
@@ -345,6 +519,9 @@ impl CollectionRepository {
 
     /// Get the collections containing each of the given series, name-sorted.
     /// Series with no memberships are absent from the returned map.
+    ///
+    /// Manual membership only, for the reasons on
+    /// [`Self::get_collections_for_series`].
     pub async fn get_collections_for_series_ids(
         db: &DatabaseConnection,
         series_ids: &[Uuid],
@@ -369,6 +546,7 @@ impl CollectionRepository {
             .collect();
         let collections_by_id: HashMap<Uuid, collections::Model> = Collections::find()
             .filter(collections::Column::Id.is_in(collection_ids))
+            .filter(collections::Column::Condition.is_null())
             .all(db)
             .await?
             .into_iter()
@@ -428,7 +606,7 @@ mod tests {
         let (db, _t) = create_test_db().await;
         let conn = db.sea_orm_connection();
 
-        let coll = CollectionRepository::create(conn, "  Batman  ", None, false)
+        let coll = CollectionRepository::create(conn, "  Batman  ", None, false, None)
             .await
             .unwrap();
         assert_eq!(coll.name, "Batman");
@@ -440,11 +618,17 @@ mod tests {
             .unwrap();
         assert_eq!(found.unwrap().id, coll.id);
 
-        let updated =
-            CollectionRepository::update(conn, coll.id, Some("Dark Knight"), None, Some(true))
-                .await
-                .unwrap()
-                .unwrap();
+        let updated = CollectionRepository::update(
+            conn,
+            coll.id,
+            Some("Dark Knight"),
+            None,
+            Some(true),
+            None,
+        )
+        .await
+        .unwrap()
+        .unwrap();
         assert_eq!(updated.name, "Dark Knight");
         assert!(updated.ordered);
 
@@ -463,7 +647,7 @@ mod tests {
         let conn = db.sea_orm_connection();
         let (_lib, series) = lib_and_series(conn).await;
 
-        let coll = CollectionRepository::create(conn, "Coll", None, true)
+        let coll = CollectionRepository::create(conn, "Coll", None, true, None)
             .await
             .unwrap();
 
@@ -556,7 +740,7 @@ mod tests {
             by_name.insert(name, s);
         }
 
-        let coll = CollectionRepository::create(conn, "Coll", None, false)
+        let coll = CollectionRepository::create(conn, "Coll", None, false, None)
             .await
             .unwrap();
         for name in ["Banana", "Cherry", "Apple"] {
@@ -629,7 +813,7 @@ mod tests {
                 .unwrap();
             by_name.insert(name, s);
         }
-        let coll = CollectionRepository::create(conn, "Coll", None, false)
+        let coll = CollectionRepository::create(conn, "Coll", None, false, None)
             .await
             .unwrap();
         for name in ["Banana", "Cherry", "Apple"] {
@@ -697,10 +881,10 @@ mod tests {
         assert!(members.is_empty());
 
         // Two collections, with one series shared between them.
-        let coll_a = CollectionRepository::create(conn, "A", None, false)
+        let coll_a = CollectionRepository::create(conn, "A", None, false, None)
             .await
             .unwrap();
-        let coll_b = CollectionRepository::create(conn, "B", None, false)
+        let coll_b = CollectionRepository::create(conn, "B", None, false, None)
             .await
             .unwrap();
         CollectionRepository::add_series(conn, coll_a.id, series[0].id)
@@ -730,7 +914,7 @@ mod tests {
         let conn = db.sea_orm_connection();
         let (_lib, series) = lib_and_series(conn).await;
 
-        let coll = CollectionRepository::create(conn, "Coll", None, false)
+        let coll = CollectionRepository::create(conn, "Coll", None, false, None)
             .await
             .unwrap();
         for s in &series {
@@ -783,10 +967,10 @@ mod tests {
         let conn = db.sea_orm_connection();
         let (_lib, series) = lib_and_series(conn).await;
 
-        let zeta = CollectionRepository::create(conn, "Zeta", None, false)
+        let zeta = CollectionRepository::create(conn, "Zeta", None, false, None)
             .await
             .unwrap();
-        let alpha = CollectionRepository::create(conn, "Alpha Picks", None, false)
+        let alpha = CollectionRepository::create(conn, "Alpha Picks", None, false, None)
             .await
             .unwrap();
 

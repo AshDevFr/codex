@@ -26,6 +26,7 @@ use codex_db::repositories::{
     CollectionRepository, SeriesRepository, visibility::SeriesVisibility,
 };
 use codex_models::sort::SortDirection;
+use codex_services::CollectionMembershipService;
 use std::sync::Arc;
 use utoipa::OpenApi;
 use uuid::Uuid;
@@ -154,10 +155,15 @@ pub async fn create_collection(
         )));
     }
 
-    let model =
-        CollectionRepository::create(&state.db, name, request.summary.as_deref(), request.ordered)
-            .await
-            .map_err(internal("Failed to create collection"))?;
+    let model = CollectionRepository::create(
+        &state.db,
+        name,
+        request.summary.as_deref(),
+        request.ordered,
+        None,
+    )
+    .await
+    .map_err(internal("Failed to create collection"))?;
     Ok((
         StatusCode::CREATED,
         Json(CollectionDto::from_model(model, 0)),
@@ -239,6 +245,7 @@ pub async fn update_collection(
         request.name.as_deref().map(str::trim),
         summary,
         request.ordered,
+        None,
     )
     .await
     .map_err(internal("Failed to update collection"))?
@@ -301,12 +308,13 @@ pub async fn get_collection_series(
     let collection = get_collection_or_404(&state, collection_id).await?;
 
     let vis = user_visibility(&state, auth.user_id).await?;
-    let members = CollectionRepository::get_series(
+    let members = CollectionMembershipService::members(
         &state.db,
         &collection,
         vis.as_ref(),
         query.sort,
         query.direction.unwrap_or_default(),
+        Some(auth.user_id),
     )
     .await
     .map_err(internal("Failed to fetch collection series"))?;
@@ -427,12 +435,13 @@ pub async fn get_collection_thumbnail(
     auth.require_permission(&Permission::CollectionsRead)?;
     let collection = get_collection_or_404(&state, collection_id).await?;
     let vis = user_visibility(&state, auth.user_id).await?;
-    let members = CollectionRepository::get_series(
+    let members = CollectionMembershipService::members(
         &state.db,
         &collection,
         vis.as_ref(),
         None,
         SortDirection::default(),
+        Some(auth.user_id),
     )
     .await
     .map_err(internal("Failed to fetch collection series"))?;

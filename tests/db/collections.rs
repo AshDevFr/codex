@@ -39,6 +39,7 @@ async fn exercise_collections(db: &DatabaseConnection) {
         name: Set(format!("Batman-{}", Uuid::new_v4())),
         normalized_name: Set(format!("batman-{}", Uuid::new_v4())),
         summary: Set(None),
+        condition: Set(None),
         ordered: Set(true),
         created_at: Set(Utc::now()),
         updated_at: Set(Utc::now()),

@@ -5005,7 +5005,7 @@ async fn test_komga_collections_real_data() {
     let series = SeriesRepository::create(&db, library.id, "Batman", None)
         .await
         .unwrap();
-    let coll = CollectionRepository::create(&db, "Batman Collection", None, true)
+    let coll = CollectionRepository::create(&db, "Batman Collection", None, true, None)
         .await
         .unwrap();
     CollectionRepository::add_series(&db, coll.id, series.id)

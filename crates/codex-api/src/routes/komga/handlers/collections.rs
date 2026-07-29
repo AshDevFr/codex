@@ -29,6 +29,7 @@ use codex_db::repositories::{
     CollectionRepository, WantToReadRepository, visibility::SeriesVisibility,
 };
 use codex_models::sort::{SortDirection, WantToReadSort};
+use codex_services::CollectionMembershipService;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -86,15 +87,31 @@ async fn build_want_to_read_dto(
     })
 }
 
+/// Build the Komga DTO for a collection.
+///
+/// `seriesIds` is part of the Komga contract, so this is the one place a rule
+/// has to resolve during a *list* request. Both list endpoints paginate before
+/// building DTOs, so the cost is bounded by page size rather than by how many
+/// collections exist.
+///
+/// `user_id` is threaded through because a rule may reference the viewer's own
+/// ratings or read state, in which case `seriesIds` differs per caller.
 async fn build_collection_dto(
     state: &AuthState,
     model: codex_db::entities::collections::Model,
     vis: Option<&SeriesVisibility>,
+    user_id: Option<Uuid>,
 ) -> Result<KomgaCollectionDto, ApiError> {
-    let members =
-        CollectionRepository::get_series(&state.db, &model, vis, None, SortDirection::default())
-            .await
-            .map_err(|e| ApiError::Internal(format!("Failed to fetch collection series: {e}")))?;
+    let members = CollectionMembershipService::members(
+        &state.db,
+        &model,
+        vis,
+        None,
+        SortDirection::default(),
+        user_id,
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to fetch collection series: {e}")))?;
     Ok(KomgaCollectionDto {
         id: model.id.to_string(),
         name: model.name,
@@ -145,7 +162,7 @@ pub async fn list_collections(
     let page_models: Vec<_> = collections.into_iter().skip(start).take(take).collect();
 
     for model in page_models {
-        content.push(build_collection_dto(&state, model, vis.as_ref()).await?);
+        content.push(build_collection_dto(&state, model, vis.as_ref(), Some(auth.user_id)).await?);
     }
     Ok(Json(KomgaPage::new(content, page, size, total)))
 }
@@ -177,7 +194,7 @@ pub async fn get_collection(
         .map_err(|e| ApiError::Internal(format!("Failed to fetch collection: {e}")))?
         .ok_or_else(|| ApiError::NotFound("Collection not found".to_string()))?;
     Ok(Json(
-        build_collection_dto(&state, model, vis.as_ref()).await?,
+        build_collection_dto(&state, model, vis.as_ref(), Some(auth.user_id)).await?,
     ))
 }
 
@@ -208,12 +225,13 @@ pub async fn get_collection_series(
             .await
             .map_err(|e| ApiError::Internal(format!("Failed to fetch collection: {e}")))?
             .ok_or_else(|| ApiError::NotFound("Collection not found".to_string()))?;
-        CollectionRepository::get_series(
+        CollectionMembershipService::members(
             &state.db,
             &model,
             vis.as_ref(),
             None,
             SortDirection::default(),
+            Some(auth.user_id),
         )
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch collection series: {e}")))?
@@ -262,12 +280,13 @@ pub async fn get_collection_thumbnail(
             .await
             .map_err(|e| ApiError::Internal(format!("Failed to fetch collection: {e}")))?
             .ok_or_else(|| ApiError::NotFound("Collection not found".to_string()))?;
-        CollectionRepository::get_series(
+        CollectionMembershipService::members(
             &state.db,
             &model,
             vis.as_ref(),
             None,
             SortDirection::default(),
+            Some(auth.user_id),
         )
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch collection series: {e}")))?
@@ -317,7 +336,7 @@ pub async fn get_series_collections(
         out.push(build_want_to_read_dto(&state, auth.user_id, vis.as_ref()).await?);
     }
     for model in collections {
-        out.push(build_collection_dto(&state, model, vis.as_ref()).await?);
+        out.push(build_collection_dto(&state, model, vis.as_ref(), Some(auth.user_id)).await?);
     }
     Ok(Json(out))
 }
