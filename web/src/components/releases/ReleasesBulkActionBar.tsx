@@ -1,4 +1,4 @@
-import { Button, Card, Group, Text } from "@mantine/core";
+import { Button, Card, Group, Text, Tooltip } from "@mantine/core";
 import {
   IconCheck,
   IconEyeOff,
@@ -7,6 +7,7 @@ import {
   IconX,
 } from "@tabler/icons-react";
 import type { BulkReleaseAction } from "@/api/releases";
+import { RELEASE_ACTION_DESCRIPTIONS } from "./actionDescriptions";
 
 interface ReleasesBulkActionBarProps {
   count: number;
@@ -42,61 +43,103 @@ export function ReleasesBulkActionBar({
           {count} selected
         </Text>
         <Group gap="xs">
-          <Button
-            size="xs"
-            variant="light"
-            color="green"
-            leftSection={<IconCheck size={14} />}
-            loading={isPending}
-            onClick={() => onAction("mark-acquired")}
+          <Tooltip
+            label={RELEASE_ACTION_DESCRIPTIONS.markAcquired}
+            multiline
+            w={300}
+            withArrow
           >
-            Mark acquired
-          </Button>
-          <Button
-            size="xs"
-            variant="light"
-            color="gray"
-            leftSection={<IconX size={14} />}
-            loading={isPending}
-            onClick={() => onAction("dismiss")}
-          >
-            Dismiss
-          </Button>
-          <Button
-            size="xs"
-            variant="light"
-            color="gray"
-            leftSection={<IconEyeOff size={14} />}
-            loading={isPending}
-            onClick={() => onAction("ignore")}
-          >
-            Ignore
-          </Button>
-          <Button
-            size="xs"
-            variant="light"
-            color="blue"
-            leftSection={<IconRefresh size={14} />}
-            loading={isPending}
-            onClick={() => onAction("reset")}
-          >
-            Reset
-          </Button>
-          {onDeleteClick && (
             <Button
               size="xs"
               variant="light"
-              color="red"
-              leftSection={<IconTrash size={14} />}
+              color="green"
+              leftSection={<IconCheck size={14} />}
               loading={isPending}
-              onClick={onDeleteClick}
+              onClick={() => onAction("mark-acquired")}
             >
-              Delete
+              Mark acquired
             </Button>
+          </Tooltip>
+          <Tooltip
+            label={RELEASE_ACTION_DESCRIPTIONS.dismiss}
+            multiline
+            w={300}
+            withArrow
+          >
+            <Button
+              size="xs"
+              variant="light"
+              color="gray"
+              leftSection={<IconX size={14} />}
+              loading={isPending}
+              onClick={() => onAction("dismiss")}
+            >
+              Dismiss
+            </Button>
+          </Tooltip>
+          <Tooltip
+            label={RELEASE_ACTION_DESCRIPTIONS.ignore}
+            multiline
+            w={300}
+            withArrow
+          >
+            <Button
+              size="xs"
+              variant="light"
+              color="gray"
+              leftSection={<IconEyeOff size={14} />}
+              loading={isPending}
+              onClick={() => onAction("ignore")}
+            >
+              Ignore
+            </Button>
+          </Tooltip>
+          <Tooltip
+            label={RELEASE_ACTION_DESCRIPTIONS.reset}
+            multiline
+            w={300}
+            withArrow
+          >
+            <Button
+              size="xs"
+              variant="light"
+              color="blue"
+              leftSection={<IconRefresh size={14} />}
+              loading={isPending}
+              onClick={() => onAction("reset")}
+            >
+              Reset
+            </Button>
+          </Tooltip>
+          {onDeleteClick && (
+            <Tooltip
+              label={RELEASE_ACTION_DESCRIPTIONS.delete}
+              multiline
+              w={300}
+              withArrow
+            >
+              <Button
+                size="xs"
+                variant="light"
+                color="red"
+                leftSection={<IconTrash size={14} />}
+                loading={isPending}
+                onClick={onDeleteClick}
+              >
+                Delete
+              </Button>
+            </Tooltip>
           )}
-          <Button size="xs" variant="subtle" onClick={onClear}>
-            Clear
-          </Button>
+          <Tooltip
+            label="Deselect everything. Doesn't change any release."
+            multiline
+            w={300}
+            withArrow
+          >
+            <Button size="xs" variant="subtle" onClick={onClear}>
+              Clear
+            </Button>
+          </Tooltip>
         </Group>
       </Group>
     </Card>

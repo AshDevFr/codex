@@ -31,6 +31,7 @@ import type {
   ReleaseSource,
 } from "@/api/releases";
 import { MOBILE_MEDIA_QUERY } from "@/components/ui";
+import { RELEASE_ACTION_DESCRIPTIONS } from "./actionDescriptions";
 import { MediaUrlIcon } from "./MediaUrlIcon";
 
 const STATE_BADGE: Record<string, { color: string; label: string }> = {
@@ -287,7 +288,12 @@ export function ReleasesTable({
                 )}
                 {entry.state === "announced" ? (
                   <>
-                    <Tooltip label="Mark acquired">
+                    <Tooltip
+                      label={RELEASE_ACTION_DESCRIPTIONS.markAcquired}
+                      multiline
+                      w={300}
+                      withArrow
+                    >
                       <ActionIcon
                         variant="subtle"
                         color="green"
@@ -298,7 +304,12 @@ export function ReleasesTable({
                         <IconCheck size={16} />
                       </ActionIcon>
                     </Tooltip>
-                    <Tooltip label="Dismiss">
+                    <Tooltip
+                      label={RELEASE_ACTION_DESCRIPTIONS.dismiss}
+                      multiline
+                      w={300}
+                      withArrow
+                    >
                       <ActionIcon
                         variant="subtle"
                         color="gray"
@@ -309,7 +320,12 @@ export function ReleasesTable({
                         <IconX size={16} />
                       </ActionIcon>
                     </Tooltip>
-                    <Tooltip label="Ignore">
+                    <Tooltip
+                      label={RELEASE_ACTION_DESCRIPTIONS.ignore}
+                      multiline
+                      w={300}
+                      withArrow
+                    >
                       <ActionIcon
                         variant="subtle"
                         color="gray"
@@ -322,7 +338,12 @@ export function ReleasesTable({
                     </Tooltip>
                   </>
                 ) : (
-                  <Tooltip label="Reset to new">
+                  <Tooltip
+                    label={RELEASE_ACTION_DESCRIPTIONS.reset}
+                    multiline
+                    w={300}
+                    withArrow
+                  >
                     <ActionIcon
                       variant="subtle"
                       color="blue"
@@ -334,7 +355,12 @@ export function ReleasesTable({
                     </ActionIcon>
                   </Tooltip>
                 )}
-                <Tooltip label="Delete (will reappear on next poll)">
+                <Tooltip
+                  label={RELEASE_ACTION_DESCRIPTIONS.delete}
+                  multiline
+                  w={300}
+                  withArrow
+                >
                   <ActionIcon
                     variant="subtle"
                     color="red"
@@ -526,7 +552,12 @@ export function ReleasesTable({
                   )}
                   {entry.state === "announced" ? (
                     <>
-                      <Tooltip label="Mark acquired">
+                      <Tooltip
+                        label={RELEASE_ACTION_DESCRIPTIONS.markAcquired}
+                        multiline
+                        w={300}
+                        withArrow
+                      >
                         <ActionIcon
                           variant="subtle"
                           size="sm"
@@ -538,7 +569,12 @@ export function ReleasesTable({
                           <IconCheck size={16} />
                         </ActionIcon>
                       </Tooltip>
-                      <Tooltip label="Dismiss">
+                      <Tooltip
+                        label={RELEASE_ACTION_DESCRIPTIONS.dismiss}
+                        multiline
+                        w={300}
+                        withArrow
+                      >
                         <ActionIcon
                           variant="subtle"
                           size="sm"
@@ -550,7 +586,12 @@ export function ReleasesTable({
                           <IconX size={16} />
                         </ActionIcon>
                       </Tooltip>
-                      <Tooltip label="Ignore">
+                      <Tooltip
+                        label={RELEASE_ACTION_DESCRIPTIONS.ignore}
+                        multiline
+                        w={300}
+                        withArrow
+                      >
                         <ActionIcon
                           variant="subtle"
                           size="sm"
@@ -564,7 +605,12 @@ export function ReleasesTable({
                       </Tooltip>
                     </>
                   ) : (
-                    <Tooltip label="Reset to new">
+                    <Tooltip
+                      label={RELEASE_ACTION_DESCRIPTIONS.reset}
+                      multiline
+                      w={300}
+                      withArrow
+                    >
                       <ActionIcon
                         variant="subtle"
                         size="sm"
@@ -577,7 +623,12 @@ export function ReleasesTable({
                       </ActionIcon>
                     </Tooltip>
                   )}
-                  <Tooltip label="Delete (will reappear on next poll)">
+                  <Tooltip
+                    label={RELEASE_ACTION_DESCRIPTIONS.delete}
+                    multiline
+                    w={300}
+                    withArrow
+                  >
                     <ActionIcon
                       variant="subtle"
                       size="sm"
