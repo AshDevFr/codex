@@ -56,6 +56,23 @@ macro_rules! apply_ci_text_filter {
     }};
 }
 
+/// Flatten a `UuidOperator` into the set of IDs it names plus whether matching
+/// that set means inclusion or exclusion.
+///
+/// `Is`/`In` and `IsNot`/`NotIn` differ only in cardinality, so every uuid
+/// filter resolves the named set once and then branches on the flag. An empty
+/// `In` names nothing and therefore matches nothing; an empty `NotIn` excludes
+/// nothing and therefore matches everything, which falls out of this shape
+/// without a special case.
+fn uuid_operator_targets(operator: &UuidOperator) -> (Vec<Uuid>, bool) {
+    match operator {
+        UuidOperator::Is { value } => (vec![*value], true),
+        UuidOperator::IsNot { value } => (vec![*value], false),
+        UuidOperator::In { values } => (values.clone(), true),
+        UuidOperator::NotIn { values } => (values.clone(), false),
+    }
+}
+
 /// Service for evaluating filter conditions against series/books
 pub struct FilterService;
 
@@ -192,6 +209,14 @@ impl FilterService {
                         .await
                 }
 
+                SeriesCondition::UserRating { user_rating } => {
+                    Self::filter_by_user_rating(db, user_rating, candidate_ids, user_id).await
+                }
+
+                SeriesCondition::CommunityRating { community_rating } => {
+                    Self::filter_by_community_rating(db, community_rating, candidate_ids).await
+                }
+
                 SeriesCondition::IsTracked { is_tracked } => {
                     Self::filter_by_is_tracked(db, is_tracked, candidate_ids).await
                 }
@@ -225,60 +250,50 @@ impl FilterService {
         candidate_ids: Option<&HashSet<Uuid>>,
     ) -> Result<HashSet<Uuid>> {
         use codex_db::entities::series;
-        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
 
-        match operator {
-            UuidOperator::Is { value } => {
-                let series_in_library: Vec<Uuid> = series::Entity::find()
-                    .filter(series::Column::LibraryId.eq(*value))
-                    .all(db)
-                    .await?
-                    .into_iter()
-                    .map(|s| s.id)
-                    .collect();
+        let (libraries, include) = uuid_operator_targets(operator);
 
-                let result: HashSet<Uuid> = if let Some(candidates) = candidate_ids {
-                    series_in_library
-                        .into_iter()
-                        .filter(|id| candidates.contains(id))
-                        .collect()
-                } else {
-                    series_in_library.into_iter().collect()
-                };
+        let series_in_libraries: HashSet<Uuid> = if libraries.is_empty() {
+            HashSet::new()
+        } else {
+            series::Entity::find()
+                .filter(series::Column::LibraryId.is_in(libraries))
+                .select_only()
+                .column(series::Column::Id)
+                .into_tuple()
+                .all(db)
+                .await?
+                .into_iter()
+                .collect()
+        };
 
-                Ok(result)
-            }
-            UuidOperator::IsNot { value } => {
-                let series_in_library: HashSet<Uuid> = series::Entity::find()
-                    .filter(series::Column::LibraryId.eq(*value))
-                    .all(db)
-                    .await?
-                    .into_iter()
-                    .map(|s| s.id)
-                    .collect();
-
-                if let Some(candidates) = candidate_ids {
-                    Ok(candidates
-                        .iter()
-                        .filter(|id| !series_in_library.contains(id))
-                        .cloned()
-                        .collect())
-                } else {
-                    // Need to get all series and exclude the ones in this library
-                    let all_series: HashSet<Uuid> = series::Entity::find()
-                        .all(db)
-                        .await?
-                        .into_iter()
-                        .map(|s| s.id)
-                        .collect();
-
-                    Ok(all_series
-                        .into_iter()
-                        .filter(|id| !series_in_library.contains(id))
-                        .collect())
-                }
-            }
+        if include {
+            return Ok(match candidate_ids {
+                Some(candidates) => series_in_libraries
+                    .intersection(candidates)
+                    .copied()
+                    .collect(),
+                None => series_in_libraries,
+            });
         }
+
+        let scope: HashSet<Uuid> = match candidate_ids {
+            Some(candidates) => candidates.clone(),
+            None => series::Entity::find()
+                .select_only()
+                .column(series::Column::Id)
+                .into_tuple()
+                .all(db)
+                .await?
+                .into_iter()
+                .collect(),
+        };
+
+        Ok(scope
+            .into_iter()
+            .filter(|id| !series_in_libraries.contains(id))
+            .collect())
     }
 
     async fn filter_by_genre(
@@ -973,6 +988,216 @@ impl FilterService {
                 }
             }
         }
+    }
+
+    /// Filter series by the calling user's own rating, on the stored 1-100
+    /// scale.
+    ///
+    /// Comparisons run against `user_series_ratings` rows belonging to this
+    /// user, so a series the user has not rated has no value to compare and is
+    /// excluded by every comparison operator (including `ne`, matching SQL's
+    /// NULL semantics). `isNull` returns the unrated series, `isNotNull` the
+    /// rated ones.
+    ///
+    /// Without user context there are no ratings at all: comparisons and
+    /// `isNotNull` return nothing and `isNull` returns everything.
+    async fn filter_by_user_rating(
+        db: &DatabaseConnection,
+        operator: &NumberOperator,
+        candidate_ids: Option<&HashSet<Uuid>>,
+        user_id: Option<Uuid>,
+    ) -> Result<HashSet<Uuid>> {
+        use codex_db::entities::{series, user_series_ratings};
+        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
+
+        // Every series in scope, used by the "unrated" branches below.
+        async fn scope(
+            db: &DatabaseConnection,
+            candidate_ids: Option<&HashSet<Uuid>>,
+        ) -> Result<HashSet<Uuid>> {
+            use sea_orm::{EntityTrait, QuerySelect};
+            if let Some(candidates) = candidate_ids {
+                return Ok(candidates.clone());
+            }
+            Ok(series::Entity::find()
+                .select_only()
+                .column(series::Column::Id)
+                .into_tuple()
+                .all(db)
+                .await?
+                .into_iter()
+                .collect())
+        }
+
+        let Some(uid) = user_id else {
+            return match operator {
+                NumberOperator::IsNull => scope(db, candidate_ids).await,
+                _ => Ok(HashSet::new()),
+            };
+        };
+
+        let rated_by_user =
+            user_series_ratings::Entity::find().filter(user_series_ratings::Column::UserId.eq(uid));
+
+        // The two nullability operators ask whether a rating row exists, not
+        // what it holds, so they can't go through the comparison query below.
+        if matches!(operator, NumberOperator::IsNull | NumberOperator::IsNotNull) {
+            let rated: HashSet<Uuid> = rated_by_user
+                .select_only()
+                .column(user_series_ratings::Column::SeriesId)
+                .distinct()
+                .into_tuple()
+                .all(db)
+                .await?
+                .into_iter()
+                .collect();
+
+            return match operator {
+                NumberOperator::IsNotNull => Ok(match candidate_ids {
+                    Some(candidates) => rated.intersection(candidates).copied().collect(),
+                    None => rated,
+                }),
+                _ => Ok(scope(db, candidate_ids)
+                    .await?
+                    .into_iter()
+                    .filter(|id| !rated.contains(id))
+                    .collect()),
+            };
+        }
+
+        let column = user_series_ratings::Column::Rating;
+        let filtered = match operator {
+            NumberOperator::Eq { value } => rated_by_user.filter(column.eq(*value as i32)),
+            NumberOperator::Ne { value } => rated_by_user.filter(column.ne(*value as i32)),
+            NumberOperator::Gt { value } => rated_by_user.filter(column.gt(*value as i32)),
+            NumberOperator::Gte { value } => rated_by_user.filter(column.gte(*value as i32)),
+            NumberOperator::Lt { value } => rated_by_user.filter(column.lt(*value as i32)),
+            NumberOperator::Lte { value } => rated_by_user.filter(column.lte(*value as i32)),
+            NumberOperator::Between { min, max } => {
+                let mut q = rated_by_user;
+                if let Some(min) = min {
+                    q = q.filter(column.gte(*min as i32));
+                }
+                if let Some(max) = max {
+                    q = q.filter(column.lte(*max as i32));
+                }
+                q
+            }
+            NumberOperator::IsNull | NumberOperator::IsNotNull => {
+                unreachable!("handled above")
+            }
+        };
+
+        let matching: Vec<Uuid> = filtered
+            .select_only()
+            .column(user_series_ratings::Column::SeriesId)
+            .distinct()
+            .into_tuple()
+            .all(db)
+            .await?;
+
+        Ok(match candidate_ids {
+            Some(candidates) => matching
+                .into_iter()
+                .filter(|id| candidates.contains(id))
+                .collect(),
+            None => matching.into_iter().collect(),
+        })
+    }
+
+    /// Filter series by their average rating across every user on this server,
+    /// on the stored 1-100 scale.
+    ///
+    /// The average is computed with `AVG(...) GROUP BY series_id` and compared
+    /// in a `HAVING` clause, so a series nobody has rated contributes no group
+    /// and is excluded by every comparison operator and by `isNotNull`.
+    /// `isNull` returns exactly those unrated series.
+    async fn filter_by_community_rating(
+        db: &DatabaseConnection,
+        operator: &NumberOperator,
+        candidate_ids: Option<&HashSet<Uuid>>,
+    ) -> Result<HashSet<Uuid>> {
+        use codex_db::entities::{series, user_series_ratings};
+        use sea_orm::prelude::Expr;
+        use sea_orm::sea_query::Func;
+        use sea_orm::{EntityTrait, QuerySelect};
+
+        // `isNull`/`isNotNull` ask whether the series has any rating at all,
+        // which is a row-existence question rather than an aggregate one.
+        if matches!(operator, NumberOperator::IsNull | NumberOperator::IsNotNull) {
+            let rated: HashSet<Uuid> = user_series_ratings::Entity::find()
+                .select_only()
+                .column(user_series_ratings::Column::SeriesId)
+                .distinct()
+                .into_tuple()
+                .all(db)
+                .await?
+                .into_iter()
+                .collect();
+
+            if matches!(operator, NumberOperator::IsNotNull) {
+                return Ok(match candidate_ids {
+                    Some(candidates) => rated.intersection(candidates).copied().collect(),
+                    None => rated,
+                });
+            }
+
+            let scope: HashSet<Uuid> = match candidate_ids {
+                Some(candidates) => candidates.clone(),
+                None => series::Entity::find()
+                    .select_only()
+                    .column(series::Column::Id)
+                    .into_tuple()
+                    .all(db)
+                    .await?
+                    .into_iter()
+                    .collect(),
+            };
+            return Ok(scope.into_iter().filter(|id| !rated.contains(id)).collect());
+        }
+
+        // AVG over an integer column yields NUMERIC on Postgres and REAL on
+        // SQLite; both compare correctly against an integer literal, so no cast
+        // is needed here (unlike the sort expressions, which must return a
+        // uniform type to the caller).
+        let average = || Expr::expr(Func::avg(Expr::col(user_series_ratings::Column::Rating)));
+
+        let query = user_series_ratings::Entity::find()
+            .select_only()
+            .column(user_series_ratings::Column::SeriesId)
+            .group_by(user_series_ratings::Column::SeriesId);
+
+        let query = match operator {
+            NumberOperator::Eq { value } => query.having(average().eq(*value)),
+            NumberOperator::Ne { value } => query.having(average().ne(*value)),
+            NumberOperator::Gt { value } => query.having(average().gt(*value)),
+            NumberOperator::Gte { value } => query.having(average().gte(*value)),
+            NumberOperator::Lt { value } => query.having(average().lt(*value)),
+            NumberOperator::Lte { value } => query.having(average().lte(*value)),
+            NumberOperator::Between { min, max } => {
+                let mut q = query;
+                if let Some(min) = min {
+                    q = q.having(average().gte(*min));
+                }
+                if let Some(max) = max {
+                    q = q.having(average().lte(*max));
+                }
+                q
+            }
+            NumberOperator::IsNull | NumberOperator::IsNotNull => {
+                unreachable!("handled above")
+            }
+        };
+
+        let matching: Vec<Uuid> = query.into_tuple().all(db).await?;
+
+        Ok(match candidate_ids {
+            Some(candidates) => matching
+                .into_iter()
+                .filter(|id| candidates.contains(id))
+                .collect(),
+            None => matching.into_iter().collect(),
+        })
     }
 
     /// Filter series by whether release tracking is enabled.
@@ -1935,78 +2160,56 @@ impl FilterService {
         use codex_db::entities::{books, series};
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
 
-        match operator {
-            UuidOperator::Is { value } => {
-                // Get series in this library, then get books from those series
-                let series_ids: Vec<Uuid> = series::Entity::find()
-                    .filter(series::Column::LibraryId.eq(*value))
-                    .select_only()
-                    .column(series::Column::Id)
-                    .into_tuple()
-                    .all(db)
-                    .await?;
+        let (libraries, include) = uuid_operator_targets(operator);
 
-                let books_in_library: Vec<Uuid> = books::Entity::find()
-                    .filter(books::Column::SeriesId.is_in(series_ids))
-                    .select_only()
-                    .column(books::Column::Id)
-                    .into_tuple()
-                    .all(db)
-                    .await?;
+        let books_in_libraries: HashSet<Uuid> = if libraries.is_empty() {
+            HashSet::new()
+        } else {
+            let series_ids: Vec<Uuid> = series::Entity::find()
+                .filter(series::Column::LibraryId.is_in(libraries))
+                .select_only()
+                .column(series::Column::Id)
+                .into_tuple()
+                .all(db)
+                .await?;
 
-                let result: HashSet<Uuid> = if let Some(candidates) = candidate_ids {
-                    books_in_library
-                        .into_iter()
-                        .filter(|id| candidates.contains(id))
-                        .collect()
-                } else {
-                    books_in_library.into_iter().collect()
-                };
+            books::Entity::find()
+                .filter(books::Column::SeriesId.is_in(series_ids))
+                .select_only()
+                .column(books::Column::Id)
+                .into_tuple()
+                .all(db)
+                .await?
+                .into_iter()
+                .collect()
+        };
 
-                Ok(result)
-            }
-            UuidOperator::IsNot { value } => {
-                let series_ids: Vec<Uuid> = series::Entity::find()
-                    .filter(series::Column::LibraryId.eq(*value))
-                    .select_only()
-                    .column(series::Column::Id)
-                    .into_tuple()
-                    .all(db)
-                    .await?;
-
-                let books_in_library: HashSet<Uuid> = books::Entity::find()
-                    .filter(books::Column::SeriesId.is_in(series_ids))
-                    .select_only()
-                    .column(books::Column::Id)
-                    .into_tuple()
-                    .all(db)
-                    .await?
-                    .into_iter()
-                    .collect();
-
-                if let Some(candidates) = candidate_ids {
-                    Ok(candidates
-                        .iter()
-                        .filter(|id| !books_in_library.contains(id))
-                        .cloned()
-                        .collect())
-                } else {
-                    let all_books: HashSet<Uuid> = books::Entity::find()
-                        .select_only()
-                        .column(books::Column::Id)
-                        .into_tuple()
-                        .all(db)
-                        .await?
-                        .into_iter()
-                        .collect();
-
-                    Ok(all_books
-                        .into_iter()
-                        .filter(|id| !books_in_library.contains(id))
-                        .collect())
-                }
-            }
+        if include {
+            return Ok(match candidate_ids {
+                Some(candidates) => books_in_libraries
+                    .intersection(candidates)
+                    .copied()
+                    .collect(),
+                None => books_in_libraries,
+            });
         }
+
+        let scope: HashSet<Uuid> = match candidate_ids {
+            Some(candidates) => candidates.clone(),
+            None => books::Entity::find()
+                .select_only()
+                .column(books::Column::Id)
+                .into_tuple()
+                .all(db)
+                .await?
+                .into_iter()
+                .collect(),
+        };
+
+        Ok(scope
+            .into_iter()
+            .filter(|id| !books_in_libraries.contains(id))
+            .collect())
     }
 
     async fn filter_books_by_series_id(
@@ -2017,61 +2220,45 @@ impl FilterService {
         use codex_db::entities::books;
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
 
-        match operator {
-            UuidOperator::Is { value } => {
-                let books_in_series: Vec<Uuid> = books::Entity::find()
-                    .filter(books::Column::SeriesId.eq(*value))
-                    .select_only()
-                    .column(books::Column::Id)
-                    .into_tuple()
-                    .all(db)
-                    .await?;
+        let (series_ids, include) = uuid_operator_targets(operator);
 
-                let result: HashSet<Uuid> = if let Some(candidates) = candidate_ids {
-                    books_in_series
-                        .into_iter()
-                        .filter(|id| candidates.contains(id))
-                        .collect()
-                } else {
-                    books_in_series.into_iter().collect()
-                };
+        let books_in_series: HashSet<Uuid> = if series_ids.is_empty() {
+            HashSet::new()
+        } else {
+            books::Entity::find()
+                .filter(books::Column::SeriesId.is_in(series_ids))
+                .select_only()
+                .column(books::Column::Id)
+                .into_tuple()
+                .all(db)
+                .await?
+                .into_iter()
+                .collect()
+        };
 
-                Ok(result)
-            }
-            UuidOperator::IsNot { value } => {
-                let books_in_series: HashSet<Uuid> = books::Entity::find()
-                    .filter(books::Column::SeriesId.eq(*value))
-                    .select_only()
-                    .column(books::Column::Id)
-                    .into_tuple()
-                    .all(db)
-                    .await?
-                    .into_iter()
-                    .collect();
-
-                if let Some(candidates) = candidate_ids {
-                    Ok(candidates
-                        .iter()
-                        .filter(|id| !books_in_series.contains(id))
-                        .cloned()
-                        .collect())
-                } else {
-                    let all_books: HashSet<Uuid> = books::Entity::find()
-                        .select_only()
-                        .column(books::Column::Id)
-                        .into_tuple()
-                        .all(db)
-                        .await?
-                        .into_iter()
-                        .collect();
-
-                    Ok(all_books
-                        .into_iter()
-                        .filter(|id| !books_in_series.contains(id))
-                        .collect())
-                }
-            }
+        if include {
+            return Ok(match candidate_ids {
+                Some(candidates) => books_in_series.intersection(candidates).copied().collect(),
+                None => books_in_series,
+            });
         }
+
+        let scope: HashSet<Uuid> = match candidate_ids {
+            Some(candidates) => candidates.clone(),
+            None => books::Entity::find()
+                .select_only()
+                .column(books::Column::Id)
+                .into_tuple()
+                .all(db)
+                .await?
+                .into_iter()
+                .collect(),
+        };
+
+        Ok(scope
+            .into_iter()
+            .filter(|id| !books_in_series.contains(id))
+            .collect())
     }
 
     async fn filter_books_by_genre(

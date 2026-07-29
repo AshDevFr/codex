@@ -88,6 +88,8 @@ export const OPERATOR_LABELS: Record<OperatorType, Record<string, string>> = {
   uuid: {
     is: "is",
     isNot: "is not",
+    in: "is any of",
+    notIn: "is none of",
   },
   bool: {
     isTrue: "is true",
@@ -144,10 +146,17 @@ export function defaultOperator(field: FieldDef): string {
     case "bool":
       return "isTrue";
     case "number":
-      return "eq";
+      // "at least" is what people actually want from a rating; an exact-match
+      // default would make the common case a two-step interaction.
+      return field.hint === "rating" ? "gte" : "eq";
     case "date":
       return "onOrAfter";
   }
+}
+
+/** `true` for the uuid operators that carry a list rather than a single value. */
+export function isUuidListOperator(operator: string): boolean {
+  return operator === "in" || operator === "notIn";
 }
 
 /**
@@ -204,9 +213,21 @@ export function updateLeafOperator(
     }
     case "uuid": {
       const prev = (c as Record<string, UuidOperator>)[key];
-      const prevValue = "value" in prev ? prev.value : "";
+      // Carry the selection across a single-value <-> list switch so toggling
+      // "is" to "is any of" keeps the library the user already picked.
+      const prevValues =
+        "values" in prev
+          ? prev.values
+          : "value" in prev && prev.value
+            ? [prev.value]
+            : [];
+      if (isUuidListOperator(operator)) {
+        return {
+          [key]: { operator, values: prevValues } as UuidOperator,
+        } as Condition;
+      }
       return {
-        [key]: { operator, value: prevValue } as UuidOperator,
+        [key]: { operator, value: prevValues[0] ?? "" } as UuidOperator,
       } as Condition;
     }
     case "bool":
@@ -361,6 +382,13 @@ export function isLeafComplete(c: Condition): boolean {
     op === "isFalse"
   ) {
     return true;
+  }
+  // An empty `in` matches nothing and an empty `notIn` matches everything, so
+  // neither is what a user midway through picking libraries meant. Hold the
+  // leaf in the UI but keep it out of the request.
+  if (isUuidListOperator(op)) {
+    const values = (node as { values?: unknown }).values;
+    return Array.isArray(values) && values.length > 0;
   }
   if (op === "between") {
     const min = (node as { min?: unknown; start?: unknown }).min;

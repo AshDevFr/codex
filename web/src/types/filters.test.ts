@@ -754,3 +754,159 @@ describe("Filter Types - Membership filters (inCollection / inReadList)", () => 
     });
   });
 });
+
+describe("Filter Types - Libraries group", () => {
+  const LIB_A = "11111111-1111-1111-1111-111111111111";
+  const LIB_B = "22222222-2222-2222-2222-222222222222";
+  const LIB_C = "33333333-3333-3333-3333-333333333333";
+
+  it("starts empty", () => {
+    const state = createEmptySeriesFilterState();
+    expect(state.libraries.values.size).toBe(0);
+    expect(seriesFilterStateToCondition(state)).toBeUndefined();
+  });
+
+  it("emits a single `in` condition for included libraries", () => {
+    const state = createEmptySeriesFilterState();
+    state.libraries.values.set(LIB_A, "include");
+    state.libraries.values.set(LIB_B, "include");
+
+    expect(seriesFilterStateToCondition(state)).toEqual({
+      libraryId: { operator: "in", values: [LIB_A, LIB_B] },
+    });
+  });
+
+  it("emits a single `notIn` condition for excluded libraries", () => {
+    const state = createEmptySeriesFilterState();
+    state.libraries.values.set(LIB_A, "exclude");
+
+    expect(seriesFilterStateToCondition(state)).toEqual({
+      libraryId: { operator: "notIn", values: [LIB_A] },
+    });
+  });
+
+  it("emits both when includes and excludes are mixed", () => {
+    const state = createEmptySeriesFilterState();
+    state.libraries.values.set(LIB_A, "include");
+    state.libraries.values.set(LIB_B, "exclude");
+
+    expect(seriesFilterStateToCondition(state)).toEqual({
+      allOf: [
+        { libraryId: { operator: "in", values: [LIB_A] } },
+        { libraryId: { operator: "notIn", values: [LIB_B] } },
+      ],
+    });
+  });
+
+  // A series belongs to exactly one library, so "all of" would never match.
+  // The mode must not leak into the emitted condition.
+  it("ignores the group mode", () => {
+    const anyOf = createEmptySeriesFilterState();
+    anyOf.libraries.mode = "anyOf";
+    anyOf.libraries.values.set(LIB_A, "include");
+    anyOf.libraries.values.set(LIB_B, "include");
+
+    const allOf = createEmptySeriesFilterState();
+    allOf.libraries.mode = "allOf";
+    allOf.libraries.values.set(LIB_A, "include");
+    allOf.libraries.values.set(LIB_B, "include");
+
+    expect(seriesFilterStateToCondition(allOf)).toEqual(
+      seriesFilterStateToCondition(anyOf),
+    );
+  });
+
+  it("round-trips include and exclude through the condition converters", () => {
+    const original = createEmptySeriesFilterState();
+    original.libraries.values.set(LIB_A, "include");
+    original.libraries.values.set(LIB_B, "include");
+    original.libraries.values.set(LIB_C, "exclude");
+
+    const restored = conditionToSeriesFilterState(
+      seriesFilterStateToCondition(original),
+    );
+
+    expect(restored).not.toBeNull();
+    expect(restored?.libraries.values.get(LIB_A)).toBe("include");
+    expect(restored?.libraries.values.get(LIB_B)).toBe("include");
+    expect(restored?.libraries.values.get(LIB_C)).toBe("exclude");
+  });
+
+  // The advanced builder emits single-value `is` / `isNot`, and presets saved
+  // before the libraries group existed use that shape too.
+  it("parses single-value is / isNot leaves from the advanced builder", () => {
+    const included = conditionToSeriesFilterState({
+      libraryId: { operator: "is", value: LIB_A },
+    });
+    expect(included?.libraries.values.get(LIB_A)).toBe("include");
+
+    const excluded = conditionToSeriesFilterState({
+      libraryId: { operator: "isNot", value: LIB_A },
+    });
+    expect(excluded?.libraries.values.get(LIB_A)).toBe("exclude");
+  });
+
+  it("round-trips through URL params", () => {
+    const state = createEmptySeriesFilterState();
+    state.libraries.values.set(LIB_A, "include");
+    state.libraries.values.set(LIB_B, "exclude");
+
+    const params = serializeSeriesFilters(state);
+    expect(params.get("libf")).toBeTruthy();
+
+    const parsed = parseSeriesFilters(new URLSearchParams(params.toString()));
+    expect(parsed.libraries.values.get(LIB_A)).toBe("include");
+    expect(parsed.libraries.values.get(LIB_B)).toBe("exclude");
+  });
+
+  it("omits the param when no library is selected", () => {
+    const params = serializeSeriesFilters(createEmptySeriesFilterState());
+    expect(params.get("libf")).toBeNull();
+  });
+
+  it("counts toward the active filter count", () => {
+    const state = createEmptySeriesFilterState();
+    expect(countActiveFilters(state.libraries)).toBe(0);
+    state.libraries.values.set(LIB_A, "include");
+    state.libraries.values.set(LIB_B, "exclude");
+    expect(countActiveFilters(state.libraries)).toBe(2);
+  });
+
+  it("combines with other groups under a top-level allOf", () => {
+    const state = createEmptySeriesFilterState();
+    state.libraries.values.set(LIB_A, "include");
+    state.genres.values.set("Action", "include");
+
+    expect(seriesFilterStateToCondition(state)).toEqual({
+      allOf: [
+        { libraryId: { operator: "in", values: [LIB_A] } },
+        { genre: { operator: "is", value: "Action" } },
+      ],
+    });
+  });
+});
+
+describe("Filter Types - Rating conditions", () => {
+  // Ratings are builder-only: the chip state has no numeric slot, so the
+  // reverse converter must refuse rather than silently drop the filter.
+  it("are rejected by the chip-state converter", () => {
+    expect(
+      conditionToSeriesFilterState({
+        userRating: { operator: "gte", value: 85 },
+      }),
+    ).toBeNull();
+    expect(
+      conditionToSeriesFilterState({
+        communityRating: { operator: "gte", value: 85 },
+      }),
+    ).toBeNull();
+  });
+
+  it("are never emitted by the chip-state forward converter", () => {
+    const state = createEmptySeriesFilterState();
+    state.hasUserRating = "include";
+    expect(seriesFilterStateToCondition(state)).toEqual({
+      hasUserRating: { operator: "isTrue" },
+    });
+  });
+});

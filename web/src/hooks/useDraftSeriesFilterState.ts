@@ -7,6 +7,7 @@ import {
   type FilterGroupState,
   type FilterMode,
   parseSeriesFilters,
+  SERIES_FILTER_PARAM_KEYS,
   type SeriesFilterState,
   serializeSeriesFilters,
   type TriState,
@@ -43,6 +44,10 @@ interface UseDraftSeriesFilterStateReturn {
   // Actions for sharing tag filters
   setSharingTagState: (value: string, state: TriState) => void;
   setSharingTagMode: (mode: FilterMode) => void;
+
+  // Actions for library filters. No mode setter: a series belongs to exactly
+  // one library, so "all of these libraries" can never match.
+  setLibraryState: (value: string, state: TriState) => void;
 
   // Actions for completion filter
   setCompletionState: (state: TriState) => void;
@@ -101,6 +106,10 @@ function cloneFilterState(state: SeriesFilterState): SeriesFilterState {
       mode: state.sharingTags.mode,
       values: new Map(state.sharingTags.values),
     },
+    libraries: {
+      mode: state.libraries.mode,
+      values: new Map(state.libraries.values),
+    },
     completion: state.completion,
     hasExternalSourceId: state.hasExternalSourceId,
     hasUserRating: state.hasUserRating,
@@ -138,6 +147,7 @@ function filterStatesEqual(
     "publisher",
     "language",
     "sharingTags",
+    "libraries",
   ];
 
   for (const group of groups) {
@@ -378,6 +388,22 @@ export function useDraftSeriesFilterState(): UseDraftSeriesFilterStateReturn {
     [updateGroup],
   );
 
+  // Library actions
+  const setLibraryState = useCallback(
+    (value: string, state: TriState) => {
+      updateGroup("libraries", (current) => {
+        const newValues = new Map(current.values);
+        if (state === "neutral") {
+          newValues.delete(value);
+        } else {
+          newValues.set(value, state);
+        }
+        return { ...current, values: newValues };
+      });
+    },
+    [updateGroup],
+  );
+
   // Completion actions
   const setCompletionState = useCallback(
     (state: TriState) => {
@@ -450,18 +476,9 @@ export function useDraftSeriesFilterState(): UseDraftSeriesFilterStateReturn {
     const newParams = new URLSearchParams(searchParams);
 
     // Remove old filter params
-    newParams.delete("gf");
-    newParams.delete("tf");
-    newParams.delete("sf");
-    newParams.delete("rf");
-    newParams.delete("pf");
-    newParams.delete("lf");
-    newParams.delete("stf");
-    newParams.delete("cf");
-    newParams.delete("esf");
-    newParams.delete("urf");
-    newParams.delete("trf");
-    newParams.delete("icf");
+    for (const key of SERIES_FILTER_PARAM_KEYS) {
+      newParams.delete(key);
+    }
     // Add new filter params (will be empty for cleared filters)
     for (const [key, value] of filterParams) {
       newParams.set(key, value);
@@ -524,18 +541,9 @@ export function useDraftSeriesFilterState(): UseDraftSeriesFilterStateReturn {
     const newParams = new URLSearchParams(searchParams);
 
     // Remove old filter params
-    newParams.delete("gf");
-    newParams.delete("tf");
-    newParams.delete("sf");
-    newParams.delete("rf");
-    newParams.delete("pf");
-    newParams.delete("lf");
-    newParams.delete("stf");
-    newParams.delete("cf");
-    newParams.delete("esf");
-    newParams.delete("urf");
-    newParams.delete("trf");
-    newParams.delete("icf");
+    for (const key of SERIES_FILTER_PARAM_KEYS) {
+      newParams.delete(key);
+    }
     // Add new filter params
     for (const [key, value] of filterParams) {
       newParams.set(key, value);
@@ -562,6 +570,7 @@ export function useDraftSeriesFilterState(): UseDraftSeriesFilterStateReturn {
       publisher: countActiveFilters(draftFilters.publisher),
       language: countActiveFilters(draftFilters.language),
       sharingTags: countActiveFilters(draftFilters.sharingTags),
+      libraries: countActiveFilters(draftFilters.libraries),
       completion: draftFilters.completion !== "neutral" ? 1 : 0,
       hasExternalSourceId:
         draftFilters.hasExternalSourceId !== "neutral" ? 1 : 0,
@@ -599,6 +608,7 @@ export function useDraftSeriesFilterState(): UseDraftSeriesFilterStateReturn {
     setLanguageMode,
     setSharingTagState,
     setSharingTagMode,
+    setLibraryState,
     setCompletionState,
     setHasExternalSourceIdState,
     setHasUserRatingState,

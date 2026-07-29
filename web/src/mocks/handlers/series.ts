@@ -17,6 +17,58 @@ import coverSvg from "../fixtures/cover.svg?raw";
 type ExternalRatingDto = components["schemas"]["ExternalRatingDto"];
 type SeriesExternalIdDto = components["schemas"]["SeriesExternalIdDto"];
 
+type SeriesLike = { libraryId: string };
+
+/**
+ * Apply the `libraryId` leaves of a condition to a mock result set.
+ *
+ * The mock deliberately doesn't evaluate the full condition tree, but library
+ * scope has to work or every library-scoped screen shows the wrong data. All
+ * four uuid operators are handled: the filter drawer emits `in`/`notIn` (a
+ * series has exactly one library, so an include set is always an OR) while the
+ * advanced builder can still emit single-value `is`/`isNot`.
+ */
+function applyLibraryCondition<T extends SeriesLike>(
+  results: T[],
+  condition: unknown,
+): T[] {
+  if (!condition || typeof condition !== "object") return results;
+
+  const applyLeaf = (leaf: unknown, current: T[]): T[] => {
+    if (!leaf || typeof leaf !== "object" || !("libraryId" in leaf)) {
+      return current;
+    }
+    const op = (leaf as Record<string, unknown>).libraryId as {
+      operator?: string;
+      value?: string;
+      values?: string[];
+    };
+    switch (op?.operator) {
+      case "is":
+        return current.filter((s) => s.libraryId === op.value);
+      case "isNot":
+        return current.filter((s) => s.libraryId !== op.value);
+      case "in":
+        return current.filter((s) => (op.values ?? []).includes(s.libraryId));
+      case "notIn":
+        return current.filter((s) => !(op.values ?? []).includes(s.libraryId));
+      default:
+        return current;
+    }
+  };
+
+  let filtered = applyLeaf(condition, results);
+
+  const allOf = (condition as Record<string, unknown>).allOf;
+  if (Array.isArray(allOf)) {
+    for (const leaf of allOf) {
+      filtered = applyLeaf(leaf, filtered);
+    }
+  }
+
+  return filtered;
+}
+
 /**
  * Sample custom metadata for specific series (by title match)
  * These demonstrate the custom metadata feature in development mode
@@ -312,38 +364,7 @@ export const seriesHandlers = [
 
     // For mock purposes, we'll do basic filtering
     // In a real implementation, the backend evaluates the full condition tree
-    let results = [...mockSeries];
-
-    // Apply basic library filtering if condition contains libraryId
-    if (body.condition && typeof body.condition === "object") {
-      const condition = body.condition as Record<string, unknown>;
-
-      // Handle direct libraryId condition
-      if ("libraryId" in condition) {
-        const libOp = condition.libraryId as {
-          operator: string;
-          value: string;
-        };
-        if (libOp.operator === "is") {
-          results = results.filter((s) => s.libraryId === libOp.value);
-        }
-      }
-
-      // Handle allOf wrapper with libraryId
-      if ("allOf" in condition && Array.isArray(condition.allOf)) {
-        for (const c of condition.allOf) {
-          if (c && typeof c === "object" && "libraryId" in c) {
-            const libOp = (c as Record<string, unknown>).libraryId as {
-              operator: string;
-              value: string;
-            };
-            if (libOp.operator === "is") {
-              results = results.filter((s) => s.libraryId === libOp.value);
-            }
-          }
-        }
-      }
-    }
+    let results = applyLibraryCondition([...mockSeries], body.condition);
 
     // Apply full-text search
     if (body.fullTextSearch) {
@@ -403,38 +424,7 @@ export const seriesHandlers = [
     };
 
     // For mock purposes, we'll do basic filtering
-    let results = [...mockSeries];
-
-    // Apply basic library filtering if condition contains libraryId
-    if (body.condition && typeof body.condition === "object") {
-      const condition = body.condition as Record<string, unknown>;
-
-      // Handle direct libraryId condition
-      if ("libraryId" in condition) {
-        const libOp = condition.libraryId as {
-          operator: string;
-          value: string;
-        };
-        if (libOp.operator === "is") {
-          results = results.filter((s) => s.libraryId === libOp.value);
-        }
-      }
-
-      // Handle allOf wrapper with libraryId
-      if ("allOf" in condition && Array.isArray(condition.allOf)) {
-        for (const c of condition.allOf) {
-          if (c && typeof c === "object" && "libraryId" in c) {
-            const libOp = (c as Record<string, unknown>).libraryId as {
-              operator: string;
-              value: string;
-            };
-            if (libOp.operator === "is") {
-              results = results.filter((s) => s.libraryId === libOp.value);
-            }
-          }
-        }
-      }
-    }
+    const results = applyLibraryCondition([...mockSeries], body.condition);
 
     // Group by first letter of title (lowercase)
     const groups = new Map<string, number>();

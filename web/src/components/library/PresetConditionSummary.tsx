@@ -1,11 +1,15 @@
 import { Badge, Group, Stack, Text } from "@mantine/core";
+import { useQuery } from "@tanstack/react-query";
 import type { FilterPresetDto } from "@/api/filterPresets";
+import { librariesApi } from "@/api/libraries";
+import { storageToDisplayRating } from "@/api/ratings";
 import {
   type BookCondition,
   type BookFilterState,
   conditionToBookFilterState,
   conditionToSeriesFilterState,
   type FilterGroupState,
+  type NumberOperator,
   type SeriesCondition,
   type SeriesFilterState,
   type TriState,
@@ -38,20 +42,138 @@ const BOOK_TYPE_LABELS: Record<string, string> = {
   magazine: "Magazine",
 };
 
-function labelFor(field: string, value: string): string {
+const RATING_FIELD_LABELS: Record<string, string> = {
+  userRating: "My Rating",
+  communityRating: "Community Rating",
+};
+
+function labelFor(
+  field: string,
+  value: string,
+  names?: Map<string, string>,
+): string {
   if (field === "readStatus") return READ_STATUS_LABELS[value] ?? value;
   if (field === "status") return SERIES_STATUS_LABELS[value] ?? value;
   if (field === "bookType") return BOOK_TYPE_LABELS[value] ?? value;
+  // Libraries are stored by UUID. Fall back to a short prefix rather than
+  // dumping a full UUID at the user when the name isn't loaded (or the library
+  // has since been deleted).
+  if (field === "libraryId") {
+    return names?.get(value) ?? `${value.slice(0, 8)}…`;
+  }
   return value;
+}
+
+/**
+ * Render a `NumberOperator` over a rating on the 1-10 display scale.
+ *
+ * Conditions store the 1-100 scale, so every bound goes through
+ * `storageToDisplayRating`. Showing the raw stored value would read as "my
+ * rating is at least 85" on a 10-point scale.
+ */
+function describeRating(operator: NumberOperator): string {
+  const show = (stored: number) => storageToDisplayRating(stored).toFixed(1);
+  switch (operator.operator) {
+    case "eq":
+      return `is ${show(operator.value)}`;
+    case "ne":
+      return `is not ${show(operator.value)}`;
+    case "gt":
+      return `> ${show(operator.value)}`;
+    case "gte":
+      return `≥ ${show(operator.value)}`;
+    case "lt":
+      return `< ${show(operator.value)}`;
+    case "lte":
+      return `≤ ${show(operator.value)}`;
+    case "between": {
+      const { min, max } = operator;
+      if (typeof min === "number" && typeof max === "number") {
+        return `${show(min)} to ${show(max)}`;
+      }
+      if (typeof min === "number") return `≥ ${show(min)}`;
+      if (typeof max === "number") return `≤ ${show(max)}`;
+      return "any";
+    }
+    case "isNull":
+      return "not rated";
+    case "isNotNull":
+      return "rated";
+  }
+}
+
+interface RatingLeaf {
+  field: "userRating" | "communityRating";
+  operator: NumberOperator;
+}
+
+function asRatingLeaf(condition: unknown): RatingLeaf | null {
+  if (typeof condition !== "object" || condition === null) return null;
+  const keys = Object.keys(condition as Record<string, unknown>);
+  if (keys.length !== 1) return null;
+  const field = keys[0];
+  if (field !== "userRating" && field !== "communityRating") return null;
+  const operator = (condition as Record<string, NumberOperator>)[field];
+  if (!operator || typeof operator.operator !== "string") return null;
+  return { field, operator };
+}
+
+/**
+ * Pull rating leaves out of a condition so they can be described directly.
+ *
+ * Rating filters are only buildable in the advanced filter builder, and the
+ * chip-based state this summary otherwise renders has no numeric slot. Without
+ * this split, any preset containing a rating would fall through to the
+ * "advanced filter" notice and tell the user nothing about it.
+ */
+function extractRatingLeaves(condition: SeriesCondition | null | undefined): {
+  ratings: RatingLeaf[];
+  rest: SeriesCondition | null;
+} {
+  if (!condition) return { ratings: [], rest: null };
+
+  const direct = asRatingLeaf(condition);
+  if (direct) return { ratings: [direct], rest: null };
+
+  const record = condition as Record<string, unknown>;
+  if (!Array.isArray(record.allOf)) return { ratings: [], rest: condition };
+
+  const ratings: RatingLeaf[] = [];
+  const others: SeriesCondition[] = [];
+  for (const item of record.allOf as SeriesCondition[]) {
+    const leaf = asRatingLeaf(item);
+    if (leaf) ratings.push(leaf);
+    else others.push(item);
+  }
+
+  if (ratings.length === 0) return { ratings: [], rest: condition };
+  if (others.length === 0) return { ratings, rest: null };
+  if (others.length === 1) return { ratings, rest: others[0] };
+  return { ratings, rest: { allOf: others } };
+}
+
+function RatingRow({ leaf }: { leaf: RatingLeaf }) {
+  return (
+    <Group gap="xs" wrap="nowrap">
+      <Text size="xs" fw={600} c="dimmed" style={{ minWidth: 90 }}>
+        {RATING_FIELD_LABELS[leaf.field]}
+      </Text>
+      <Badge size="xs" variant="light" color="blue">
+        {describeRating(leaf.operator)}
+      </Badge>
+    </Group>
+  );
 }
 
 interface GroupRowProps {
   title: string;
   field: string;
   group: FilterGroupState;
+  /** UUID to display-name map, for fields whose values are IDs. */
+  names?: Map<string, string>;
 }
 
-function GroupRow({ title, field, group }: GroupRowProps) {
+function GroupRow({ title, field, group, names }: GroupRowProps) {
   const entries = Array.from(group.values.entries()).filter(
     ([, state]) => state !== "neutral",
   );
@@ -70,7 +192,7 @@ function GroupRow({ title, field, group }: GroupRowProps) {
             variant="light"
             color={state === "include" ? "blue" : "red"}
           >
-            {state === "include" ? "+" : "−"} {labelFor(field, value)}
+            {state === "include" ? "+" : "−"} {labelFor(field, value, names)}
           </Badge>
         ))}
       </Group>
@@ -108,9 +230,21 @@ function TriRow({
   );
 }
 
-function SeriesSummary({ state }: { state: SeriesFilterState }) {
+function SeriesSummary({
+  state,
+  libraryNames,
+}: {
+  state: SeriesFilterState;
+  libraryNames?: Map<string, string>;
+}) {
   return (
     <Stack gap={6}>
+      <GroupRow
+        title="Libraries"
+        field="libraryId"
+        group={state.libraries}
+        names={libraryNames}
+      />
       <GroupRow
         title="Read Status"
         field="readStatus"
@@ -193,27 +327,62 @@ export interface PresetConditionSummaryProps {
  * Falls back to a notice when the condition uses advanced shapes that the
  * chip UI cannot represent (those presets are still applyable from the
  * advanced search page).
+ *
+ * Rating leaves are described separately, before that parse: they're only
+ * buildable in the advanced builder and the chip state has no numeric slot, so
+ * folding them in would hide them behind the advanced-filter notice.
  */
 export function PresetConditionSummary({
   preset,
 }: PresetConditionSummaryProps) {
   const condition = preset.condition as unknown;
 
+  // Library chips hold UUIDs; resolve display names where we can.
+  const { data: libraries } = useQuery({
+    queryKey: ["libraries"],
+    queryFn: () => librariesApi.getAll(),
+    staleTime: 5 * 60 * 1000,
+    enabled: preset.target === "series",
+  });
+  const libraryNames = libraries
+    ? new Map(libraries.map((l) => [l.id, l.name]))
+    : undefined;
+
   if (preset.target === "series") {
-    const state = conditionToSeriesFilterState(
+    const { ratings, rest } = extractRatingLeaves(
       condition as SeriesCondition | undefined | null,
     );
+    const state = conditionToSeriesFilterState(rest);
+    const ratingRows = ratings.map((leaf) => (
+      <RatingRow key={leaf.field} leaf={leaf} />
+    ));
+
+    // The non-rating remainder is outside the chip grammar. Still show the
+    // ratings we could read, then say the rest needs the advanced page.
     if (!state) {
-      return <AdvancedNotice />;
+      return (
+        <Stack gap={6}>
+          {ratingRows}
+          <AdvancedNotice />
+        </Stack>
+      );
     }
+
     if (!hasAnyActive(state)) {
+      if (ratings.length > 0) return <Stack gap={6}>{ratingRows}</Stack>;
       return (
         <Text size="xs" c="dimmed">
           No filters in this preset.
         </Text>
       );
     }
-    return <SeriesSummary state={state} />;
+
+    return (
+      <Stack gap={6}>
+        {ratingRows}
+        <SeriesSummary state={state} libraryNames={libraryNames} />
+      </Stack>
+    );
   }
 
   if (preset.target === "books") {

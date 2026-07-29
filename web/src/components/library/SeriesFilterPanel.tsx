@@ -18,6 +18,7 @@ import { notifications } from "@mantine/notifications";
 import {
   IconAdjustments,
   IconBookmark,
+  IconLibrary,
   IconLock,
   IconNotebook,
   IconTag,
@@ -28,6 +29,7 @@ import { useQuery } from "@tanstack/react-query";
 import { type ReactNode, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { FilterPresetDto } from "@/api/filterPresets";
+import { librariesApi } from "@/api/libraries";
 import { sharingTagsApi } from "@/api/sharingTags";
 import { useDraftSeriesFilterState } from "@/hooks/useDraftSeriesFilterState";
 import { useAllGenres, useAllTags } from "@/hooks/useReferenceData";
@@ -35,6 +37,7 @@ import { useSeriesFilterState } from "@/hooks/useSeriesFilterState";
 import { useAuthStore } from "@/store/authStore";
 import {
   conditionToSeriesFilterState,
+  SERIES_FILTER_PARAM_KEYS,
   type SeriesCondition,
   serializeSeriesFilters,
   seriesFilterStateToCondition,
@@ -138,20 +141,7 @@ export function SeriesFilterPanel({ libraryId }: SeriesFilterPanelProps = {}) {
 
     const filterParams = serializeSeriesFilters(next);
     const newParams = new URLSearchParams(searchParams);
-    for (const key of [
-      "gf",
-      "tf",
-      "sf",
-      "rf",
-      "pf",
-      "lf",
-      "stf",
-      "cf",
-      "esf",
-      "urf",
-      "trf",
-      "icf",
-    ]) {
+    for (const key of SERIES_FILTER_PARAM_KEYS) {
       newParams.delete(key);
     }
     for (const [key, value] of filterParams) {
@@ -193,8 +183,23 @@ export function SeriesFilterPanel({ libraryId }: SeriesFilterPanelProps = {}) {
     enabled: isAdmin,
   });
 
+  // A library filter only makes sense in all-libraries scope. On a
+  // single-library route the request is already scoped to that library and this
+  // condition is ANDed with it, so naming any other library returns nothing.
+  const showLibraryFilter = normalizedLibraryId === null;
+
+  const { data: libraries = [], isLoading: librariesLoading } = useQuery({
+    queryKey: ["libraries"],
+    queryFn: () => librariesApi.getAll(),
+    staleTime: 5 * 60 * 1000,
+    enabled: showLibraryFilter,
+  });
+
   const isLoading =
-    genresLoading || tagsLoading || (isAdmin && sharingTagsLoading);
+    genresLoading ||
+    tagsLoading ||
+    (isAdmin && sharingTagsLoading) ||
+    (showLibraryFilter && librariesLoading);
 
   // Transform API data to filter options
   const genreOptions = genres.map((g) => ({
@@ -213,6 +218,13 @@ export function SeriesFilterPanel({ libraryId }: SeriesFilterPanelProps = {}) {
     value: st.name,
     label: st.name,
     count: st.seriesCount ?? undefined,
+  }));
+
+  // Chips carry library UUIDs so a rename doesn't invalidate a saved filter;
+  // the label is the display name.
+  const libraryOptions = libraries.map((l) => ({
+    value: l.id,
+    label: l.name,
   }));
 
   // Check if we have any metadata-based filters available
@@ -266,6 +278,28 @@ export function SeriesFilterPanel({ libraryId }: SeriesFilterPanelProps = {}) {
       />
 
       <Divider my={4} />
+
+      {/* Scope - only in all-libraries mode */}
+      {showLibraryFilter && libraryOptions.length > 0 && (
+        <>
+          <SectionHeader icon={IconLibrary}>Scope</SectionHeader>
+
+          <FilterGroup
+            title="Libraries"
+            options={libraryOptions}
+            state={draftState.draftFilters.libraries}
+            onValueChange={draftState.setLibraryState}
+            // A series belongs to exactly one library, so an "all of" mode
+            // could never match. The group is always an OR.
+            onModeChange={() => {}}
+            onClear={() => draftState.clearGroupDraft("libraries")}
+            showModeToggle={false}
+            searchable
+          />
+
+          <Divider my={4} />
+        </>
+      )}
 
       {/* Reading Progress */}
       <SectionHeader icon={IconBookmark}>Reading Progress</SectionHeader>

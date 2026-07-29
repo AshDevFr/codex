@@ -37,7 +37,9 @@ export type FieldOperator =
 
 export type UuidOperator =
   | { operator: "is"; value: string }
-  | { operator: "isNot"; value: string };
+  | { operator: "isNot"; value: string }
+  | { operator: "in"; values: string[] }
+  | { operator: "notIn"; values: string[] };
 
 // =============================================================================
 // Boolean operators (matches backend BoolOperator)
@@ -100,6 +102,10 @@ export type SeriesCondition =
   | { isTracked: BoolOperator }
   | { inCollection: BoolOperator }
   | { year: NumberOperator }
+  // Rating conditions carry the stored 1-100 scale, not the 1-10 scale the UI
+  // shows. Convert with displayToStorageRating / storageToDisplayRating.
+  | { userRating: NumberOperator }
+  | { communityRating: NumberOperator }
   | { author: FieldOperator }
   | { path: FieldOperator }
   | { dateAdded: DateOperator };
@@ -178,6 +184,15 @@ export interface SeriesFilterState {
   publisher: FilterGroupState;
   language: FilterGroupState;
   sharingTags: FilterGroupState;
+  /**
+   * Libraries to include or exclude. Values are library UUIDs, not names, so
+   * renaming a library doesn't break a saved filter.
+   *
+   * Only meaningful in all-libraries scope: on a single-library route the
+   * request is already scoped to one library and this condition is ANDed with
+   * that scope, so naming a different library can only return nothing.
+   */
+  libraries: FilterGroupState;
   completion: TriState;
   hasExternalSourceId: TriState;
   hasUserRating: TriState;
@@ -223,6 +238,7 @@ export function createEmptySeriesFilterState(): SeriesFilterState {
     publisher: createEmptyFilterGroup(),
     language: createEmptyFilterGroup(),
     sharingTags: createEmptyFilterGroup(),
+    libraries: createEmptyFilterGroup(),
     completion: "neutral",
     hasExternalSourceId: "neutral",
     hasUserRating: "neutral",
@@ -342,12 +358,41 @@ export function filterGroupToConditions<
 }
 
 /**
+ * Convert the libraries group to API conditions.
+ *
+ * Libraries speak `UuidOperator`, not `FieldOperator`, so this can't go through
+ * `filterGroupToConditions`. It also ignores the group's `mode`: a series
+ * belongs to exactly one library, so "all of these libraries" is unsatisfiable
+ * by construction and the include set is always an OR. That's what `in`
+ * expresses, in one indexed comparison rather than an `anyOf` of N leaves.
+ */
+export function libraryGroupToConditions(
+  group: FilterGroupState,
+): SeriesCondition[] {
+  const includes = getIncludedValues(group);
+  const excludes = getExcludedValues(group);
+  const conditions: SeriesCondition[] = [];
+
+  if (includes.length > 0) {
+    conditions.push({ libraryId: { operator: "in", values: includes } });
+  }
+  if (excludes.length > 0) {
+    conditions.push({ libraryId: { operator: "notIn", values: excludes } });
+  }
+
+  return conditions;
+}
+
+/**
  * Convert UI filter state to API condition
  */
 export function seriesFilterStateToCondition(
   state: SeriesFilterState,
 ): SeriesCondition | undefined {
   const allConditions: SeriesCondition[] = [];
+
+  // Add library conditions
+  allConditions.push(...libraryGroupToConditions(state.libraries));
 
   // Add genre conditions
   allConditions.push(...filterGroupToConditions(state.genres, "genre"));
@@ -531,6 +576,7 @@ const SERIES_FIELD_GROUPS: Record<
     | "hasUserRating"
     | "isTracked"
     | "inCollection"
+    | "libraries"
   >
 > = {
   genre: "genres",
@@ -541,6 +587,44 @@ const SERIES_FIELD_GROUPS: Record<
   language: "language",
   sharingTag: "sharingTags",
 };
+
+/**
+ * Parse a `libraryId` leaf back into the libraries chip group.
+ *
+ * Accepts all four uuid operators, not just the two the chip UI emits: the
+ * advanced builder can produce single-value `is` / `isNot` leaves, and presets
+ * saved before the libraries group existed use exactly that shape.
+ */
+function applyLibraryLeaf(
+  state: SeriesFilterState,
+  op: { operator?: string; value?: unknown; values?: unknown },
+): boolean {
+  const setAll = (values: unknown, tri: TriState): boolean => {
+    if (!Array.isArray(values)) return false;
+    for (const value of values) {
+      if (typeof value !== "string") return false;
+      state.libraries.values.set(value, tri);
+    }
+    return true;
+  };
+
+  switch (op.operator) {
+    case "in":
+      return setAll(op.values, "include");
+    case "notIn":
+      return setAll(op.values, "exclude");
+    case "is":
+      if (typeof op.value !== "string") return false;
+      state.libraries.values.set(op.value, "include");
+      return true;
+    case "isNot":
+      if (typeof op.value !== "string") return false;
+      state.libraries.values.set(op.value, "exclude");
+      return true;
+    default:
+      return false;
+  }
+}
 
 const SERIES_BOOL_FIELDS = new Set([
   "completion",
@@ -561,6 +645,11 @@ function applySeriesLeaf(
   const op = leaf[field] as { operator?: string; value?: string };
   if (!op || typeof op !== "object" || typeof op.operator !== "string") {
     return false;
+  }
+
+  // Libraries carry uuid operators rather than field operators.
+  if (field === "libraryId") {
+    return applyLibraryLeaf(state, op);
   }
 
   // Bool fields land directly on the state.
@@ -905,12 +994,24 @@ export const FILTER_PARAM_KEYS = {
   publisher: "pf",
   language: "lf",
   sharingTags: "stf",
+  libraries: "libf",
   completion: "cf",
   hasExternalSourceId: "esf",
   hasUserRating: "urf",
   isTracked: "trf",
   inCollection: "icf",
 } as const;
+
+/**
+ * Every series filter param key, for callers that need to clear the whole set
+ * before writing a fresh one.
+ *
+ * Derived from `FILTER_PARAM_KEYS` rather than listed by hand: the delete-then-
+ * rewrite dance happens in several places, and a hand-maintained copy that
+ * misses a key leaves a stale filter in the URL that nothing can clear.
+ */
+export const SERIES_FILTER_PARAM_KEYS: readonly string[] =
+  Object.values(FILTER_PARAM_KEYS);
 
 /**
  * Serialize series filter state to URL search params
@@ -942,6 +1043,9 @@ export function serializeSeriesFilters(
   const sharingTagParam = serializeFilterGroup(state.sharingTags);
   if (sharingTagParam)
     params.set(FILTER_PARAM_KEYS.sharingTags, sharingTagParam);
+
+  const librariesParam = serializeFilterGroup(state.libraries);
+  if (librariesParam) params.set(FILTER_PARAM_KEYS.libraries, librariesParam);
 
   if (state.completion !== "neutral") {
     params.set(FILTER_PARAM_KEYS.completion, state.completion);
@@ -988,6 +1092,7 @@ export function parseSeriesFilters(params: URLSearchParams): SeriesFilterState {
     publisher: parseFilterGroup(params.get(FILTER_PARAM_KEYS.publisher)),
     language: parseFilterGroup(params.get(FILTER_PARAM_KEYS.language)),
     sharingTags: parseFilterGroup(params.get(FILTER_PARAM_KEYS.sharingTags)),
+    libraries: parseFilterGroup(params.get(FILTER_PARAM_KEYS.libraries)),
     completion:
       completionParam === "include" || completionParam === "exclude"
         ? completionParam

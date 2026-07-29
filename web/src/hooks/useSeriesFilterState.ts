@@ -6,6 +6,7 @@ import {
   type FilterGroupState,
   type FilterMode,
   parseSeriesFilters,
+  SERIES_FILTER_PARAM_KEYS,
   type SeriesCondition,
   type SeriesFilterState,
   serializeSeriesFilters,
@@ -44,6 +45,10 @@ interface UseSeriesFilterStateReturn {
   // Actions for sharing tag filters
   setSharingTagState: (value: string, state: TriState) => void;
   setSharingTagMode: (mode: FilterMode) => void;
+
+  // Actions for library filters. No mode setter: a series belongs to exactly
+  // one library, so "all of these libraries" can never match.
+  setLibraryState: (value: string, state: TriState) => void;
 
   // Actions for completion filter
   setCompletionState: (state: TriState) => void;
@@ -103,18 +108,9 @@ export function useSeriesFilterState(): UseSeriesFilterStateReturn {
       const newParams = new URLSearchParams(searchParams);
 
       // Remove old filter params
-      newParams.delete("gf");
-      newParams.delete("tf");
-      newParams.delete("sf");
-      newParams.delete("rf");
-      newParams.delete("pf");
-      newParams.delete("lf");
-      newParams.delete("stf");
-      newParams.delete("cf");
-      newParams.delete("esf");
-      newParams.delete("urf");
-      newParams.delete("trf");
-      newParams.delete("icf");
+      for (const key of SERIES_FILTER_PARAM_KEYS) {
+        newParams.delete(key);
+      }
       // Add new filter params
       for (const [key, value] of filterParams) {
         newParams.set(key, value);
@@ -309,6 +305,22 @@ export function useSeriesFilterState(): UseSeriesFilterStateReturn {
     [updateGroup],
   );
 
+  // Library actions
+  const setLibraryState = useCallback(
+    (value: string, state: TriState) => {
+      updateGroup("libraries", (current) => {
+        const newValues = new Map(current.values);
+        if (state === "neutral") {
+          newValues.delete(value);
+        } else {
+          newValues.set(value, state);
+        }
+        return { ...current, values: newValues };
+      });
+    },
+    [updateGroup],
+  );
+
   // Completion actions
   const setCompletionState = useCallback(
     (state: TriState) => {
@@ -409,6 +421,7 @@ export function useSeriesFilterState(): UseSeriesFilterStateReturn {
       publisher: countActiveFilters(filters.publisher),
       language: countActiveFilters(filters.language),
       sharingTags: countActiveFilters(filters.sharingTags),
+      libraries: countActiveFilters(filters.libraries),
       completion: filters.completion !== "neutral" ? 1 : 0,
       hasExternalSourceId: filters.hasExternalSourceId !== "neutral" ? 1 : 0,
       hasUserRating: filters.hasUserRating !== "neutral" ? 1 : 0,
@@ -445,6 +458,7 @@ export function useSeriesFilterState(): UseSeriesFilterStateReturn {
     setLanguageMode,
     setSharingTagState,
     setSharingTagMode,
+    setLibraryState,
     setCompletionState,
     setHasExternalSourceIdState,
     setHasUserRatingState,

@@ -17797,6 +17797,10 @@ export interface components {
         } | {
             hasUserRating: components["schemas"]["BoolOperator"];
         } | {
+            userRating: components["schemas"]["NumberOperator"];
+        } | {
+            communityRating: components["schemas"]["NumberOperator"];
+        } | {
             isTracked: components["schemas"]["BoolOperator"];
         } | {
             inCollection: components["schemas"]["BoolOperator"];
@@ -20754,6 +20758,14 @@ export interface components {
             operator: "isNot";
             /** Format: uuid */
             value: string;
+        } | {
+            /** @enum {string} */
+            operator: "in";
+            values: string[];
+        } | {
+            /** @enum {string} */
+            operator: "notIn";
+            values: string[];
         };
         /** @description Verify email request */
         VerifyEmailRequest: {

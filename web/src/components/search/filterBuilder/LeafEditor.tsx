@@ -1,6 +1,7 @@
 import {
   ActionIcon,
   Group,
+  MultiSelect,
   NumberInput,
   Select,
   Stack,
@@ -13,6 +14,7 @@ import { IconTrash } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { librariesApi } from "@/api/libraries";
+import { displayToStorageRating, storageToDisplayRating } from "@/api/ratings";
 import type {
   DateOperator,
   FieldOperator,
@@ -21,6 +23,7 @@ import type {
 } from "@/types/filters";
 import {
   type Condition,
+  isUuidListOperator,
   newLeaf,
   OPERATOR_LABELS,
   operatorsForField,
@@ -255,6 +258,7 @@ function ValueInput({
       <UuidValueInput
         condition={condition}
         field={field}
+        operator={operator}
         onChange={onChange}
         fullWidth={fullWidth}
       />
@@ -262,6 +266,17 @@ function ValueInput({
   }
 
   if (field.operatorType === "number") {
+    if (field.hint === "rating") {
+      return (
+        <RatingValueInput
+          condition={condition}
+          field={field}
+          operator={operator}
+          onChange={onChange}
+          fullWidth={fullWidth}
+        />
+      );
+    }
     if (operator === "between") {
       const node = (condition as Record<string, NumberOperator>)[
         field.key
@@ -393,11 +408,13 @@ function EnumSelect({
 function UuidValueInput({
   condition,
   field,
+  operator,
   onChange,
   fullWidth,
 }: {
   condition: Condition;
   field: FieldDef;
+  operator: string;
   onChange: (next: Condition) => void;
   fullWidth?: boolean;
 }) {
@@ -411,13 +428,31 @@ function UuidValueInput({
   });
 
   const node = (condition as Record<string, UuidOperator>)[field.key];
+  const isList = isUuidListOperator(operator);
   const value = "value" in node ? node.value : "";
+  const values = "values" in node ? node.values : [];
 
   if (field.key === "libraryId" && libraries) {
+    const data = libraries.map((l) => ({ value: l.id, label: l.name }));
+    if (isList) {
+      return (
+        <MultiSelect
+          value={values}
+          data={data}
+          onChange={(next) =>
+            onChange(updateLeafValue(condition, field, { values: next }))
+          }
+          placeholder={values.length === 0 ? "Pick libraries" : undefined}
+          searchable
+          clearable
+          w={fullWidth ? "100%" : 260}
+        />
+      );
+    }
     return (
       <Select
         value={value || null}
-        data={libraries.map((l) => ({ value: l.id, label: l.name }))}
+        data={data}
         onChange={(next) => {
           if (next) {
             onChange(updateLeafValue(condition, field, { value: next }));
@@ -426,6 +461,30 @@ function UuidValueInput({
         placeholder="Pick a library"
         searchable
         w={fullWidth ? "100%" : 220}
+      />
+    );
+  }
+
+  // No curated picker for this field: accept raw UUIDs. For the list operators
+  // that means a comma-separated list, which is ugly but honest, and it keeps
+  // `seriesId in [...]` reachable without a series autocomplete.
+  if (isList) {
+    return (
+      <TextInput
+        value={values.join(", ")}
+        onChange={(e) =>
+          onChange(
+            updateLeafValue(condition, field, {
+              values: e.currentTarget.value
+                .split(",")
+                .map((part) => part.trim())
+                .filter((part) => part.length > 0),
+            }),
+          )
+        }
+        placeholder="uuid, uuid"
+        w={fullWidth ? "100%" : undefined}
+        flex={fullWidth ? undefined : 1}
       />
     );
   }
@@ -441,6 +500,89 @@ function UuidValueInput({
       placeholder="uuid"
       w={fullWidth ? "100%" : undefined}
       flex={fullWidth ? undefined : 1}
+    />
+  );
+}
+
+/**
+ * Rating value input. Reads and writes the 0-10 display scale with 0.1
+ * precision while the condition holds the stored 1-100 value, so 8.5 in the box
+ * is `85` on the wire and comes back as 8.5.
+ */
+function RatingValueInput({
+  condition,
+  field,
+  operator,
+  onChange,
+  fullWidth,
+}: {
+  condition: Condition;
+  field: FieldDef;
+  operator: string;
+  onChange: (next: Condition) => void;
+  fullWidth?: boolean;
+}) {
+  const toDisplay = (stored: number | null | undefined): number | "" =>
+    typeof stored === "number" ? storageToDisplayRating(stored) : "";
+  const toStored = (next: string | number): number | null =>
+    typeof next === "number" ? displayToStorageRating(next) : null;
+
+  const numberProps = {
+    min: 0,
+    max: 10,
+    step: 0.1,
+    decimalScale: 1,
+    clampBehavior: "strict" as const,
+  };
+
+  if (operator === "between") {
+    const node = (condition as Record<string, NumberOperator>)[
+      field.key
+    ] as Extract<NumberOperator, { operator: "between" }>;
+    return (
+      <Group
+        gap="xs"
+        wrap="nowrap"
+        grow={fullWidth}
+        w={fullWidth ? "100%" : undefined}
+      >
+        <NumberInput
+          {...numberProps}
+          value={toDisplay(node.min)}
+          onChange={(v) =>
+            onChange(updateLeafValue(condition, field, { min: toStored(v) }))
+          }
+          placeholder="min"
+          aria-label={`${field.label} minimum`}
+          w={fullWidth ? undefined : 100}
+        />
+        <NumberInput
+          {...numberProps}
+          value={toDisplay(node.max)}
+          onChange={(v) =>
+            onChange(updateLeafValue(condition, field, { max: toStored(v) }))
+          }
+          placeholder="max"
+          aria-label={`${field.label} maximum`}
+          w={fullWidth ? undefined : 100}
+        />
+      </Group>
+    );
+  }
+
+  const node = (condition as Record<string, NumberOperator>)[
+    field.key
+  ] as Extract<NumberOperator, { value: number }>;
+  return (
+    <NumberInput
+      {...numberProps}
+      value={toDisplay(node.value)}
+      onChange={(v) =>
+        onChange(updateLeafValue(condition, field, { value: toStored(v) ?? 0 }))
+      }
+      placeholder="0.0 - 10.0"
+      aria-label={field.label}
+      w={fullWidth ? "100%" : 120}
     />
   );
 }

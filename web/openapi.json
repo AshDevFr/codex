@@ -40010,6 +40010,30 @@
           },
           {
             "type": "object",
+            "description": "Filter by the calling user's own rating of the series.\n\nValues are on the stored 1-100 scale (`user_series_ratings.rating`),\nwhich the UI presents as 1.0-10.0 with 0.1 precision, so `userRating >=\n85` means \"I rated it 8.5 or better\". Conversion between the two scales\nhappens only in the UI; the API is 1-100 everywhere.\n\nRequires user context: without a caller the comparison operators resolve\nto an empty set, `isNull` matches everything and `isNotNull` matches\nnothing, since an anonymous caller has rated nothing.",
+            "required": [
+              "userRating"
+            ],
+            "properties": {
+              "userRating": {
+                "$ref": "#/components/schemas/NumberOperator"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Filter by the average rating this series has across all users on this\nserver (`AVG(user_series_ratings.rating)`, stored 1-100 scale).\n\nSeries nobody has rated have no average: they are excluded by every\ncomparison operator and by `isNotNull`, and matched by `isNull`.",
+            "required": [
+              "communityRating"
+            ],
+            "properties": {
+              "communityRating": {
+                "$ref": "#/components/schemas/NumberOperator"
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "Filter by whether release tracking is enabled for the series.\n\n`IsTrue` returns only series whose `series_tracking.tracked` flag is\n`true`. `IsFalse` returns everything else, including series with no\n`series_tracking` row at all (the common case for a fresh library).",
             "required": [
               "isTracked"
@@ -45398,6 +45422,52 @@
               "value": {
                 "type": "string",
                 "format": "uuid"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Matches any of the given IDs. An empty list matches nothing.\n\nExpressible as an `anyOf` of several `Is` conditions, but that bloats\nthe stored JSON and turns one indexed `IN` into N unioned subqueries.",
+            "required": [
+              "values",
+              "operator"
+            ],
+            "properties": {
+              "operator": {
+                "type": "string",
+                "enum": [
+                  "in"
+                ]
+              },
+              "values": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Matches none of the given IDs. An empty list matches everything.",
+            "required": [
+              "values",
+              "operator"
+            ],
+            "properties": {
+              "operator": {
+                "type": "string",
+                "enum": [
+                  "notIn"
+                ]
+              },
+              "values": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
               }
             }
           }

@@ -26,8 +26,14 @@ export interface FieldDef {
   targets: FieldTarget[];
   /** Closed enum: only `is` / `isNot` / `isNull` / `isNotNull` make sense. */
   enumValues?: EnumOption[];
-  /** Hint for the LeafEditor (e.g. textarea for free text, year for number). */
-  hint?: "text" | "year" | "page-count" | "path";
+  /**
+   * Hint for the LeafEditor (e.g. textarea for free text, year for number).
+   *
+   * `rating` additionally changes the *units* of the control: the stored value
+   * is on the 1-100 scale but the input reads and writes 0-10 with 0.1
+   * precision, matching how ratings are shown everywhere else in the UI.
+   */
+  hint?: "text" | "year" | "page-count" | "path" | "rating";
 }
 
 const READ_STATUS: EnumOption[] = [
@@ -196,6 +202,22 @@ export const FIELD_CATALOG: FieldDef[] = [
     group: "User",
     operatorType: "bool",
     targets: ["series"],
+  },
+  {
+    key: "userRating",
+    label: "My rating",
+    group: "User",
+    operatorType: "number",
+    targets: ["series"],
+    hint: "rating",
+  },
+  {
+    key: "communityRating",
+    label: "Community rating",
+    group: "User",
+    operatorType: "number",
+    targets: ["series"],
+    hint: "rating",
   },
   {
     key: "isTracked",

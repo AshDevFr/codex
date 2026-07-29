@@ -7444,3 +7444,521 @@ async fn test_list_series_external_index_requires_auth() {
 
     assert_eq!(status, StatusCode::UNAUTHORIZED);
 }
+
+// ============================================================================
+// Numeric Rating Filter Tests
+// ============================================================================
+
+/// Set up a library with four series and return `(db, state, library_id, ids)`
+/// where `ids` is `[high, mid, low, unrated]`. Ratings are attached by the
+/// caller so each test can control who rated what.
+async fn setup_rating_fixture(db: &sea_orm::DatabaseConnection) -> (uuid::Uuid, Vec<uuid::Uuid>) {
+    let library = LibraryRepository::create(db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let mut ids = Vec::new();
+    for name in ["High", "Mid", "Low", "Unrated"] {
+        let series = SeriesRepository::create(db, library.id, name, None)
+            .await
+            .unwrap();
+        ids.push(series.id);
+    }
+
+    (library.id, ids)
+}
+
+async fn create_user_and_token(
+    db: &sea_orm::DatabaseConnection,
+    state: &codex::api::extractors::AuthState,
+    username: &str,
+) -> (uuid::Uuid, String) {
+    let password_hash = password::hash_password("password123").unwrap();
+    let user = create_test_user(
+        username,
+        &format!("{username}@example.com"),
+        &password_hash,
+        true,
+    );
+    let created = UserRepository::create(db, &user).await.unwrap();
+    let token = state
+        .jwt_service
+        .generate_token(created.id, created.username.clone(), created.get_role())
+        .unwrap();
+    (created.id, token)
+}
+
+#[tokio::test]
+async fn test_list_series_filtered_by_user_rating_threshold() {
+    use codex::api::routes::v1::dto::filter::NumberOperator;
+    use codex::db::repositories::UserSeriesRatingRepository;
+
+    let (db, _temp_dir) = setup_test_db().await;
+    let (_library_id, ids) = setup_rating_fixture(&db).await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let (user_id, token) = create_user_and_token(&db, &state, "reader").await;
+
+    // 9.0, 8.5 and 4.0 on the display scale.
+    UserSeriesRatingRepository::create(&db, user_id, ids[0], 90, None)
+        .await
+        .unwrap();
+    UserSeriesRatingRepository::create(&db, user_id, ids[1], 85, None)
+        .await
+        .unwrap();
+    UserSeriesRatingRepository::create(&db, user_id, ids[2], 40, None)
+        .await
+        .unwrap();
+
+    let app = create_test_router(state).await;
+
+    // gte is inclusive at the boundary, and the unrated series is excluded.
+    let request_body = SeriesListRequest {
+        condition: Some(SeriesCondition::UserRating {
+            user_rating: NumberOperator::Gte { value: 85 },
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app.clone(), request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    let titles: Vec<&str> = series_list.data.iter().map(|s| s.title.as_str()).collect();
+    assert_eq!(series_list.data.len(), 2, "got {titles:?}");
+    assert!(titles.contains(&"High"));
+    assert!(titles.contains(&"Mid"));
+
+    // gt excludes the boundary.
+    let request_body = SeriesListRequest {
+        condition: Some(SeriesCondition::UserRating {
+            user_rating: NumberOperator::Gt { value: 85 },
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app.clone(), request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 1);
+    assert_eq!(series_list.data[0].title, "High");
+
+    // A closed range picks out the middle.
+    let request_body = SeriesListRequest {
+        condition: Some(SeriesCondition::UserRating {
+            user_rating: NumberOperator::Between {
+                min: Some(80),
+                max: Some(89),
+            },
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 1);
+    assert_eq!(series_list.data[0].title, "Mid");
+}
+
+#[tokio::test]
+async fn test_list_series_filtered_by_user_rating_nullability() {
+    use codex::api::routes::v1::dto::filter::NumberOperator;
+    use codex::db::repositories::UserSeriesRatingRepository;
+
+    let (db, _temp_dir) = setup_test_db().await;
+    let (_library_id, ids) = setup_rating_fixture(&db).await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let (user_id, token) = create_user_and_token(&db, &state, "reader").await;
+
+    UserSeriesRatingRepository::create(&db, user_id, ids[0], 90, None)
+        .await
+        .unwrap();
+
+    let app = create_test_router(state).await;
+
+    // isNotNull is the rated set.
+    let request_body = SeriesListRequest {
+        condition: Some(SeriesCondition::UserRating {
+            user_rating: NumberOperator::IsNotNull,
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app.clone(), request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 1);
+    assert_eq!(series_list.data[0].title, "High");
+
+    // isNull is everything else, including series with no rating row at all.
+    let request_body = SeriesListRequest {
+        condition: Some(SeriesCondition::UserRating {
+            user_rating: NumberOperator::IsNull,
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app.clone(), request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 3);
+
+    // `ne` compares an existing rating, so the unrated series stay out: SQL
+    // NULL semantics, not "everything that isn't 90".
+    let request_body = SeriesListRequest {
+        condition: Some(SeriesCondition::UserRating {
+            user_rating: NumberOperator::Ne { value: 90 },
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(response.unwrap().data.len(), 0);
+}
+
+#[tokio::test]
+async fn test_list_series_user_rating_is_per_caller() {
+    use codex::api::routes::v1::dto::filter::NumberOperator;
+    use codex::db::repositories::UserSeriesRatingRepository;
+
+    let (db, _temp_dir) = setup_test_db().await;
+    let (_library_id, ids) = setup_rating_fixture(&db).await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let (alice_id, alice_token) = create_user_and_token(&db, &state, "alice").await;
+    let (bob_id, bob_token) = create_user_and_token(&db, &state, "bob").await;
+
+    // Alice loves "High", Bob loves "Low".
+    UserSeriesRatingRepository::create(&db, alice_id, ids[0], 95, None)
+        .await
+        .unwrap();
+    UserSeriesRatingRepository::create(&db, alice_id, ids[2], 20, None)
+        .await
+        .unwrap();
+    UserSeriesRatingRepository::create(&db, bob_id, ids[0], 20, None)
+        .await
+        .unwrap();
+    UserSeriesRatingRepository::create(&db, bob_id, ids[2], 95, None)
+        .await
+        .unwrap();
+
+    let condition = SeriesCondition::UserRating {
+        user_rating: NumberOperator::Gte { value: 85 },
+    };
+
+    let app = create_test_router(state.clone()).await;
+    let request_body = SeriesListRequest {
+        condition: Some(condition.clone()),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &alice_token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+    let alice_list = response.unwrap();
+    assert_eq!(alice_list.data.len(), 1);
+    assert_eq!(alice_list.data[0].title, "High");
+
+    let app = create_test_router(state).await;
+    let request_body = SeriesListRequest {
+        condition: Some(condition),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &bob_token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+    let bob_list = response.unwrap();
+    assert_eq!(bob_list.data.len(), 1);
+    assert_eq!(bob_list.data[0].title, "Low");
+}
+
+#[tokio::test]
+async fn test_list_series_filtered_by_community_rating() {
+    use codex::api::routes::v1::dto::filter::NumberOperator;
+    use codex::db::repositories::UserSeriesRatingRepository;
+
+    let (db, _temp_dir) = setup_test_db().await;
+    let (_library_id, ids) = setup_rating_fixture(&db).await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let (alice_id, alice_token) = create_user_and_token(&db, &state, "alice").await;
+    let (bob_id, _bob_token) = create_user_and_token(&db, &state, "bob").await;
+
+    // "High" averages 90, "Mid" averages exactly 85, "Low" averages 40.
+    UserSeriesRatingRepository::create(&db, alice_id, ids[0], 100, None)
+        .await
+        .unwrap();
+    UserSeriesRatingRepository::create(&db, bob_id, ids[0], 80, None)
+        .await
+        .unwrap();
+    UserSeriesRatingRepository::create(&db, alice_id, ids[1], 90, None)
+        .await
+        .unwrap();
+    UserSeriesRatingRepository::create(&db, bob_id, ids[1], 80, None)
+        .await
+        .unwrap();
+    UserSeriesRatingRepository::create(&db, alice_id, ids[2], 40, None)
+        .await
+        .unwrap();
+
+    let app = create_test_router(state).await;
+
+    // The average, not any individual rating: Alice rated "Mid" 90 but the
+    // community average is 85, so `gt 85` must not return it.
+    let request_body = SeriesListRequest {
+        condition: Some(SeriesCondition::CommunityRating {
+            community_rating: NumberOperator::Gt { value: 85 },
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &alice_token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app.clone(), request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    let titles: Vec<&str> = series_list.data.iter().map(|s| s.title.as_str()).collect();
+    assert_eq!(series_list.data.len(), 1, "got {titles:?}");
+    assert_eq!(series_list.data[0].title, "High");
+
+    // gte picks up the boundary average.
+    let request_body = SeriesListRequest {
+        condition: Some(SeriesCondition::CommunityRating {
+            community_rating: NumberOperator::Gte { value: 85 },
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &alice_token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app.clone(), request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    let titles: Vec<&str> = series_list.data.iter().map(|s| s.title.as_str()).collect();
+    assert_eq!(series_list.data.len(), 2, "got {titles:?}");
+    assert!(titles.contains(&"High"));
+    assert!(titles.contains(&"Mid"));
+
+    // Unrated series have no average: excluded by comparisons, returned by
+    // isNull.
+    let request_body = SeriesListRequest {
+        condition: Some(SeriesCondition::CommunityRating {
+            community_rating: NumberOperator::Lte { value: 100 },
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &alice_token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app.clone(), request).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(response.unwrap().data.len(), 3);
+
+    let request_body = SeriesListRequest {
+        condition: Some(SeriesCondition::CommunityRating {
+            community_rating: NumberOperator::IsNull,
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &alice_token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 1);
+    assert_eq!(series_list.data[0].title, "Unrated");
+}
+
+/// A community-rating rule is independent of who asks: unlike `userRating`, the
+/// average is a server-wide fact.
+#[tokio::test]
+async fn test_community_rating_is_the_same_for_every_caller() {
+    use codex::api::routes::v1::dto::filter::NumberOperator;
+    use codex::db::repositories::UserSeriesRatingRepository;
+
+    let (db, _temp_dir) = setup_test_db().await;
+    let (_library_id, ids) = setup_rating_fixture(&db).await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let (alice_id, alice_token) = create_user_and_token(&db, &state, "alice").await;
+    let (_bob_id, bob_token) = create_user_and_token(&db, &state, "bob").await;
+
+    UserSeriesRatingRepository::create(&db, alice_id, ids[0], 90, None)
+        .await
+        .unwrap();
+
+    let condition = SeriesCondition::CommunityRating {
+        community_rating: NumberOperator::Gte { value: 85 },
+    };
+
+    for token in [&alice_token, &bob_token] {
+        let app = create_test_router(state.clone()).await;
+        let request_body = SeriesListRequest {
+            condition: Some(condition.clone()),
+            ..Default::default()
+        };
+        let request = post_json_request_with_auth("/api/v1/series/list", &request_body, token);
+        let (status, response): (StatusCode, Option<SeriesListResponse>) =
+            make_json_request(app, request).await;
+        assert_eq!(status, StatusCode::OK);
+        let series_list = response.unwrap();
+        assert_eq!(series_list.data.len(), 1);
+        assert_eq!(series_list.data[0].title, "High");
+    }
+}
+
+// ============================================================================
+// Multi-Library Filter Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_list_series_filtered_by_library_id_in() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library1 = LibraryRepository::create(&db, "Library 1", "/lib1", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let library2 = LibraryRepository::create(&db, "Library 2", "/lib2", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let library3 = LibraryRepository::create(&db, "Library 3", "/lib3", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    SeriesRepository::create(&db, library1.id, "Lib1 Series", None)
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library2.id, "Lib2 Series", None)
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library3.id, "Lib3 Series", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    // `in` over two libraries returns their union.
+    let app = create_test_router(state.clone()).await;
+    let request_body = SeriesListRequest {
+        condition: Some(SeriesCondition::LibraryId {
+            library_id: UuidOperator::In {
+                values: vec![library1.id, library2.id],
+            },
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    let titles: Vec<&str> = series_list.data.iter().map(|s| s.title.as_str()).collect();
+    assert_eq!(series_list.data.len(), 2, "got {titles:?}");
+    assert!(titles.contains(&"Lib1 Series"));
+    assert!(titles.contains(&"Lib2 Series"));
+
+    // `notIn` is the complement.
+    let app = create_test_router(state.clone()).await;
+    let request_body = SeriesListRequest {
+        condition: Some(SeriesCondition::LibraryId {
+            library_id: UuidOperator::NotIn {
+                values: vec![library1.id, library2.id],
+            },
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 1);
+    assert_eq!(series_list.data[0].title, "Lib3 Series");
+
+    // An empty `in` names no library and so matches nothing.
+    let app = create_test_router(state.clone()).await;
+    let request_body = SeriesListRequest {
+        condition: Some(SeriesCondition::LibraryId {
+            library_id: UuidOperator::In { values: vec![] },
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(response.unwrap().data.len(), 0);
+
+    // An empty `notIn` excludes nothing and so matches everything.
+    let app = create_test_router(state).await;
+    let request_body = SeriesListRequest {
+        condition: Some(SeriesCondition::LibraryId {
+            library_id: UuidOperator::NotIn { values: vec![] },
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(response.unwrap().data.len(), 3);
+}
+
+/// A single-library `is` condition, the shape every saved preset uses today,
+/// must keep returning what it always did now that `in` exists.
+#[tokio::test]
+async fn test_list_series_single_library_is_condition_unchanged() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library1 = LibraryRepository::create(&db, "Library 1", "/lib1", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let library2 = LibraryRepository::create(&db, "Library 2", "/lib2", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    SeriesRepository::create(&db, library1.id, "Lib1 Series", None)
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library2.id, "Lib2 Series", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request_body = SeriesListRequest {
+        condition: Some(SeriesCondition::LibraryId {
+            library_id: UuidOperator::Is { value: library1.id },
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 1);
+    assert_eq!(series_list.data[0].title, "Lib1 Series");
+}
