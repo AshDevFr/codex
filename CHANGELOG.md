@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.42.3] - 2026-07-29
+
+### 🐛 Bug Fixes
+
+- *(plugins)* Migrate mangabaka to the api.mangabaka.org host
+
 ## [1.42.2] - 2026-07-22
 
 ### 🚀 Features
