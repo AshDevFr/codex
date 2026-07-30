@@ -706,3 +706,290 @@ async fn a_rule_matching_thousands_of_series_still_reads() {
     assert_eq!(resolved[0].name, "Series 00000");
     assert_eq!(resolved[COUNT - 1].name, format!("Series {:05}", COUNT - 1));
 }
+
+// ============================================================================
+// Cover resolution and the short-lived rule cache
+// ============================================================================
+
+/// The cover is one series, not the whole membership.
+#[tokio::test]
+async fn cover_returns_the_first_member_by_title() {
+    let (db, _tmp) = setup_test_db().await;
+    CollectionMembershipService::clear_resolution_cache();
+    let library = create_test_library(&db, "Library", "/lib").await;
+
+    for name in ["Charlie", "Alpha", "Bravo"] {
+        let series = create_test_series(&db, &library, name).await;
+        TagRepository::set_tags_for_series(&db, series.id, vec!["pick".to_string()])
+            .await
+            .unwrap();
+    }
+
+    let collection =
+        CollectionRepository::create(&db, "Picks", None, false, Some(tag_rule("pick")))
+            .await
+            .unwrap();
+
+    let cover = CollectionMembershipService::cover(&db, &collection, None, None)
+        .await
+        .unwrap()
+        .expect("a matching collection has a cover");
+    assert_eq!(cover.name, "Alpha");
+}
+
+#[tokio::test]
+async fn cover_is_none_when_the_rule_matches_nothing() {
+    let (db, _tmp) = setup_test_db().await;
+    CollectionMembershipService::clear_resolution_cache();
+    let library = create_test_library(&db, "Library", "/lib").await;
+    create_test_series(&db, &library, "Unmatched").await;
+
+    let collection =
+        CollectionRepository::create(&db, "Empty", None, false, Some(tag_rule("nothing")))
+            .await
+            .unwrap();
+
+    assert!(
+        CollectionMembershipService::cover(&db, &collection, None, None)
+            .await
+            .unwrap()
+            .is_none()
+    );
+}
+
+/// A manual collection's cover honours its arranged order.
+#[tokio::test]
+async fn cover_of_a_manual_collection_follows_the_manual_order() {
+    let (db, _tmp) = setup_test_db().await;
+    let library = create_test_library(&db, "Library", "/lib").await;
+    let alpha = create_test_series(&db, &library, "Alpha").await;
+    let bravo = create_test_series(&db, &library, "Bravo").await;
+
+    let collection = CollectionRepository::create(&db, "Manual", None, true, None)
+        .await
+        .unwrap();
+    CollectionRepository::add_series(&db, collection.id, alpha.id)
+        .await
+        .unwrap();
+    CollectionRepository::add_series(&db, collection.id, bravo.id)
+        .await
+        .unwrap();
+    // Put Bravo first by hand.
+    CollectionRepository::reorder(&db, collection.id, &[bravo.id, alpha.id])
+        .await
+        .unwrap();
+
+    let cover = CollectionMembershipService::cover(&db, &collection, None, None)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(cover.name, "Bravo");
+}
+
+#[tokio::test]
+async fn cover_respects_visibility() {
+    use codex::db::repositories::visibility::SeriesVisibility;
+
+    let (db, _tmp) = setup_test_db().await;
+    CollectionMembershipService::clear_resolution_cache();
+    let library = create_test_library(&db, "Library", "/lib").await;
+    let hidden = create_test_series(&db, &library, "Alpha").await;
+    let visible = create_test_series(&db, &library, "Bravo").await;
+    for series in [&hidden, &visible] {
+        TagRepository::set_tags_for_series(&db, series.id, vec!["pick".to_string()])
+            .await
+            .unwrap();
+    }
+
+    let collection =
+        CollectionRepository::create(&db, "Picks", None, false, Some(tag_rule("pick")))
+            .await
+            .unwrap();
+
+    let vis = SeriesVisibility {
+        allowed_series_ids: None,
+        excluded_series_ids: [hidden.id].into_iter().collect(),
+    };
+    let cover = CollectionMembershipService::cover(&db, &collection, Some(&vis), None)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        cover.name, "Bravo",
+        "the alphabetically-first series is hidden, so the cover is the next one"
+    );
+}
+
+/// The cache is what makes a page of covers cheap. Within the TTL a second
+/// resolution reuses the first, so a series that starts matching is not picked
+/// up immediately — deliberate for a cover.
+#[tokio::test]
+async fn cover_reuses_a_recent_resolution() {
+    let (db, _tmp) = setup_test_db().await;
+    CollectionMembershipService::clear_resolution_cache();
+    let library = create_test_library(&db, "Library", "/lib").await;
+
+    let bravo = create_test_series(&db, &library, "Bravo").await;
+    TagRepository::set_tags_for_series(&db, bravo.id, vec!["pick".to_string()])
+        .await
+        .unwrap();
+
+    let collection =
+        CollectionRepository::create(&db, "Picks", None, false, Some(tag_rule("pick")))
+            .await
+            .unwrap();
+
+    assert_eq!(
+        CollectionMembershipService::cover(&db, &collection, None, None)
+            .await
+            .unwrap()
+            .unwrap()
+            .name,
+        "Bravo"
+    );
+
+    // A new alphabetically-earlier match lands after the resolution was cached.
+    let alpha = create_test_series(&db, &library, "Alpha").await;
+    TagRepository::set_tags_for_series(&db, alpha.id, vec!["pick".to_string()])
+        .await
+        .unwrap();
+
+    assert_eq!(
+        CollectionMembershipService::cover(&db, &collection, None, None)
+            .await
+            .unwrap()
+            .unwrap()
+            .name,
+        "Bravo",
+        "still serving the cached resolution"
+    );
+
+    // The member list a user actually reads is never cached, so it sees both.
+    let names = members(&db, &collection, None, None).await;
+    assert_eq!(
+        names,
+        vec!["Alpha", "Bravo"],
+        "members() must stay live: a stale member list is a wrong answer"
+    );
+
+    // Clearing stands in for the TTL expiring.
+    CollectionMembershipService::clear_resolution_cache();
+    assert_eq!(
+        CollectionMembershipService::cover(&db, &collection, None, None)
+            .await
+            .unwrap()
+            .unwrap()
+            .name,
+        "Alpha"
+    );
+}
+
+/// Editing the rule changes the cache key, so a cover follows a rule edit
+/// immediately rather than waiting out the TTL.
+#[tokio::test]
+async fn editing_the_rule_bypasses_the_cache() {
+    let (db, _tmp) = setup_test_db().await;
+    CollectionMembershipService::clear_resolution_cache();
+    let library = create_test_library(&db, "Library", "/lib").await;
+
+    let alpha = create_test_series(&db, &library, "Alpha").await;
+    let bravo = create_test_series(&db, &library, "Bravo").await;
+    TagRepository::set_tags_for_series(&db, alpha.id, vec!["isekai".to_string()])
+        .await
+        .unwrap();
+    TagRepository::set_tags_for_series(&db, bravo.id, vec!["mecha".to_string()])
+        .await
+        .unwrap();
+
+    let collection =
+        CollectionRepository::create(&db, "Themed", None, false, Some(tag_rule("isekai")))
+            .await
+            .unwrap();
+    assert_eq!(
+        CollectionMembershipService::cover(&db, &collection, None, None)
+            .await
+            .unwrap()
+            .unwrap()
+            .name,
+        "Alpha"
+    );
+
+    let updated = CollectionRepository::update(
+        &db,
+        collection.id,
+        None,
+        None,
+        None,
+        Some(Some(tag_rule("mecha"))),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+
+    assert_eq!(
+        CollectionMembershipService::cover(&db, &updated, None, None)
+            .await
+            .unwrap()
+            .unwrap()
+            .name,
+        "Bravo",
+        "a new rule is a new cache key"
+    );
+}
+
+/// Two users with different personal rules must not share a resolution.
+#[tokio::test]
+async fn the_cache_is_keyed_per_user() {
+    let (db, _tmp) = setup_test_db().await;
+    CollectionMembershipService::clear_resolution_cache();
+    let library = create_test_library(&db, "Library", "/lib").await;
+
+    let alpha = create_test_series(&db, &library, "Alpha").await;
+    let bravo = create_test_series(&db, &library, "Bravo").await;
+
+    let hash = password::hash_password("password123").unwrap();
+    let alice = UserRepository::create(
+        &db,
+        &create_test_user("alice", "alice@example.com", &hash, true),
+    )
+    .await
+    .unwrap();
+    let bob = UserRepository::create(
+        &db,
+        &create_test_user("bob", "bob@example.com", &hash, true),
+    )
+    .await
+    .unwrap();
+
+    UserSeriesRatingRepository::create(&db, alice.id, alpha.id, 95, None)
+        .await
+        .unwrap();
+    UserSeriesRatingRepository::create(&db, bob.id, bravo.id, 95, None)
+        .await
+        .unwrap();
+
+    let condition = rule(SeriesCondition::UserRating {
+        user_rating: NumberOperator::Gte { value: 85 },
+    });
+    let collection = CollectionRepository::create(&db, "Favourites", None, false, Some(condition))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        CollectionMembershipService::cover(&db, &collection, None, Some(alice.id))
+            .await
+            .unwrap()
+            .unwrap()
+            .name,
+        "Alpha"
+    );
+    assert_eq!(
+        CollectionMembershipService::cover(&db, &collection, None, Some(bob.id))
+            .await
+            .unwrap()
+            .unwrap()
+            .name,
+        "Bravo",
+        "one user's cached resolution must not be served to another"
+    );
+}

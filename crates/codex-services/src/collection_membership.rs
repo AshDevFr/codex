@@ -20,13 +20,20 @@
 //! ([`CollectionRepository::get_series_by_ids`]); deciding *which* ids happens
 //! here.
 
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
+use std::sync::LazyLock;
+use std::time::{Duration, Instant};
+
 use anyhow::{Context, Result};
 use codex_db::entities::{collections, series};
 use codex_db::repositories::CollectionRepository;
 use codex_db::repositories::visibility::SeriesVisibility;
 use codex_models::filter::SeriesCondition;
 use codex_models::sort::{CollectionSeriesSort, SortDirection};
+use dashmap::DashMap;
 use sea_orm::DatabaseConnection;
+use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::filter::FilterService;
@@ -77,7 +84,8 @@ impl CollectionMembershipService {
         user_id: Option<Uuid>,
     ) -> Result<Vec<series::Model>> {
         let Some(condition) = Self::rule(collection)? else {
-            return CollectionRepository::get_series(db, collection, vis, sort, direction).await;
+            return CollectionRepository::get_series(db, collection, vis, sort, direction, None)
+                .await;
         };
 
         let matching = FilterService::get_matching_series_for_user(db, &condition, None, user_id)
@@ -94,7 +102,139 @@ impl CollectionMembershipService {
         let sort = sort.unwrap_or(CollectionSeriesSort::Title);
         let ids: Vec<Uuid> = matching.into_iter().collect();
 
-        CollectionRepository::get_series_by_ids(db, &ids, vis, sort, direction).await
+        CollectionRepository::get_series_by_ids(db, &ids, vis, sort, direction, None).await
+    }
+
+    /// Resolve a rule to its matching ids, reusing a recent result when there is
+    /// one.
+    ///
+    /// Read only by paths where a slightly old answer is harmless: the cover
+    /// image and the Komga list DTO's `seriesIds`. [`Self::members`] never uses
+    /// it. There is no invalidation, by design — entries simply expire, and a
+    /// rule edit changes the key.
+    async fn resolve_cached(
+        db: &DatabaseConnection,
+        collection: &collections::Model,
+        condition: &SeriesCondition,
+        user_id: Option<Uuid>,
+    ) -> Result<Arc<Vec<Uuid>>> {
+        let raw = collection
+            .condition
+            .as_ref()
+            .expect("caller parsed a rule from this collection");
+        let key: ResolutionKey = (collection.id, user_id, rule_hash(raw));
+
+        if let Some(entry) = RESOLUTION_CACHE.get(&key)
+            && entry.0.elapsed() < RESOLUTION_TTL
+        {
+            return Ok(Arc::clone(&entry.1));
+        }
+
+        let matching = FilterService::get_matching_series_for_user(db, condition, None, user_id)
+            .await
+            .with_context(|| format!("failed to resolve rule for collection {}", collection.id))?;
+        let ids = Arc::new(matching.into_iter().collect::<Vec<_>>());
+
+        if RESOLUTION_CACHE.len() >= RESOLUTION_CACHE_CAP {
+            RESOLUTION_CACHE.retain(|_, (at, _)| at.elapsed() < RESOLUTION_TTL);
+        }
+        RESOLUTION_CACHE.insert(key, (Instant::now(), Arc::clone(&ids)));
+        Ok(ids)
+    }
+
+    /// Drop every cached resolution. Test-only: production entries expire.
+    #[doc(hidden)]
+    pub fn clear_resolution_cache() {
+        RESOLUTION_CACHE.clear();
+    }
+
+    /// The series whose thumbnail represents this collection.
+    ///
+    /// Fetches one row rather than the whole membership: a cover previously cost
+    /// a full resolve-sort-hydrate of every member to display a single image,
+    /// which on a page of automatic collections multiplied by the number of
+    /// cards on screen.
+    pub async fn cover(
+        db: &DatabaseConnection,
+        collection: &collections::Model,
+        vis: Option<&SeriesVisibility>,
+        user_id: Option<Uuid>,
+    ) -> Result<Option<series::Model>> {
+        let Some(condition) = Self::rule(collection)? else {
+            return Ok(CollectionRepository::get_series(
+                db,
+                collection,
+                vis,
+                None,
+                SortDirection::default(),
+                Some(1),
+            )
+            .await?
+            .into_iter()
+            .next());
+        };
+
+        let ids = Self::resolve_cached(db, collection, &condition, user_id).await?;
+        if ids.is_empty() {
+            return Ok(None);
+        }
+
+        Ok(CollectionRepository::get_series_by_ids(
+            db,
+            &ids,
+            vis,
+            CollectionSeriesSort::Title,
+            SortDirection::default(),
+            Some(1),
+        )
+        .await?
+        .into_iter()
+        .next())
+    }
+
+    /// Member ids for a listing context, reusing a recent resolution.
+    ///
+    /// For the Komga DTO's `seriesIds`, which is metadata on a list row rather
+    /// than the list a user is reading. Manual collections resolve live, since
+    /// their membership is a cheap junction read.
+    pub async fn member_ids_for_listing(
+        db: &DatabaseConnection,
+        collection: &collections::Model,
+        vis: Option<&SeriesVisibility>,
+        user_id: Option<Uuid>,
+    ) -> Result<Vec<Uuid>> {
+        let Some(condition) = Self::rule(collection)? else {
+            return Ok(CollectionRepository::get_series(
+                db,
+                collection,
+                vis,
+                None,
+                SortDirection::default(),
+                None,
+            )
+            .await?
+            .into_iter()
+            .map(|s| s.id)
+            .collect());
+        };
+
+        let ids = Self::resolve_cached(db, collection, &condition, user_id).await?;
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        Ok(CollectionRepository::get_series_by_ids(
+            db,
+            &ids,
+            vis,
+            CollectionSeriesSort::Title,
+            SortDirection::default(),
+            None,
+        )
+        .await?
+        .into_iter()
+        .map(|s| s.id)
+        .collect())
     }
 
     /// How many series a collection contains for this caller.
@@ -123,6 +263,42 @@ impl CollectionMembershipService {
         .await?;
         Ok(members.len() as u64)
     }
+}
+
+/// How long a resolved rule may be reused.
+///
+/// Only the *cover* and the Komga list DTO read through this cache. The member
+/// list a user is actually looking at is always resolved live, because the whole
+/// point of a rule-backed collection is that its contents are current; a stale
+/// member list is a wrong answer, while a stale cover is a slightly old picture.
+const RESOLUTION_TTL: Duration = Duration::from_secs(60);
+
+/// Cap on cached entries before expired ones are swept.
+///
+/// The natural size is (collections shown x active users), which is small. The
+/// cap exists so a pathological case cannot grow the map without bound.
+const RESOLUTION_CACHE_CAP: usize = 1024;
+
+/// Key: collection, caller, and a hash of the rule itself.
+///
+/// The rule hash means editing a rule lands on a fresh key rather than waiting
+/// out the TTL, so a cover follows a rule change immediately. The caller is part
+/// of the key because a rule may reference the viewer's own ratings or read
+/// state.
+type ResolutionKey = (Uuid, Option<Uuid>, u64);
+
+/// When it was resolved, and what it resolved to.
+type ResolutionEntry = (Instant, Arc<Vec<Uuid>>);
+
+static RESOLUTION_CACHE: LazyLock<DashMap<ResolutionKey, ResolutionEntry>> =
+    LazyLock::new(DashMap::new);
+
+fn rule_hash(condition: &serde_json::Value) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    // `serde_json::Map` is a BTreeMap by default, so the rendered string is
+    // stable for a given rule rather than depending on insertion order.
+    condition.to_string().hash(&mut hasher);
+    hasher.finish()
 }
 
 /// Why a proposed collection rule was rejected.

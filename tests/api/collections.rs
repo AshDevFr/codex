@@ -1124,9 +1124,16 @@ async fn test_collection_thumbnail_redirect_is_not_cacheable() {
             cache_control.contains("private"),
             "{label}: redirect must be marked private, got {cache_control:?}"
         );
+        // A short max-age, not no-store: resolving a cover is a rule evaluation,
+        // so re-running it on every render of a collections page is the cost
+        // this bounds. `private` is what keeps it per-user.
         assert!(
-            cache_control.contains("no-store"),
-            "{label}: redirect must not be stored, got {cache_control:?}"
+            cache_control.contains("max-age=60"),
+            "{label}: redirect should be briefly cacheable by the caller, got {cache_control:?}"
+        );
+        assert!(
+            !cache_control.contains("public"),
+            "{label}: redirect must never be marked public, got {cache_control:?}"
         );
 
         // The target is still the cache-busted series thumbnail, so image bytes

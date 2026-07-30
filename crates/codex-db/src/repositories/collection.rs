@@ -280,12 +280,16 @@ impl CollectionRepository {
     /// displayed title (metadata `title_sort`, falling back to `title`, then
     /// the scan-derived series name) otherwise. `direction` applies to every
     /// sort except `Manual`, whose order is exactly what the user arranged.
+    /// `limit` caps how many members are hydrated. The cover path passes
+    /// `Some(1)`: rendering one thumbnail otherwise fetched and sorted every
+    /// member of the collection to throw all but the first away.
     pub async fn get_series(
         db: &DatabaseConnection,
         collection: &collections::Model,
         vis: Option<&SeriesVisibility>,
         sort: Option<CollectionSeriesSort>,
         direction: SortDirection,
+        limit: Option<u64>,
     ) -> Result<Vec<series::Model>> {
         if matches!(vis, Some(v) if v.is_empty_whitelist()) {
             return Ok(vec![]);
@@ -332,11 +336,17 @@ impl CollectionRepository {
 
         match sort {
             CollectionSeriesSort::Title | CollectionSeriesSort::Year => {
-                Self::hydrate_by_title_or_year(db, ordered_ids, sort, order).await
+                Self::hydrate_by_title_or_year(db, ordered_ids, sort, order, limit).await
             }
             // Manual position / date-added order comes from the junction query;
-            // re-project the hydrated models into that order.
+            // re-project the hydrated models into that order. The junction is
+            // already ordered, so a limit truncates the id list before the
+            // hydration rather than after it.
             _ => {
+                let ordered_ids: Vec<Uuid> = match limit {
+                    Some(n) => ordered_ids.into_iter().take(n as usize).collect(),
+                    None => ordered_ids,
+                };
                 let series_models = Series::find()
                     .filter(series::Column::Id.is_in(ordered_ids.clone()))
                     .all(db)
@@ -362,6 +372,7 @@ impl CollectionRepository {
         ids: Vec<Uuid>,
         sort: CollectionSeriesSort,
         order: Order,
+        limit: Option<u64>,
     ) -> Result<Vec<series::Model>> {
         // LOWER makes the order case-insensitive: binary collation would
         // sort every uppercase title ahead of any lowercase one.
@@ -385,10 +396,11 @@ impl CollectionRepository {
         } else {
             query = query.order_by(title_expr, order);
         }
-        Ok(query
-            .order_by(series::Column::Id, Order::Asc)
-            .all(db)
-            .await?)
+        let mut query = query.order_by(series::Column::Id, Order::Asc);
+        if let Some(n) = limit {
+            query = query.limit(n);
+        }
+        Ok(query.all(db).await?)
     }
 
     /// Sort and hydrate an explicit set of series, filtered by the caller's
@@ -411,12 +423,14 @@ impl CollectionRepository {
     /// keep the emitted SQL to a single `IN` and because the visibility sets are
     /// already in memory. This mirrors
     /// [`crate::repositories::SeriesRepository::list_by_ids_sorted`].
+    /// `limit` caps the hydration; see [`Self::get_series`].
     pub async fn get_series_by_ids(
         db: &DatabaseConnection,
         series_ids: &[Uuid],
         vis: Option<&SeriesVisibility>,
         sort: CollectionSeriesSort,
         direction: SortDirection,
+        limit: Option<u64>,
     ) -> Result<Vec<series::Model>> {
         if matches!(vis, Some(v) if v.is_empty_whitelist()) {
             return Ok(vec![]);
@@ -450,19 +464,35 @@ impl CollectionRepository {
 
         match sort {
             CollectionSeriesSort::Year => {
-                Self::hydrate_by_title_or_year(db, visible_ids, CollectionSeriesSort::Year, order)
-                    .await
+                Self::hydrate_by_title_or_year(
+                    db,
+                    visible_ids,
+                    CollectionSeriesSort::Year,
+                    order,
+                    limit,
+                )
+                .await
             }
-            CollectionSeriesSort::Added => Ok(Series::find()
-                .filter(series::Column::Id.is_in(visible_ids))
-                .order_by(series::Column::CreatedAt, order)
-                .order_by(series::Column::Id, Order::Asc)
-                .all(db)
-                .await?),
+            CollectionSeriesSort::Added => {
+                let mut query = Series::find()
+                    .filter(series::Column::Id.is_in(visible_ids))
+                    .order_by(series::Column::CreatedAt, order)
+                    .order_by(series::Column::Id, Order::Asc);
+                if let Some(n) = limit {
+                    query = query.limit(n);
+                }
+                Ok(query.all(db).await?)
+            }
             // Title, and Manual which has nothing to fall back on but title.
             _ => {
-                Self::hydrate_by_title_or_year(db, visible_ids, CollectionSeriesSort::Title, order)
-                    .await
+                Self::hydrate_by_title_or_year(
+                    db,
+                    visible_ids,
+                    CollectionSeriesSort::Title,
+                    order,
+                    limit,
+                )
+                .await
             }
         }
     }
@@ -663,9 +693,10 @@ mod tests {
             .unwrap();
         assert_eq!(again.position, 0);
 
-        let members = CollectionRepository::get_series(conn, &coll, None, None, SortDirection::Asc)
-            .await
-            .unwrap();
+        let members =
+            CollectionRepository::get_series(conn, &coll, None, None, SortDirection::Asc, None)
+                .await
+                .unwrap();
         assert_eq!(members.len(), 3);
         assert_eq!(members[0].id, series[0].id);
         assert_eq!(members[2].id, series[2].id);
@@ -675,9 +706,10 @@ mod tests {
         CollectionRepository::reorder(conn, coll.id, &reversed)
             .await
             .unwrap();
-        let members = CollectionRepository::get_series(conn, &coll, None, None, SortDirection::Asc)
-            .await
-            .unwrap();
+        let members =
+            CollectionRepository::get_series(conn, &coll, None, None, SortDirection::Asc, None)
+                .await
+                .unwrap();
         assert_eq!(members[0].id, series[2].id);
         assert_eq!(members[2].id, series[0].id);
 
@@ -689,6 +721,7 @@ mod tests {
             None,
             Some(CollectionSeriesSort::Title),
             SortDirection::Asc,
+            None,
         )
         .await
         .unwrap();
@@ -702,6 +735,7 @@ mod tests {
             None,
             Some(CollectionSeriesSort::Manual),
             SortDirection::Asc,
+            None,
         )
         .await
         .unwrap();
@@ -750,9 +784,10 @@ mod tests {
         }
 
         // Default sort for an unordered collection is by title.
-        let members = CollectionRepository::get_series(conn, &coll, None, None, SortDirection::Asc)
-            .await
-            .unwrap();
+        let members =
+            CollectionRepository::get_series(conn, &coll, None, None, SortDirection::Asc, None)
+                .await
+                .unwrap();
         let names: Vec<&str> = members.iter().map(|s| s.name.as_str()).collect();
         assert_eq!(names, ["Apple", "Banana", "Cherry"]);
 
@@ -766,9 +801,10 @@ mod tests {
         )
         .await
         .unwrap();
-        let members = CollectionRepository::get_series(conn, &coll, None, None, SortDirection::Asc)
-            .await
-            .unwrap();
+        let members =
+            CollectionRepository::get_series(conn, &coll, None, None, SortDirection::Asc, None)
+                .await
+                .unwrap();
         let names: Vec<&str> = members.iter().map(|s| s.name.as_str()).collect();
         assert_eq!(names, ["Cherry", "Apple", "Banana"]);
 
@@ -783,15 +819,16 @@ mod tests {
         )
         .await
         .unwrap();
-        let members = CollectionRepository::get_series(conn, &coll, None, None, SortDirection::Asc)
-            .await
-            .unwrap();
+        let members =
+            CollectionRepository::get_series(conn, &coll, None, None, SortDirection::Asc, None)
+                .await
+                .unwrap();
         let names: Vec<&str> = members.iter().map(|s| s.name.as_str()).collect();
         assert_eq!(names, ["Cherry", "Apple", "Banana"]);
 
         // Descending direction reverses the title order.
         let members =
-            CollectionRepository::get_series(conn, &coll, None, None, SortDirection::Desc)
+            CollectionRepository::get_series(conn, &coll, None, None, SortDirection::Desc, None)
                 .await
                 .unwrap();
         let names: Vec<&str> = members.iter().map(|s| s.name.as_str()).collect();
@@ -829,6 +866,7 @@ mod tests {
             None,
             Some(CollectionSeriesSort::Added),
             SortDirection::Asc,
+            None,
         )
         .await
         .unwrap();
@@ -848,6 +886,7 @@ mod tests {
             None,
             Some(CollectionSeriesSort::Year),
             SortDirection::Asc,
+            None,
         )
         .await
         .unwrap();
@@ -861,6 +900,7 @@ mod tests {
             None,
             Some(CollectionSeriesSort::Year),
             SortDirection::Desc,
+            None,
         )
         .await
         .unwrap();
@@ -928,10 +968,16 @@ mod tests {
             excluded_series_ids: vec![series[1].id],
             allowed_series_ids: None,
         };
-        let visible =
-            CollectionRepository::get_series(conn, &coll, Some(&vis), None, SortDirection::Asc)
-                .await
-                .unwrap();
+        let visible = CollectionRepository::get_series(
+            conn,
+            &coll,
+            Some(&vis),
+            None,
+            SortDirection::Asc,
+            None,
+        )
+        .await
+        .unwrap();
         assert_eq!(visible.len(), 2);
         assert!(visible.iter().all(|s| s.id != series[1].id));
         assert_eq!(
@@ -947,10 +993,17 @@ mod tests {
             allowed_series_ids: Some(vec![]),
         };
         assert!(
-            CollectionRepository::get_series(conn, &coll, Some(&empty), None, SortDirection::Asc)
-                .await
-                .unwrap()
-                .is_empty()
+            CollectionRepository::get_series(
+                conn,
+                &coll,
+                Some(&empty),
+                None,
+                SortDirection::Asc,
+                None
+            )
+            .await
+            .unwrap()
+            .is_empty()
         );
 
         // Containers-for-series lookup.

@@ -103,21 +103,18 @@ async fn build_collection_dto(
     vis: Option<&SeriesVisibility>,
     user_id: Option<Uuid>,
 ) -> Result<KomgaCollectionDto, ApiError> {
-    let members = CollectionMembershipService::members(
-        &state.db,
-        &model,
-        vis,
-        None,
-        SortDirection::default(),
-        user_id,
-    )
-    .await
-    .map_err(|e| ApiError::Internal(format!("Failed to fetch collection series: {e}")))?;
+    // `seriesIds` is metadata on a list row rather than a list someone is
+    // reading, so this reads through the short-lived resolution cache. The
+    // members endpoint below stays live.
+    let member_ids =
+        CollectionMembershipService::member_ids_for_listing(&state.db, &model, vis, user_id)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to fetch collection series: {e}")))?;
     Ok(KomgaCollectionDto {
         id: model.id.to_string(),
         name: model.name,
         ordered: model.ordered,
-        series_ids: members.iter().map(|s| s.id.to_string()).collect(),
+        series_ids: member_ids.iter().map(|id| id.to_string()).collect(),
         created_date: model.created_at.to_rfc3339(),
         last_modified_date: model.updated_at.to_rfc3339(),
         filtered: false,
@@ -281,16 +278,11 @@ pub async fn get_collection_thumbnail(
             .await
             .map_err(|e| ApiError::Internal(format!("Failed to fetch collection: {e}")))?
             .ok_or_else(|| ApiError::NotFound("Collection not found".to_string()))?;
-        CollectionMembershipService::members(
-            &state.db,
-            &model,
-            vis.as_ref(),
-            None,
-            SortDirection::default(),
-            Some(auth.user_id),
-        )
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to fetch collection series: {e}")))?
+        CollectionMembershipService::cover(&state.db, &model, vis.as_ref(), Some(auth.user_id))
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to fetch collection cover: {e}")))?
+            .into_iter()
+            .collect()
     };
     let first = members
         .first()
@@ -304,12 +296,15 @@ pub async fn get_collection_thumbnail(
     // an automatic collection's rule can reference the viewer's own ratings or
     // read state, so two users legitimately resolve to different covers. A
     // shared cache holding this 307 would serve one user's cover to another.
-    // `private` keeps proxies out; `no-store` forces a fresh resolution so a
-    // rule-backed cover follows the library as it changes. Only the redirect is
-    // uncacheable — the series thumbnail it points at keeps its long-lived
-    // cache, so no image bytes are re-fetched.
+    // `private` keeps proxies out. A short `max-age` lets the caller's own
+    // browser skip the round-trip while browsing, which matters because
+    // resolving a cover is a rule evaluation, not a lookup. The cost is that a
+    // cover can lag a membership change by up to a minute — a slightly old
+    // picture, where a stale member list would be a wrong answer. Only the
+    // redirect is short-lived; the series thumbnail it points at keeps its
+    // long-lived cache, so no image bytes are re-fetched.
     Ok((
-        [(header::CACHE_CONTROL, "private, no-store")],
+        [(header::CACHE_CONTROL, "private, max-age=60")],
         Redirect::temporary(&format!(
             "/api/v1/series/{}/thumbnail?v={}",
             first.id,

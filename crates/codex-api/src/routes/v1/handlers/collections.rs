@@ -26,7 +26,6 @@ use codex_db::repositories::{
     CollectionRepository, SeriesRepository, visibility::SeriesVisibility,
 };
 use codex_models::filter::SeriesCondition;
-use codex_models::sort::SortDirection;
 use codex_services::CollectionMembershipService;
 use std::sync::Arc;
 use utoipa::OpenApi;
@@ -530,19 +529,15 @@ pub async fn get_collection_thumbnail(
     auth.require_permission(&Permission::CollectionsRead)?;
     let collection = get_collection_or_404(&state, collection_id).await?;
     let vis = user_visibility(&state, auth.user_id).await?;
-    let members = CollectionMembershipService::members(
+    let first = CollectionMembershipService::cover(
         &state.db,
         &collection,
         vis.as_ref(),
-        None,
-        SortDirection::default(),
         Some(auth.user_id),
     )
     .await
-    .map_err(internal("Failed to fetch collection series"))?;
-    let first = members
-        .first()
-        .ok_or_else(|| ApiError::NotFound("Collection has no visible series".to_string()))?;
+    .map_err(internal("Failed to fetch collection cover"))?
+    .ok_or_else(|| ApiError::NotFound("Collection has no visible series".to_string()))?;
     // Cache-bust with the member's update time so browsers refetch the image
     // after its cover is regenerated (the target URL is otherwise cached
     // indefinitely; the card grids bust their own image URLs the same way).
@@ -552,12 +547,15 @@ pub async fn get_collection_thumbnail(
     // an automatic collection's rule can reference the viewer's own ratings or
     // read state, so two users legitimately resolve to different covers. A
     // shared cache holding this 307 would serve one user's cover to another.
-    // `private` keeps proxies out; `no-store` forces a fresh resolution so a
-    // rule-backed cover follows the library as it changes. Only the redirect is
-    // uncacheable — the series thumbnail it points at keeps its long-lived
-    // cache, so no image bytes are re-fetched.
+    // `private` keeps proxies out. A short `max-age` lets the caller's own
+    // browser skip the round-trip while browsing, which matters because
+    // resolving a cover is a rule evaluation, not a lookup. The cost is that a
+    // cover can lag a membership change by up to a minute — a slightly old
+    // picture, where a stale member list would be a wrong answer. Only the
+    // redirect is short-lived; the series thumbnail it points at keeps its
+    // long-lived cache, so no image bytes are re-fetched.
     Ok((
-        [(header::CACHE_CONTROL, "private, no-store")],
+        [(header::CACHE_CONTROL, "private, max-age=60")],
         Redirect::temporary(&format!(
             "/api/v1/series/{}/thumbnail?v={}",
             first.id,
