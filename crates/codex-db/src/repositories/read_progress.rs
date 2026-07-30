@@ -5,6 +5,7 @@
 #![allow(dead_code)]
 
 use crate::entities::{read_progress, read_progress::Entity as ReadProgress};
+use crate::repositories::ReadCompletionRepository;
 use anyhow::Result;
 use chrono::Utc;
 use sea_orm::*;
@@ -29,6 +30,16 @@ impl ReadProgressRepository {
     /// Get reading progress for a specific user and book
     pub async fn get_by_user_and_book(
         db: &DatabaseConnection,
+        user_id: Uuid,
+        book_id: Uuid,
+    ) -> Result<Option<read_progress::Model>> {
+        Self::get_in(db, user_id, book_id).await
+    }
+
+    /// [`Self::get_by_user_and_book`] over any connection, so the upsert can run
+    /// it inside its transaction.
+    async fn get_in<C: ConnectionTrait>(
+        db: &C,
         user_id: Uuid,
         book_id: Uuid,
     ) -> Result<Option<read_progress::Model>> {
@@ -65,66 +76,147 @@ impl ReadProgressRepository {
         completed: bool,
         r2_progression: Option<String>,
     ) -> Result<read_progress::Model> {
-        // Check if progress already exists
-        let existing = Self::get_by_user_and_book(db, user_id, book_id).await?;
-
-        let now = Utc::now();
-
-        if let Some(existing_model) = existing {
-            // Update existing progress
-            Self::update_existing(
-                db,
-                existing_model,
-                current_page,
-                progress_percentage,
-                completed,
-                now,
-                r2_progression,
-            )
-            .await
-        } else {
-            // Create new progress
-            let new_progress = read_progress::ActiveModel {
-                id: Set(Uuid::new_v4()),
-                user_id: Set(user_id),
-                book_id: Set(book_id),
-                current_page: Set(current_page),
-                progress_percentage: Set(progress_percentage),
-                completed: Set(completed),
-                started_at: Set(now),
-                updated_at: Set(now),
-                completed_at: Set(if completed { Some(now) } else { None }),
-                r2_progression: Set(r2_progression.clone()),
-            };
-
-            match new_progress.insert(db).await {
-                Ok(result) => Ok(result),
-                Err(ref e) if Self::is_unique_constraint_error(e) => {
-                    // Race condition: another request created the record, fetch and update it
-                    let existing = Self::get_by_user_and_book(db, user_id, book_id)
-                        .await?
-                        .ok_or_else(|| {
-                            anyhow::anyhow!("Failed to find progress after constraint violation")
-                        })?;
-                    Self::update_existing(
-                        db,
-                        existing,
-                        current_page,
-                        progress_percentage,
-                        completed,
-                        now,
-                        r2_progression,
-                    )
-                    .await
-                }
-                Err(e) => Err(e.into()),
+        // Two concurrent writers for the same (user, book) can both miss the
+        // existence check and race on the unique index. The loser retries the
+        // whole transaction rather than re-querying inside it: on PostgreSQL a
+        // failed statement poisons the surrounding transaction, so the old
+        // fetch-and-update-in-place recovery would itself error out.
+        match Self::upsert_txn(
+            db,
+            user_id,
+            book_id,
+            current_page,
+            progress_percentage,
+            completed,
+            r2_progression.clone(),
+        )
+        .await
+        {
+            Err(e) if Self::is_unique_violation(&e) => {
+                // The row exists now, so the retry takes the update path.
+                Self::upsert_txn(
+                    db,
+                    user_id,
+                    book_id,
+                    current_page,
+                    progress_percentage,
+                    completed,
+                    r2_progression,
+                )
+                .await
             }
+            other => other,
         }
     }
 
-    /// Helper to update an existing progress record
-    async fn update_existing(
+    /// One attempt at the upsert, wrapped in a transaction together with the
+    /// completion it may record.
+    ///
+    /// The two writes belong together: a completion that is not banked because
+    /// the process died between them would be lost permanently, and the log is
+    /// meant to be the authoritative record of what has been read.
+    async fn upsert_txn(
         db: &DatabaseConnection,
+        user_id: Uuid,
+        book_id: Uuid,
+        current_page: i32,
+        progress_percentage: Option<f64>,
+        completed: bool,
+        r2_progression: Option<String>,
+    ) -> Result<read_progress::Model> {
+        let txn = db.begin().await?;
+        let now = Utc::now();
+
+        // `started_at` of the pass this write belongs to. For an existing row
+        // that is when the current pass began; for a new row it is now.
+        let (result, pass_started_at) = match Self::get_in(&txn, user_id, book_id).await? {
+            Some(existing_model) => {
+                let pass_started_at = existing_model.started_at;
+                let updated = Self::update_existing(
+                    &txn,
+                    existing_model,
+                    current_page,
+                    progress_percentage,
+                    completed,
+                    now,
+                    r2_progression,
+                )
+                .await?;
+                (updated, pass_started_at)
+            }
+            None => {
+                let new_progress = read_progress::ActiveModel {
+                    id: Set(Uuid::new_v4()),
+                    user_id: Set(user_id),
+                    book_id: Set(book_id),
+                    current_page: Set(current_page),
+                    progress_percentage: Set(progress_percentage),
+                    completed: Set(completed),
+                    started_at: Set(now),
+                    updated_at: Set(now),
+                    completed_at: Set(if completed { Some(now) } else { None }),
+                    r2_progression: Set(r2_progression),
+                };
+                (new_progress.insert(&txn).await?, now)
+            }
+        };
+
+        if completed {
+            Self::record_completion_if_new(
+                &txn,
+                user_id,
+                book_id,
+                pass_started_at,
+                result.completed_at.unwrap_or(now),
+            )
+            .await?;
+        }
+
+        txn.commit().await?;
+        Ok(result)
+    }
+
+    /// Bank a completion unless this read-through already has one.
+    ///
+    /// The guard compares against the progress row's `started_at`, not against
+    /// `completed` or `completed_at`. Both of those are cleared when a book is
+    /// un-completed, so tapping back one page from the end and forward again
+    /// looks identical to a first-ever completion, and a guard reading either
+    /// column would bank a second row for a single read-through. `started_at`
+    /// survives that bounce and so delimits the pass.
+    ///
+    /// Marking a book unread deletes the progress row outright, which is what
+    /// makes a genuine re-read record: the next pass gets a later `started_at`,
+    /// so the earlier completion no longer falls inside it.
+    async fn record_completion_if_new<C: ConnectionTrait>(
+        db: &C,
+        user_id: Uuid,
+        book_id: Uuid,
+        pass_started_at: chrono::DateTime<Utc>,
+        completed_at: chrono::DateTime<Utc>,
+    ) -> Result<()> {
+        let already_recorded =
+            ReadCompletionRepository::has_completion_since(db, user_id, book_id, pass_started_at)
+                .await?;
+        if already_recorded {
+            return Ok(());
+        }
+
+        ReadCompletionRepository::record(db, user_id, book_id, pass_started_at, completed_at)
+            .await?;
+        Ok(())
+    }
+
+    /// Whether an error is the unique-index collision from two writers racing on
+    /// the same `(user_id, book_id)`.
+    fn is_unique_violation(err: &anyhow::Error) -> bool {
+        err.downcast_ref::<DbErr>()
+            .is_some_and(Self::is_unique_constraint_error)
+    }
+
+    /// Helper to update an existing progress record
+    async fn update_existing<C: ConnectionTrait>(
+        db: &C,
         existing_model: read_progress::Model,
         current_page: i32,
         progress_percentage: Option<f64>,
@@ -764,5 +856,311 @@ mod tests {
         assert_eq!(result.get(&book1.id).unwrap().current_page, 10);
         assert_eq!(result.get(&book2.id).unwrap().current_page, 25);
         assert!(result.get(&book2.id).unwrap().completed);
+    }
+    // ========================================================================
+    // Completion log: the read-through guard
+    //
+    // The rule under test is that one read-through banks exactly one
+    // completion, however many times the client re-asserts it, while a genuine
+    // re-read (signalled by marking unread) banks another.
+    // ========================================================================
+
+    async fn completion_count(db: &DatabaseConnection, user_id: Uuid, book_id: Uuid) -> i64 {
+        crate::repositories::ReadCompletionRepository::count_for_book(db, user_id, book_id)
+            .await
+            .unwrap()
+    }
+
+    /// (d) A first-ever completion, arriving through the insert path because no
+    /// progress row exists yet.
+    #[tokio::test]
+    async fn first_completion_via_insert_records_one_row() {
+        let db = setup_test_db().await;
+        let user = create_test_user(&db).await;
+        let book = create_test_book(&db).await;
+
+        ReadProgressRepository::upsert(&db, user.id, book.id, 50, true)
+            .await
+            .unwrap();
+
+        assert_eq!(completion_count(&db, user.id, book.id).await, 1);
+    }
+
+    /// A completion arriving through the update path (progress existed first).
+    #[tokio::test]
+    async fn first_completion_via_update_records_one_row() {
+        let db = setup_test_db().await;
+        let user = create_test_user(&db).await;
+        let book = create_test_book(&db).await;
+
+        ReadProgressRepository::upsert(&db, user.id, book.id, 10, false)
+            .await
+            .unwrap();
+        assert_eq!(completion_count(&db, user.id, book.id).await, 0);
+
+        ReadProgressRepository::upsert(&db, user.id, book.id, 50, true)
+            .await
+            .unwrap();
+        assert_eq!(completion_count(&db, user.id, book.id).await, 1);
+    }
+
+    /// Reading without finishing banks nothing.
+    #[tokio::test]
+    async fn progress_without_completion_records_nothing() {
+        let db = setup_test_db().await;
+        let user = create_test_user(&db).await;
+        let book = create_test_book(&db).await;
+
+        for page in [5, 20, 49] {
+            ReadProgressRepository::upsert(&db, user.id, book.id, page, false)
+                .await
+                .unwrap();
+        }
+
+        assert_eq!(completion_count(&db, user.id, book.id).await, 0);
+    }
+
+    /// (a) Tapping back one page from the end and forward again. This is the
+    /// case a guard keyed on `completed` or `completed_at` gets wrong: both are
+    /// cleared by the back-tap, so the second completion looks like a first.
+    #[tokio::test]
+    async fn completing_after_a_back_tap_does_not_record_a_second_row() {
+        let db = setup_test_db().await;
+        let user = create_test_user(&db).await;
+        let book = create_test_book(&db).await;
+
+        ReadProgressRepository::upsert(&db, user.id, book.id, 50, true)
+            .await
+            .unwrap();
+        assert_eq!(completion_count(&db, user.id, book.id).await, 1);
+
+        // Back one page: the row is un-completed and `completed_at` is wiped.
+        let backed = ReadProgressRepository::upsert(&db, user.id, book.id, 49, false)
+            .await
+            .unwrap();
+        assert!(!backed.completed);
+        assert!(
+            backed.completed_at.is_none(),
+            "the un-complete path clears completed_at, which is why the guard \
+             cannot key on it"
+        );
+
+        // Forward again.
+        ReadProgressRepository::upsert(&db, user.id, book.id, 50, true)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            completion_count(&db, user.id, book.id).await,
+            1,
+            "one read-through must bank exactly one completion"
+        );
+    }
+
+    /// Several back-and-forth bounces still bank one completion.
+    #[tokio::test]
+    async fn repeated_bounces_record_one_row() {
+        let db = setup_test_db().await;
+        let user = create_test_user(&db).await;
+        let book = create_test_book(&db).await;
+
+        for _ in 0..3 {
+            ReadProgressRepository::upsert(&db, user.id, book.id, 50, true)
+                .await
+                .unwrap();
+            ReadProgressRepository::upsert(&db, user.id, book.id, 49, false)
+                .await
+                .unwrap();
+        }
+        ReadProgressRepository::upsert(&db, user.id, book.id, 50, true)
+            .await
+            .unwrap();
+
+        assert_eq!(completion_count(&db, user.id, book.id).await, 1);
+    }
+
+    /// (c) A client re-sending `completed = true` on an already-complete book.
+    #[tokio::test]
+    async fn re_asserting_completion_does_not_record_a_second_row() {
+        let db = setup_test_db().await;
+        let user = create_test_user(&db).await;
+        let book = create_test_book(&db).await;
+
+        for _ in 0..4 {
+            ReadProgressRepository::upsert(&db, user.id, book.id, 50, true)
+                .await
+                .unwrap();
+        }
+
+        assert_eq!(completion_count(&db, user.id, book.id).await, 1);
+    }
+
+    /// (b) A genuine re-read: marking unread deletes the progress row, so the
+    /// next pass starts fresh and its completion banks a second row.
+    #[tokio::test]
+    async fn completing_after_marking_unread_records_a_second_row() {
+        let db = setup_test_db().await;
+        let user = create_test_user(&db).await;
+        let book = create_test_book(&db).await;
+
+        ReadProgressRepository::upsert(&db, user.id, book.id, 50, true)
+            .await
+            .unwrap();
+        assert_eq!(completion_count(&db, user.id, book.id).await, 1);
+
+        ReadProgressRepository::mark_as_unread(&db, user.id, book.id)
+            .await
+            .unwrap();
+        assert_eq!(
+            completion_count(&db, user.id, book.id).await,
+            1,
+            "marking unread resets progress but must not erase history"
+        );
+
+        ReadProgressRepository::upsert(&db, user.id, book.id, 50, true)
+            .await
+            .unwrap();
+        assert_eq!(completion_count(&db, user.id, book.id).await, 2);
+
+        // And again, to prove the count keeps climbing.
+        ReadProgressRepository::mark_as_unread(&db, user.id, book.id)
+            .await
+            .unwrap();
+        ReadProgressRepository::upsert(&db, user.id, book.id, 50, true)
+            .await
+            .unwrap();
+        assert_eq!(completion_count(&db, user.id, book.id).await, 3);
+    }
+
+    /// `mark_as_read` goes through the same hook, so it banks a completion.
+    #[tokio::test]
+    async fn mark_as_read_records_a_completion() {
+        let db = setup_test_db().await;
+        let user = create_test_user(&db).await;
+        let book = create_test_book(&db).await;
+
+        ReadProgressRepository::mark_as_read(&db, user.id, book.id, 50)
+            .await
+            .unwrap();
+
+        assert_eq!(completion_count(&db, user.id, book.id).await, 1);
+    }
+
+    /// (e) Re-running `mark_series_as_read` on an already-read series banks
+    /// nothing new.
+    #[tokio::test]
+    async fn mark_series_as_read_is_idempotent_for_the_log() {
+        let db = setup_test_db().await;
+        let user = create_test_user(&db).await;
+        let first = create_test_book(&db).await;
+        let second = create_test_book(&db).await;
+
+        let books = vec![(first.id, 50), (second.id, 50)];
+        ReadProgressRepository::mark_series_as_read(&db, user.id, books.clone())
+            .await
+            .unwrap();
+        assert_eq!(completion_count(&db, user.id, first.id).await, 1);
+        assert_eq!(completion_count(&db, user.id, second.id).await, 1);
+
+        ReadProgressRepository::mark_series_as_read(&db, user.id, books)
+            .await
+            .unwrap();
+        assert_eq!(
+            completion_count(&db, user.id, first.id).await,
+            1,
+            "re-marking an already-read series must not inflate the log"
+        );
+        assert_eq!(completion_count(&db, user.id, second.id).await, 1);
+    }
+
+    /// The series-level unread path also spares the log, and a subsequent
+    /// re-read is counted.
+    #[tokio::test]
+    async fn mark_series_as_unread_preserves_history() {
+        let db = setup_test_db().await;
+        let user = create_test_user(&db).await;
+        let first = create_test_book(&db).await;
+        let second = create_test_book(&db).await;
+
+        ReadProgressRepository::mark_series_as_read(
+            &db,
+            user.id,
+            vec![(first.id, 50), (second.id, 50)],
+        )
+        .await
+        .unwrap();
+
+        ReadProgressRepository::mark_series_as_unread(&db, user.id, vec![first.id, second.id])
+            .await
+            .unwrap();
+
+        assert_eq!(completion_count(&db, user.id, first.id).await, 1);
+        assert_eq!(completion_count(&db, user.id, second.id).await, 1);
+
+        // Re-read just the first volume.
+        ReadProgressRepository::mark_as_read(&db, user.id, first.id, 50)
+            .await
+            .unwrap();
+        assert_eq!(completion_count(&db, user.id, first.id).await, 2);
+        assert_eq!(completion_count(&db, user.id, second.id).await, 1);
+    }
+
+    /// The banked row carries the pass's own dates, not just "now".
+    #[tokio::test]
+    async fn the_recorded_row_spans_the_pass() {
+        let db = setup_test_db().await;
+        let user = create_test_user(&db).await;
+        let book = create_test_book(&db).await;
+
+        let started = ReadProgressRepository::upsert(&db, user.id, book.id, 1, false)
+            .await
+            .unwrap()
+            .started_at;
+        let finished = ReadProgressRepository::upsert(&db, user.id, book.id, 50, true)
+            .await
+            .unwrap();
+
+        let entries =
+            crate::repositories::ReadCompletionRepository::list_for_book(&db, user.id, book.id)
+                .await
+                .unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].started_at, started);
+        assert_eq!(entries[0].completed_at, finished.completed_at.unwrap());
+    }
+
+    /// Two users completing the same book each get their own entry.
+    #[tokio::test]
+    async fn completions_are_recorded_per_user() {
+        let db = setup_test_db().await;
+        let alice = create_test_user(&db).await;
+        let book = create_test_book(&db).await;
+
+        let password_hash = password::hash_password("password").unwrap();
+        let bob = UserRepository::create(
+            &db,
+            &users::Model {
+                id: Uuid::new_v4(),
+                username: "bob".to_string(),
+                email: "bob@example.com".to_string(),
+                password_hash,
+                role: "admin".to_string(),
+                is_active: true,
+                email_verified: false,
+                permissions: serde_json::json!([]),
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
+                last_login_at: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        ReadProgressRepository::mark_as_read(&db, alice.id, book.id, 50)
+            .await
+            .unwrap();
+
+        assert_eq!(completion_count(&db, alice.id, book.id).await, 1);
+        assert_eq!(completion_count(&db, bob.id, book.id).await, 0);
     }
 }
