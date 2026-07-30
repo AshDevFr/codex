@@ -122,6 +122,10 @@ export function CollectionFormModal({
       title={isEdit ? "Edit collection" : "New collection"}
       centered
       size={mode === "automatic" ? "xl" : "md"}
+      // Default "pop" transition scales the modal, which makes child
+      // SegmentedControls measure their active-item geometry against a
+      // pre-animation size and leaves the selected pill misaligned.
+      transitionProps={{ transition: "fade" }}
     >
       <Stack gap="md">
         <TextInput
@@ -146,6 +150,7 @@ export function CollectionFormModal({
             Membership
           </Text>
           <SegmentedControl
+            fullWidth
             value={mode}
             onChange={(value) => setMode(value as Mode)}
             data={[
