@@ -10290,6 +10290,22 @@ export interface components {
         };
         /** @description A collection of series. */
         CollectionDto: {
+            /**
+             * @description `true` when membership comes from `condition` instead of a hand-picked
+             *     list. Derived from `condition`, never stored separately.
+             * @example false
+             */
+            automatic: boolean;
+            /**
+             * @description The rule defining membership, or `null` for a hand-picked collection.
+             *
+             *     Returned as the raw stored JSON rather than a parsed condition so that a
+             *     collection whose rule somehow became invalid still round-trips to the UI,
+             *     where an administrator can see and correct it. Writes go through the
+             *     typed `SeriesCondition`, so a rule that cannot be parsed cannot be saved
+             *     in the first place.
+             */
+            condition?: Record<string, never> | null;
             /** Format: date-time */
             createdAt: string;
             /**
@@ -10308,9 +10324,14 @@ export interface components {
             /**
              * Format: int64
              * @description Number of member series visible to the requesting user.
+             *
+             *     `null` for an automatic collection. Counting one means resolving its
+             *     whole rule, so a list endpoint that reported it would run every rule on
+             *     the server to render a single page. Clients that need the number for an
+             *     automatic collection get it from the member list they already fetch.
              * @example 12
              */
-            seriesCount: number;
+            seriesCount?: number | null;
             /**
              * @description Optional description.
              * @example The Dark Knight's essential arcs.
@@ -10468,10 +10489,22 @@ export interface components {
         };
         /** @description Request to create a collection. */
         CreateCollectionRequest: {
+            /**
+             * @description Optional membership rule. When present the collection is automatic: its
+             *     members are resolved from this condition on every read and cannot be
+             *     added or removed by hand.
+             *
+             *     Typed rather than free-form JSON, so a condition outside the grammar is
+             *     rejected before it can be stored.
+             */
+            condition?: Record<string, never> | null;
             /** @example Batman */
             name: string;
             /**
              * @description Defaults to `false` (members default to sorting by title).
+             *
+             *     Rejected alongside `condition`: an automatic collection has no manual
+             *     arrangement to preserve.
              * @example false
              */
             ordered?: boolean;
@@ -19947,9 +19980,14 @@ export interface components {
         };
         /**
          * @description Request to update a collection. Absent fields are left unchanged. To clear
-         *     the summary, send `summary: null` explicitly.
+         *     the summary or the rule, send `summary: null` / `condition: null`
+         *     explicitly.
+         *
+         *     Clearing `condition` converts an automatic collection to a manual one, which
+         *     leaves it empty: it never had hand-picked members to fall back on.
          */
         UpdateCollectionRequest: {
+            condition?: Record<string, never> | null;
             name?: string | null;
             ordered?: boolean | null;
             summary?: string | null;

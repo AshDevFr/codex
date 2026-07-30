@@ -1,6 +1,7 @@
 //! DTOs for collections (shared, ordered groupings of series).
 
 use chrono::{DateTime, Utc};
+use codex_models::filter::SeriesCondition;
 use codex_models::sort::{CollectionSeriesSort, SortDirection};
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
@@ -37,21 +38,48 @@ pub struct CollectionDto {
     /// Optional description.
     #[schema(example = "The Dark Knight's essential arcs.")]
     pub summary: Option<String>,
+    /// The rule defining membership, or `null` for a hand-picked collection.
+    ///
+    /// Returned as the raw stored JSON rather than a parsed condition so that a
+    /// collection whose rule somehow became invalid still round-trips to the UI,
+    /// where an administrator can see and correct it. Writes go through the
+    /// typed `SeriesCondition`, so a rule that cannot be parsed cannot be saved
+    /// in the first place.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<Object>)]
+    pub condition: Option<serde_json::Value>,
+    /// `true` when membership comes from `condition` instead of a hand-picked
+    /// list. Derived from `condition`, never stored separately.
+    #[schema(example = false)]
+    pub automatic: bool,
     /// Number of member series visible to the requesting user.
+    ///
+    /// `null` for an automatic collection. Counting one means resolving its
+    /// whole rule, so a list endpoint that reported it would run every rule on
+    /// the server to render a single page. Clients that need the number for an
+    /// automatic collection get it from the member list they already fetch.
     #[schema(example = 12)]
-    pub series_count: u64,
+    pub series_count: Option<u64>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
 
 impl CollectionDto {
-    pub fn from_model(model: codex_db::entities::collections::Model, series_count: u64) -> Self {
+    /// Build the DTO. `series_count` is `None` for automatic collections; see
+    /// the field docs.
+    pub fn from_model(
+        model: codex_db::entities::collections::Model,
+        series_count: Option<u64>,
+    ) -> Self {
+        let automatic = model.condition.is_some();
         Self {
             id: model.id,
             name: model.name,
             ordered: model.ordered,
             summary: model.summary,
-            series_count,
+            condition: model.condition,
+            automatic,
+            series_count: if automatic { None } else { series_count },
             created_at: model.created_at,
             updated_at: model.updated_at,
         }
@@ -77,9 +105,21 @@ pub struct CreateCollectionRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub summary: Option<String>,
     /// Defaults to `false` (members default to sorting by title).
+    ///
+    /// Rejected alongside `condition`: an automatic collection has no manual
+    /// arrangement to preserve.
     #[serde(default)]
     #[schema(example = false)]
     pub ordered: bool,
+    /// Optional membership rule. When present the collection is automatic: its
+    /// members are resolved from this condition on every read and cannot be
+    /// added or removed by hand.
+    ///
+    /// Typed rather than free-form JSON, so a condition outside the grammar is
+    /// rejected before it can be stored.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<Object>)]
+    pub condition: Option<SeriesCondition>,
 }
 
 /// Deserialize a nullable field into a "double option" so the handler can tell
@@ -95,7 +135,11 @@ where
 }
 
 /// Request to update a collection. Absent fields are left unchanged. To clear
-/// the summary, send `summary: null` explicitly.
+/// the summary or the rule, send `summary: null` / `condition: null`
+/// explicitly.
+///
+/// Clearing `condition` converts an automatic collection to a manual one, which
+/// leaves it empty: it never had hand-picked members to fall back on.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateCollectionRequest {
@@ -110,6 +154,13 @@ pub struct UpdateCollectionRequest {
     pub summary: Option<Option<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ordered: Option<bool>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "double_option"
+    )]
+    #[schema(value_type = Option<Object>)]
+    pub condition: Option<Option<SeriesCondition>>,
 }
 
 /// Request to add one or more series to a collection.

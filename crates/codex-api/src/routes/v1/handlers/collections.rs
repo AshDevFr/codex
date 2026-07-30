@@ -25,6 +25,7 @@ use codex_db::entities::collections;
 use codex_db::repositories::{
     CollectionRepository, SeriesRepository, visibility::SeriesVisibility,
 };
+use codex_models::filter::SeriesCondition;
 use codex_models::sort::SortDirection;
 use codex_services::CollectionMembershipService;
 use std::sync::Arc;
@@ -66,15 +67,49 @@ fn internal<E: std::fmt::Display>(context: &str) -> impl Fn(E) -> ApiError + '_ 
 }
 
 /// Build a CollectionDto with the requesting user's visible member count.
+///
+/// The count is skipped for automatic collections: it would mean resolving the
+/// whole rule, and `seriesCount` is documented as null for them.
 async fn collection_dto(
     db: &sea_orm::DatabaseConnection,
     model: codex_db::entities::collections::Model,
     vis: Option<&SeriesVisibility>,
 ) -> Result<CollectionDto, ApiError> {
+    if model.condition.is_some() {
+        return Ok(CollectionDto::from_model(model, None));
+    }
     let count = CollectionRepository::count_series(db, model.id, vis)
         .await
         .map_err(internal("Failed to count collection series"))?;
-    Ok(CollectionDto::from_model(model, count))
+    Ok(CollectionDto::from_model(model, Some(count)))
+}
+
+/// Reject a rule that is a valid condition but nonsense as a collection
+/// definition. Maps the service's reasons onto 400 with the reason as the body,
+/// so the client learns *which* field is the problem rather than just "invalid".
+fn validate_rule(condition: &SeriesCondition) -> Result<(), ApiError> {
+    CollectionMembershipService::validate_rule(condition)
+        .map_err(|e| ApiError::BadRequest(e.to_string()))
+}
+
+/// 409 when the collection's membership comes from a rule.
+///
+/// Returned by every hand-editing endpoint. The body says why and what to do
+/// instead, because "conflict" alone gives a client no way to explain the
+/// refusal to a user.
+fn reject_manual_mutation(
+    collection: &codex_db::entities::collections::Model,
+    action: &str,
+) -> Result<(), ApiError> {
+    if collection.condition.is_some() {
+        return Err(ApiError::Conflict(format!(
+            "Collection '{}' is automatic: its members come from its rule, so they cannot be \
+             {action} by hand. Edit the rule, or correct the series' metadata so it stops \
+             matching.",
+            collection.name
+        )));
+    }
+    Ok(())
 }
 
 async fn user_visibility(
@@ -155,18 +190,43 @@ pub async fn create_collection(
         )));
     }
 
+    if let Some(ref condition) = request.condition {
+        validate_rule(condition)?;
+        if request.ordered {
+            return Err(ApiError::BadRequest(
+                "An automatic collection cannot be ordered: its members come from its rule, so \
+                 there is no manual arrangement to preserve."
+                    .to_string(),
+            ));
+        }
+    }
+
+    let condition = request
+        .condition
+        .as_ref()
+        .map(serde_json::to_value)
+        .transpose()
+        .map_err(internal("Failed to serialize collection rule"))?;
+
     let model = CollectionRepository::create(
         &state.db,
         name,
         request.summary.as_deref(),
         request.ordered,
-        None,
+        condition,
     )
     .await
     .map_err(internal("Failed to create collection"))?;
+    // A fresh manual collection has no members yet; an automatic one reports a
+    // null count like every other automatic collection.
+    let count = if model.condition.is_some() {
+        None
+    } else {
+        Some(0)
+    };
     Ok((
         StatusCode::CREATED,
-        Json(CollectionDto::from_model(model, 0)),
+        Json(CollectionDto::from_model(model, count)),
     ))
 }
 
@@ -237,15 +297,46 @@ pub async fn update_collection(
         }
     }
 
+    if let Some(Some(ref condition)) = request.condition {
+        validate_rule(condition)?;
+    }
+
+    // Whether the collection will be rule-backed once this update lands, which
+    // is what decides if `ordered: true` is acceptable.
+    let will_be_automatic = match &request.condition {
+        Some(next) => next.is_some(),
+        None => get_collection_or_404(&state, collection_id)
+            .await?
+            .condition
+            .is_some(),
+    };
+    if request.ordered == Some(true) && will_be_automatic {
+        return Err(ApiError::BadRequest(
+            "An automatic collection cannot be ordered: its members come from its rule, so there \
+             is no manual arrangement to preserve."
+                .to_string(),
+        ));
+    }
+
     // Outer None = leave unchanged; inner None = clear the summary.
     let summary = request.summary.as_ref().map(|inner| inner.as_deref());
+    // Same tri-state for the rule: absent leaves it alone, explicit null clears
+    // it and converts the collection to manual.
+    let condition = match &request.condition {
+        None => None,
+        Some(None) => Some(None),
+        Some(Some(condition)) => Some(Some(
+            serde_json::to_value(condition)
+                .map_err(internal("Failed to serialize collection rule"))?,
+        )),
+    };
     let model = CollectionRepository::update(
         &state.db,
         collection_id,
         request.name.as_deref().map(str::trim),
         summary,
         request.ordered,
-        None,
+        condition,
     )
     .await
     .map_err(internal("Failed to update collection"))?
@@ -348,6 +439,7 @@ pub async fn add_collection_series(
         .await
         .map_err(internal("Failed to fetch collection"))?
         .ok_or_else(|| ApiError::NotFound("Collection not found".to_string()))?;
+    reject_manual_mutation(&model, "added")?;
 
     for series_id in &request.series_ids {
         if SeriesRepository::get_by_id(&state.db, *series_id)
@@ -383,6 +475,8 @@ pub async fn remove_collection_series(
     Path((collection_id, series_id)): Path<(Uuid, Uuid)>,
 ) -> Result<StatusCode, ApiError> {
     require_permission!(auth, Permission::CollectionsWrite)?;
+    let collection = get_collection_or_404(&state, collection_id).await?;
+    reject_manual_mutation(&collection, "removed")?;
     CollectionRepository::remove_series(&state.db, collection_id, series_id)
         .await
         .map_err(internal("Failed to remove series from collection"))?;
@@ -409,7 +503,8 @@ pub async fn reorder_collection_series(
     Json(request): Json<ReorderCollectionSeriesRequest>,
 ) -> Result<StatusCode, ApiError> {
     require_permission!(auth, Permission::CollectionsWrite)?;
-    ensure_collection_exists(&state, collection_id).await?;
+    let collection = get_collection_or_404(&state, collection_id).await?;
+    reject_manual_mutation(&collection, "reordered")?;
     CollectionRepository::reorder(&state.db, collection_id, &request.series_ids)
         .await
         .map_err(internal("Failed to reorder collection series"))?;
@@ -487,12 +582,6 @@ pub async fn get_series_collections(
     }
     let total = items.len();
     Ok(Json(CollectionListResponse { items, total }))
-}
-
-async fn ensure_collection_exists(state: &AuthState, collection_id: Uuid) -> Result<(), ApiError> {
-    get_collection_or_404(state, collection_id)
-        .await
-        .map(|_| ())
 }
 
 async fn get_collection_or_404(

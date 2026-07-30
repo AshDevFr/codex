@@ -25983,11 +25983,23 @@
           "id",
           "name",
           "ordered",
-          "seriesCount",
+          "automatic",
           "createdAt",
           "updatedAt"
         ],
         "properties": {
+          "automatic": {
+            "type": "boolean",
+            "description": "`true` when membership comes from `condition` instead of a hand-picked\nlist. Derived from `condition`, never stored separately.",
+            "example": false
+          },
+          "condition": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "The rule defining membership, or `null` for a hand-picked collection.\n\nReturned as the raw stored JSON rather than a parsed condition so that a\ncollection whose rule somehow became invalid still round-trips to the UI,\nwhere an administrator can see and correct it. Writes go through the\ntyped `SeriesCondition`, so a rule that cannot be parsed cannot be saved\nin the first place."
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -26007,9 +26019,12 @@
             "example": false
           },
           "seriesCount": {
-            "type": "integer",
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64",
-            "description": "Number of member series visible to the requesting user.",
+            "description": "Number of member series visible to the requesting user.\n\n`null` for an automatic collection. Counting one means resolving its\nwhole rule, so a list endpoint that reported it would run every rule on\nthe server to render a single page. Clients that need the number for an\nautomatic collection get it from the member list they already fetch.",
             "example": 12,
             "minimum": 0
           },
@@ -26333,13 +26348,20 @@
           "name"
         ],
         "properties": {
+          "condition": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Optional membership rule. When present the collection is automatic: its\nmembers are resolved from this condition on every read and cannot be\nadded or removed by hand.\n\nTyped rather than free-form JSON, so a condition outside the grammar is\nrejected before it can be stored."
+          },
           "name": {
             "type": "string",
             "example": "Batman"
           },
           "ordered": {
             "type": "boolean",
-            "description": "Defaults to `false` (members default to sorting by title).",
+            "description": "Defaults to `false` (members default to sorting by title).\n\nRejected alongside `condition`: an automatic collection has no manual\narrangement to preserve.",
             "example": false
           },
           "summary": {
@@ -43977,8 +43999,14 @@
       },
       "UpdateCollectionRequest": {
         "type": "object",
-        "description": "Request to update a collection. Absent fields are left unchanged. To clear\nthe summary, send `summary: null` explicitly.",
+        "description": "Request to update a collection. Absent fields are left unchanged. To clear\nthe summary or the rule, send `summary: null` / `condition: null`\nexplicitly.\n\nClearing `condition` converts an automatic collection to a manual one, which\nleaves it empty: it never had hand-picked members to fall back on.",
         "properties": {
+          "condition": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
           "name": {
             "type": [
               "string",

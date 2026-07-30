@@ -102,7 +102,7 @@ async fn test_create_get_and_list_collection() {
     let created = created.unwrap();
     assert_eq!(created.name, "Batman");
     assert!(created.ordered);
-    assert_eq!(created.series_count, 0);
+    assert_eq!(created.series_count, Some(0));
 
     let req = get_request_with_auth(&format!("/api/v1/collections/{}", created.id), &token);
     let (status, fetched): (StatusCode, Option<CollectionDto>) =
@@ -226,7 +226,7 @@ async fn test_member_management_order_and_count() {
     let (status, updated): (StatusCode, Option<CollectionDto>) =
         make_json_request(app.clone(), req).await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(updated.unwrap().series_count, 3);
+    assert_eq!(updated.unwrap().series_count, Some(3));
 
     // Members come back in insertion order.
     let req = get_request_with_auth(&format!("/api/v1/collections/{coll_id}/series"), &token);
@@ -505,4 +505,558 @@ async fn test_add_nonexistent_series_returns_404() {
     );
     let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, req).await;
     assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+// ============================================================================
+// Automatic (rule-backed) collections
+// ============================================================================
+
+/// A tag rule as request JSON. Built as raw `serde_json` rather than typed
+/// conditions so the tests exercise the same wire shape a client sends.
+fn tag_rule(tag: &str) -> serde_json::Value {
+    serde_json::json!({ "tag": { "operator": "is", "value": tag } })
+}
+
+async fn set_tag(db: &sea_orm::DatabaseConnection, series_id: uuid::Uuid, tag: &str) {
+    codex::db::repositories::TagRepository::set_tags_for_series(
+        db,
+        series_id,
+        vec![tag.to_string()],
+    )
+    .await
+    .unwrap();
+}
+
+/// Create an automatic collection over the API and return its DTO.
+async fn create_auto_collection(
+    app: axum::Router,
+    token: &str,
+    name: &str,
+    rule: serde_json::Value,
+) -> CollectionDto {
+    let body = serde_json::json!({ "name": name, "condition": rule });
+    let req = post_json_request_with_auth("/api/v1/collections", &body, token);
+    let (status, response): (StatusCode, Option<CollectionDto>) = make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::CREATED, "creating '{name}'");
+    response.unwrap()
+}
+
+#[tokio::test]
+async fn test_create_automatic_collection_and_browse_it() {
+    let (db, _tmp) = setup_test_db().await;
+    let series = make_series_in_library(&db, &["Isekai One", "Isekai Two", "Mecha"]).await;
+    set_tag(&db, series[0].id, "isekai").await;
+    set_tag(&db, series[1].id, "isekai").await;
+    set_tag(&db, series[2].id, "mecha").await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let (_id, token) = user_and_token(&db, &state, "admin", true).await;
+
+    let dto = create_auto_collection(
+        create_test_router(state.clone()).await,
+        &token,
+        "Isekai",
+        tag_rule("isekai"),
+    )
+    .await;
+
+    assert!(dto.automatic, "a collection with a rule is automatic");
+    assert!(dto.condition.is_some());
+    assert_eq!(
+        dto.series_count, None,
+        "seriesCount is null for automatic collections"
+    );
+    assert!(!dto.ordered, "ordered is forced off");
+
+    // Browsable immediately, with no population step.
+    let app = create_test_router(state).await;
+    let req = get_request_with_auth(&format!("/api/v1/collections/{}/series", dto.id), &token);
+    let (status, members): (StatusCode, Option<Vec<SeriesDto>>) = make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::OK);
+    let titles: Vec<String> = members.unwrap().into_iter().map(|s| s.title).collect();
+    assert_eq!(titles, vec!["Isekai One", "Isekai Two"]);
+}
+
+/// A reader (no write permission) can browse an automatic collection.
+#[tokio::test]
+async fn test_reader_can_browse_an_automatic_collection() {
+    let (db, _tmp) = setup_test_db().await;
+    let series = make_series_in_library(&db, &["Alpha"]).await;
+    set_tag(&db, series[0].id, "pick").await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let (_id, admin_token) = user_and_token(&db, &state, "admin", true).await;
+    let (_rid, reader_token) = user_and_token(&db, &state, "reader", false).await;
+
+    let dto = create_auto_collection(
+        create_test_router(state.clone()).await,
+        &admin_token,
+        "Picks",
+        tag_rule("pick"),
+    )
+    .await;
+
+    let app = create_test_router(state).await;
+    let req = get_request_with_auth(
+        &format!("/api/v1/collections/{}/series", dto.id),
+        &reader_token,
+    );
+    let (status, members): (StatusCode, Option<Vec<SeriesDto>>) = make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(members.unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn test_editing_the_rule_changes_members_on_the_next_read() {
+    let (db, _tmp) = setup_test_db().await;
+    let series = make_series_in_library(&db, &["Alpha", "Beta"]).await;
+    set_tag(&db, series[0].id, "isekai").await;
+    set_tag(&db, series[1].id, "mecha").await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let (_id, token) = user_and_token(&db, &state, "admin", true).await;
+
+    let dto = create_auto_collection(
+        create_test_router(state.clone()).await,
+        &token,
+        "Themed",
+        tag_rule("isekai"),
+    )
+    .await;
+
+    let app = create_test_router(state.clone()).await;
+    let req = patch_json_request_with_auth(
+        &format!("/api/v1/collections/{}", dto.id),
+        &serde_json::json!({ "condition": tag_rule("mecha") }),
+        &token,
+    );
+    let (status, updated): (StatusCode, Option<CollectionDto>) = make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(updated.unwrap().automatic);
+
+    let app = create_test_router(state).await;
+    let req = get_request_with_auth(&format!("/api/v1/collections/{}/series", dto.id), &token);
+    let (status, members): (StatusCode, Option<Vec<SeriesDto>>) = make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::OK);
+    let titles: Vec<String> = members.unwrap().into_iter().map(|s| s.title).collect();
+    assert_eq!(titles, vec!["Beta"]);
+}
+
+/// Clearing the rule converts the collection to manual and leaves it empty: it
+/// never had hand-picked members.
+#[tokio::test]
+async fn test_clearing_the_rule_converts_to_an_empty_manual_collection() {
+    let (db, _tmp) = setup_test_db().await;
+    let series = make_series_in_library(&db, &["Alpha"]).await;
+    set_tag(&db, series[0].id, "pick").await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let (_id, token) = user_and_token(&db, &state, "admin", true).await;
+
+    let dto = create_auto_collection(
+        create_test_router(state.clone()).await,
+        &token,
+        "Picks",
+        tag_rule("pick"),
+    )
+    .await;
+
+    let app = create_test_router(state.clone()).await;
+    let req = patch_json_request_with_auth(
+        &format!("/api/v1/collections/{}", dto.id),
+        &serde_json::json!({ "condition": null }),
+        &token,
+    );
+    let (status, updated): (StatusCode, Option<CollectionDto>) = make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::OK);
+    let updated = updated.unwrap();
+    assert!(!updated.automatic);
+    assert!(updated.condition.is_none());
+    assert_eq!(
+        updated.series_count,
+        Some(0),
+        "now manual, so it reports a real count again"
+    );
+
+    let app = create_test_router(state.clone()).await;
+    let req = get_request_with_auth(&format!("/api/v1/collections/{}/series", dto.id), &token);
+    let (status, members): (StatusCode, Option<Vec<SeriesDto>>) = make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(members.unwrap().is_empty());
+
+    // And it accepts hand-picked members again.
+    let app = create_test_router(state).await;
+    let req = post_json_request_with_auth(
+        &format!("/api/v1/collections/{}/series", dto.id),
+        &serde_json::json!({ "seriesIds": [series[0].id] }),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<CollectionDto>) = make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::OK);
+}
+
+/// An absent `condition` on PATCH leaves the rule alone; only an explicit null
+/// clears it.
+#[tokio::test]
+async fn test_omitting_condition_on_update_leaves_the_rule_intact() {
+    let (db, _tmp) = setup_test_db().await;
+    let series = make_series_in_library(&db, &["Alpha"]).await;
+    set_tag(&db, series[0].id, "pick").await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let (_id, token) = user_and_token(&db, &state, "admin", true).await;
+
+    let dto = create_auto_collection(
+        create_test_router(state.clone()).await,
+        &token,
+        "Picks",
+        tag_rule("pick"),
+    )
+    .await;
+
+    let app = create_test_router(state).await;
+    let req = patch_json_request_with_auth(
+        &format!("/api/v1/collections/{}", dto.id),
+        &serde_json::json!({ "name": "Renamed" }),
+        &token,
+    );
+    let (status, updated): (StatusCode, Option<CollectionDto>) = make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::OK);
+    let updated = updated.unwrap();
+    assert_eq!(updated.name, "Renamed");
+    assert!(updated.automatic, "the rule survived a rename");
+}
+
+// ---- Validation ------------------------------------------------------------
+
+#[tokio::test]
+async fn test_rule_with_in_collection_is_rejected() {
+    let (db, _tmp) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_id, token) = user_and_token(&db, &state, "admin", true).await;
+    let app = create_test_router(state).await;
+
+    let body = serde_json::json!({
+        "name": "Recursive",
+        "condition": { "inCollection": { "operator": "isTrue" } },
+    });
+    let req = post_json_request_with_auth("/api/v1/collections", &body, &token);
+    let (status, error): (StatusCode, Option<ErrorResponse>) = make_json_request(app, req).await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let message = format!("{:?}", error.unwrap());
+    assert!(
+        message.contains("inCollection"),
+        "the error must name the offending field, got: {message}"
+    );
+}
+
+/// Nesting it deeper does not get it past validation.
+#[tokio::test]
+async fn test_nested_in_collection_is_rejected() {
+    let (db, _tmp) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_id, token) = user_and_token(&db, &state, "admin", true).await;
+    let app = create_test_router(state).await;
+
+    let body = serde_json::json!({
+        "name": "Recursive",
+        "condition": {
+            "allOf": [
+                tag_rule("isekai"),
+                { "anyOf": [ { "inCollection": { "operator": "isTrue" } } ] },
+            ]
+        },
+    });
+    let req = post_json_request_with_auth("/api/v1/collections", &body, &token);
+    let (status, error): (StatusCode, Option<ErrorResponse>) = make_json_request(app, req).await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(format!("{:?}", error.unwrap()).contains("inCollection"));
+}
+
+#[tokio::test]
+async fn test_empty_rule_is_rejected() {
+    let (db, _tmp) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_id, token) = user_and_token(&db, &state, "admin", true).await;
+
+    for empty in [
+        serde_json::json!({ "allOf": [] }),
+        serde_json::json!({ "anyOf": [] }),
+    ] {
+        let app = create_test_router(state.clone()).await;
+        let body = serde_json::json!({ "name": format!("Empty {empty}"), "condition": empty });
+        let req = post_json_request_with_auth("/api/v1/collections", &body, &token);
+        let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, req).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "empty rule {empty}");
+    }
+}
+
+/// Validation also runs on update, so a valid collection cannot be edited into
+/// an invalid one.
+#[tokio::test]
+async fn test_update_rejects_an_invalid_rule() {
+    let (db, _tmp) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_id, token) = user_and_token(&db, &state, "admin", true).await;
+
+    let dto = create_auto_collection(
+        create_test_router(state.clone()).await,
+        &token,
+        "Picks",
+        tag_rule("pick"),
+    )
+    .await;
+
+    let app = create_test_router(state).await;
+    let req = patch_json_request_with_auth(
+        &format!("/api/v1/collections/{}", dto.id),
+        &serde_json::json!({ "condition": { "inCollection": { "operator": "isTrue" } } }),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn test_ordered_is_rejected_alongside_a_rule() {
+    let (db, _tmp) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_id, token) = user_and_token(&db, &state, "admin", true).await;
+
+    let app = create_test_router(state.clone()).await;
+    let body = serde_json::json!({
+        "name": "Ordered auto",
+        "ordered": true,
+        "condition": tag_rule("pick"),
+    });
+    let req = post_json_request_with_auth("/api/v1/collections", &body, &token);
+    let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    // Also on update of an existing automatic collection.
+    let dto = create_auto_collection(
+        create_test_router(state.clone()).await,
+        &token,
+        "Picks",
+        tag_rule("pick"),
+    )
+    .await;
+    let app = create_test_router(state).await;
+    let req = patch_json_request_with_auth(
+        &format!("/api/v1/collections/{}", dto.id),
+        &serde_json::json!({ "ordered": true }),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
+// ---- Write protection ------------------------------------------------------
+
+#[tokio::test]
+async fn test_add_series_to_automatic_collection_returns_409() {
+    let (db, _tmp) = setup_test_db().await;
+    let series = make_series_in_library(&db, &["Alpha"]).await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_id, token) = user_and_token(&db, &state, "admin", true).await;
+
+    let dto = create_auto_collection(
+        create_test_router(state.clone()).await,
+        &token,
+        "Picks",
+        tag_rule("pick"),
+    )
+    .await;
+
+    let app = create_test_router(state).await;
+    let req = post_json_request_with_auth(
+        &format!("/api/v1/collections/{}/series", dto.id),
+        &serde_json::json!({ "seriesIds": [series[0].id] }),
+        &token,
+    );
+    let (status, error): (StatusCode, Option<ErrorResponse>) = make_json_request(app, req).await;
+
+    assert_eq!(status, StatusCode::CONFLICT);
+    let message = format!("{:?}", error.unwrap());
+    assert!(
+        message.contains("automatic") && message.contains("rule"),
+        "the 409 must explain why, got: {message}"
+    );
+}
+
+#[tokio::test]
+async fn test_remove_series_from_automatic_collection_returns_409() {
+    let (db, _tmp) = setup_test_db().await;
+    let series = make_series_in_library(&db, &["Alpha"]).await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_id, token) = user_and_token(&db, &state, "admin", true).await;
+
+    let dto = create_auto_collection(
+        create_test_router(state.clone()).await,
+        &token,
+        "Picks",
+        tag_rule("pick"),
+    )
+    .await;
+
+    let app = create_test_router(state).await;
+    let req = delete_request_with_auth(
+        &format!("/api/v1/collections/{}/series/{}", dto.id, series[0].id),
+        &token,
+    );
+    let (status, error): (StatusCode, Option<ErrorResponse>) = make_json_request(app, req).await;
+
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert!(format!("{:?}", error.unwrap()).contains("automatic"));
+}
+
+#[tokio::test]
+async fn test_reorder_automatic_collection_returns_409() {
+    let (db, _tmp) = setup_test_db().await;
+    let series = make_series_in_library(&db, &["Alpha"]).await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_id, token) = user_and_token(&db, &state, "admin", true).await;
+
+    let dto = create_auto_collection(
+        create_test_router(state.clone()).await,
+        &token,
+        "Picks",
+        tag_rule("pick"),
+    )
+    .await;
+
+    let app = create_test_router(state).await;
+    let req = put_json_request_with_auth(
+        &format!("/api/v1/collections/{}/series", dto.id),
+        &serde_json::json!({ "seriesIds": [series[0].id] }),
+        &token,
+    );
+    let (status, error): (StatusCode, Option<ErrorResponse>) = make_json_request(app, req).await;
+
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert!(format!("{:?}", error.unwrap()).contains("automatic"));
+}
+
+/// Manual collections keep working through every mutation endpoint: the guards
+/// must not have caught the common case.
+#[tokio::test]
+async fn test_manual_collection_mutation_still_works() {
+    let (db, _tmp) = setup_test_db().await;
+    let series = make_series_in_library(&db, &["Alpha", "Beta"]).await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_id, token) = user_and_token(&db, &state, "admin", true).await;
+
+    let app = create_test_router(state.clone()).await;
+    let req = post_json_request_with_auth(
+        "/api/v1/collections",
+        &serde_json::json!({ "name": "Manual", "ordered": true }),
+        &token,
+    );
+    let (status, dto): (StatusCode, Option<CollectionDto>) = make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::CREATED);
+    let dto = dto.unwrap();
+    assert!(!dto.automatic);
+    assert!(dto.ordered, "a manual collection keeps ordered");
+    assert_eq!(dto.series_count, Some(0));
+
+    let app = create_test_router(state.clone()).await;
+    let req = post_json_request_with_auth(
+        &format!("/api/v1/collections/{}/series", dto.id),
+        &serde_json::json!({ "seriesIds": [series[0].id, series[1].id] }),
+        &token,
+    );
+    let (status, updated): (StatusCode, Option<CollectionDto>) = make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(updated.unwrap().series_count, Some(2));
+
+    let app = create_test_router(state.clone()).await;
+    let req = put_json_request_with_auth(
+        &format!("/api/v1/collections/{}/series", dto.id),
+        &serde_json::json!({ "seriesIds": [series[1].id, series[0].id] }),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) = make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+
+    let app = create_test_router(state).await;
+    let req = delete_request_with_auth(
+        &format!("/api/v1/collections/{}/series/{}", dto.id, series[0].id),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) = make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+}
+
+/// The list endpoint must not report a count for automatic collections, and must
+/// keep reporting one for manual collections in the same response.
+#[tokio::test]
+async fn test_list_reports_null_count_only_for_automatic_collections() {
+    let (db, _tmp) = setup_test_db().await;
+    let series = make_series_in_library(&db, &["Alpha"]).await;
+    set_tag(&db, series[0].id, "pick").await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let (_id, token) = user_and_token(&db, &state, "admin", true).await;
+
+    let app = create_test_router(state.clone()).await;
+    let req = post_json_request_with_auth(
+        "/api/v1/collections",
+        &serde_json::json!({ "name": "Manual" }),
+        &token,
+    );
+    let (status, manual): (StatusCode, Option<CollectionDto>) = make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::CREATED);
+    let manual = manual.unwrap();
+
+    let app = create_test_router(state.clone()).await;
+    let req = post_json_request_with_auth(
+        &format!("/api/v1/collections/{}/series", manual.id),
+        &serde_json::json!({ "seriesIds": [series[0].id] }),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<CollectionDto>) = make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::OK);
+
+    create_auto_collection(
+        create_test_router(state.clone()).await,
+        &token,
+        "Auto",
+        tag_rule("pick"),
+    )
+    .await;
+
+    let app = create_test_router(state).await;
+    let req = get_request_with_auth("/api/v1/collections", &token);
+    let (status, listed): (StatusCode, Option<CollectionListResponse>) =
+        make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let listed = listed.unwrap();
+    let auto = listed.items.iter().find(|c| c.automatic).unwrap();
+    let hand_picked = listed.items.iter().find(|c| !c.automatic).unwrap();
+    assert_eq!(auto.series_count, None);
+    assert_eq!(hand_picked.series_count, Some(1));
+}
+
+/// A condition outside the grammar is rejected at deserialization, so a
+/// malformed rule can never reach the database.
+#[tokio::test]
+async fn test_rule_outside_the_grammar_is_rejected() {
+    let (db, _tmp) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_id, token) = user_and_token(&db, &state, "admin", true).await;
+    let app = create_test_router(state).await;
+
+    let body = serde_json::json!({
+        "name": "Bogus",
+        "condition": { "notAField": { "operator": "is", "value": "x" } },
+    });
+    let req = post_json_request_with_auth("/api/v1/collections", &body, &token);
+    let (status, _): (StatusCode, Option<serde_json::Value>) = make_json_request(app, req).await;
+    assert!(
+        status == StatusCode::UNPROCESSABLE_ENTITY || status == StatusCode::BAD_REQUEST,
+        "expected a 4xx for an ungrammatical rule, got {status}"
+    );
 }

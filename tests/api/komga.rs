@@ -5331,3 +5331,100 @@ async fn test_komga_collection_not_found() {
     let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
+
+/// An automatic collection must serialize to Komga clients as an ordinary
+/// read-only collection: same DTO shape, resolved `seriesIds`, working members
+/// and thumbnail. The one deliberate difference is that it is absent from the
+/// per-series reverse lookup, because a rule-backed collection is a view over
+/// the library rather than a container the series belongs to.
+#[tokio::test]
+async fn test_komga_automatic_collection_reads_like_any_other() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let library = LibraryRepository::create(&db, "Manga", "/manga", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let matching = SeriesRepository::create(&db, library.id, "Isekai Hero", None)
+        .await
+        .unwrap();
+    let other = SeriesRepository::create(&db, library.id, "Mecha Pilot", None)
+        .await
+        .unwrap();
+
+    codex::db::repositories::TagRepository::set_tags_for_series(
+        &db,
+        matching.id,
+        vec!["isekai".to_string()],
+    )
+    .await
+    .unwrap();
+    codex::db::repositories::TagRepository::set_tags_for_series(
+        &db,
+        other.id,
+        vec!["mecha".to_string()],
+    )
+    .await
+    .unwrap();
+
+    let rule = serde_json::json!({ "tag": { "operator": "is", "value": "isekai" } });
+    let auto = CollectionRepository::create(&db, "Isekai", None, false, Some(rule))
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    // List: seriesIds are resolved from the rule, not from a junction.
+    let request = get_request_with_auth("/komga/api/v1/collections", &token);
+    let (status, page): (StatusCode, Option<KomgaPage<KomgaCollectionDto>>) =
+        make_json_request(app.clone(), request).await;
+    assert_eq!(status, StatusCode::OK);
+    let page = page.unwrap();
+    let listed = page
+        .content
+        .iter()
+        .find(|c| c.name == "Isekai")
+        .expect("automatic collection missing from the Komga list");
+    assert_eq!(listed.series_ids, vec![matching.id.to_string()]);
+    assert!(!listed.ordered, "ordered is forced off for a rule");
+
+    // Detail
+    let request = get_request_with_auth(&format!("/komga/api/v1/collections/{}", auto.id), &token);
+    let (status, dto): (StatusCode, Option<KomgaCollectionDto>) =
+        make_json_request(app.clone(), request).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(dto.unwrap().series_ids, vec![matching.id.to_string()]);
+
+    // Members, paginated
+    let request = get_request_with_auth(
+        &format!("/komga/api/v1/collections/{}/series", auto.id),
+        &token,
+    );
+    let (status, members): (StatusCode, Option<KomgaPage<KomgaSeriesDto>>) =
+        make_json_request(app.clone(), request).await;
+    assert_eq!(status, StatusCode::OK);
+    let members = members.unwrap();
+    assert_eq!(members.total_elements, 1);
+    assert_eq!(members.content[0].id, matching.id.to_string());
+
+    // Thumbnail redirects to the first resolved member.
+    let request = get_request_with_auth(
+        &format!("/komga/api/v1/collections/{}/thumbnail", auto.id),
+        &token,
+    );
+    let (status, _) = make_raw_request(app.clone(), request).await;
+    assert_eq!(status, StatusCode::TEMPORARY_REDIRECT);
+
+    // Reverse lookup: deliberately excluded.
+    let request = get_request_with_auth(
+        &format!("/komga/api/v1/series/{}/collections", matching.id),
+        &token,
+    );
+    let (status, list): (StatusCode, Option<Vec<KomgaCollectionDto>>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        list.unwrap().is_empty(),
+        "an automatic collection must not be reported as containing the series"
+    );
+}
