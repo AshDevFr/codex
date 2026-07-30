@@ -317,38 +317,44 @@ function hasAnyActive(state: SeriesFilterState | BookFilterState): boolean {
   return false;
 }
 
-export interface PresetConditionSummaryProps {
-  preset: FilterPresetDto;
+export interface ConditionSummaryProps {
+  condition: unknown;
+  /** Which grammar the condition speaks. Defaults to `series`. */
+  target?: "series" | "books";
+  /** Wording for the "nothing here" case. */
+  emptyLabel?: string;
 }
 
 /**
- * Read-only renderer for a saved preset's condition. Parses the condition
- * back into the chip UI's flat state and lists each active group or TriState.
- * Falls back to a notice when the condition uses advanced shapes that the
- * chip UI cannot represent (those presets are still applyable from the
- * advanced search page).
+ * Read-only renderer for a filter condition. Parses it back into the chip UI's
+ * flat state and lists each active group or TriState. Falls back to a notice
+ * when the condition uses advanced shapes the chip UI cannot represent (those
+ * are still applyable from the advanced search page).
  *
  * Rating leaves are described separately, before that parse: they're only
  * buildable in the advanced builder and the chip state has no numeric slot, so
  * folding them in would hide them behind the advanced-filter notice.
+ *
+ * Used both for saved presets and for an automatic collection's membership rule,
+ * which is the same grammar rendered in a different place.
  */
-export function PresetConditionSummary({
-  preset,
-}: PresetConditionSummaryProps) {
-  const condition = preset.condition as unknown;
-
+export function ConditionSummary({
+  condition,
+  target = "series",
+  emptyLabel = "No filters in this preset.",
+}: ConditionSummaryProps) {
   // Library chips hold UUIDs; resolve display names where we can.
   const { data: libraries } = useQuery({
     queryKey: ["libraries"],
     queryFn: () => librariesApi.getAll(),
     staleTime: 5 * 60 * 1000,
-    enabled: preset.target === "series",
+    enabled: target === "series",
   });
   const libraryNames = libraries
     ? new Map(libraries.map((l) => [l.id, l.name]))
     : undefined;
 
-  if (preset.target === "series") {
+  if (target === "series") {
     const { ratings, rest } = extractRatingLeaves(
       condition as SeriesCondition | undefined | null,
     );
@@ -372,7 +378,7 @@ export function PresetConditionSummary({
       if (ratings.length > 0) return <Stack gap={6}>{ratingRows}</Stack>;
       return (
         <Text size="xs" c="dimmed">
-          No filters in this preset.
+          {emptyLabel}
         </Text>
       );
     }
@@ -385,7 +391,7 @@ export function PresetConditionSummary({
     );
   }
 
-  if (preset.target === "books") {
+  if (target === "books") {
     const state = conditionToBookFilterState(
       condition as BookCondition | undefined | null,
     );
@@ -395,7 +401,7 @@ export function PresetConditionSummary({
     if (!hasAnyActive(state)) {
       return (
         <Text size="xs" c="dimmed">
-          No filters in this preset.
+          {emptyLabel}
         </Text>
       );
     }
@@ -403,6 +409,27 @@ export function PresetConditionSummary({
   }
 
   return <AdvancedNotice />;
+}
+
+export interface PresetConditionSummaryProps {
+  preset: FilterPresetDto;
+}
+
+/** [`ConditionSummary`] for a saved preset, reading the target off the preset. */
+export function PresetConditionSummary({
+  preset,
+}: PresetConditionSummaryProps) {
+  // A target outside the two known grammars can't be summarized at all, so it
+  // falls through to the advanced notice rather than being parsed as series.
+  if (preset.target !== "series" && preset.target !== "books") {
+    return <AdvancedNotice />;
+  }
+  return (
+    <ConditionSummary
+      condition={preset.condition as unknown}
+      target={preset.target}
+    />
+  );
 }
 
 function AdvancedNotice() {

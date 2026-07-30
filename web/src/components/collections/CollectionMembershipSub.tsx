@@ -2,8 +2,8 @@ import { Loader, Menu } from "@mantine/core";
 import { IconCheck, IconFolderPlus, IconPlus } from "@tabler/icons-react";
 import {
   useAddSeriesToCollection,
-  useCollections,
   useCollectionsForSeries,
+  useManualCollections,
   useRemoveSeriesFromCollections,
 } from "@/hooks/useCollections";
 
@@ -29,7 +29,8 @@ export function CollectionMembershipSub({
   seriesId: string;
   onRequestCreate: () => void;
 }) {
-  const { data: collections, isLoading } = useCollections();
+  // Automatic collections are excluded: the API refuses hand-editing them.
+  const { data: collections, isLoading } = useManualCollections();
   const { data: memberOf } = useCollectionsForSeries(seriesId);
   const add = useAddSeriesToCollection();
   const remove = useRemoveSeriesFromCollections();

@@ -20,9 +20,74 @@ interface MockCollection {
   name: string;
   summary: string | null;
   ordered: boolean;
+  /** Hand-picked members. Always empty for a rule-backed collection. */
   seriesIds: string[];
+  /** Membership rule; `null` for a hand-picked collection. */
+  condition: Record<string, unknown> | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * Resolve a rule-backed collection's members.
+ *
+ * Only the leaf shapes the collection form can produce are evaluated, which is
+ * enough for the mock UI to behave like the real thing. Anything else matches
+ * nothing rather than silently matching everything, so an unsupported rule looks
+ * empty instead of looking like the whole library.
+ */
+function resolveRule(condition: Record<string, unknown>): string[] {
+  const matches = (series: (typeof mockSeries)[number]): boolean => {
+    if (Array.isArray(condition.allOf)) {
+      return (condition.allOf as Record<string, unknown>[]).every((child) =>
+        resolveRule(child).includes(series.id),
+      );
+    }
+    if (Array.isArray(condition.anyOf)) {
+      return (condition.anyOf as Record<string, unknown>[]).some((child) =>
+        resolveRule(child).includes(series.id),
+      );
+    }
+
+    const tag = condition.tag as
+      | { operator?: string; value?: string }
+      | undefined;
+    if (tag?.operator === "is") {
+      return (series.tags ?? []).some(
+        (t) => t.toLowerCase() === (tag.value ?? "").toLowerCase(),
+      );
+    }
+
+    const genre = condition.genre as
+      | { operator?: string; value?: string }
+      | undefined;
+    if (genre?.operator === "is") {
+      return (series.genres ?? []).some(
+        (g) => g.toLowerCase() === (genre.value ?? "").toLowerCase(),
+      );
+    }
+
+    const library = condition.libraryId as
+      | { operator?: string; value?: string; values?: string[] }
+      | undefined;
+    if (library?.operator === "is") {
+      return series.libraryId === library.value;
+    }
+    if (library?.operator === "in") {
+      return (library.values ?? []).includes(series.libraryId);
+    }
+
+    return false;
+  };
+
+  return mockSeries.filter(matches).map((s) => s.id);
+}
+
+/** The series a collection contains, from its rule or its junction. */
+function memberIds(collection: MockCollection): string[] {
+  return collection.condition
+    ? resolveRule(collection.condition)
+    : collection.seriesIds;
 }
 
 const favoriteSeriesIds = mockSeries
@@ -34,6 +99,10 @@ const batmanSeriesIds = mockSeries
   .filter((s) => s.title.startsWith("Batman"))
   .map((s) => s.id);
 
+const mangaLibraryId = mockSeries.find(
+  (s) => s.libraryName === "Manga",
+)?.libraryId;
+
 let mockCollections: MockCollection[] = [
   {
     id: seededUuid("collection-favorites"),
@@ -41,6 +110,7 @@ let mockCollections: MockCollection[] = [
     summary: null,
     ordered: false,
     seriesIds: favoriteSeriesIds,
+    condition: null,
     createdAt: "2024-01-10T10:00:00Z",
     updatedAt: "2024-06-01T10:00:00Z",
   },
@@ -50,8 +120,24 @@ let mockCollections: MockCollection[] = [
     summary: "The essential Batman arcs, in reading order.",
     ordered: true,
     seriesIds: batmanSeriesIds,
+    condition: null,
     createdAt: "2024-02-15T10:00:00Z",
     updatedAt: "2024-05-20T10:00:00Z",
+  },
+  {
+    id: seededUuid("collection-auto-manga"),
+    name: "All Manga (automatic)",
+    summary: "Every series in the Manga library, kept current automatically.",
+    ordered: false,
+    seriesIds: [],
+    // Scoped by library rather than by tag: the mock series store populates
+    // libraryId but not tags or genres, so a tag rule would resolve to nothing
+    // and the demo collection would look broken rather than automatic.
+    condition: mangaLibraryId
+      ? { libraryId: { operator: "is", value: mangaLibraryId } }
+      : null,
+    createdAt: "2024-03-01T10:00:00Z",
+    updatedAt: "2024-03-01T10:00:00Z",
   },
 ];
 
@@ -60,10 +146,23 @@ const toDto = (collection: MockCollection): CollectionDto => ({
   name: collection.name,
   summary: collection.summary,
   ordered: collection.ordered,
-  seriesCount: collection.seriesIds.length,
+  condition: collection.condition,
+  automatic: collection.condition !== null,
+  // Null for automatic collections, matching the real API: counting one means
+  // resolving its whole rule.
+  seriesCount: collection.condition ? null : collection.seriesIds.length,
   createdAt: collection.createdAt,
   updatedAt: collection.updatedAt,
 });
+
+/** 409 body for hand-editing a rule-backed collection, as the real API sends. */
+const automaticConflict = (collection: MockCollection) =>
+  HttpResponse.json(
+    {
+      error: `Collection '${collection.name}' is automatic: its members come from its rule, so they cannot be edited by hand.`,
+    },
+    { status: 409 },
+  );
 
 export const collectionsHandlers = [
   // List collections
@@ -101,10 +200,11 @@ export const collectionsHandlers = [
 
     const url = new URL(request.url);
     const sort =
-      url.searchParams.get("sort") ?? (collection.ordered ? "manual" : "title");
+      url.searchParams.get("sort") ??
+      (collection.ordered && !collection.condition ? "manual" : "title");
     const direction = url.searchParams.get("direction") ?? "asc";
 
-    const members = collection.seriesIds
+    const members = memberIds(collection)
       .map((id) => mockSeries.find((s) => s.id === id))
       .filter((s) => s !== undefined);
 
@@ -135,8 +235,11 @@ export const collectionsHandlers = [
       id: seededUuid(`collection-${body.name}-${mockCollections.length}`),
       name: body.name,
       summary: body.summary ?? null,
-      ordered: body.ordered ?? false,
+      // Forced off alongside a rule, like the real API.
+      ordered: (body.ordered ?? false) && !body.condition,
       seriesIds: [],
+      condition:
+        (body.condition as Record<string, unknown> | undefined) ?? null,
       createdAt: "2024-06-15T10:00:00Z",
       updatedAt: "2024-06-15T10:00:00Z",
     };
@@ -157,7 +260,14 @@ export const collectionsHandlers = [
     const body = (await request.json()) as UpdateCollectionRequest;
     if (body.name != null) collection.name = body.name;
     if (body.summary !== undefined) collection.summary = body.summary;
+    // Absent leaves the rule alone; explicit null clears it and converts the
+    // collection to manual.
+    if (body.condition !== undefined) {
+      collection.condition =
+        (body.condition as Record<string, unknown> | null) ?? null;
+    }
     if (body.ordered != null) collection.ordered = body.ordered;
+    if (collection.condition) collection.ordered = false;
     return HttpResponse.json(toDto(collection));
   }),
 
@@ -178,6 +288,7 @@ export const collectionsHandlers = [
         { status: 404 },
       );
     }
+    if (collection.condition) return automaticConflict(collection);
     const body = (await request.json()) as { seriesIds: string[] };
     for (const seriesId of body.seriesIds) {
       if (!collection.seriesIds.includes(seriesId)) {
@@ -199,6 +310,7 @@ export const collectionsHandlers = [
           { status: 404 },
         );
       }
+      if (collection.condition) return automaticConflict(collection);
       collection.seriesIds = collection.seriesIds.filter(
         (id) => id !== params.seriesId,
       );
@@ -216,6 +328,7 @@ export const collectionsHandlers = [
         { status: 404 },
       );
     }
+    if (collection.condition) return automaticConflict(collection);
     const body = (await request.json()) as { seriesIds: string[] };
     collection.seriesIds = body.seriesIds;
     return new HttpResponse(null, { status: 204 });
@@ -224,8 +337,12 @@ export const collectionsHandlers = [
   // Collections containing a given series
   http.get("/api/v1/series/:seriesId/collections", async ({ params }) => {
     await delay(100);
+    // Manual membership only: a rule-backed collection is a view over the
+    // library rather than a container the series belongs to.
     const items = mockCollections
-      .filter((c) => c.seriesIds.includes(params.seriesId as string))
+      .filter(
+        (c) => !c.condition && c.seriesIds.includes(params.seriesId as string),
+      )
       .map(toDto);
     return HttpResponse.json({ items, total: items.length });
   }),

@@ -1,4 +1,5 @@
 import {
+  Badge,
   Box,
   Button,
   Card,
@@ -10,20 +11,35 @@ import {
   Stack,
   Text,
   Title,
+  Tooltip,
 } from "@mantine/core";
-import { IconLayoutGrid, IconPlus } from "@tabler/icons-react";
+import {
+  IconLayoutGrid,
+  IconPlus,
+  IconUser,
+  IconWand,
+} from "@tabler/icons-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import type { Collection } from "@/api/collections";
 import { CollectionFormModal } from "@/components/collections/CollectionFormModal";
 import { useCollections } from "@/hooks/useCollections";
 import { usePermissions } from "@/hooks/usePermissions";
+import type { SeriesCondition } from "@/types/filters";
 import { PERMISSIONS } from "@/types/permissions";
+import {
+  countRuleConditions,
+  describesPersonalData,
+} from "@/utils/collectionRules";
 
 const NO_COVER =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='300'%3E%3Crect fill='%23ddd' width='200' height='300'/%3E%3Ctext fill='%23999' font-family='sans-serif' font-size='14' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3ENo Cover%3C/text%3E%3C/svg%3E";
 
 function CollectionCard({ collection }: { collection: Collection }) {
+  const rule = collection.condition as SeriesCondition | null | undefined;
+  const personalized = collection.automatic && describesPersonalData(rule);
+  const ruleSize = collection.automatic ? countRuleConditions(rule) : 0;
+
   return (
     <Card
       component={Link}
@@ -44,13 +60,45 @@ function CollectionCard({ collection }: { collection: Collection }) {
           fallbackSrc={NO_COVER}
         />
       </Box>
-      <Stack gap={2} p="sm">
+      <Stack gap={4} p="sm">
         <Text fw={600} size="sm" lineClamp={1}>
           {collection.name}
         </Text>
+        {/* An automatic collection has no seriesCount: reporting one would mean
+            resolving every rule to render this page. Describe the rule instead
+            of rendering a misleading "0 series". */}
         <Text size="xs" c="dimmed">
-          {collection.seriesCount} series
+          {collection.automatic
+            ? ruleSize === 1
+              ? "Automatic · 1 condition"
+              : `Automatic · ${ruleSize} conditions`
+            : `${collection.seriesCount ?? 0} series`}
         </Text>
+        {collection.automatic && (
+          <Group gap={4} wrap="wrap">
+            <Tooltip label="Members come from a rule and stay up to date automatically">
+              <Badge
+                size="xs"
+                variant="light"
+                leftSection={<IconWand size={10} />}
+              >
+                Automatic
+              </Badge>
+            </Tooltip>
+            {personalized && (
+              <Tooltip label="This rule uses personal ratings or reading progress, so each person sees different series">
+                <Badge
+                  size="xs"
+                  variant="light"
+                  color="yellow"
+                  leftSection={<IconUser size={10} />}
+                >
+                  Personal
+                </Badge>
+              </Tooltip>
+            )}
+          </Group>
+        )}
       </Stack>
     </Card>
   );

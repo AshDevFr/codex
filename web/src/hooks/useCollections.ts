@@ -24,6 +24,22 @@ export function useCollections() {
   });
 }
 
+/**
+ * Collections a series can actually be added to or removed from.
+ *
+ * Automatic collections are excluded: their membership comes from a rule, the
+ * API returns 409 for hand-editing them, and offering them in an "add to
+ * collection" picker would be a dead end. Shares the `useCollections` cache, so
+ * this costs no extra request.
+ */
+export function useManualCollections() {
+  const query = useCollections();
+  return {
+    ...query,
+    data: query.data?.filter((collection) => !collection.automatic),
+  };
+}
+
 export function useCollection(id: string | undefined) {
   return useQuery<Collection>({
     queryKey: [COLLECTIONS_KEY, id],

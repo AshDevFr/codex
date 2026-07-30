@@ -1,6 +1,6 @@
 import { Loader, Menu } from "@mantine/core";
 import { IconFolderPlus, IconPlus } from "@tabler/icons-react";
-import { useCollections } from "@/hooks/useCollections";
+import { useManualCollections } from "@/hooks/useCollections";
 
 /**
  * Nested submenu listing every collection, for embedding in the bulk-selection
@@ -23,7 +23,8 @@ export function BulkAddToCollectionSub({
   onRequestCreate: () => void;
   disabled?: boolean;
 }) {
-  const { data: collections, isLoading } = useCollections();
+  // Automatic collections are excluded: the API refuses hand-editing them.
+  const { data: collections, isLoading } = useManualCollections();
 
   return (
     <Menu.Sub>

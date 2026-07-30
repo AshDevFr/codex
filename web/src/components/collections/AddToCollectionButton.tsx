@@ -3,8 +3,8 @@ import { IconCheck, IconFolderPlus, IconPlus } from "@tabler/icons-react";
 import { useState } from "react";
 import {
   useAddSeriesToCollection,
-  useCollections,
   useCollectionsForSeries,
+  useManualCollections,
   useRemoveSeriesFromCollections,
 } from "@/hooks/useCollections";
 import { CollectionFormModal } from "./CollectionFormModal";
@@ -14,7 +14,8 @@ import { CollectionFormModal } from "./CollectionFormModal";
  * Render only for users with `collections:write`.
  */
 export function AddToCollectionButton({ seriesId }: { seriesId: string }) {
-  const { data: collections, isLoading } = useCollections();
+  // Automatic collections are excluded: the API refuses hand-editing them.
+  const { data: collections, isLoading } = useManualCollections();
   const { data: memberOf } = useCollectionsForSeries(seriesId);
   const add = useAddSeriesToCollection();
   const remove = useRemoveSeriesFromCollections();

@@ -20,6 +20,7 @@ import {
   IconCheck,
   IconChevronDown,
   IconChevronRight,
+  IconLayoutGrid,
   IconPencil,
   IconTrash,
 } from "@tabler/icons-react";
@@ -31,6 +32,10 @@ import {
   filterPresetsApi,
 } from "@/api/filterPresets";
 import { librariesApi } from "@/api/libraries";
+import { CollectionFormModal } from "@/components/collections/CollectionFormModal";
+import { usePermissions } from "@/hooks/usePermissions";
+import type { SeriesCondition } from "@/types/filters";
+import { PERMISSIONS } from "@/types/permissions";
 import { PresetConditionSummary } from "./PresetConditionSummary";
 
 export interface ManagePresetsModalProps {
@@ -89,6 +94,18 @@ export function ManagePresetsModal({
 
 function PresetsList({ target }: { target: FilterPresetTarget }) {
   const qc = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canWriteCollections = hasPermission(PERMISSIONS.COLLECTIONS_WRITE);
+  // The condition is *copied* into a new collection, not linked. A global
+  // collection pointing at one user's private preset would break the moment the
+  // preset was deleted, and nobody else could see why it held what it held.
+  const [collectionSeed, setCollectionSeed] = useState<
+    SeriesCondition | undefined
+  >(undefined);
+  const startCollectionFromPreset = (preset: FilterPresetDto) => {
+    setCollectionSeed(preset.condition as unknown as SeriesCondition);
+  };
+
   const { data: presets, isLoading } = useQuery({
     queryKey: ["filter-presets", "manage", target],
     queryFn: () => filterPresetsApi.list({ target }),
@@ -157,12 +174,25 @@ function PresetsList({ target }: { target: FilterPresetTarget }) {
                       queryKey: ["filter-presets"],
                     })
                   }
+                  onCreateCollection={
+                    canWriteCollections && preset.target === "series"
+                      ? startCollectionFromPreset
+                      : undefined
+                  }
                 />
               ))}
             </Stack>
           )}
         </Box>
       ))}
+
+      {/* Mounted outside the rows so it survives the list re-rendering when the
+          preset queries refetch. */}
+      <CollectionFormModal
+        opened={collectionSeed !== undefined}
+        onClose={() => setCollectionSeed(undefined)}
+        initialCondition={collectionSeed}
+      />
     </Stack>
   );
 }
@@ -171,10 +201,13 @@ function PresetRow({
   preset,
   libraryNameById,
   onChange,
+  onCreateCollection,
 }: {
   preset: FilterPresetDto;
   libraryNameById: Map<string, string>;
   onChange: () => void;
+  /** Offered only for series presets, and only with `collections:write`. */
+  onCreateCollection?: (preset: FilterPresetDto) => void;
 }) {
   const [renaming, setRenaming] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -295,6 +328,18 @@ function PresetRow({
         </Group>
         {!renaming && (
           <Group gap={4} wrap="nowrap">
+            {onCreateCollection && (
+              <Tooltip label="Create an automatic collection from this preset">
+                <ActionIcon
+                  variant="subtle"
+                  size="sm"
+                  onClick={() => onCreateCollection(preset)}
+                  aria-label={`Create a collection from ${preset.name}`}
+                >
+                  <IconLayoutGrid size={14} />
+                </ActionIcon>
+              </Tooltip>
+            )}
             <Tooltip label="Rename">
               <ActionIcon
                 variant="subtle"
