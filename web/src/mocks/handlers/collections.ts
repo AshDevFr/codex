@@ -31,10 +31,11 @@ interface MockCollection {
 /**
  * Resolve a rule-backed collection's members.
  *
- * Only the leaf shapes the collection form can produce are evaluated, which is
- * enough for the mock UI to behave like the real thing. Anything else matches
- * nothing rather than silently matching everything, so an unsupported rule looks
- * empty instead of looking like the whole library.
+ * Only `libraryId` leaves and the two combinators are evaluated. That is the
+ * limit of what the mock series store can answer: its entries carry a library
+ * but no tags or genres, so a tag rule has nothing to match against. An
+ * unevaluable leaf matches nothing rather than everything, so an unsupported
+ * rule shows up as an empty collection instead of the whole library.
  */
 function resolveRule(condition: Record<string, unknown>): string[] {
   const matches = (series: (typeof mockSeries)[number]): boolean => {
@@ -49,35 +50,21 @@ function resolveRule(condition: Record<string, unknown>): string[] {
       );
     }
 
-    const tag = condition.tag as
-      | { operator?: string; value?: string }
-      | undefined;
-    if (tag?.operator === "is") {
-      return (series.tags ?? []).some(
-        (t) => t.toLowerCase() === (tag.value ?? "").toLowerCase(),
-      );
-    }
-
-    const genre = condition.genre as
-      | { operator?: string; value?: string }
-      | undefined;
-    if (genre?.operator === "is") {
-      return (series.genres ?? []).some(
-        (g) => g.toLowerCase() === (genre.value ?? "").toLowerCase(),
-      );
-    }
-
     const library = condition.libraryId as
       | { operator?: string; value?: string; values?: string[] }
       | undefined;
-    if (library?.operator === "is") {
-      return series.libraryId === library.value;
+    switch (library?.operator) {
+      case "is":
+        return series.libraryId === library.value;
+      case "isNot":
+        return series.libraryId !== library.value;
+      case "in":
+        return (library.values ?? []).includes(series.libraryId);
+      case "notIn":
+        return !(library.values ?? []).includes(series.libraryId);
+      default:
+        return false;
     }
-    if (library?.operator === "in") {
-      return (library.values ?? []).includes(series.libraryId);
-    }
-
-    return false;
   };
 
   return mockSeries.filter(matches).map((s) => s.id);
@@ -146,7 +133,9 @@ const toDto = (collection: MockCollection): CollectionDto => ({
   name: collection.name,
   summary: collection.summary,
   ordered: collection.ordered,
-  condition: collection.condition,
+  // The generated DTO models the rule as an opaque object; the mock holds it as
+  // a plain record so it can actually be evaluated above.
+  condition: collection.condition as CollectionDto["condition"],
   automatic: collection.condition !== null,
   // Null for automatic collections, matching the real API: counting one means
   // resolving its whole rule.

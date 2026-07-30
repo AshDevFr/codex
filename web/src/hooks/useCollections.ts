@@ -8,10 +8,10 @@ import {
 import {
   type Collection,
   type CollectionSeriesSort,
-  type CreateCollectionRequest,
+  type CreateCollectionInput,
   collectionsApi,
   type SortDirection,
-  type UpdateCollectionRequest,
+  type UpdateCollectionInput,
 } from "@/api/collections";
 import type { Series } from "@/types";
 
@@ -91,7 +91,7 @@ function notifyError(title: string) {
 export function useCreateCollection() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (body: CreateCollectionRequest) => collectionsApi.create(body),
+    mutationFn: (body: CreateCollectionInput) => collectionsApi.create(body),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [COLLECTIONS_KEY] });
     },
@@ -102,7 +102,7 @@ export function useCreateCollection() {
 export function useUpdateCollection(id: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (body: UpdateCollectionRequest) =>
+    mutationFn: (body: UpdateCollectionInput) =>
       collectionsApi.update(id, body),
     onSuccess: (data) => {
       queryClient.setQueryData([COLLECTIONS_KEY, id], data);

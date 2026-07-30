@@ -1,5 +1,6 @@
 import type { Series } from "@/types";
 import type { components } from "@/types/api.generated";
+import type { SeriesCondition } from "@/types/filters";
 import { api } from "./client";
 
 export type Collection = components["schemas"]["CollectionDto"];
@@ -7,6 +8,38 @@ export type CreateCollectionRequest =
   components["schemas"]["CreateCollectionRequest"];
 export type UpdateCollectionRequest =
   components["schemas"]["UpdateCollectionRequest"];
+
+/**
+ * The generated schema types model a collection's `condition` as an opaque
+ * object, because the API documents it as a free-form `Object`. Callers work
+ * with the real `SeriesCondition` union instead and the cast happens here, at
+ * the one boundary, rather than in every component.
+ */
+type WireCondition = Record<string, never>;
+
+const encodeCondition = (condition: SeriesCondition | null | undefined) =>
+  condition as unknown as WireCondition | null | undefined;
+
+/** Create payload, with a typed membership rule. */
+export type CreateCollectionInput = Omit<
+  CreateCollectionRequest,
+  "condition"
+> & {
+  condition?: SeriesCondition;
+};
+
+/**
+ * Update payload, with a typed membership rule.
+ *
+ * `condition` is a tri-state: absent leaves the rule alone, `null` clears it
+ * (converting the collection to hand-picked), and a value replaces it.
+ */
+export type UpdateCollectionInput = Omit<
+  UpdateCollectionRequest,
+  "condition"
+> & {
+  condition?: SeriesCondition | null;
+};
 
 type CollectionListResponse = components["schemas"]["CollectionListResponse"];
 
@@ -51,15 +84,25 @@ export const collectionsApi = {
     return response.data;
   },
 
-  create: async (body: CreateCollectionRequest): Promise<Collection> => {
+  create: async (input: CreateCollectionInput): Promise<Collection> => {
+    const body: CreateCollectionRequest = {
+      ...input,
+      condition: encodeCondition(input.condition) ?? undefined,
+    };
     const response = await api.post<Collection>("/collections", body);
     return response.data;
   },
 
   update: async (
     id: string,
-    body: UpdateCollectionRequest,
+    input: UpdateCollectionInput,
   ): Promise<Collection> => {
+    // Spread first so an absent `condition` stays absent on the wire; only
+    // overwrite the key when the caller actually supplied one.
+    const body: UpdateCollectionRequest = { ...input, condition: undefined };
+    if ("condition" in input) {
+      body.condition = encodeCondition(input.condition);
+    }
     const response = await api.patch<Collection>(`/collections/${id}`, body);
     return response.data;
   },

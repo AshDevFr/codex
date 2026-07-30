@@ -92,10 +92,8 @@ export function CollectionFormModal({
           name: trimmed,
           summary: trimmedSummary || null,
           ordered: isAuto ? false : ordered,
-          // Explicit null clears the rule and converts back to manual.
-          condition: isAuto
-            ? (emitted as UpdateCondition)
-            : (null as UpdateCondition),
+          // Explicit null clears the rule and converts back to hand-picked.
+          condition: isAuto ? emitted : null,
         },
         { onSuccess: () => onClose() },
       );
@@ -105,7 +103,7 @@ export function CollectionFormModal({
           name: trimmed,
           summary: trimmedSummary || undefined,
           ordered: isAuto ? false : ordered,
-          condition: isAuto ? (emitted as CreateCondition) : undefined,
+          condition: isAuto ? emitted : undefined,
         },
         {
           onSuccess: (created) => {
@@ -212,13 +210,3 @@ export function CollectionFormModal({
     </Modal>
   );
 }
-
-// The generated request types model `condition` as an opaque object, so the
-// typed condition needs a cast at the boundary. Named aliases keep the two
-// call sites readable.
-type CreateCondition = NonNullable<
-  Parameters<ReturnType<typeof useCreateCollection>["mutate"]>[0]["condition"]
->;
-type UpdateCondition = Parameters<
-  ReturnType<typeof useUpdateCollection>["mutate"]
->[0]["condition"];
