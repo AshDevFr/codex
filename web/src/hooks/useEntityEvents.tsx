@@ -164,6 +164,27 @@ export function useEntityEvents() {
       }
     }, 1500);
 
+    // An automatic collection's membership is a *query*, so it changes whenever
+    // series metadata changes — not only through the collection endpoints. A
+    // tag edit can add or remove a member, and nothing else on this event path
+    // touches the collection keys, so an open or cached collection page would
+    // otherwise keep showing the old members until its 30s staleTime lapsed.
+    //
+    // Throttled like the list invalidations above, and skipped entirely when
+    // the cached collection list has no automatic collections: with only
+    // hand-picked collections, membership cannot change this way and the
+    // invalidation would be pure cost during a scan. When the list is not
+    // cached we cannot tell, so we invalidate rather than risk staleness.
+    const invalidateAutomaticCollections = throttle(() => {
+      const collections = queryClient.getQueryData<{ automatic?: boolean }[]>([
+        "collections",
+      ]);
+      if (collections && !collections.some((c) => c.automatic)) {
+        return;
+      }
+      queryClient.invalidateQueries({ queryKey: ["collections"] });
+    }, 1500);
+
     // Coalesce a burst of `release_announced` events (a poll or a source reset
     // can announce hundreds of releases in one wave) into a single refetch
     // wave — the release-tracking equivalent of the list throttle above.
@@ -191,6 +212,7 @@ export function useEntityEvents() {
     const listInvalidate: ListInvalidators = {
       series: invalidateSeriesList,
       books: invalidateBooksList,
+      automaticCollections: invalidateAutomaticCollections,
       release: (seriesId: string) => {
         pendingReleaseSeriesIds.add(seriesId);
         flushReleaseInvalidations();
@@ -215,6 +237,7 @@ export function useEntityEvents() {
       // Drop any pending trailing refetch so we don't fire after teardown/logout.
       invalidateSeriesList.cancel();
       invalidateBooksList.cancel();
+      invalidateAutomaticCollections.cancel();
       flushReleaseInvalidations.cancel();
     };
   }, [queryClient, isAuthenticated]);
@@ -235,6 +258,11 @@ export function useEntityEvents() {
 type ListInvalidators = {
   series: () => void;
   books: () => void;
+  /**
+   * Refresh collection queries because a rule-backed collection's membership
+   * may have changed. No-op when no automatic collection exists.
+   */
+  automaticCollections: () => void;
   /** Queue a throttled refetch wave for release views touched by a
    * `release_announced` burst (shared inbox/facets + this series' ledger and
    * tracking row). Coalesces a poll/reset storm into ~one wave per interval. */
@@ -284,6 +312,9 @@ function handleEntityEvent(
       // Invalidate the (heavy) series list, throttled so a bulk operation
       // emitting many series events coalesces into a handful of refetches.
       listInvalidate.series();
+
+      // Rule-backed collection membership follows series metadata.
+      listInvalidate.automaticCollections();
 
       // Invalidate specific series if it's an update.
       if (

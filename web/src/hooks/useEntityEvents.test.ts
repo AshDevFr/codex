@@ -716,3 +716,97 @@ describe("formatReleaseLabel", () => {
     expect(out.startsWith("Ch ")).toBe(true);
   });
 });
+
+describe("automatic collection invalidation", () => {
+  let queryClient: QueryClient;
+
+  beforeEach(() => {
+    queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    vi.mocked(useAuthStore).mockReturnValue({
+      isAuthenticated: true,
+    } as ReturnType<typeof useAuthStore>);
+    Storage.prototype.getItem = vi.fn((key) =>
+      key === "jwt_token" ? "test-token" : null,
+    );
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    queryClient.clear();
+  });
+
+  const wrapper = ({ children }: { children: ReactNode }) =>
+    React.createElement(QueryClientProvider, { client: queryClient }, children);
+
+  async function emitSeriesMetadataUpdate() {
+    let capturedCallback: ((event: EntityChangeEvent) => void) | undefined;
+    vi.spyOn(eventsApi.eventsApi, "subscribeToEntityEvents").mockImplementation(
+      (onEvent) => {
+        capturedCallback = onEvent;
+        return vi.fn();
+      },
+    );
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+    renderHook(() => useEntityEvents(), { wrapper });
+    await waitFor(() => expect(capturedCallback).toBeDefined());
+
+    capturedCallback?.({
+      type: "series_metadata_updated",
+      entityType: "series",
+      entityId: "series-1",
+      seriesId: "series-1",
+      timestamp: "2026-01-07T12:00:00Z",
+      userId: undefined,
+    } as EntityChangeEvent);
+
+    return invalidateSpy;
+  }
+
+  // A rule-backed collection's membership follows series metadata, so a tag
+  // edit can add or remove a member with no collection endpoint involved.
+  it("refreshes collections when an automatic collection exists", async () => {
+    queryClient.setQueryData(
+      ["collections"],
+      [
+        { id: "c1", automatic: false },
+        { id: "c2", automatic: true },
+      ],
+    );
+
+    const invalidateSpy = await emitSeriesMetadataUpdate();
+
+    await waitFor(() =>
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: ["collections"],
+      }),
+    );
+  });
+
+  // Hand-picked membership cannot change this way, so the refetch would be pure
+  // cost during a scan.
+  it("skips the refresh when every collection is hand-picked", async () => {
+    queryClient.setQueryData(["collections"], [{ id: "c1", automatic: false }]);
+
+    const invalidateSpy = await emitSeriesMetadataUpdate();
+
+    // Give the throttle a chance to fire before asserting the absence.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(invalidateSpy).not.toHaveBeenCalledWith({
+      queryKey: ["collections"],
+    });
+  });
+
+  // Without the list cached we cannot know, so err toward freshness.
+  it("refreshes when the collection list is not cached", async () => {
+    const invalidateSpy = await emitSeriesMetadataUpdate();
+
+    await waitFor(() =>
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: ["collections"],
+      }),
+    );
+  });
+});
