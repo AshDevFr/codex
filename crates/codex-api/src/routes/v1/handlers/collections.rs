@@ -18,8 +18,8 @@ use crate::{
 use axum::{
     Json,
     extract::{Path, Query, State},
-    http::StatusCode,
-    response::Redirect,
+    http::{StatusCode, header},
+    response::{IntoResponse, Redirect},
 };
 use codex_db::entities::collections;
 use codex_db::repositories::{
@@ -526,7 +526,7 @@ pub async fn get_collection_thumbnail(
     State(state): State<Arc<AuthState>>,
     FlexibleAuthContext(auth): FlexibleAuthContext,
     Path(collection_id): Path<Uuid>,
-) -> Result<Redirect, ApiError> {
+) -> Result<impl IntoResponse, ApiError> {
     auth.require_permission(&Permission::CollectionsRead)?;
     let collection = get_collection_or_404(&state, collection_id).await?;
     let vis = user_visibility(&state, auth.user_id).await?;
@@ -546,11 +546,24 @@ pub async fn get_collection_thumbnail(
     // Cache-bust with the member's update time so browsers refetch the image
     // after its cover is regenerated (the target URL is otherwise cached
     // indefinitely; the card grids bust their own image URLs the same way).
-    Ok(Redirect::temporary(&format!(
-        "/api/v1/series/{}/thumbnail?v={}",
-        first.id,
-        first.updated_at.timestamp_millis()
-    )))
+    //
+    // The redirect itself must not be cached, by anyone. Which series is "first"
+    // depends on the caller: sharing-tag visibility hides members per user, and
+    // an automatic collection's rule can reference the viewer's own ratings or
+    // read state, so two users legitimately resolve to different covers. A
+    // shared cache holding this 307 would serve one user's cover to another.
+    // `private` keeps proxies out; `no-store` forces a fresh resolution so a
+    // rule-backed cover follows the library as it changes. Only the redirect is
+    // uncacheable — the series thumbnail it points at keeps its long-lived
+    // cache, so no image bytes are re-fetched.
+    Ok((
+        [(header::CACHE_CONTROL, "private, no-store")],
+        Redirect::temporary(&format!(
+            "/api/v1/series/{}/thumbnail?v={}",
+            first.id,
+            first.updated_at.timestamp_millis()
+        )),
+    ))
 }
 
 /// List the collections that contain a given series.

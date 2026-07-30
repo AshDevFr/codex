@@ -1060,3 +1060,84 @@ async fn test_rule_outside_the_grammar_is_rejected() {
         "expected a 4xx for an ungrammatical rule, got {status}"
     );
 }
+
+/// The collection thumbnail redirect must never be cached by a shared proxy.
+///
+/// Which series is "first" depends on the caller: sharing-tag visibility hides
+/// members per user, and an automatic collection's rule can reference the
+/// viewer's own ratings or read state. A cached 307 would serve one user's cover
+/// to another.
+#[tokio::test]
+async fn test_collection_thumbnail_redirect_is_not_cacheable() {
+    let (db, _tmp) = setup_test_db().await;
+    let series = make_series_in_library(&db, &["Alpha"]).await;
+    set_tag(&db, series[0].id, "pick").await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let (_id, token) = user_and_token(&db, &state, "admin", true).await;
+
+    // Both kinds, since the per-user variation applies to each.
+    let auto = create_auto_collection(
+        create_test_router(state.clone()).await,
+        &token,
+        "Auto",
+        tag_rule("pick"),
+    )
+    .await;
+
+    let app = create_test_router(state.clone()).await;
+    let req = post_json_request_with_auth(
+        "/api/v1/collections",
+        &serde_json::json!({ "name": "Manual" }),
+        &token,
+    );
+    let (status, manual): (StatusCode, Option<CollectionDto>) = make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::CREATED);
+    let manual = manual.unwrap();
+
+    let app = create_test_router(state.clone()).await;
+    let req = post_json_request_with_auth(
+        &format!("/api/v1/collections/{}/series", manual.id),
+        &serde_json::json!({ "seriesIds": [series[0].id] }),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<CollectionDto>) = make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::OK);
+
+    for (label, id) in [("automatic", auto.id), ("manual", manual.id)] {
+        let app = create_test_router(state.clone()).await;
+        let request = get_request_with_auth(&format!("/api/v1/collections/{id}/thumbnail"), &token);
+        let (status, headers, _body) = make_full_request(app, request).await;
+
+        assert_eq!(
+            status,
+            StatusCode::TEMPORARY_REDIRECT,
+            "{label} collection thumbnail should redirect"
+        );
+
+        let cache_control = headers
+            .get(hyper::header::CACHE_CONTROL)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or_default()
+            .to_string();
+        assert!(
+            cache_control.contains("private"),
+            "{label}: redirect must be marked private, got {cache_control:?}"
+        );
+        assert!(
+            cache_control.contains("no-store"),
+            "{label}: redirect must not be stored, got {cache_control:?}"
+        );
+
+        // The target is still the cache-busted series thumbnail, so image bytes
+        // stay cacheable.
+        let location = headers
+            .get(hyper::header::LOCATION)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or_default();
+        assert!(
+            location.starts_with(&format!("/api/v1/series/{}/thumbnail?v=", series[0].id)),
+            "{label}: unexpected redirect target {location:?}"
+        );
+    }
+}
