@@ -356,6 +356,13 @@ The following paths are exempt from rate limiting:
         v1::handlers::mark_series_as_read,
         v1::handlers::mark_series_as_unread,
 
+        // Read completion history endpoints
+        v1::handlers::get_book_read_history,
+        v1::handlers::clear_book_read_history,
+        v1::handlers::get_series_read_history,
+        v1::handlers::clear_series_read_history,
+        v1::handlers::clear_my_read_history,
+
         // Want to read (per-user queue) endpoints
         v1::handlers::list_want_to_read,
         v1::handlers::add_want_to_read,
@@ -969,6 +976,8 @@ The following paths are exempt from rate limiting:
             v1::dto::ReadProgressResponse,
             v1::dto::ReadProgressListResponse,
             v1::dto::MarkReadResponse,
+            v1::dto::ReadCompletionDto,
+            v1::dto::ReadHistoryResponse,
 
             // Want to read (per-user queue) DTOs
             v1::dto::WantToReadEntryDto,

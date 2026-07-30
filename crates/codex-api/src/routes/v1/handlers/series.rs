@@ -454,6 +454,26 @@ async fn series_to_full_dtos_batched(
         .into_iter()
         .collect();
 
+    // Per-series completion history. Derived from each series' books, so this is
+    // one query per series rather than one for the page; the detail endpoint
+    // fetches a single series, and the list endpoint only reaches here with
+    // `full=true`.
+    let mut series_histories: HashMap<
+        Uuid,
+        codex_db::repositories::read_completions::SeriesHistory,
+    > = HashMap::new();
+    if let Some(uid) = user_id {
+        for id in &series_ids {
+            let history =
+                codex_db::repositories::ReadCompletionRepository::series_history(db, uid, *id)
+                    .await
+                    .map_err(|e| {
+                        ApiError::Internal(format!("Failed to load series history: {}", e))
+                    })?;
+            series_histories.insert(*id, history);
+        }
+    }
+
     // Per-user want-to-read membership for the whole page in one query.
     let want_to_read_ids = match user_id {
         Some(uid) => WantToReadRepository::series_ids_in_queue(db, uid, &series_ids)
@@ -717,8 +737,12 @@ async fn series_to_full_dtos_batched(
             external_ids: series_external_ids,
         });
 
+        let history = series_histories.get(&series.id);
+
         results.push(FullSeriesResponse {
             id: series.id,
+            read_count: history.map_or(0, |h| h.read_count),
+            last_completed_at: history.and_then(|h| h.last_completed_at),
             library_id: series.library_id,
             library_name,
             book_count,

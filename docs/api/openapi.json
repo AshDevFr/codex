@@ -5306,6 +5306,96 @@
         ]
       }
     },
+    "/api/v1/books/{book_id}/read-history": {
+      "get": {
+        "tags": [
+          "Reading Progress"
+        ],
+        "summary": "Get a book's completion history for the current user",
+        "operationId": "get_book_read_history",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Completion history",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadHistoryResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Book not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Reading Progress"
+        ],
+        "summary": "Clear a book's completion history for the current user",
+        "description": "Does not touch current reading progress.",
+        "operationId": "clear_book_read_history",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "History cleared"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Book not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/books/{book_id}/readlists": {
       "get": {
         "tags": [
@@ -14201,6 +14291,97 @@
         ]
       }
     },
+    "/api/v1/series/{series_id}/read-history": {
+      "get": {
+        "tags": [
+          "Reading Progress"
+        ],
+        "summary": "Get a series' completion history for the current user",
+        "description": "The series counts as read once every one of its books has been read, so\n`readCount` is the minimum across them and each entry spans from the earliest\nbook start to the latest book finish of that pass.",
+        "operationId": "get_series_read_history",
+        "parameters": [
+          {
+            "name": "series_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Completion history",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadHistoryResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Reading Progress"
+        ],
+        "summary": "Clear the completion history of every book in a series, for the current user",
+        "description": "Does not touch current reading progress.",
+        "operationId": "clear_series_read_history",
+        "parameters": [
+          {
+            "name": "series_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "History cleared"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/series/{series_id}/releases": {
       "get": {
         "tags": [
@@ -16870,6 +17051,32 @@
         "security": [
           {
             "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/user/read-history": {
+      "delete": {
+        "tags": [
+          "Reading Progress"
+        ],
+        "summary": "Clear the current user's entire completion history",
+        "description": "Does not touch current reading progress.",
+        "operationId": "clear_my_read_history",
+        "responses": {
+          "204": {
+            "description": "History cleared"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
           },
           {
             "api_key": []
@@ -29122,6 +29329,7 @@
           "pageCount",
           "deleted",
           "analyzed",
+          "readCount",
           "metadata",
           "genres",
           "tags",
@@ -29189,6 +29397,15 @@
             ],
             "description": "KOReader-compatible partial MD5 hash for sync"
           },
+          "lastCompletedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When the requesting user most recently completed this book, or null if\nnever.",
+            "example": "2024-01-14T20:05:00Z"
+          },
           "libraryId": {
             "type": "string",
             "format": "uuid",
@@ -29223,6 +29440,12 @@
             "type": "string",
             "description": "Filesystem path to the book file",
             "example": "/media/comics/Batman/Batman - Year One 001.cbz"
+          },
+          "readCount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "How many times the requesting user has completed this book.\n\nIndependent of `read_progress`: marking the book unread resets progress\nbut leaves this alone, which is what makes a re-read countable.",
+            "example": 2
           },
           "readProgress": {
             "oneOf": [
@@ -29483,6 +29706,7 @@
         "description": "Full series response including series data and complete metadata",
         "required": [
           "id",
+          "readCount",
           "libraryId",
           "libraryName",
           "bookCount",
@@ -29559,6 +29783,15 @@
             "description": "Series unique identifier",
             "example": "550e8400-e29b-41d4-a716-446655440002"
           },
+          "lastCompletedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When the requesting user most recently completed the whole series, or\nnull if never.",
+            "example": "2024-01-14T20:05:00Z"
+          },
           "libraryId": {
             "type": "string",
             "format": "uuid",
@@ -29599,6 +29832,12 @@
             ],
             "description": "Filesystem path to the series directory",
             "example": "/media/comics/Batman - Year One"
+          },
+          "readCount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "How many times the requesting user has completed the whole series.\n\nThe minimum completion count across its books: the series counts as read\nN times only once every volume has been read N times. A series with no\nbooks reports 0. Adding a new volume to a finished series therefore drops\nthis to 0, which is correct; the per-pass history remains visible.",
+            "example": 1
           },
           "selectedCoverSource": {
             "type": [
@@ -37763,6 +38002,60 @@
             "description": "Number of stale/stuck tasks",
             "example": 0,
             "minimum": 0
+          }
+        }
+      },
+      "ReadCompletionDto": {
+        "type": "object",
+        "description": "One completed read-through of a book.",
+        "required": [
+          "startedAt",
+          "completedAt"
+        ],
+        "properties": {
+          "completedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When this pass finished.",
+            "example": "2024-01-14T20:05:00Z"
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When this pass started.",
+            "example": "2024-01-10T14:30:00Z"
+          }
+        }
+      },
+      "ReadHistoryResponse": {
+        "type": "object",
+        "description": "A book's or series' completion history for the requesting user.\n\nIndependent of current reading progress: clearing history leaves progress\nalone, and marking something unread leaves history alone.",
+        "required": [
+          "readCount",
+          "entries"
+        ],
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadCompletionDto"
+            },
+            "description": "The individual completions, newest first."
+          },
+          "lastCompletedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When it was most recently completed, or null if never.",
+            "example": "2024-01-14T20:05:00Z"
+          },
+          "readCount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "How many times this has been completed.\n\nFor a series this is the *minimum* across its books: the series has been\nread N times only once every volume has. A series with no books reports 0.",
+            "example": 2
           }
         }
       },

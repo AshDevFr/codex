@@ -1,5 +1,6 @@
 use super::super::dto::{
-    MarkReadResponse, ReadProgressListResponse, ReadProgressResponse, UpdateProgressRequest,
+    MarkReadResponse, ReadCompletionDto, ReadHistoryResponse, ReadProgressListResponse,
+    ReadProgressResponse, UpdateProgressRequest,
 };
 use crate::{AppState, error::ApiError, extractors::AuthContext, permissions::Permission};
 use axum::{
@@ -8,7 +9,9 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use codex_db::repositories::{BookRepository, ReadProgressRepository};
+use codex_db::repositories::{
+    BookRepository, ReadCompletionRepository, ReadProgressRepository, SeriesRepository,
+};
 use std::sync::Arc;
 use utoipa::OpenApi;
 use uuid::Uuid;
@@ -24,12 +27,19 @@ use uuid::Uuid;
         mark_book_as_unread,
         get_progression,
         put_progression,
+        get_book_read_history,
+        clear_book_read_history,
+        get_series_read_history,
+        clear_series_read_history,
+        clear_my_read_history,
     ),
     components(schemas(
         UpdateProgressRequest,
         ReadProgressResponse,
         ReadProgressListResponse,
         MarkReadResponse,
+        ReadCompletionDto,
+        ReadHistoryResponse,
     )),
     tags(
         (name = "Reading Progress", description = "Reading progress tracking endpoints")
@@ -448,6 +458,207 @@ pub async fn put_progression(
     )
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to update progression: {}", e)))?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+// ============================================================================
+// Read completion history
+//
+// The history is a separate record from current progress: marking something
+// unread resets progress and leaves history intact, and clearing history leaves
+// progress intact. Every endpoint here acts on the authenticated user only;
+// there is no way to read or clear anyone else's history.
+// ============================================================================
+
+/// Get a book's completion history for the current user
+#[utoipa::path(
+    get,
+    path = "/api/v1/books/{book_id}/read-history",
+    responses(
+        (status = 200, description = "Completion history", body = ReadHistoryResponse),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Book not found"),
+    ),
+    security(
+        ("bearer_auth" = []),
+        ("api_key" = [])
+    ),
+    tag = "Reading Progress"
+)]
+pub async fn get_book_read_history(
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+    Path(book_id): Path<Uuid>,
+) -> Result<Json<ReadHistoryResponse>, ApiError> {
+    auth.require_permission(&Permission::BooksRead)?;
+
+    BookRepository::get_by_id(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get book: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
+
+    let entries = ReadCompletionRepository::list_for_book(&state.db, auth.user_id, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get read history: {}", e)))?;
+
+    // Newest first from the query, so the first entry is the latest completion.
+    let last_completed_at = entries.first().map(|e| e.completed_at);
+    Ok(Json(ReadHistoryResponse {
+        read_count: entries.len() as i64,
+        last_completed_at,
+        entries: entries.into_iter().map(ReadCompletionDto::from).collect(),
+    }))
+}
+
+/// Clear a book's completion history for the current user
+///
+/// Does not touch current reading progress.
+#[utoipa::path(
+    delete,
+    path = "/api/v1/books/{book_id}/read-history",
+    responses(
+        (status = 204, description = "History cleared"),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Book not found"),
+    ),
+    security(
+        ("bearer_auth" = []),
+        ("api_key" = [])
+    ),
+    tag = "Reading Progress"
+)]
+pub async fn clear_book_read_history(
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+    Path(book_id): Path<Uuid>,
+) -> Result<StatusCode, ApiError> {
+    auth.require_permission(&Permission::BooksRead)?;
+
+    BookRepository::get_by_id(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get book: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
+
+    ReadCompletionRepository::delete_for_book(&state.db, auth.user_id, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to clear read history: {}", e)))?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Get a series' completion history for the current user
+///
+/// The series counts as read once every one of its books has been read, so
+/// `readCount` is the minimum across them and each entry spans from the earliest
+/// book start to the latest book finish of that pass.
+#[utoipa::path(
+    get,
+    path = "/api/v1/series/{series_id}/read-history",
+    responses(
+        (status = 200, description = "Completion history", body = ReadHistoryResponse),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Series not found"),
+    ),
+    security(
+        ("bearer_auth" = []),
+        ("api_key" = [])
+    ),
+    tag = "Reading Progress"
+)]
+pub async fn get_series_read_history(
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+    Path(series_id): Path<Uuid>,
+) -> Result<Json<ReadHistoryResponse>, ApiError> {
+    auth.require_permission(&Permission::SeriesRead)?;
+
+    SeriesRepository::get_by_id(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get series: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
+
+    let history = ReadCompletionRepository::series_history(&state.db, auth.user_id, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get read history: {}", e)))?;
+
+    Ok(Json(ReadHistoryResponse {
+        read_count: history.read_count,
+        last_completed_at: history.last_completed_at,
+        entries: history
+            .passes
+            .into_iter()
+            .map(|(started_at, completed_at)| ReadCompletionDto {
+                started_at,
+                completed_at,
+            })
+            .collect(),
+    }))
+}
+
+/// Clear the completion history of every book in a series, for the current user
+///
+/// Does not touch current reading progress.
+#[utoipa::path(
+    delete,
+    path = "/api/v1/series/{series_id}/read-history",
+    responses(
+        (status = 204, description = "History cleared"),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Series not found"),
+    ),
+    security(
+        ("bearer_auth" = []),
+        ("api_key" = [])
+    ),
+    tag = "Reading Progress"
+)]
+pub async fn clear_series_read_history(
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+    Path(series_id): Path<Uuid>,
+) -> Result<StatusCode, ApiError> {
+    auth.require_permission(&Permission::SeriesRead)?;
+
+    SeriesRepository::get_by_id(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get series: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
+
+    ReadCompletionRepository::delete_for_series(&state.db, auth.user_id, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to clear read history: {}", e)))?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Clear the current user's entire completion history
+///
+/// Does not touch current reading progress.
+#[utoipa::path(
+    delete,
+    path = "/api/v1/user/read-history",
+    responses(
+        (status = 204, description = "History cleared"),
+        (status = 401, description = "Unauthorized"),
+    ),
+    security(
+        ("bearer_auth" = []),
+        ("api_key" = [])
+    ),
+    tag = "Reading Progress"
+)]
+pub async fn clear_my_read_history(
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+) -> Result<StatusCode, ApiError> {
+    ReadCompletionRepository::delete_all_for_user(&state.db, auth.user_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to clear read history: {}", e)))?;
 
     Ok(StatusCode::NO_CONTENT)
 }

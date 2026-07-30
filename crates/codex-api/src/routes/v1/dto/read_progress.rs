@@ -83,6 +83,50 @@ impl From<codex_db::entities::read_progress::Model> for ReadProgressResponse {
     }
 }
 
+/// One completed read-through of a book.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadCompletionDto {
+    /// When this pass started.
+    #[schema(example = "2024-01-10T14:30:00Z")]
+    pub started_at: DateTime<Utc>,
+
+    /// When this pass finished.
+    #[schema(example = "2024-01-14T20:05:00Z")]
+    pub completed_at: DateTime<Utc>,
+}
+
+impl From<codex_db::entities::read_completions::Model> for ReadCompletionDto {
+    fn from(model: codex_db::entities::read_completions::Model) -> Self {
+        Self {
+            started_at: model.started_at,
+            completed_at: model.completed_at,
+        }
+    }
+}
+
+/// A book's or series' completion history for the requesting user.
+///
+/// Independent of current reading progress: clearing history leaves progress
+/// alone, and marking something unread leaves history alone.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadHistoryResponse {
+    /// How many times this has been completed.
+    ///
+    /// For a series this is the *minimum* across its books: the series has been
+    /// read N times only once every volume has. A series with no books reports 0.
+    #[schema(example = 2)]
+    pub read_count: i64,
+
+    /// When it was most recently completed, or null if never.
+    #[schema(example = "2024-01-14T20:05:00Z")]
+    pub last_completed_at: Option<DateTime<Utc>>,
+
+    /// The individual completions, newest first.
+    pub entries: Vec<ReadCompletionDto>,
+}
+
 /// Response containing a list of reading progress records
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]

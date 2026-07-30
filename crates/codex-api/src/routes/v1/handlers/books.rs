@@ -363,6 +363,20 @@ pub async fn books_to_full_dtos_batched(
             .await
             .map_err(|e| ApiError::Internal(format!("Failed to load want-to-read: {}", e)))?;
 
+    // Completion history for the whole page in two queries rather than two per
+    // book. Books with no completions are absent from both maps, so a missing
+    // key means zero.
+    let completion_counts =
+        codex_db::repositories::ReadCompletionRepository::counts_for_books(db, user_id, &book_ids)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to load completion counts: {}", e)))?;
+    let last_completions =
+        codex_db::repositories::ReadCompletionRepository::last_completed_for_books(
+            db, user_id, &book_ids,
+        )
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to load completion dates: {}", e)))?;
+
     // Fetch all related data in parallel, bounded so a single request cannot
     // hold one pool connection per query and exhaust the pool.
     let limiter = crate::db_batch::fan_out_limiter(crate::db_batch::configured_fan_out());
@@ -706,6 +720,9 @@ pub async fn books_to_full_dtos_batched(
             })
             .unwrap_or_default();
 
+        let read_count = completion_counts.get(&book_id).copied().unwrap_or(0);
+        let last_completed_at = last_completions.get(&book_id).copied();
+
         results.push(FullBookResponse {
             id: book.id,
             library_id: book.library_id,
@@ -726,6 +743,8 @@ pub async fn books_to_full_dtos_batched(
             analysis_error: book.analysis_error,
             reading_direction,
             read_progress,
+            read_count,
+            last_completed_at,
             metadata: full_metadata,
             genres: book_genres,
             tags: book_tags,

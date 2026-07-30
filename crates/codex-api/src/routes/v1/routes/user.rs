@@ -18,6 +18,7 @@ use std::sync::Arc;
 /// - Profile: /user (GET)
 /// - Preferences: /user/preferences
 /// - Ratings: /user/ratings
+/// - Read history: /user/read-history (DELETE)
 /// - Sharing tags: /user/sharing-tags
 /// - API keys: /api-keys
 /// - Exports: /user/exports/series
@@ -27,6 +28,12 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
         .route("/user", get(handlers::get_current_user))
         // User ratings routes
         .route("/user/ratings", get(handlers::list_user_ratings))
+        // Account-wide completion-history reset. Spelled `/user/...` to match
+        // the rest of the native API; `/users/me` is the Komga layer's shape.
+        .route(
+            "/user/read-history",
+            delete(handlers::clear_my_read_history),
+        )
         // Current user's sharing tags route
         .route(
             "/user/sharing-tags",

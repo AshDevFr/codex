@@ -39,6 +39,10 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
         )
         .route("/series/{series_id}", get(handlers::get_series))
         .route("/series/{series_id}", patch(handlers::patch_series))
+        .route(
+            "/series/{series_id}/read-history",
+            get(handlers::get_series_read_history).delete(handlers::clear_series_read_history),
+        )
         .route("/series/{series_id}/books", get(handlers::get_series_books))
         // Series collection routes
         .route(

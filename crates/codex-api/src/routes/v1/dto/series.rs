@@ -1199,6 +1199,21 @@ pub struct FullSeriesResponse {
     #[schema(example = "550e8400-e29b-41d4-a716-446655440002")]
     pub id: uuid::Uuid,
 
+    /// How many times the requesting user has completed the whole series.
+    ///
+    /// The minimum completion count across its books: the series counts as read
+    /// N times only once every volume has been read N times. A series with no
+    /// books reports 0. Adding a new volume to a finished series therefore drops
+    /// this to 0, which is correct; the per-pass history remains visible.
+    #[schema(example = 1)]
+    pub read_count: i64,
+
+    /// When the requesting user most recently completed the whole series, or
+    /// null if never.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "2024-01-14T20:05:00Z")]
+    pub last_completed_at: Option<chrono::DateTime<chrono::Utc>>,
+
     /// Library unique identifier
     #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
     pub library_id: uuid::Uuid,

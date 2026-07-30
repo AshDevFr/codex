@@ -2114,6 +2114,19 @@ pub struct FullBookResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub read_progress: Option<ReadProgressResponse>,
 
+    /// How many times the requesting user has completed this book.
+    ///
+    /// Independent of `read_progress`: marking the book unread resets progress
+    /// but leaves this alone, which is what makes a re-read countable.
+    #[schema(example = 2)]
+    pub read_count: i64,
+
+    /// When the requesting user most recently completed this book, or null if
+    /// never.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "2024-01-14T20:05:00Z")]
+    pub last_completed_at: Option<DateTime<Utc>>,
+
     /// Complete book metadata with lock states
     pub metadata: BookFullMetadata,
 

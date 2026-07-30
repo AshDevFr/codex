@@ -163,6 +163,11 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/books/{book_id}/progression",
             get(handlers::get_progression).put(handlers::put_progression),
         )
+        // Completion history, alongside the progress routes it complements.
+        .route(
+            "/books/{book_id}/read-history",
+            get(handlers::get_book_read_history).delete(handlers::clear_book_read_history),
+        )
         .route("/progress", get(handlers::get_user_progress))
         // Mark as read/unread routes
         .route("/books/{book_id}/read", post(handlers::mark_book_as_read))

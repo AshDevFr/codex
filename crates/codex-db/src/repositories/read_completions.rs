@@ -22,6 +22,20 @@ use uuid::Uuid;
 
 use crate::entities::{books, read_completions, read_completions::Entity as ReadCompletions};
 
+/// One completed pass: `(started_at, completed_at)`.
+pub type CompletionSpan = (DateTime<Utc>, DateTime<Utc>);
+
+/// A series' completion history, derived from its books.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SeriesHistory {
+    /// Minimum completion count across the series' books.
+    pub read_count: i64,
+    /// When the series was last completed as a whole.
+    pub last_completed_at: Option<DateTime<Utc>>,
+    /// `(started_at, completed_at)` per pass, newest first.
+    pub passes: Vec<CompletionSpan>,
+}
+
 pub struct ReadCompletionRepository;
 
 impl ReadCompletionRepository {
@@ -149,6 +163,118 @@ impl ReadCompletionRepository {
             .get(&book_id)
             .copied()
             .unwrap_or(0))
+    }
+
+    /// Most recent completion date per book.
+    ///
+    /// Books with no completions are absent, same convention as
+    /// [`Self::counts_for_books`].
+    pub async fn last_completed_for_books<C: ConnectionTrait>(
+        db: &C,
+        user_id: Uuid,
+        book_ids: &[Uuid],
+    ) -> Result<HashMap<Uuid, DateTime<Utc>>> {
+        if book_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let rows: Vec<(Uuid, DateTime<Utc>)> = ReadCompletions::find()
+            .select_only()
+            .column(read_completions::Column::BookId)
+            .column_as(
+                read_completions::Column::CompletedAt.max(),
+                "last_completed_at",
+            )
+            .filter(read_completions::Column::UserId.eq(user_id))
+            .filter(read_completions::Column::BookId.is_in(book_ids.to_vec()))
+            .group_by(read_completions::Column::BookId)
+            .into_tuple()
+            .all(db)
+            .await?;
+
+        Ok(rows.into_iter().collect())
+    }
+
+    /// How many times a whole series has been read, and the span of each pass.
+    ///
+    /// A series counts as read N times only once *every* book in it has been read
+    /// N times, so the count is the minimum across its books. A series with no
+    /// books, or with any book never completed, reports 0. Soft-deleted books are
+    /// excluded: a file disappearing from disk should not make a finished series
+    /// look unfinished forever.
+    ///
+    /// Pass N of the series runs from the earliest of its books' Nth start to the
+    /// latest of their Nth finish, so the returned spans describe when the series
+    /// as a whole was being read. Entries come back newest first, matching
+    /// [`Self::list_for_book`].
+    ///
+    /// The completions are fetched with a single ordered query and folded in
+    /// memory. This is one series' worth of rows rather than a paginated result
+    /// set, so it does not conflict with the rule that pagination sorts in the
+    /// database.
+    pub async fn series_history<C: ConnectionTrait>(
+        db: &C,
+        user_id: Uuid,
+        series_id: Uuid,
+    ) -> Result<SeriesHistory> {
+        let book_ids: Vec<Uuid> = books::Entity::find()
+            .select_only()
+            .column(books::Column::Id)
+            .filter(books::Column::SeriesId.eq(series_id))
+            .filter(books::Column::Deleted.eq(false))
+            .into_tuple()
+            .all(db)
+            .await?;
+
+        if book_ids.is_empty() {
+            return Ok(SeriesHistory::default());
+        }
+
+        // Oldest-first per book, so index N is that book's Nth pass.
+        let mut by_book: HashMap<Uuid, Vec<CompletionSpan>> = HashMap::new();
+        let rows = ReadCompletions::find()
+            .filter(read_completions::Column::UserId.eq(user_id))
+            .filter(read_completions::Column::BookId.is_in(book_ids.clone()))
+            .order_by_asc(read_completions::Column::CompletedAt)
+            .order_by(read_completions::Column::Id, Order::Asc)
+            .all(db)
+            .await?;
+        for row in rows {
+            by_book
+                .entry(row.book_id)
+                .or_default()
+                .push((row.started_at, row.completed_at));
+        }
+
+        // A book with no completions means the series has never been finished.
+        let read_count = book_ids
+            .iter()
+            .map(|id| by_book.get(id).map_or(0, |passes| passes.len()))
+            .min()
+            .unwrap_or(0);
+
+        let mut passes = Vec::with_capacity(read_count);
+        for pass in 0..read_count {
+            let nth: Vec<CompletionSpan> = book_ids
+                .iter()
+                .filter_map(|id| by_book.get(id).and_then(|list| list.get(pass)).copied())
+                .collect();
+            let started_at = nth.iter().map(|(s, _)| *s).min();
+            let completed_at = nth.iter().map(|(_, c)| *c).max();
+            if let (Some(started_at), Some(completed_at)) = (started_at, completed_at) {
+                passes.push((started_at, completed_at));
+            }
+        }
+
+        let last_completed_at = passes.last().map(|(_, c)| *c);
+        // Newest first.
+        passes.reverse();
+
+        Ok(SeriesHistory {
+            read_count: read_count as i64,
+            last_completed_at,
+            passes,
+        })
     }
 
     /// Clear one book's history for one user. Returns the number of rows removed.

@@ -1712,6 +1712,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/books/{book_id}/read-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a book's completion history for the current user */
+        get: operations["get_book_read_history"];
+        put?: never;
+        post?: never;
+        /**
+         * Clear a book's completion history for the current user
+         * @description Does not touch current reading progress.
+         */
+        delete: operations["clear_book_read_history"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/books/{book_id}/readlists": {
         parameters: {
             query?: never;
@@ -4627,6 +4648,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/series/{series_id}/read-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a series' completion history for the current user
+         * @description The series counts as read once every one of its books has been read, so
+         *     `readCount` is the minimum across them and each entry spans from the earliest
+         *     book start to the latest book finish of that pass.
+         */
+        get: operations["get_series_read_history"];
+        put?: never;
+        post?: never;
+        /**
+         * Clear the completion history of every book in a series, for the current user
+         * @description Does not touch current reading progress.
+         */
+        delete: operations["clear_series_read_history"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/series/{series_id}/releases": {
         parameters: {
             query?: never;
@@ -5618,6 +5665,26 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/user/read-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Clear the current user's entire completion history
+         * @description Does not touch current reading progress.
+         */
+        delete: operations["clear_my_read_history"];
         options?: never;
         head?: never;
         patch?: never;
@@ -11816,6 +11883,13 @@ export interface components {
             /** @description KOReader-compatible partial MD5 hash for sync */
             koreaderHash?: string | null;
             /**
+             * Format: date-time
+             * @description When the requesting user most recently completed this book, or null if
+             *     never.
+             * @example 2024-01-14T20:05:00Z
+             */
+            lastCompletedAt?: string | null;
+            /**
              * Format: uuid
              * @description Library this book belongs to
              * @example 550e8400-e29b-41d4-a716-446655440000
@@ -11845,6 +11919,15 @@ export interface components {
              * @example /media/comics/Batman/Batman - Year One 001.cbz
              */
             path: string;
+            /**
+             * Format: int64
+             * @description How many times the requesting user has completed this book.
+             *
+             *     Independent of `read_progress`: marking the book unread resets progress
+             *     but leaves this alone, which is what makes a re-read countable.
+             * @example 2
+             */
+            readCount: number;
             readProgress?: null | components["schemas"]["ReadProgressResponse"];
             /**
              * @description Effective reading direction (from series metadata, or library default)
@@ -12022,6 +12105,13 @@ export interface components {
              */
             id: string;
             /**
+             * Format: date-time
+             * @description When the requesting user most recently completed the whole series, or
+             *     null if never.
+             * @example 2024-01-14T20:05:00Z
+             */
+            lastCompletedAt?: string | null;
+            /**
              * Format: uuid
              * @description Library unique identifier
              * @example 550e8400-e29b-41d4-a716-446655440000
@@ -12053,6 +12143,17 @@ export interface components {
              * @example /media/comics/Batman - Year One
              */
             path?: string | null;
+            /**
+             * Format: int64
+             * @description How many times the requesting user has completed the whole series.
+             *
+             *     The minimum completion count across its books: the series counts as read
+             *     N times only once every volume has been read N times. A series with no
+             *     books reports 0. Adding a new volume to a finished series therefore drops
+             *     this to 0, which is correct; the per-pass history remains visible.
+             * @example 1
+             */
+            readCount: number;
             /**
              * @description Selected cover source (e.g., "first_book", "custom")
              * @example first_book
@@ -16578,6 +16679,46 @@ export interface components {
              * @example 0
              */
             staleCount: number;
+        };
+        /** @description One completed read-through of a book. */
+        ReadCompletionDto: {
+            /**
+             * Format: date-time
+             * @description When this pass finished.
+             * @example 2024-01-14T20:05:00Z
+             */
+            completedAt: string;
+            /**
+             * Format: date-time
+             * @description When this pass started.
+             * @example 2024-01-10T14:30:00Z
+             */
+            startedAt: string;
+        };
+        /**
+         * @description A book's or series' completion history for the requesting user.
+         *
+         *     Independent of current reading progress: clearing history leaves progress
+         *     alone, and marking something unread leaves history alone.
+         */
+        ReadHistoryResponse: {
+            /** @description The individual completions, newest first. */
+            entries: components["schemas"]["ReadCompletionDto"][];
+            /**
+             * Format: date-time
+             * @description When it was most recently completed, or null if never.
+             * @example 2024-01-14T20:05:00Z
+             */
+            lastCompletedAt?: string | null;
+            /**
+             * Format: int64
+             * @description How many times this has been completed.
+             *
+             *     For a series this is the *minimum* across its books: the series has been
+             *     read N times only once every volume has. A series with no books reports 0.
+             * @example 2
+             */
+            readCount: number;
         };
         /** @description A read list. */
         ReadListDto: {
@@ -24940,6 +25081,90 @@ export interface operations {
             };
         };
     };
+    get_book_read_history: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Completion history */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadHistoryResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Book not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    clear_book_read_history: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description History cleared */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Book not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     get_book_readlists: {
         parameters: {
             query?: never;
@@ -31558,6 +31783,90 @@ export interface operations {
             };
         };
     };
+    get_series_read_history: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                series_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Completion history */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadHistoryResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    clear_series_read_history: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                series_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description History cleared */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     list_series_releases: {
         parameters: {
             query?: {
@@ -33700,6 +34009,31 @@ export interface operations {
             };
             /** @description Forbidden */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    clear_my_read_history: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description History cleared */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
