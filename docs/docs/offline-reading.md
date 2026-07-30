@@ -62,6 +62,8 @@ Page turns and "mark as read" actions made offline are not lost. Codex queues th
 
 You do not have to do anything special: just keep reading. The outbox is invisible unless you go looking for it.
 
+A book you finish offline is recorded in your [read history](./reading-progress.md) once the outbox drains, the same as one finished online.
+
 ## How durable are these downloads?
 
 It depends on your browser:

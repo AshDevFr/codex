@@ -16,6 +16,8 @@ Codex gives you three ways to group and queue what you read. They look similar b
 A personal on-deck queue. Flag any series or book you intend to read, and it shows up on the **Want to Read** page in the sidebar. The queue is private to you: other users never see it.
 
 - **Add / remove** with the bookmark button on a series or book detail page. Filled = in your queue.
+
+Finishing something does not remove it from the queue automatically, and it does not affect your [read history](./reading-progress.md), which is tracked separately.
 - **Sort** the queue newest-first or oldest-first from the page header.
 
 There's no manual reordering, no shared state, and no permission to configure: it's yours, and every signed-in user has one.
