@@ -177,6 +177,13 @@ Shared groupings of series. Read-only over the Komga API; create/manage them in 
 
 In addition to real collections, a virtual **Want to Read** collection (ID `want-to-read`) is always listed first. It is personal to the authenticated user and contains the series entries of their [want-to-read queue](./collections-readlists.md), in queue order, so you can browse and start queued series directly from a Komga app.
 
+[Automatic collections](./collections-readlists.md#hand-picked-or-automatic) are exposed as ordinary collections: same shape, same endpoints, nothing for a client to special-case. Their members are resolved from the collection's rule at the moment you ask, so the `seriesIds` on the DTO and the `/series` listing are always current without the app doing anything.
+
+Two consequences worth knowing if you are writing a client:
+
+- Automatic collections are **absent from `/series/{id}/collections`**. That endpoint reports hand-picked membership only, so a series matched by a rule will not list the rule's collection there.
+- A collection whose rule uses the viewer's own ratings or reading progress returns **different members per authenticated user**. This is intended; it is how a personal favourites collection works.
+
 ### Read Lists
 
 Shared, ordered groupings of books across series. Read-only over the Komga API.

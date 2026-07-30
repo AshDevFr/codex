@@ -58,6 +58,16 @@ Filter books by their type classification:
 
 Filter by genres and tags extracted from your media metadata (ComicInfo.xml, EPUB metadata).
 
+#### Libraries
+
+Appears only when you are browsing **All Libraries**. Include or exclude any
+number of libraries at once. On a single-library page the filter is hidden,
+because the page is already scoped to that library and picking a different one
+could only return nothing.
+
+A series belongs to exactly one library, so this group has no All/Any toggle:
+including several libraries always means "any of these".
+
 ### Filter Modes
 
 Each filter group supports two modes:
@@ -105,9 +115,11 @@ the global search bar dropdown).
 The page offers:
 
 - A **text query box** with debounced search.
-- A **filter builder** that exposes the full condition grammar — including
+- A **filter builder** that exposes the full condition grammar, including
   nested `allOf` / `anyOf` groups and operators not available on the chip-based
-  list-page panels.
+  list-page panels. Rating filters (**My rating**, **Community rating**) live
+  here only; they take a 0-10 value with one decimal, and are stored on the
+  1-100 scale described under [Rating scale](#rating-scale).
 - A **sort selector**. When a text query is present, a "Relevance (best match)"
   option appears at the top; clearing the selector returns to the default sort.
 - **Series / Books tabs** with live counts. Both tabs fetch in parallel so the
@@ -277,7 +289,7 @@ Used by timestamp fields (`dateAdded`). Values are ISO-8601 UTC strings.
 
 | Field | Description | Operators |
 |-------|-------------|-----------|
-| `libraryId` | Library UUID | `is`, `isNot` |
+| `libraryId` | Library UUID | `is`, `isNot`, `in`, `notIn` |
 | `genre` | Genre name | `is`, `isNot` |
 | `tag` | Tag name | `is`, `isNot` |
 | `sharingTag` | Sharing tag name (admin) | `is`, `isNot` |
@@ -290,6 +302,8 @@ Used by timestamp fields (`dateAdded`). Values are ISO-8601 UTC strings.
 | `completion` | Series is complete | `isTrue`, `isFalse` |
 | `hasExternalSourceId` | Linked to an external source | `isTrue`, `isFalse` |
 | `hasUserRating` | User has rated this series | `isTrue`, `isFalse` |
+| `userRating` | Your own rating, 1-100 (see [Rating scale](#rating-scale)) | All [number operators](#number-operators) |
+| `communityRating` | Average rating across all users, 1-100 | All [number operators](#number-operators) |
 | `isTracked` | Release tracking enabled | `isTrue`, `isFalse` |
 | `year` | Publication year | All [number operators](#number-operators) |
 | `author` | Author name (matches any role) | `is`, `isNot`, `contains`, `beginsWith` |
@@ -299,8 +313,8 @@ Used by timestamp fields (`dateAdded`). Values are ISO-8601 UTC strings.
 
 | Field | Description | Operators |
 |-------|-------------|-----------|
-| `libraryId` | Library UUID | `is`, `isNot` |
-| `seriesId` | Series UUID | `is`, `isNot` |
+| `libraryId` | Library UUID | `is`, `isNot`, `in`, `notIn` |
+| `seriesId` | Series UUID | `is`, `isNot`, `in`, `notIn` |
 | `genre` | Genre name (inherited from series) | `is`, `isNot` |
 | `tag` | Tag name (inherited from series) | `is`, `isNot` |
 | `title` | Book title | `is`, `isNot`, `contains` |
@@ -311,6 +325,47 @@ Used by timestamp fields (`dateAdded`). Values are ISO-8601 UTC strings.
 | `format` | File format (`cbz`, `cbr`, `epub`, `pdf`, …) | `is`, `isNot` |
 | `pageCount` | Number of pages | All [number operators](#number-operators) |
 | `dateAdded` | When the book first appeared in the library | All [date operators](#date-operators) |
+
+### UUID Operators
+
+UUID fields (`libraryId`, `seriesId`) accept a single value or a list:
+
+| Operator | Payload | Meaning |
+|----------|---------|---------|
+| `is` / `isNot` | `value` | Matches, or does not match, one ID |
+| `in` / `notIn` | `values` | Matches any, or none, of several IDs |
+
+```json
+{ "libraryId": { "operator": "in", "values": ["<manga-uuid>", "<comics-uuid>"] } }
+```
+
+An empty `in` list names nothing and so matches nothing; an empty `notIn` list
+excludes nothing and so matches everything.
+
+### Rating scale
+
+`userRating` and `communityRating` are on the **stored 1-100 scale**, not the
+1-10 scale the interface shows. The API is 1-100 everywhere; the conversion
+happens only in the UI, which displays and accepts 0-10 with one decimal.
+
+So "series I rated 8.5 or better" is:
+
+```json
+{ "userRating": { "operator": "gte", "value": 85 } }
+```
+
+Two things to know about how ratings compare:
+
+- **Unrated series are excluded by every comparison**, including `ne`. A series
+  you have not rated has no value to compare, so `userRating` `ne` 90 does not
+  return it. Use `isNull` to find unrated series and `isNotNull` for rated ones.
+- **`communityRating` is an average**, so it can exclude a series you personally
+  rated highly. If you rated something 9.0 and someone else rated it 8.0, its
+  community rating is 8.5 and `communityRating > 85` will not return it.
+
+`userRating` depends on who is asking: the same filter returns different results
+for different users. `communityRating` is a server-wide fact and is the same for
+everyone.
 
 ## Example Queries
 
