@@ -89,6 +89,7 @@ macro_rules! for_each_entity {
         $op!(read_list_books);
         $op!(read_lists);
         $op!(want_to_read);
+        $op!(read_completions);
     };
 }
 

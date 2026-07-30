@@ -18,6 +18,7 @@ pub mod metrics;
 pub mod page;
 pub mod plugin_failures;
 pub mod plugins;
+pub mod read_completions;
 pub mod read_list;
 pub mod read_progress;
 pub mod refresh_token;
@@ -84,6 +85,7 @@ pub use metrics::MetricsRepository;
 pub use page::PageRepository;
 pub use plugin_failures::{FailureContext, PluginFailuresRepository};
 pub use plugins::PluginsRepository;
+pub use read_completions::ReadCompletionRepository;
 pub use read_list::ReadListRepository;
 pub use read_progress::ReadProgressRepository;
 #[allow(unused_imports)]

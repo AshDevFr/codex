@@ -204,6 +204,8 @@ pub mod m20260615_000099_create_want_to_read;
 pub mod m20260714_000100_add_want_to_read_position;
 pub mod m20260714_000101_add_collection_summary;
 pub mod m20260729_000102_add_collection_condition;
+pub mod m20260729_000103_create_read_completions;
+pub mod m20260729_000104_backfill_read_completions;
 
 pub struct Migrator;
 
@@ -380,6 +382,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260714_000100_add_want_to_read_position::Migration),
             Box::new(m20260714_000101_add_collection_summary::Migration),
             Box::new(m20260729_000102_add_collection_condition::Migration),
+            Box::new(m20260729_000103_create_read_completions::Migration),
+            Box::new(m20260729_000104_backfill_read_completions::Migration),
         ]
     }
 }

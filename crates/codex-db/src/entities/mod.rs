@@ -25,6 +25,7 @@ pub mod metadata_sources;
 pub mod pages;
 pub mod plugin_failures;
 pub mod plugins;
+pub mod read_completions;
 pub mod read_progress;
 pub mod refresh_tokens;
 pub mod scheduled_firing_claims;

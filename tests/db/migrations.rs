@@ -889,3 +889,419 @@ async fn test_migration_089_down_restores_file_path_sqlite() {
 
     db.close().await;
 }
+
+// ============================================================================
+// read_completions: table creation and backfill
+// ============================================================================
+
+/// Number of steps needed to roll back to just before the named migration.
+fn steps_back_to(name: &str) -> u32 {
+    let migrations = Migrator::migrations();
+    let idx = migrations
+        .iter()
+        .position(|m| m.name().contains(name))
+        .unwrap_or_else(|| panic!("migration {name} should exist"));
+    (migrations.len() - idx) as u32
+}
+
+async fn sqlite_row_count(conn: &sea_orm::DatabaseConnection, sql: &str) -> i64 {
+    let row = conn
+        .query_one(Statement::from_string(
+            DatabaseBackend::Sqlite,
+            sql.to_string(),
+        ))
+        .await
+        .unwrap()
+        .expect("count query should return a row");
+    row.try_get::<i64>("", "cnt").unwrap()
+}
+
+/// The table and both of its indexes exist after migrating, and `down` removes
+/// them cleanly.
+#[tokio::test]
+async fn test_read_completions_table_up_and_down_sqlite() {
+    let (db, _temp_dir) = setup_test_db_wrapper().await;
+    let conn = db.sea_orm_connection();
+
+    for index in [
+        "idx_read_completions_user_book",
+        "idx_read_completions_user_date",
+    ] {
+        let found = conn
+            .query_one(Statement::from_string(
+                DatabaseBackend::Sqlite,
+                format!("SELECT name FROM sqlite_master WHERE type='index' AND name='{index}'"),
+            ))
+            .await
+            .unwrap();
+        assert!(found.is_some(), "{index} should exist after migrating up");
+    }
+
+    // Roll back through the create migration and confirm the table is gone.
+    let steps = steps_back_to("create_read_completions");
+    Migrator::down(conn, Some(steps)).await.unwrap();
+
+    let table = conn
+        .query_one(Statement::from_string(
+            DatabaseBackend::Sqlite,
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='read_completions'"
+                .to_string(),
+        ))
+        .await
+        .unwrap();
+    assert!(table.is_none(), "down should drop read_completions");
+
+    // And it comes back.
+    Migrator::up(conn, None).await.unwrap();
+    assert_eq!(
+        sqlite_row_count(conn, "SELECT COUNT(*) as cnt FROM read_completions").await,
+        0
+    );
+
+    db.close().await;
+}
+
+/// The backfill banks one completion per completed `read_progress` row, and
+/// falls back to `updated_at` for the legacy rows that have `completed = true`
+/// with a NULL `completed_at`.
+#[tokio::test]
+async fn test_read_completions_backfill_sqlite() {
+    let (db, _temp_dir) = setup_test_db_wrapper().await;
+    let conn = db.sea_orm_connection();
+
+    // Roll back the two read_completions migrations so we can seed the
+    // pre-migration state, then run them forward again.
+    let steps = steps_back_to("create_read_completions");
+    Migrator::down(conn, Some(steps)).await.unwrap();
+
+    conn.execute_unprepared(
+        "INSERT INTO libraries (id, name, path, series_strategy, book_strategy, number_strategy, default_reading_direction, created_at, updated_at)
+         VALUES (X'00000000000000000000000000000001', 'Lib', '/test', 'series_volume', 'filename', 'file_order', 'LEFT_TO_RIGHT', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
+    ).await.unwrap();
+    conn.execute_unprepared(
+        "INSERT INTO series (id, library_id, path, name, normalized_name, created_at, updated_at)
+         VALUES (X'00000000000000000000000000000002', X'00000000000000000000000000000001', '/test/s', 'S', 's', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
+    ).await.unwrap();
+    conn.execute_unprepared(
+        "INSERT INTO users (id, username, email, password_hash, role, is_active, email_verified, permissions, created_at, updated_at)
+         VALUES (X'00000000000000000000000000000009', 'reader', 'r@example.com', 'x', 'admin', 1, 0, '[]', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
+    ).await.unwrap();
+
+    for (n, hash) in [(3u8, "h1"), (4, "h2"), (5, "h3")] {
+        conn.execute_unprepared(&format!(
+            "INSERT INTO books (id, series_id, library_id, path, file_name, file_size, file_hash, partial_hash, format, page_count, deleted, analyzed, modified_at, created_at, updated_at)
+             VALUES (X'0000000000000000000000000000000{n}', X'00000000000000000000000000000002', X'00000000000000000000000000000001', '/test/b{n}.cbz', 'b{n}.cbz', 1024, '{hash}', '', 'cbz', 10, 0, 0, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
+        )).await.unwrap();
+    }
+
+    // Book 3: completed, with a real completed_at.
+    conn.execute_unprepared(
+        "INSERT INTO read_progress (id, user_id, book_id, current_page, completed, started_at, updated_at, completed_at)
+         VALUES (X'00000000000000000000000000000013', X'00000000000000000000000000000009', X'00000000000000000000000000000003', 10, 1, '2026-02-01T00:00:00Z', '2026-02-05T00:00:00Z', '2026-02-04T00:00:00Z')"
+    ).await.unwrap();
+    // Book 4: legacy completed row with NULL completed_at.
+    conn.execute_unprepared(
+        "INSERT INTO read_progress (id, user_id, book_id, current_page, completed, started_at, updated_at, completed_at)
+         VALUES (X'00000000000000000000000000000014', X'00000000000000000000000000000009', X'00000000000000000000000000000004', 10, 1, '2026-03-01T00:00:00Z', '2026-03-09T00:00:00Z', NULL)"
+    ).await.unwrap();
+    // Book 5: in progress, must not be backfilled.
+    conn.execute_unprepared(
+        "INSERT INTO read_progress (id, user_id, book_id, current_page, completed, started_at, updated_at, completed_at)
+         VALUES (X'00000000000000000000000000000015', X'00000000000000000000000000000009', X'00000000000000000000000000000005', 4, 0, '2026-04-01T00:00:00Z', '2026-04-02T00:00:00Z', NULL)"
+    ).await.unwrap();
+
+    Migrator::up(conn, None).await.unwrap();
+
+    assert_eq!(
+        sqlite_row_count(conn, "SELECT COUNT(*) as cnt FROM read_completions").await,
+        2,
+        "only the two completed rows should be backfilled"
+    );
+
+    // The in-progress book has no completion.
+    assert_eq!(
+        sqlite_row_count(
+            conn,
+            "SELECT COUNT(*) as cnt FROM read_completions WHERE book_id = X'00000000000000000000000000000005'"
+        )
+        .await,
+        0
+    );
+
+    // The row with a real completed_at keeps it.
+    assert_eq!(
+        sqlite_row_count(
+            conn,
+            "SELECT COUNT(*) as cnt FROM read_completions \
+             WHERE book_id = X'00000000000000000000000000000003' \
+               AND completed_at LIKE '2026-02-04%' AND started_at LIKE '2026-02-01%'"
+        )
+        .await,
+        1
+    );
+
+    // The legacy NULL row falls back to updated_at, not to its started_at and
+    // not to NULL (the column is NOT NULL, so a bad fallback would have failed
+    // the insert outright).
+    assert_eq!(
+        sqlite_row_count(
+            conn,
+            "SELECT COUNT(*) as cnt FROM read_completions \
+             WHERE book_id = X'00000000000000000000000000000004' \
+               AND completed_at LIKE '2026-03-09%'"
+        )
+        .await,
+        1,
+        "a NULL completed_at should fall back to updated_at"
+    );
+
+    db.close().await;
+}
+
+/// Re-running the backfill does not duplicate history. This matters because the
+/// write hook starts banking completions live, so the backfill's NOT EXISTS
+/// filter is the only thing keeping a re-run from doubling every entry.
+#[tokio::test]
+async fn test_read_completions_backfill_is_idempotent_sqlite() {
+    use migration::{MigrationTrait, SchemaManager};
+
+    let (db, _temp_dir) = setup_test_db_wrapper().await;
+    let conn = db.sea_orm_connection();
+
+    let steps = steps_back_to("create_read_completions");
+    Migrator::down(conn, Some(steps)).await.unwrap();
+
+    conn.execute_unprepared(
+        "INSERT INTO libraries (id, name, path, series_strategy, book_strategy, number_strategy, default_reading_direction, created_at, updated_at)
+         VALUES (X'00000000000000000000000000000001', 'Lib', '/test', 'series_volume', 'filename', 'file_order', 'LEFT_TO_RIGHT', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
+    ).await.unwrap();
+    conn.execute_unprepared(
+        "INSERT INTO series (id, library_id, path, name, normalized_name, created_at, updated_at)
+         VALUES (X'00000000000000000000000000000002', X'00000000000000000000000000000001', '/test/s', 'S', 's', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
+    ).await.unwrap();
+    conn.execute_unprepared(
+        "INSERT INTO users (id, username, email, password_hash, role, is_active, email_verified, permissions, created_at, updated_at)
+         VALUES (X'00000000000000000000000000000009', 'reader', 'r@example.com', 'x', 'admin', 1, 0, '[]', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
+    ).await.unwrap();
+    conn.execute_unprepared(
+        "INSERT INTO books (id, series_id, library_id, path, file_name, file_size, file_hash, partial_hash, format, page_count, deleted, analyzed, modified_at, created_at, updated_at)
+         VALUES (X'00000000000000000000000000000003', X'00000000000000000000000000000002', X'00000000000000000000000000000001', '/test/b.cbz', 'b.cbz', 1024, 'h1', '', 'cbz', 10, 0, 0, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
+    ).await.unwrap();
+    conn.execute_unprepared(
+        "INSERT INTO read_progress (id, user_id, book_id, current_page, completed, started_at, updated_at, completed_at)
+         VALUES (X'00000000000000000000000000000013', X'00000000000000000000000000000009', X'00000000000000000000000000000003', 10, 1, '2026-02-01T00:00:00Z', '2026-02-05T00:00:00Z', '2026-02-04T00:00:00Z')"
+    ).await.unwrap();
+
+    Migrator::up(conn, None).await.unwrap();
+    assert_eq!(
+        sqlite_row_count(conn, "SELECT COUNT(*) as cnt FROM read_completions").await,
+        1
+    );
+
+    // Invoke the backfill's `up` a second time directly; the migration table
+    // would otherwise refuse to re-run it.
+    let manager = SchemaManager::new(conn);
+    migration::m20260729_000104_backfill_read_completions::Migration
+        .up(&manager)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        sqlite_row_count(conn, "SELECT COUNT(*) as cnt FROM read_completions").await,
+        1,
+        "re-running the backfill must not duplicate a banked completion"
+    );
+
+    db.close().await;
+}
+
+/// Exercise the backfill's INSERT path on a given connection.
+///
+/// Seeds through SeaORM rather than raw SQL so the same body runs on SQLite and
+/// PostgreSQL: the hex-literal seeding used above is SQLite-only, and a
+/// zero-row backfill short-circuits before building its INSERT, leaving the
+/// statement that actually differs between dialects untested.
+async fn assert_backfill_inserts(conn: &sea_orm::DatabaseConnection) {
+    use chrono::{TimeZone, Utc};
+    use codex::db::entities::{books, libraries, read_progress, users};
+    use codex::db::repositories::{LibraryRepository, ReadCompletionRepository, SeriesRepository};
+    use sea_orm::{ActiveModelTrait, EntityTrait, Set};
+    use uuid::Uuid;
+
+    let user_id = Uuid::new_v4();
+    users::ActiveModel {
+        id: Set(user_id),
+        username: Set(format!("reader-{user_id}")),
+        email: Set(format!("{user_id}@example.com")),
+        password_hash: Set("x".to_string()),
+        role: Set("admin".to_string()),
+        is_active: Set(true),
+        email_verified: Set(false),
+        permissions: Set(serde_json::json!([])),
+        created_at: Set(Utc::now()),
+        updated_at: Set(Utc::now()),
+        last_login_at: Set(None),
+    }
+    .insert(conn)
+    .await
+    .unwrap();
+
+    // Via the repositories: they own the column defaults these tables require.
+    let library = LibraryRepository::create(
+        conn,
+        &format!("Lib {}", Uuid::new_v4()),
+        &format!("/test/{}", Uuid::new_v4()),
+        codex::models::ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+    let library_id = library.id;
+    let series_id = SeriesRepository::create(conn, library_id, "S", None)
+        .await
+        .unwrap()
+        .id;
+
+    let mut book_ids = Vec::new();
+    for _ in 0..3 {
+        let id = Uuid::new_v4();
+        books::ActiveModel {
+            id: Set(id),
+            series_id: Set(series_id),
+            library_id: Set(library_id),
+            path: Set(format!("/test/{id}.cbz")),
+            file_name: Set("b.cbz".to_string()),
+            file_size: Set(1024),
+            file_hash: Set(format!("hash-{id}")),
+            partial_hash: Set(String::new()),
+            format: Set("cbz".to_string()),
+            page_count: Set(10),
+            deleted: Set(false),
+            analyzed: Set(false),
+            modified_at: Set(Utc::now()),
+            created_at: Set(Utc::now()),
+            updated_at: Set(Utc::now()),
+            ..Default::default()
+        }
+        .insert(conn)
+        .await
+        .unwrap();
+        book_ids.push(id);
+    }
+
+    let started = Utc.with_ymd_and_hms(2026, 2, 1, 0, 0, 0).unwrap();
+    let finished = Utc.with_ymd_and_hms(2026, 2, 4, 0, 0, 0).unwrap();
+    let touched = Utc.with_ymd_and_hms(2026, 3, 9, 0, 0, 0).unwrap();
+
+    // Completed with a real completed_at.
+    read_progress::ActiveModel {
+        id: Set(Uuid::new_v4()),
+        user_id: Set(user_id),
+        book_id: Set(book_ids[0]),
+        current_page: Set(10),
+        progress_percentage: Set(None),
+        completed: Set(true),
+        started_at: Set(started),
+        updated_at: Set(finished),
+        completed_at: Set(Some(finished)),
+        r2_progression: Set(None),
+    }
+    .insert(conn)
+    .await
+    .unwrap();
+
+    // Legacy completed row with a NULL completed_at.
+    read_progress::ActiveModel {
+        id: Set(Uuid::new_v4()),
+        user_id: Set(user_id),
+        book_id: Set(book_ids[1]),
+        current_page: Set(10),
+        progress_percentage: Set(None),
+        completed: Set(true),
+        started_at: Set(started),
+        updated_at: Set(touched),
+        completed_at: Set(None),
+        r2_progression: Set(None),
+    }
+    .insert(conn)
+    .await
+    .unwrap();
+
+    // In progress: must not be backfilled.
+    read_progress::ActiveModel {
+        id: Set(Uuid::new_v4()),
+        user_id: Set(user_id),
+        book_id: Set(book_ids[2]),
+        current_page: Set(4),
+        progress_percentage: Set(None),
+        completed: Set(false),
+        started_at: Set(started),
+        updated_at: Set(touched),
+        completed_at: Set(None),
+        r2_progression: Set(None),
+    }
+    .insert(conn)
+    .await
+    .unwrap();
+
+    // Drop and re-create the table so the backfill runs with rows present.
+    let steps = steps_back_to("create_read_completions");
+    Migrator::down(conn, Some(steps)).await.unwrap();
+    Migrator::up(conn, None).await.unwrap();
+
+    assert_eq!(
+        ReadCompletionRepository::count_for_book(conn, user_id, book_ids[0])
+            .await
+            .unwrap(),
+        1
+    );
+    assert_eq!(
+        ReadCompletionRepository::count_for_book(conn, user_id, book_ids[1])
+            .await
+            .unwrap(),
+        1,
+        "a legacy NULL completed_at must still be backfilled"
+    );
+    assert_eq!(
+        ReadCompletionRepository::count_for_book(conn, user_id, book_ids[2])
+            .await
+            .unwrap(),
+        0,
+        "an in-progress book must not be backfilled"
+    );
+
+    let entries = ReadCompletionRepository::list_for_book(conn, user_id, book_ids[1])
+        .await
+        .unwrap();
+    assert_eq!(
+        entries[0].completed_at, touched,
+        "the NULL completed_at should fall back to updated_at"
+    );
+
+    // Clean up so a shared Postgres database doesn't accumulate fixtures.
+    users::Entity::delete_by_id(user_id)
+        .exec(conn)
+        .await
+        .unwrap();
+    libraries::Entity::delete_by_id(library_id)
+        .exec(conn)
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn test_read_completions_backfill_inserts_sqlite() {
+    let (db, _temp_dir) = setup_test_db_wrapper().await;
+    assert_backfill_inserts(db.sea_orm_connection()).await;
+    db.close().await;
+}
+
+/// The same on PostgreSQL, where the multi-row INSERT renders `$1..$N`
+/// placeholders rather than `?`. Skipped when no test database is running.
+#[tokio::test]
+#[ignore]
+async fn test_read_completions_backfill_inserts_postgres() {
+    let Some(conn) = common::setup_test_db_postgres().await else {
+        return;
+    };
+    assert_backfill_inserts(&conn).await;
+}
