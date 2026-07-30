@@ -35,6 +35,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { api } from "@/api/client";
+import { readProgressApi } from "@/api/readProgress";
 import { userPreferencesApi } from "@/api/userPreferences";
 import { PermissionPicker } from "@/components/common";
 import { useAppName } from "@/hooks/useAppName";
@@ -58,6 +59,7 @@ export function ProfileSettings() {
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
   const { getPreference, setPreference } = useUserPreferencesStore();
+  const [clearHistoryOpen, setClearHistoryOpen] = useState(false);
   const [createKeyModalOpened, setCreateKeyModalOpened] = useState(false);
   const [newApiKey, setNewApiKey] = useState<string | null>(null);
   const [permissionPreset, setPermissionPreset] =
@@ -138,6 +140,29 @@ export function ProfileSettings() {
       notifications.show({
         title: "Error",
         message: "Failed to update preference",
+        color: "red",
+      });
+    },
+  });
+
+  const clearHistoryMutation = useMutation({
+    mutationFn: () => readProgressApi.clearMyHistory(),
+    onSuccess: () => {
+      notifications.show({
+        title: "Reading history cleared",
+        message: "Past completions have been forgotten. Progress is unchanged.",
+        color: "green",
+      });
+      // Every per-entity history query, plus the detail DTOs that carry counts.
+      queryClient.invalidateQueries({ queryKey: ["read-history"] });
+      queryClient.invalidateQueries({ queryKey: ["book"] });
+      queryClient.invalidateQueries({ queryKey: ["series"] });
+      setClearHistoryOpen(false);
+    },
+    onError: () => {
+      notifications.show({
+        title: "Error",
+        message: "Failed to clear reading history",
         color: "red",
       });
     },
@@ -359,6 +384,32 @@ export function ProfileSettings() {
                     </Group>
                   </Stack>
                 </form>
+              </Card>
+
+              <Card withBorder>
+                <Stack gap="md">
+                  <Title order={3}>Reading History</Title>
+                  <Text size="sm" c="dimmed">
+                    Codex remembers every book you finish, so marking something
+                    unread to read it again does not erase the fact that you
+                    read it. Clearing this forgets every past completion across
+                    your whole library.
+                  </Text>
+                  <Alert variant="light" color="blue">
+                    Your current reading progress is not affected. Books stay
+                    read or unread exactly as they are now.
+                  </Alert>
+                  <Group>
+                    <Button
+                      color="red"
+                      variant="light"
+                      leftSection={<IconTrash size={16} />}
+                      onClick={() => setClearHistoryOpen(true)}
+                    >
+                      Clear reading history
+                    </Button>
+                  </Group>
+                </Stack>
               </Card>
             </Stack>
           </Tabs.Panel>
@@ -722,6 +773,37 @@ export function ProfileSettings() {
         )}
       </Modal>
       {/* Edit API Key Permissions Modal */}
+      <Modal
+        opened={clearHistoryOpen}
+        onClose={() => setClearHistoryOpen(false)}
+        title="Clear reading history"
+        centered
+      >
+        <Stack gap="md">
+          <Text size="sm">
+            Forget every book completion across your whole library? The dates of
+            past read-throughs will be deleted and re-read counts will reset to
+            zero.
+          </Text>
+          <Alert variant="light" color="blue">
+            Your current reading progress is not affected. Books stay read or
+            unread exactly as they are now.
+          </Alert>
+          <Group justify="flex-end">
+            <Button variant="subtle" onClick={() => setClearHistoryOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              color="red"
+              loading={clearHistoryMutation.isPending}
+              onClick={() => clearHistoryMutation.mutate()}
+            >
+              Clear history
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
       <Modal
         opened={editingKey !== null}
         onClose={() => setEditingKey(null)}

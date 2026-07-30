@@ -60,6 +60,7 @@ import { BookMetadataEditModal } from "@/components/books/BookMetadataEditModal"
 import { ExternalIdEditModal, MetadataLabel } from "@/components/common";
 import { MetadataApplyFlow } from "@/components/metadata";
 import { DownloadButton } from "@/components/offline/DownloadButton";
+import { ReadHistorySection } from "@/components/reading/ReadHistorySection";
 import { AddToReadListButton } from "@/components/readlists/AddToReadListButton";
 import {
   CustomMetadataDisplay,
@@ -661,6 +662,9 @@ export function BookDetail() {
               </Group>
             ) : null;
 
+          // Renders nothing until the book has been finished at least once.
+          const readHistory = <ReadHistorySection scope="book" id={book.id} />;
+
           const readActions = (
             <Group gap="sm" mt="xs">
               <Button
@@ -774,6 +778,7 @@ export function BookDetail() {
                       {subtitleBlock}
                       {seriesLink}
                       {readingProgress}
+                      {readHistory}
                     </Stack>
                   </Grid.Col>
                 </Grid>
@@ -804,6 +809,7 @@ export function BookDetail() {
                   {subtitleBlock}
                   {seriesLink}
                   {readingProgress}
+                  {readHistory}
                   {readActions}
                   {summaryBlock}
                   {analysisError}

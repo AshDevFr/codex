@@ -54,6 +54,7 @@ import { ExternalIdEditModal, MetadataLabel } from "@/components/common";
 import { BulkSelectionToolbar } from "@/components/library/BulkSelectionToolbar";
 import { MetadataApplyFlow } from "@/components/metadata";
 import { SeriesDownloadButton } from "@/components/offline/SeriesDownloadButton";
+import { ReadHistorySection } from "@/components/reading/ReadHistorySection";
 import {
   AlternateTitles,
   BehindByBadge,
@@ -820,6 +821,13 @@ export function SeriesDetail() {
           // Behind-by-N badges: translation gap (release sources) and upstream
           // gap (metadata signal). Each badge is a no-op when the gap is
           // zero/missing, the series isn't tracked, or the axis is disabled.
+          // Renders nothing until every volume has been finished at least once.
+          // A newly added volume drops the count to 0, which is correct, but the
+          // earlier full-series completions stay listed rather than vanishing.
+          const readHistory = (
+            <ReadHistorySection scope="series" id={series.id} />
+          );
+
           const behindBadges = tracking?.tracked ? (
             <Group gap={6} wrap="wrap">
               {tracking.trackChapters &&
@@ -978,6 +986,7 @@ export function SeriesDetail() {
                       {statusBadges}
                       {countsText}
                       {behindBadges}
+                      {readHistory}
                       {alternateTitlesBlock}
                     </Stack>
                   </Grid.Col>
@@ -1007,6 +1016,7 @@ export function SeriesDetail() {
                   </Group>
                   {countsText}
                   {behindBadges}
+                  {readHistory}
                   {alternateTitlesBlock}
                   {readDownloadButtons}
                   {summaryBlock}

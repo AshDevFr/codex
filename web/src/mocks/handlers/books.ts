@@ -310,6 +310,51 @@ function initMockBooksWithErrors() {
   }
 }
 
+/**
+ * Mock completion-history state.
+ *
+ * The real server stores one row per finished read-through; the mock derives a
+ * plausible history from whether a book looks finished, and tracks resets so the
+ * clear buttons visibly do something.
+ */
+const clearedBookHistory = new Set<string>();
+const clearedSeriesHistory = new Set<string>();
+let clearedAllHistory = false;
+
+const EMPTY_HISTORY = { readCount: 0, lastCompletedAt: null, entries: [] };
+
+/** An ISO timestamp `days` from now (negative for the past). */
+function shiftDays(days: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return date.toISOString();
+}
+
+function bookHistory(bookId: string, book: (typeof mockBooks)[number]) {
+  if (clearedAllHistory || clearedBookHistory.has(bookId)) {
+    return EMPTY_HISTORY;
+  }
+
+  const progress = book.readProgress;
+  const finished = progress != null && progress.currentPage >= book.pageCount;
+  if (!finished) {
+    return EMPTY_HISTORY;
+  }
+
+  // Give every third finished book a second pass, so the "read twice" wording
+  // and the expandable list are both reachable in mock mode.
+  const readCount = bookId.charCodeAt(bookId.length - 1) % 3 === 0 ? 2 : 1;
+  const entries = Array.from({ length: readCount }, (_, i) => ({
+    startedAt: shiftDays(-30 * (readCount - i)),
+    completedAt: shiftDays(-20 * (readCount - i)),
+  }));
+  return {
+    readCount,
+    lastCompletedAt: entries[0].completedAt,
+    entries,
+  };
+}
+
 export const bookHandlers = [
   // IMPORTANT: Specific routes MUST come before parameterized routes
   // Otherwise /api/v1/books/:id will match "in-progress" as an ID
@@ -1009,6 +1054,72 @@ export const bookHandlers = [
       createdAt: "2024-01-01T00:00:00Z",
       updatedAt: new Date().toISOString(),
     });
+  }),
+
+  // ============================================
+  // Read completion history
+  // ============================================
+
+  http.get("/api/v1/books/:id/read-history", async ({ params }) => {
+    await delay(100);
+    const book = mockBooks.find((b) => b.id === params.id);
+    if (!book) {
+      return HttpResponse.json({ error: "Book not found" }, { status: 404 });
+    }
+    return HttpResponse.json(bookHistory(params.id as string, book));
+  }),
+
+  http.delete("/api/v1/books/:id/read-history", async ({ params }) => {
+    await delay(100);
+    const book = mockBooks.find((b) => b.id === params.id);
+    if (!book) {
+      return HttpResponse.json({ error: "Book not found" }, { status: 404 });
+    }
+    clearedBookHistory.add(params.id as string);
+    return new HttpResponse(null, { status: 204 });
+  }),
+
+  http.get("/api/v1/series/:id/read-history", async ({ params }) => {
+    await delay(100);
+    const seriesId = params.id as string;
+    if (clearedSeriesHistory.has(seriesId) || clearedAllHistory) {
+      return HttpResponse.json(EMPTY_HISTORY);
+    }
+
+    // Mirror the real derivation: the series count is the minimum across its
+    // books, so one unfinished volume means the series was never finished.
+    const books = mockBooks.filter((b) => b.seriesId === seriesId);
+    if (books.length === 0) {
+      return HttpResponse.json(EMPTY_HISTORY);
+    }
+    const readCount = Math.min(
+      ...books.map((b) => bookHistory(b.id, b).readCount),
+    );
+    if (readCount === 0) {
+      return HttpResponse.json(EMPTY_HISTORY);
+    }
+
+    const entries = Array.from({ length: readCount }, (_, pass) => ({
+      startedAt: shiftDays(-30 * (readCount - pass)),
+      completedAt: shiftDays(-20 * (readCount - pass)),
+    }));
+    return HttpResponse.json({
+      readCount,
+      lastCompletedAt: entries[0].completedAt,
+      entries,
+    });
+  }),
+
+  http.delete("/api/v1/series/:id/read-history", async ({ params }) => {
+    await delay(100);
+    clearedSeriesHistory.add(params.id as string);
+    return new HttpResponse(null, { status: 204 });
+  }),
+
+  http.delete("/api/v1/user/read-history", async () => {
+    await delay(150);
+    clearedAllHistory = true;
+    return new HttpResponse(null, { status: 204 });
   }),
 
   // Update read progress for book

@@ -10,6 +10,8 @@ export type ReadProgressResponse =
   components["schemas"]["ReadProgressResponse"];
 export type UpdateProgressRequest =
   components["schemas"]["UpdateProgressRequest"];
+export type ReadHistoryResponse = components["schemas"]["ReadHistoryResponse"];
+export type ReadCompletionDto = components["schemas"]["ReadCompletionDto"];
 
 const API_BASE = "/api/v1";
 
@@ -107,6 +109,46 @@ export const readProgressApi = {
       await enqueueOfflineWrite(descriptor);
       throw new OfflineQueuedError(descriptor);
     }
+  },
+
+  /**
+   * A book's completion history for the current user.
+   *
+   * Independent of reading progress: this survives marking the book unread.
+   */
+  getBookHistory: async (bookId: string): Promise<ReadHistoryResponse> => {
+    const response = await api.get<ReadHistoryResponse>(
+      `/books/${bookId}/read-history`,
+    );
+    return response.data;
+  },
+
+  /** Clear a book's completion history. Leaves reading progress alone. */
+  clearBookHistory: async (bookId: string): Promise<void> => {
+    await api.delete(`/books/${bookId}/read-history`);
+  },
+
+  /**
+   * A series' completion history for the current user.
+   *
+   * `readCount` is the minimum across the series' books, so it only advances
+   * once every volume has been read again.
+   */
+  getSeriesHistory: async (seriesId: string): Promise<ReadHistoryResponse> => {
+    const response = await api.get<ReadHistoryResponse>(
+      `/series/${seriesId}/read-history`,
+    );
+    return response.data;
+  },
+
+  /** Clear every book's history in a series. Leaves reading progress alone. */
+  clearSeriesHistory: async (seriesId: string): Promise<void> => {
+    await api.delete(`/series/${seriesId}/read-history`);
+  },
+
+  /** Clear the current user's entire completion history. */
+  clearMyHistory: async (): Promise<void> => {
+    await api.delete("/user/read-history");
   },
 
   /**
