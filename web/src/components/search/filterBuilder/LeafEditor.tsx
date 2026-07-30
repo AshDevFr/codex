@@ -1,5 +1,6 @@
 import {
   ActionIcon,
+  Autocomplete,
   Group,
   MultiSelect,
   NumberInput,
@@ -15,6 +16,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { librariesApi } from "@/api/libraries";
 import { displayToStorageRating, storageToDisplayRating } from "@/api/ratings";
+import { useAllGenres, useAllTags } from "@/hooks/useReferenceData";
 import type {
   DateOperator,
   FieldOperator,
@@ -238,6 +240,17 @@ function ValueInput({
         />
       );
     }
+    if (field.suggestions) {
+      return (
+        <SuggestedValueInput
+          condition={condition}
+          field={field}
+          value={value}
+          onChange={onChange}
+          fullWidth={fullWidth}
+        />
+      );
+    }
     return (
       <TextInput
         value={value}
@@ -401,6 +414,60 @@ function EnumSelect({
         if (next) onChange(next);
       }}
       w={fullWidth ? "100%" : 180}
+    />
+  );
+}
+
+/**
+ * Free-text value input that offers the library's existing values as
+ * suggestions.
+ *
+ * Deliberately an Autocomplete rather than a Select: the set is open. Filtering
+ * on a tag that has not been applied to anything yet is legitimate (a collection
+ * rule can be written before the metadata lands), and `contains` / `beginsWith`
+ * take fragments that will never appear in the list at all. So the list is a
+ * shortcut, never a constraint.
+ *
+ * The reference lists are shared, long-cached queries, so several leaves using
+ * the same field cost one request between them.
+ */
+function SuggestedValueInput({
+  condition,
+  field,
+  value,
+  onChange,
+  fullWidth,
+}: {
+  condition: Condition;
+  field: FieldDef;
+  value: string;
+  onChange: (next: Condition) => void;
+  fullWidth?: boolean;
+}) {
+  const wantsGenres = field.suggestions === "genres";
+  const { data: genres } = useAllGenres(wantsGenres);
+  const { data: tags } = useAllTags(!wantsGenres);
+
+  const options = useMemo(() => {
+    const source = wantsGenres ? genres : tags;
+    const names = (source ?? []).map((item) => item.name);
+    // De-duplicate defensively: the same name can exist with different casing.
+    return Array.from(new Set(names)).sort((a, b) => a.localeCompare(b));
+  }, [wantsGenres, genres, tags]);
+
+  return (
+    <Autocomplete
+      value={value}
+      data={options}
+      onChange={(next) =>
+        onChange(updateLeafValue(condition, field, { value: next }))
+      }
+      placeholder={wantsGenres ? "genre" : "tag"}
+      // Cap the rendered list; Mantine filters it down as the user types, so a
+      // library with hundreds of tags does not render hundreds of options.
+      limit={20}
+      w={fullWidth ? "100%" : undefined}
+      flex={fullWidth ? undefined : 1}
     />
   );
 }

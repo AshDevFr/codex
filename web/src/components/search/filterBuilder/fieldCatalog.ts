@@ -27,6 +27,16 @@ export interface FieldDef {
   /** Closed enum: only `is` / `isNot` / `isNull` / `isNotNull` make sense. */
   enumValues?: EnumOption[];
   /**
+   * Open set with known values: the editor offers the existing ones as
+   * suggestions while still accepting anything typed.
+   *
+   * Distinct from `enumValues`, which is a closed set rendered as a plain
+   * select. A tag or genre that does not exist yet is a legitimate thing to
+   * filter on (a rule can be written before the metadata is applied), so the
+   * input must not be restricted to what is currently in the library.
+   */
+  suggestions?: "genres" | "tags";
+  /**
    * Hint for the LeafEditor (e.g. textarea for free text, year for number).
    *
    * `rating` additionally changes the *units* of the control: the stored value
@@ -80,6 +90,7 @@ export const FIELD_CATALOG: FieldDef[] = [
     group: "Metadata",
     operatorType: "field",
     targets: ["series", "books"],
+    suggestions: "genres",
   },
   {
     key: "tag",
@@ -87,6 +98,7 @@ export const FIELD_CATALOG: FieldDef[] = [
     group: "Metadata",
     operatorType: "field",
     targets: ["series", "books"],
+    suggestions: "tags",
   },
   {
     key: "readStatus",
