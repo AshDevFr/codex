@@ -4,7 +4,10 @@ import {
   appendChildAtPath,
   applyDragMove,
   asGroup,
+  conditionAtPath,
   dragId,
+  dragIdParentKey,
+  dragIdToPath,
   emptyRoot,
   ensureRoot,
   isGroup,
@@ -307,6 +310,40 @@ describe("conditionUtils — applyDragMove", () => {
 
   it("rejects an index that is out of range", () => {
     expect(applyDragMove(root(), dragId([], 0), dragId([], 9))).toBeNull();
+  });
+
+  it("exposes the parent key so collision detection can keep to siblings", () => {
+    expect(dragIdParentKey(dragId([], 2))).toBe("");
+    expect(dragIdParentKey(dragId([1], 0))).toBe("1");
+    expect(dragIdParentKey(dragId([1, 0], 3))).toBe("1.0");
+    expect(dragIdParentKey("nonsense")).toBeNull();
+  });
+
+  it("resolves a drag id back to a full tree path", () => {
+    expect(dragIdToPath(dragId([], 1))).toEqual([1]);
+    expect(dragIdToPath(dragId([1], 0))).toEqual([1, 0]);
+    expect(dragIdToPath("nonsense")).toBeNull();
+  });
+
+  it("looks up the condition a drag id addresses", () => {
+    // The drag overlay renders the row being carried, so it has to resolve the
+    // id back to the condition it came from.
+    const tree = root();
+    const path = dragIdToPath(dragId([1], 1));
+    expect(path).not.toBeNull();
+    expect(conditionAtPath(tree, path as number[])).toEqual({
+      tag: { operator: "is", value: "y" },
+    });
+  });
+
+  it("returns null for a path that does not resolve", () => {
+    expect(conditionAtPath(root(), [9])).toBeNull();
+    expect(conditionAtPath(root(), [0, 0])).toBeNull();
+  });
+
+  it("returns the root for an empty path", () => {
+    const tree = root();
+    expect(conditionAtPath(tree, [])).toBe(tree);
   });
 });
 

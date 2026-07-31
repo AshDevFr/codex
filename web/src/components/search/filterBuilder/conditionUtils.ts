@@ -378,12 +378,46 @@ export function dragId(parentPath: number[], index: number): string {
   return `${parentPath.join(".")}#${index}`;
 }
 
+/** The parent-path half of a drag id, back to the index array it encodes. */
+export function parsePathKey(key: string): number[] {
+  return key === "" ? [] : key.split(".").map(Number);
+}
+
 function parseDragId(id: string): { parentKey: string; index: number } | null {
   const sep = id.lastIndexOf("#");
   if (sep === -1) return null;
   const index = Number(id.slice(sep + 1));
   if (!Number.isInteger(index)) return null;
   return { parentKey: id.slice(0, sep), index };
+}
+
+/** The parent-path key encoded in a drag id, or `null` if malformed. */
+export function dragIdParentKey(id: string): string | null {
+  return parseDragId(id)?.parentKey ?? null;
+}
+
+/** Full index path to the condition a drag id addresses, or `null` if malformed. */
+export function dragIdToPath(id: string): number[] | null {
+  const parsed = parseDragId(id);
+  if (!parsed) return null;
+  const parentPath = parsePathKey(parsed.parentKey);
+  if (parentPath.some((n) => !Number.isInteger(n))) return null;
+  return [...parentPath, parsed.index];
+}
+
+/** Walk `path` from the root, or `null` when it doesn't resolve. */
+export function conditionAtPath(
+  root: Condition,
+  path: number[],
+): Condition | null {
+  let current = root;
+  for (const idx of path) {
+    const group = asGroup(current);
+    const next = group?.children[idx];
+    if (!next) return null;
+    current = next;
+  }
+  return current;
 }
 
 /**
@@ -405,8 +439,7 @@ export function applyDragMove(
   if (from.parentKey !== to.parentKey) return null;
   if (from.index === to.index) return null;
 
-  const parentPath =
-    from.parentKey === "" ? [] : from.parentKey.split(".").map(Number);
+  const parentPath = parsePathKey(from.parentKey);
   if (parentPath.some((n) => !Number.isInteger(n))) return null;
 
   const next = moveAtPath(root, parentPath, from.index, to.index);

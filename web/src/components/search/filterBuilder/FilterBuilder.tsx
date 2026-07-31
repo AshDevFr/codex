@@ -1,9 +1,13 @@
 import {
-  closestCenter,
+  type CollisionDetection,
+  closestCorners,
   DndContext,
   type DragEndEvent,
+  DragOverlay,
+  type DragStartEvent,
   KeyboardSensor,
   PointerSensor,
+  pointerWithin,
   TouchSensor,
   useSensor,
   useSensors,
@@ -34,18 +38,22 @@ import {
   IconPlus,
   IconTrash,
 } from "@tabler/icons-react";
-import { type ReactNode, useMemo } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import {
   appendChildAtPath,
   applyDragMove,
   asGroup,
   type Condition,
+  conditionAtPath,
   dragId,
+  dragIdParentKey,
+  dragIdToPath,
   ensureRoot,
   isGroup,
   leafFieldKey,
   makeGroup,
   newLeaf,
+  parsePathKey,
   removeAtPath,
   replaceAtPath,
 } from "./conditionUtils";
@@ -97,17 +105,29 @@ export function FilterBuilder({
     onChange(next);
   };
 
+  const [activeId, setActiveId] = useState<string | null>(null);
+
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
+    setActiveId(null);
     if (!over) return;
     const next = applyDragMove(root, String(active.id), String(over.id));
     if (next) emitRoot(next);
   };
 
+  // The row travelling with the cursor is rendered into the drag overlay, so
+  // resolve it back out of the tree from the id being dragged.
+  const activePath = activeId ? dragIdToPath(activeId) : null;
+  const activeCondition = activePath ? conditionAtPath(root, activePath) : null;
+
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCenter}
+      collisionDetection={siblingCollisionDetection}
+      onDragStart={({ active }: DragStartEvent) =>
+        setActiveId(String(active.id))
+      }
       onDragEnd={handleDragEnd}
+      onDragCancel={() => setActiveId(null)}
     >
       <GroupNodeView
         condition={root}
@@ -116,9 +136,56 @@ export function FilterBuilder({
         depth={0}
         onChange={emitRoot}
       />
+      {/* No drop animation: dnd-kit flies the overlay to the dragged node's
+          rect, but rows are keyed by index so that node never moves. The
+          overlay would glide back to the slot the row was picked up from
+          while the list below already shows the new order, which reads as
+          the move reverting and then happening again. */}
+      <DragOverlay dropAnimation={null}>
+        {activeCondition && activePath ? (
+          <DragPreviewRow>
+            {/* Inert copy: the overlay renders inside a nullified dnd context,
+                so nothing here registers as a droppable. */}
+            <ChildRow
+              child={activeCondition}
+              target={target}
+              depth={activePath.length - 1}
+              path={[]}
+              onChange={noop}
+              onRemove={noop}
+            />
+          </DragPreviewRow>
+        ) : null}
+      </DragOverlay>
     </DndContext>
   );
 }
+
+function noop() {}
+
+/**
+ * Only siblings are valid drop targets, so narrow the candidates before
+ * measuring rather than rejecting a bad drop afterwards. That keeps the
+ * preview honest: the gap that opens is always where the row will land.
+ *
+ * Two things go wrong without it. A nested group's own rows are droppables
+ * too, so dragging a root row over a group's body would resolve to a row
+ * inside it and the drop would be silently discarded. And a group card is
+ * several times taller than a filter row, so measuring by centre (the
+ * `closestCenter` default) lands the drop a slot past the pointer, since a
+ * tall card grabbed by its grip has its centre well below the cursor.
+ * Pointer position decides while it is over a sibling, and corner distance
+ * takes over in the gaps between rows, where it isn't over anything.
+ */
+const siblingCollisionDetection: CollisionDetection = (args) => {
+  const activeParent = dragIdParentKey(String(args.active.id));
+  const siblings = args.droppableContainers.filter(
+    (container) => dragIdParentKey(String(container.id)) === activeParent,
+  );
+  const scoped = { ...args, droppableContainers: siblings };
+  const underPointer = pointerWithin(scoped);
+  return underPointer.length > 0 ? underPointer : closestCorners(scoped);
+};
 
 interface GroupNodeViewProps {
   condition: Condition;
@@ -136,6 +203,21 @@ function GroupNodeView({
   onChange,
 }: GroupNodeViewProps) {
   const group = asGroup(condition);
+
+  // Computed before the early return to keep hook order stable. dnd-kit
+  // compares the `items` array by reference to decide whether the list
+  // changed, so rebuilding it on every render would leave it permanently
+  // convinced it had.
+  const pathKey = path.join(".");
+  const childCount = group?.children.length ?? 0;
+  const childIds = useMemo(
+    () =>
+      Array.from({ length: childCount }, (_, idx) =>
+        dragId(parsePathKey(pathKey), idx),
+      ),
+    [childCount, pathKey],
+  );
+
   if (!group) return null;
 
   const fields = fieldsForTarget(target);
@@ -165,7 +247,6 @@ function GroupNodeView({
   };
 
   const isRoot = depth === 0;
-  const childIds = group.children.map((_, idx) => dragId(path, idx));
   // Nothing to reorder in a one-row group. The gutter still renders so rows
   // stay aligned with sibling groups; only the grip itself is hidden.
   const canReorder = group.children.length > 1;
@@ -319,7 +400,14 @@ function SortableRow({ id, canReorder, label, children }: SortableRowProps) {
     transform,
     transition,
     isDragging,
-  } = useSortable({ id, disabled: !canReorder });
+  } = useSortable({
+    id,
+    disabled: !canReorder,
+    // Sortable ids encode position, so a row's id never travels with it and
+    // the DOM node it lives in never actually moves. dnd-kit's layout
+    // animation measures a move that didn't happen, so opt out of it.
+    animateLayoutChanges: () => false,
+  });
 
   return (
     <Group
@@ -330,10 +418,10 @@ function SortableRow({ id, canReorder, label, children }: SortableRowProps) {
       style={{
         transform: CSS.Transform.toString(transform),
         transition,
-        opacity: isDragging ? 0.5 : undefined,
-        // Keep the row being dragged above the group cards it passes over.
-        position: "relative",
-        zIndex: isDragging ? 1 : undefined,
+        // The row travels with the cursor in the drag overlay, so the original
+        // gives up its space here. Keeping it visible would show the same row
+        // twice; displacing it instead is what made the drop read as a revert.
+        opacity: isDragging ? 0 : undefined,
       }}
     >
       <ActionIcon
@@ -353,6 +441,35 @@ function SortableRow({ id, canReorder, label, children }: SortableRowProps) {
         }}
         {...attributes}
         {...listeners}
+      >
+        <IconGripVertical size={14} />
+      </ActionIcon>
+      <Box style={{ flex: 1, minWidth: 0 }}>{children}</Box>
+    </Group>
+  );
+}
+
+/**
+ * The row travelling with the cursor. Mirrors SortableRow's gutter so the
+ * preview sits exactly where the original was picked up, and renders the real
+ * ChildRow rather than a summary so it looks like the row itself moving.
+ */
+function DragPreviewRow({ children }: { children: ReactNode }) {
+  return (
+    <Group
+      gap="xs"
+      wrap="nowrap"
+      align="flex-start"
+      style={{ cursor: "grabbing" }}
+    >
+      <ActionIcon
+        component="div"
+        variant="subtle"
+        color="gray"
+        size="sm"
+        mt={4}
+        aria-hidden
+        tabIndex={-1}
       >
         <IconGripVertical size={14} />
       </ActionIcon>
