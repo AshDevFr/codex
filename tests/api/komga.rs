@@ -5180,10 +5180,13 @@ async fn test_komga_want_to_read_virtual_collection() {
     assert_eq!(members.content[0].id, bleach.id.to_string());
     assert_eq!(members.content[1].id, naruto.id.to_string());
 
-    // Thumbnail redirects to the first queued series.
+    // The thumbnail is the first queued series' cover, served as image bytes.
+    // These fixtures have no book files to build one from, so the cover
+    // resolves to nothing; see test_komga_container_thumbnails_serve_image_bytes
+    // for the contract with a real file behind it.
     let request = get_request_with_auth("/komga/api/v1/collections/want-to-read/thumbnail", &token);
     let (status, _) = make_raw_request(app.clone(), request).await;
-    assert_eq!(status, StatusCode::TEMPORARY_REDIRECT);
+    assert_eq!(status, StatusCode::NOT_FOUND);
 
     // Reverse lookup: queued series report the virtual collection...
     let request = get_request_with_auth(
@@ -5273,10 +5276,12 @@ async fn test_komga_want_to_read_virtual_readlist() {
     assert_eq!(members.total_elements, 1);
     assert_eq!(members.content[0].id, queued_book.id.to_string());
 
-    // Thumbnail redirects to the first queued book.
+    // The thumbnail is the first queued book's cover, served as image bytes.
+    // This fixture's book has no readable file behind it, so there is nothing
+    // to build a cover from; see test_komga_container_thumbnails_serve_image_bytes.
     let request = get_request_with_auth("/komga/api/v1/readlists/want-to-read/thumbnail", &token);
     let (status, _) = make_raw_request(app.clone(), request).await;
-    assert_eq!(status, StatusCode::TEMPORARY_REDIRECT);
+    assert_eq!(status, StatusCode::NOT_FOUND);
 
     // Reverse lookup: the queued book reports the virtual read list...
     let request = get_request_with_auth(
@@ -5413,7 +5418,9 @@ async fn test_komga_automatic_collection_reads_like_any_other() {
         &token,
     );
     let (status, _) = make_raw_request(app.clone(), request).await;
-    assert_eq!(status, StatusCode::TEMPORARY_REDIRECT);
+    // Resolves to the matching series, which has no book file to build a cover
+    // from in this fixture; the point here is that the rule resolves at all.
+    assert_eq!(status, StatusCode::NOT_FOUND);
 
     // Reverse lookup: deliberately excluded.
     let request = get_request_with_auth(
@@ -5836,4 +5843,100 @@ async fn test_komga_series_thumbnail_is_cached_and_revalidates() {
     let (status, _, body) = make_full_request(app, request).await;
     assert_eq!(status, StatusCode::NOT_MODIFIED);
     assert!(body.is_empty());
+}
+
+/// Komga answers a collection's or read list's thumbnail URL with the image
+/// itself, not with a pointer to one. Codex used to reply with a 307 to the
+/// native series/book thumbnail; Komic never follows that, so every container
+/// rendered with a blank cover even though the list behind it was fine.
+#[tokio::test]
+async fn test_komga_container_thumbnails_serve_image_bytes() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let cbz_dir = tempfile::TempDir::new().unwrap();
+    let cbz_path = create_test_cbz(&cbz_dir, 3, false);
+
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Batman", None)
+        .await
+        .unwrap();
+    let book = create_test_book_with_hash(
+        &db,
+        &library,
+        &series,
+        "Issue 1",
+        cbz_path.to_str().unwrap(),
+        "hash_container_cover",
+    )
+    .await;
+
+    let coll = CollectionRepository::create(&db, "Batman Collection", None, true, None)
+        .await
+        .unwrap();
+    CollectionRepository::add_series(&db, coll.id, series.id)
+        .await
+        .unwrap();
+
+    let rl = ReadListRepository::create(&db, "Batman Reading Order", None, true)
+        .await
+        .unwrap();
+    ReadListRepository::add_book(&db, rl.id, book.id)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    for uri in [
+        format!("/komga/api/v1/collections/{}/thumbnail", coll.id),
+        format!("/komga/api/v1/readlists/{}/thumbnail", rl.id),
+    ] {
+        let request = get_request_with_auth(&uri, &token);
+        let (status, headers, body) = make_full_request(app.clone(), request).await;
+        assert_eq!(status, StatusCode::OK, "{uri}");
+        assert_eq!(
+            headers.get("content-type").unwrap(),
+            "image/jpeg",
+            "{uri} must return the image itself, never a redirect"
+        );
+        assert!(
+            body.starts_with(&[0xFF, 0xD8, 0xFF]),
+            "{uri} body must be JPEG bytes"
+        );
+
+        // The cover is only meaningful for the caller who resolved it: sharing
+        // tags and rule-backed membership make "first member" per-user, so a
+        // shared cache must not hold it.
+        let cache_control = headers
+            .get("cache-control")
+            .expect("cover must declare its cacheability")
+            .to_str()
+            .unwrap();
+        assert!(
+            cache_control.contains("private"),
+            "{uri} cache-control must be private, got {cache_control}"
+        );
+
+        // An ETag turns the revalidation after that short max-age into a 304
+        // rather than a re-download.
+        let etag = headers
+            .get("etag")
+            .expect("cover must carry an ETag")
+            .to_str()
+            .unwrap()
+            .to_string();
+
+        let request = axum::http::Request::builder()
+            .method("GET")
+            .uri(&uri)
+            .header("Authorization", format!("Bearer {token}"))
+            .header("If-None-Match", &etag)
+            .body(String::new())
+            .unwrap();
+        let (status, _, body) = make_full_request(app.clone(), request).await;
+        assert_eq!(status, StatusCode::NOT_MODIFIED, "{uri}");
+        assert!(body.is_empty(), "{uri} 304 must not carry a body");
+    }
 }

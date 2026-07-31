@@ -6884,7 +6884,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get a collection's thumbnail (redirects to the first visible member series). */
+        /** Get a collection's thumbnail (the first visible member series' cover). */
         get: operations["komga_get_collection_thumbnail"];
         put?: never;
         post?: never;
@@ -7123,7 +7123,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get a read list's thumbnail (redirects to the first visible member book). */
+        /** Get a read list's thumbnail (the first visible member book's cover). */
         get: operations["komga_get_readlist_thumbnail"];
         put?: never;
         post?: never;
@@ -36066,12 +36066,23 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            307: {
+            /** @description Collection thumbnail image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": unknown;
+                };
+            };
+            /** @description Not modified */
+            304: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
+            /** @description Collection not found or has no visible series */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -36380,12 +36391,23 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            307: {
+            /** @description Read list thumbnail image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": unknown;
+                };
+            };
+            /** @description Not modified */
+            304: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
+            /** @description Read list not found or has no visible books */
             404: {
                 headers: {
                     [name: string]: unknown;

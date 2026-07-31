@@ -19896,7 +19896,7 @@
         "tags": [
           "Komga"
         ],
-        "summary": "Get a collection's thumbnail (redirects to the first visible member series).",
+        "summary": "Get a collection's thumbnail (the first visible member series' cover).",
         "operationId": "komga_get_collection_thumbnail",
         "parameters": [
           {
@@ -19918,11 +19918,17 @@
           }
         ],
         "responses": {
-          "307": {
-            "description": ""
+          "200": {
+            "description": "Collection thumbnail image",
+            "content": {
+              "image/jpeg": {}
+            }
+          },
+          "304": {
+            "description": "Not modified"
           },
           "404": {
-            "description": ""
+            "description": "Collection not found or has no visible series"
           }
         },
         "security": [
@@ -20392,7 +20398,7 @@
         "tags": [
           "Komga"
         ],
-        "summary": "Get a read list's thumbnail (redirects to the first visible member book).",
+        "summary": "Get a read list's thumbnail (the first visible member book's cover).",
         "operationId": "komga_get_readlist_thumbnail",
         "parameters": [
           {
@@ -20414,11 +20420,17 @@
           }
         ],
         "responses": {
-          "307": {
-            "description": ""
+          "200": {
+            "description": "Read list thumbnail image",
+            "content": {
+              "image/jpeg": {}
+            }
+          },
+          "304": {
+            "description": "Not modified"
           },
           "404": {
-            "description": ""
+            "description": "Read list not found or has no visible books"
           }
         },
         "security": [

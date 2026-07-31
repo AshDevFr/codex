@@ -13,8 +13,11 @@ use super::super::dto::book::KomgaBookDto;
 use super::super::dto::pagination::KomgaPage;
 use super::super::dto::stubs::{KomgaReadListDto, StubPaginationQuery};
 use super::books::get_series_title;
-use super::collections::{WANT_TO_READ_ID, WANT_TO_READ_NAME, queue_dates};
+use super::collections::{
+    MEMBER_COVER_CACHE_CONTROL, WANT_TO_READ_ID, WANT_TO_READ_NAME, queue_dates,
+};
 use crate::require_permission;
+use crate::routes::v1::handlers::pages::generate_book_thumbnail;
 use crate::{
     error::ApiError,
     extractors::{AuthState, ContentFilter, FlexibleAuthContext},
@@ -22,8 +25,10 @@ use crate::{
 };
 use axum::{
     Json,
+    body::Body,
     extract::{Path, Query, State},
-    response::Redirect,
+    http::{HeaderMap, StatusCode, header},
+    response::Response,
 };
 use codex_db::repositories::{
     BookMetadataRepository, BookRepository, ReadListRepository, ReadProgressRepository,
@@ -309,11 +314,15 @@ pub async fn get_readlist_books(
     Ok(Json(KomgaPage::new(content, page, size, total)))
 }
 
-/// Get a read list's thumbnail (redirects to the first visible member book).
+/// Get a read list's thumbnail (the first visible member book's cover).
 #[utoipa::path(
     get,
     path = "/{prefix}/api/v1/readlists/{read_list_id}/thumbnail",
-    responses((status = 307), (status = 404)),
+    responses(
+        (status = 200, description = "Read list thumbnail image", content_type = "image/jpeg"),
+        (status = 304, description = "Not modified"),
+        (status = 404, description = "Read list not found or has no visible books"),
+    ),
     params(("prefix" = String, Path, description = "Komga API prefix"), ("read_list_id" = String, Path)),
     security(("jwt_bearer" = []), ("api_key" = [])),
     tag = "Komga"
@@ -321,8 +330,9 @@ pub async fn get_readlist_books(
 pub async fn get_readlist_thumbnail(
     State(state): State<Arc<AuthState>>,
     FlexibleAuthContext(auth): FlexibleAuthContext,
+    headers: HeaderMap,
     Path(read_list_id): Path<String>,
-) -> Result<Redirect, ApiError> {
+) -> Result<Response, ApiError> {
     auth.require_permission(&Permission::BooksRead)?;
     let vis = user_visibility(&state, auth.user_id).await?;
     let members = if read_list_id == WANT_TO_READ_ID {
@@ -348,14 +358,94 @@ pub async fn get_readlist_thumbnail(
     let first = members
         .first()
         .ok_or_else(|| ApiError::NotFound("Read list has no visible books".to_string()))?;
-    // Cache-bust with the member's update time so browsers refetch the image
-    // after its cover is regenerated (the target URL is otherwise cached
-    // indefinitely; the card grids bust their own image URLs the same way).
-    Ok(Redirect::temporary(&format!(
-        "/api/v1/books/{}/thumbnail?v={}",
-        first.id,
-        first.updated_at.timestamp_millis()
-    )))
+
+    serve_member_cover(&state, first, &headers).await
+}
+
+/// Serve a member book's cover as the read list's own thumbnail.
+///
+/// Komga answers this URL with the image itself, so, exactly as for a
+/// collection, redirecting here leaves clients that do not follow it with a
+/// blank cover. See [`MEMBER_COVER_CACHE_CONTROL`] for why these bytes are
+/// cached privately and briefly rather than inheriting the book cover's own
+/// long-lived caching.
+async fn serve_member_cover(
+    state: &Arc<AuthState>,
+    book: &codex_db::entities::books::Model,
+    headers: &HeaderMap,
+) -> Result<Response, ApiError> {
+    if let Some(meta) = state
+        .thumbnail_service
+        .get_thumbnail_metadata(book.id)
+        .await
+    {
+        if let Some(if_none_match) = headers.get(header::IF_NONE_MATCH)
+            && let Ok(client_etag) = if_none_match.to_str()
+        {
+            let client_etag = client_etag.trim().trim_start_matches("W/");
+            if client_etag == meta.etag
+                || client_etag.trim_matches('"') == meta.etag.trim_matches('"')
+            {
+                return Ok(Response::builder()
+                    .status(StatusCode::NOT_MODIFIED)
+                    .header(header::ETAG, &meta.etag)
+                    .header(header::CACHE_CONTROL, MEMBER_COVER_CACHE_CONTROL)
+                    .body(Body::empty())
+                    .unwrap());
+            }
+        }
+
+        if let Some(stream) = state.thumbnail_service.get_thumbnail_stream(book.id).await {
+            return Ok(Response::builder()
+                .status(StatusCode::OK)
+                .header(header::CONTENT_TYPE, "image/jpeg")
+                .header(header::CACHE_CONTROL, MEMBER_COVER_CACHE_CONTROL)
+                .header(header::CONTENT_LENGTH, meta.size)
+                .header(header::ETAG, &meta.etag)
+                .body(Body::from_stream(stream))
+                .unwrap());
+        }
+    }
+
+    // A member whose file is missing or unreadable means this read list has no
+    // cover to show, which is a 404 rather than a server fault: the list itself
+    // is fine, and a client asking for a picture wants "there isn't one", not a
+    // 500. The underlying error is logged so it stays diagnosable.
+    let thumbnail_data = if book.page_count == 0 {
+        return Err(ApiError::NotFound(
+            "Read list has no cover available".to_string(),
+        ));
+    } else {
+        match generate_book_thumbnail(state, book).await {
+            Ok(data) => data,
+            Err(e) => {
+                tracing::warn!(
+                    "Failed to build read list cover from book {}: {e:?}",
+                    book.id
+                );
+                return Err(ApiError::NotFound(
+                    "Read list has no cover available".to_string(),
+                ));
+            }
+        }
+    };
+
+    // ETag read back off the file just written, so it matches what the cache
+    // branch above will send and the next revalidation is a 304.
+    let mut response = Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "image/jpeg")
+        .header(header::CACHE_CONTROL, MEMBER_COVER_CACHE_CONTROL)
+        .header(header::CONTENT_LENGTH, thumbnail_data.len());
+    if let Some(meta) = state
+        .thumbnail_service
+        .get_thumbnail_metadata(book.id)
+        .await
+    {
+        response = response.header(header::ETAG, meta.etag);
+    }
+
+    Ok(response.body(Body::from(thumbnail_data)).unwrap())
 }
 
 /// List the read lists that contain a book (Komga-compatible).

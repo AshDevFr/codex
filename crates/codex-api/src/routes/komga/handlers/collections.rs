@@ -13,7 +13,7 @@
 use super::super::dto::pagination::KomgaPage;
 use super::super::dto::series::KomgaSeriesDto;
 use super::super::dto::stubs::{KomgaCollectionDto, StubPaginationQuery};
-use super::series::build_series_dto;
+use super::series::{build_series_dto, generate_series_thumbnail};
 use crate::require_permission;
 use crate::{
     error::ApiError,
@@ -22,9 +22,10 @@ use crate::{
 };
 use axum::{
     Json,
+    body::Body,
     extract::{Path, Query, State},
-    http::header,
-    response::{IntoResponse, Redirect},
+    http::{HeaderMap, StatusCode, header},
+    response::Response,
 };
 use codex_db::repositories::{
     CollectionRepository, SeriesRepository, WantToReadRepository, visibility::SeriesVisibility,
@@ -38,6 +39,24 @@ use uuid::Uuid;
 /// treat collection IDs as opaque strings, so a non-UUID value is safe.
 pub(crate) const WANT_TO_READ_ID: &str = "want-to-read";
 pub(crate) const WANT_TO_READ_NAME: &str = "Want to Read";
+
+/// `Cache-Control` for a collection's or read list's cover.
+///
+/// Deliberately `private` and short-lived, unlike the series and book covers
+/// these bytes are copied from. *Which* member represents the container depends
+/// on the caller: sharing-tag visibility hides members per user, and an
+/// automatic collection's rule can reference the viewer's own ratings or read
+/// state, so two users legitimately resolve to different covers. A shared cache
+/// holding this response would serve one user's cover to another, so `private`
+/// keeps proxies out.
+///
+/// The short `max-age` lets the caller's own client skip the round-trip while
+/// browsing, which matters because resolving a cover is a rule evaluation
+/// rather than a lookup. The cost is that a cover can lag a membership change
+/// by up to a minute: a slightly old picture, where a stale member list would
+/// be a wrong answer. The accompanying `ETag` makes the revalidation after that
+/// minute a 304 rather than a re-download.
+pub(crate) const MEMBER_COVER_CACHE_CONTROL: &str = "private, max-age=60";
 
 fn parse_id(value: &str) -> Result<Uuid, ApiError> {
     Uuid::parse_str(value).map_err(|_| ApiError::NotFound("Collection not found".to_string()))
@@ -314,11 +333,15 @@ pub async fn get_collection_series(
     Ok(Json(KomgaPage::new(content, page, size, total)))
 }
 
-/// Get a collection's thumbnail (redirects to the first visible member series).
+/// Get a collection's thumbnail (the first visible member series' cover).
 #[utoipa::path(
     get,
     path = "/{prefix}/api/v1/collections/{collection_id}/thumbnail",
-    responses((status = 307), (status = 404)),
+    responses(
+        (status = 200, description = "Collection thumbnail image", content_type = "image/jpeg"),
+        (status = 304, description = "Not modified"),
+        (status = 404, description = "Collection not found or has no visible series"),
+    ),
     params(("prefix" = String, Path, description = "Komga API prefix"), ("collection_id" = String, Path)),
     security(("jwt_bearer" = []), ("api_key" = [])),
     tag = "Komga"
@@ -326,8 +349,9 @@ pub async fn get_collection_series(
 pub async fn get_collection_thumbnail(
     State(state): State<Arc<AuthState>>,
     FlexibleAuthContext(auth): FlexibleAuthContext,
+    headers: HeaderMap,
     Path(collection_id): Path<String>,
-) -> Result<impl IntoResponse, ApiError> {
+) -> Result<Response, ApiError> {
     auth.require_permission(&Permission::SeriesRead)?;
     let vis = user_visibility(&state, auth.user_id).await?;
     let members = if collection_id == WANT_TO_READ_ID {
@@ -349,30 +373,89 @@ pub async fn get_collection_thumbnail(
     let first = members
         .first()
         .ok_or_else(|| ApiError::NotFound("Collection has no visible series".to_string()))?;
-    // Cache-bust with the member's update time so browsers refetch the image
-    // after its cover is regenerated (the target URL is otherwise cached
-    // indefinitely; the card grids bust their own image URLs the same way).
-    //
-    // The redirect itself must not be cached, by anyone. Which series is "first"
-    // depends on the caller: sharing-tag visibility hides members per user, and
-    // an automatic collection's rule can reference the viewer's own ratings or
-    // read state, so two users legitimately resolve to different covers. A
-    // shared cache holding this 307 would serve one user's cover to another.
-    // `private` keeps proxies out. A short `max-age` lets the caller's own
-    // browser skip the round-trip while browsing, which matters because
-    // resolving a cover is a rule evaluation, not a lookup. The cost is that a
-    // cover can lag a membership change by up to a minute — a slightly old
-    // picture, where a stale member list would be a wrong answer. Only the
-    // redirect is short-lived; the series thumbnail it points at keeps its
-    // long-lived cache, so no image bytes are re-fetched.
-    Ok((
-        [(header::CACHE_CONTROL, "private, max-age=60")],
-        Redirect::temporary(&format!(
-            "/api/v1/series/{}/thumbnail?v={}",
-            first.id,
-            first.updated_at.timestamp_millis()
-        )),
-    ))
+
+    serve_member_cover(&state, first.id, &headers).await
+}
+
+/// Serve a member series' cover as the collection's own thumbnail.
+///
+/// Komga answers this URL with the image itself (`image/jpeg`), so clients
+/// treat it as the picture rather than as a pointer to one. This used to reply
+/// with a 307 to the native series thumbnail; Komic does not follow that, so
+/// every collection rendered with a blank cover while the list behind it was
+/// perfectly healthy.
+async fn serve_member_cover(
+    state: &Arc<AuthState>,
+    series_id: Uuid,
+    headers: &HeaderMap,
+) -> Result<Response, ApiError> {
+    if let Some(meta) = state
+        .thumbnail_service
+        .get_series_thumbnail_metadata(series_id)
+        .await
+    {
+        if let Some(if_none_match) = headers.get(header::IF_NONE_MATCH)
+            && let Ok(client_etag) = if_none_match.to_str()
+        {
+            let client_etag = client_etag.trim().trim_start_matches("W/");
+            if client_etag == meta.etag
+                || client_etag.trim_matches('"') == meta.etag.trim_matches('"')
+            {
+                return Ok(Response::builder()
+                    .status(StatusCode::NOT_MODIFIED)
+                    .header(header::ETAG, &meta.etag)
+                    .header(header::CACHE_CONTROL, MEMBER_COVER_CACHE_CONTROL)
+                    .body(Body::empty())
+                    .unwrap());
+            }
+        }
+
+        if let Some(stream) = state
+            .thumbnail_service
+            .get_series_thumbnail_stream(series_id)
+            .await
+        {
+            return Ok(Response::builder()
+                .status(StatusCode::OK)
+                .header(header::CONTENT_TYPE, "image/jpeg")
+                .header(header::CACHE_CONTROL, MEMBER_COVER_CACHE_CONTROL)
+                .header(header::CONTENT_LENGTH, meta.size)
+                .header(header::ETAG, &meta.etag)
+                .body(Body::from_stream(stream))
+                .unwrap());
+        }
+    }
+
+    // A member whose file is missing or unreadable means this collection has no
+    // cover to show, which is a 404 rather than a server fault: the collection
+    // itself is fine, and a client asking for a picture wants "there isn't one",
+    // not a 500. The underlying error is logged so it stays diagnosable.
+    let thumbnail_data = match generate_series_thumbnail(state, series_id).await {
+        Ok(data) => data,
+        Err(e) => {
+            tracing::warn!("Failed to build collection cover from series {series_id}: {e:?}");
+            return Err(ApiError::NotFound(
+                "Collection has no cover available".to_string(),
+            ));
+        }
+    };
+
+    // ETag read back off the file just written, so it matches what the cache
+    // branch above will send and the next revalidation is a 304.
+    let mut response = Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "image/jpeg")
+        .header(header::CACHE_CONTROL, MEMBER_COVER_CACHE_CONTROL)
+        .header(header::CONTENT_LENGTH, thumbnail_data.len());
+    if let Some(meta) = state
+        .thumbnail_service
+        .get_series_thumbnail_metadata(series_id)
+        .await
+    {
+        response = response.header(header::ETAG, meta.etag);
+    }
+
+    Ok(response.body(Body::from(thumbnail_data)).unwrap())
 }
 
 /// List the collections that contain a series (Komga-compatible).

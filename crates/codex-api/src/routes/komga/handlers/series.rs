@@ -637,40 +637,7 @@ pub async fn get_series_thumbnail(
         }
     }
 
-    // Verify series exists
-    let _series = SeriesRepository::get_by_id(&state.db, series_id)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
-        .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
-
-    // Get the series cover - try selected cover first
-    let image_data = if let Some(cover) = SeriesCoversRepository::get_selected(&state.db, series_id)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to fetch cover: {}", e)))?
-    {
-        fs::read(&cover.path).await.map_err(|e| {
-            ApiError::Internal(format!("Failed to read cover from {}: {}", cover.path, e))
-        })?
-    } else {
-        // Fall back to first book's first page
-        get_default_series_cover(&state, series_id).await?
-    };
-
-    // Generate thumbnail (max 400px width or height)
-    let thumbnail_data = generate_thumbnail(image_data, 400)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to generate thumbnail: {}", e)))?;
-
-    // Populate the cache so the next request is a file read. A failure here
-    // only costs the next caller a regeneration, so it must not fail the
-    // response that already has an image in hand.
-    if let Err(e) = state
-        .thumbnail_service
-        .save_series_thumbnail(series_id, &thumbnail_data)
-        .await
-    {
-        tracing::warn!("Failed to cache series thumbnail for {}: {}", series_id, e);
-    }
+    let thumbnail_data = generate_series_thumbnail(&state, series_id).await?;
 
     // Read the ETag back off the file just written rather than deriving one
     // here: it has to be byte-identical to what the cache-hit branch above will
@@ -807,6 +774,53 @@ pub async fn get_series_books(
 // ============================================================================
 // Helper Functions
 // ============================================================================
+
+/// Build a series cover from its selected image (or, failing that, its first
+/// book's first page) and persist it to the thumbnail cache.
+///
+/// Shared with the collection thumbnail endpoint, which represents a collection
+/// by one of its member series' covers and so needs the same bytes.
+pub(crate) async fn generate_series_thumbnail(
+    state: &Arc<AuthState>,
+    series_id: Uuid,
+) -> Result<Vec<u8>, ApiError> {
+    // Verify series exists
+    let _series = SeriesRepository::get_by_id(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
+
+    // Get the series cover - try selected cover first
+    let image_data = if let Some(cover) = SeriesCoversRepository::get_selected(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch cover: {}", e)))?
+    {
+        fs::read(&cover.path).await.map_err(|e| {
+            ApiError::Internal(format!("Failed to read cover from {}: {}", cover.path, e))
+        })?
+    } else {
+        // Fall back to first book's first page
+        get_default_series_cover(state, series_id).await?
+    };
+
+    // Generate thumbnail (max 400px width or height)
+    let thumbnail_data = generate_thumbnail(image_data, 400)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to generate thumbnail: {}", e)))?;
+
+    // Populate the cache so the next request is a file read. A failure here
+    // only costs the next caller a regeneration, so it must not fail the
+    // response that already has an image in hand.
+    if let Err(e) = state
+        .thumbnail_service
+        .save_series_thumbnail(series_id, &thumbnail_data)
+        .await
+    {
+        tracing::warn!("Failed to cache series thumbnail for {}: {}", series_id, e);
+    }
+
+    Ok(thumbnail_data)
+}
 
 /// Build a KomgaSeriesDto from a series entity
 pub(crate) async fn build_series_dto(
