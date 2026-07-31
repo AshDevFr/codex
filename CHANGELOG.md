@@ -2,6 +2,19 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.43.1] - 2026-07-31
+
+### 🚀 Features
+
+- *(web)* Reorder filter builder conditions by dragging
+
+### 🐛 Bug Fixes
+
+- *(komga)* Honour the sort parameter on a collection's series
+- *(komga)* Honour the sort parameter on a read list's books
+- *(komga)* Stop thumbnail requests from blocking the async runtime
+- *(web)* Stop filter drags reverting and fix drops around groups
+
 ## [1.43.0] - 2026-07-30
 
 ### 🚀 Features
