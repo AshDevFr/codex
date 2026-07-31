@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.43.2] - 2026-07-31
+
+### 🐛 Bug Fixes
+
+- *(komga)* Serve collection and read list covers as image bytes
+
 ## [1.43.1] - 2026-07-31
 
 ### 🚀 Features
