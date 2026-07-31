@@ -331,6 +331,88 @@ export function removeAtPath(root: Condition, path: number[]): Condition {
   return makeGroup({ mode: group.mode, children: newChildren });
 }
 
+/**
+ * Reorder the children of the group at `path`, moving the child at `from` to
+ * index `to`. Order is cosmetic (`allOf`/`anyOf` are commutative), but it is
+ * how the user groups related rows visually, so it round-trips through the
+ * stored rule.
+ *
+ * Returns `root` untouched when the path doesn't resolve to a group or when
+ * either index is out of range, so a stray drop event can't corrupt the tree.
+ */
+export function moveAtPath(
+  root: Condition,
+  path: number[],
+  from: number,
+  to: number,
+): Condition {
+  const group = asGroup(root);
+  if (!group) return root;
+
+  if (path.length > 0) {
+    const [head, ...rest] = path;
+    if (head < 0 || head >= group.children.length) return root;
+    const newChildren = group.children.slice();
+    newChildren[head] = moveAtPath(newChildren[head], rest, from, to);
+    return makeGroup({ mode: group.mode, children: newChildren });
+  }
+
+  const count = group.children.length;
+  if (from === to) return root;
+  if (from < 0 || from >= count || to < 0 || to >= count) return root;
+
+  const newChildren = group.children.slice();
+  const [moved] = newChildren.splice(from, 1);
+  newChildren.splice(to, 0, moved);
+  return makeGroup({ mode: group.mode, children: newChildren });
+}
+
+/**
+ * Sortable ids are derived from tree position rather than stored on the
+ * condition. Builder rows are keyed by index so that editing a value doesn't
+ * remount the row and steal focus from the input mid-keystroke, and an id
+ * living on the condition would defeat that. Encoding the parent path in the
+ * id is also what lets a drop that crossed into another group be rejected.
+ */
+export function dragId(parentPath: number[], index: number): string {
+  return `${parentPath.join(".")}#${index}`;
+}
+
+function parseDragId(id: string): { parentKey: string; index: number } | null {
+  const sep = id.lastIndexOf("#");
+  if (sep === -1) return null;
+  const index = Number(id.slice(sep + 1));
+  if (!Number.isInteger(index)) return null;
+  return { parentKey: id.slice(0, sep), index };
+}
+
+/**
+ * Resolve a drag from `activeId` onto `overId` into a new tree, or `null` when
+ * the drop should be ignored.
+ *
+ * Rows reorder among their siblings only: moving one in or out of a nested
+ * group would change which series the rule matches, and a drag shouldn't
+ * change results silently.
+ */
+export function applyDragMove(
+  root: Condition,
+  activeId: string,
+  overId: string,
+): Condition | null {
+  const from = parseDragId(activeId);
+  const to = parseDragId(overId);
+  if (!from || !to) return null;
+  if (from.parentKey !== to.parentKey) return null;
+  if (from.index === to.index) return null;
+
+  const parentPath =
+    from.parentKey === "" ? [] : from.parentKey.split(".").map(Number);
+  if (parentPath.some((n) => !Number.isInteger(n))) return null;
+
+  const next = moveAtPath(root, parentPath, from.index, to.index);
+  return next === root ? null : next;
+}
+
 export function appendChildAtPath(
   root: Condition,
   path: number[],

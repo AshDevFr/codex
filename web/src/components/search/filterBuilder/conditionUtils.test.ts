@@ -2,13 +2,16 @@ import { describe, expect, it } from "vitest";
 import type { BookCondition, SeriesCondition } from "@/types/filters";
 import {
   appendChildAtPath,
+  applyDragMove,
   asGroup,
+  dragId,
   emptyRoot,
   ensureRoot,
   isGroup,
   isLeafComplete,
   leafFieldKey,
   leafOperator,
+  moveAtPath,
   newLeaf,
   normalizeForEmit,
   removeAtPath,
@@ -179,6 +182,139 @@ describe("conditionUtils — tree mutations", () => {
     expect(nested.children).toHaveLength(3);
   });
 });
+
+describe("conditionUtils — moveAtPath", () => {
+  const root = (): SeriesCondition => ({
+    allOf: [
+      { title: { operator: "is", value: "a" } },
+      {
+        anyOf: [
+          { tag: { operator: "is", value: "x" } },
+          { tag: { operator: "is", value: "y" } },
+          { tag: { operator: "is", value: "z" } },
+        ],
+      },
+      { genre: { operator: "is", value: "fantasy" } },
+    ],
+  });
+
+  it("moves a child down within the root group", () => {
+    const children = asGroup(moveAtPath(root(), [], 0, 2))!.children;
+    expect(children[0]).toHaveProperty("anyOf");
+    expect(children[1]).toEqual({
+      genre: { operator: "is", value: "fantasy" },
+    });
+    expect(children[2]).toEqual({ title: { operator: "is", value: "a" } });
+  });
+
+  it("moves a child up within the root group", () => {
+    const children = asGroup(moveAtPath(root(), [], 2, 0))!.children;
+    expect(children[0]).toEqual({
+      genre: { operator: "is", value: "fantasy" },
+    });
+    expect(children[1]).toEqual({ title: { operator: "is", value: "a" } });
+    expect(children[2]).toHaveProperty("anyOf");
+  });
+
+  it("moves a child within a nested group", () => {
+    const next = moveAtPath(root(), [1], 2, 0);
+    const nested = asGroup(asGroup(next)!.children[1])!;
+    expect(nested.children.map((c) => leafOperatorValue(c))).toEqual([
+      "z",
+      "x",
+      "y",
+    ]);
+  });
+
+  it("preserves the combinator mode of the group it reorders", () => {
+    const next = moveAtPath(root(), [1], 0, 1);
+    expect(asGroup(asGroup(next)!.children[1])!.mode).toBe("anyOf");
+  });
+
+  it("is a no-op when the indices are equal", () => {
+    const before = root();
+    expect(moveAtPath(before, [], 1, 1)).toEqual(before);
+  });
+
+  it("is a no-op when an index is out of range", () => {
+    const before = root();
+    expect(moveAtPath(before, [], 0, 9)).toEqual(before);
+    expect(moveAtPath(before, [], -1, 0)).toEqual(before);
+    expect(moveAtPath(before, [], 5, 0)).toEqual(before);
+  });
+
+  it("is a no-op when the path does not point at a group", () => {
+    const before = root();
+    // Path [0] is a leaf, not a group, so there is nothing to reorder inside it.
+    expect(moveAtPath(before, [0], 0, 1)).toEqual(before);
+  });
+
+  it("does not mutate the input tree", () => {
+    const before = root();
+    const snapshot = structuredClone(before);
+    moveAtPath(before, [1], 0, 2);
+    expect(before).toEqual(snapshot);
+  });
+});
+
+describe("conditionUtils — applyDragMove", () => {
+  const root = (): SeriesCondition => ({
+    allOf: [
+      { title: { operator: "is", value: "a" } },
+      {
+        anyOf: [
+          { tag: { operator: "is", value: "x" } },
+          { tag: { operator: "is", value: "y" } },
+        ],
+      },
+    ],
+  });
+
+  it("builds ids that encode the parent path", () => {
+    expect(dragId([], 0)).toBe("#0");
+    expect(dragId([1], 2)).toBe("1#2");
+    expect(dragId([1, 0], 3)).toBe("1.0#3");
+  });
+
+  it("reorders siblings at the root", () => {
+    const next = applyDragMove(root(), dragId([], 0), dragId([], 1));
+    expect(asGroup(next as SeriesCondition)!.children[0]).toHaveProperty(
+      "anyOf",
+    );
+  });
+
+  it("reorders siblings inside a nested group", () => {
+    const next = applyDragMove(root(), dragId([1], 1), dragId([1], 0));
+    const nested = asGroup(asGroup(next as SeriesCondition)!.children[1])!;
+    expect(nested.children[0]).toEqual({ tag: { operator: "is", value: "y" } });
+  });
+
+  it("rejects a drop that crossed into another group", () => {
+    // Dragging a root row into the nested anyOf would change what matches, so
+    // the drop is ignored rather than applied.
+    expect(applyDragMove(root(), dragId([], 0), dragId([1], 0))).toBeNull();
+    expect(applyDragMove(root(), dragId([1], 0), dragId([], 0))).toBeNull();
+  });
+
+  it("rejects a drop onto itself", () => {
+    expect(applyDragMove(root(), dragId([], 1), dragId([], 1))).toBeNull();
+  });
+
+  it("rejects malformed ids", () => {
+    expect(applyDragMove(root(), "nonsense", dragId([], 1))).toBeNull();
+    expect(applyDragMove(root(), dragId([], 0), "#notanumber")).toBeNull();
+  });
+
+  it("rejects an index that is out of range", () => {
+    expect(applyDragMove(root(), dragId([], 0), dragId([], 9))).toBeNull();
+  });
+});
+
+/** Pull the `value` off a single-key leaf, for terse ordering assertions. */
+function leafOperatorValue(c: SeriesCondition): unknown {
+  const key = Object.keys(c)[0]!;
+  return (c as Record<string, { value?: unknown }>)[key]?.value;
+}
 
 describe("conditionUtils — normalizeForEmit", () => {
   it("emits undefined for an empty root", () => {

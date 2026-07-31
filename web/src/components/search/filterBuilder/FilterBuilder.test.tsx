@@ -110,6 +110,83 @@ describe("FilterBuilder", () => {
     expect(screen.getByText(/match any/i)).toBeInTheDocument();
   });
 
+  describe("reordering", () => {
+    it("renders a reorder grip for every sibling row", () => {
+      renderWithProviders(
+        <FilterBuilder
+          condition={{
+            allOf: [
+              { title: { operator: "contains", value: "punch" } },
+              { title: { operator: "contains", value: "saitama" } },
+              { genre: { operator: "is", value: "action" } },
+            ],
+          }}
+          target="series"
+          onChange={vi.fn()}
+        />,
+      );
+
+      expect(
+        screen.getAllByRole("button", { name: /reorder filter/i }),
+      ).toHaveLength(3);
+    });
+
+    it("labels a nested group's grip as a group", () => {
+      renderWithProviders(
+        <FilterBuilder
+          condition={{
+            allOf: [
+              { title: { operator: "contains", value: "punch" } },
+              {
+                anyOf: [
+                  { tag: { operator: "is", value: "manga" } },
+                  { tag: { operator: "is", value: "comic" } },
+                ],
+              },
+            ],
+          }}
+          target="series"
+          onChange={vi.fn()}
+        />,
+      );
+
+      expect(
+        screen.getByRole("button", { name: /reorder group/i }),
+      ).toBeInTheDocument();
+      // The two leaves inside the group plus the one at the root.
+      expect(
+        screen.getAllByRole("button", { name: /reorder filter/i }),
+      ).toHaveLength(3);
+    });
+
+    it("hides the grip when a group has a single row", () => {
+      renderWithProviders(
+        <FilterBuilder
+          condition={{
+            allOf: [{ title: { operator: "contains", value: "punch" } }],
+          }}
+          target="series"
+          onChange={vi.fn()}
+        />,
+      );
+
+      // Nothing to reorder, so the grip is hidden, which also takes it out of
+      // the accessibility tree and the tab order.
+      expect(
+        screen.queryByRole("button", { name: /reorder filter/i }),
+      ).not.toBeInTheDocument();
+
+      // The gutter still occupies its column so a one-row group lines up with
+      // multi-row ones. Queried by attribute because a `visibility: hidden`
+      // element has no computed accessible name to match on.
+      const grips = document.querySelectorAll<HTMLElement>(
+        '[aria-label="Reorder filter"]',
+      );
+      expect(grips).toHaveLength(1);
+      expect(grips[0].style.visibility).toBe("hidden");
+    });
+  });
+
   describe("responsive leaf layout", () => {
     afterEach(() => {
       // Reset to the desktop default so the override doesn't leak between tests.

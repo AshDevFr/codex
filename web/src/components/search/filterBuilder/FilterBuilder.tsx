@@ -1,4 +1,21 @@
 import {
+  closestCenter,
+  DndContext,
+  type DragEndEvent,
+  KeyboardSensor,
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import {
   ActionIcon,
   Box,
   Button,
@@ -13,14 +30,17 @@ import {
 import {
   IconChevronDown,
   IconFolderPlus,
+  IconGripVertical,
   IconPlus,
   IconTrash,
 } from "@tabler/icons-react";
-import { useMemo } from "react";
+import { type ReactNode, useMemo } from "react";
 import {
   appendChildAtPath,
+  applyDragMove,
   asGroup,
   type Condition,
+  dragId,
   ensureRoot,
   isGroup,
   leafFieldKey,
@@ -55,6 +75,19 @@ export function FilterBuilder({
 }: FilterBuilderProps) {
   const root = useMemo(() => ensureRoot(condition), [condition]);
 
+  const sensors = useSensors(
+    // A small threshold so clicking a select inside a row never reads as a drag.
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    // On touch the builder lives inside a scrollable modal, so a drag has to
+    // be a deliberate press-and-hold or vertical scrolling would break.
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 200, tolerance: 5 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
+
   const emitRoot = (next: Condition) => {
     const group = asGroup(next);
     if (group && group.children.length === 0) {
@@ -64,14 +97,26 @@ export function FilterBuilder({
     onChange(next);
   };
 
+  const handleDragEnd = ({ active, over }: DragEndEvent) => {
+    if (!over) return;
+    const next = applyDragMove(root, String(active.id), String(over.id));
+    if (next) emitRoot(next);
+  };
+
   return (
-    <GroupNodeView
-      condition={root}
-      path={[]}
-      target={target}
-      depth={0}
-      onChange={emitRoot}
-    />
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragEnd={handleDragEnd}
+    >
+      <GroupNodeView
+        condition={root}
+        path={[]}
+        target={target}
+        depth={0}
+        onChange={emitRoot}
+      />
+    </DndContext>
   );
 }
 
@@ -120,6 +165,10 @@ function GroupNodeView({
   };
 
   const isRoot = depth === 0;
+  const childIds = group.children.map((_, idx) => dragId(path, idx));
+  // Nothing to reorder in a one-row group. The gutter still renders so rows
+  // stay aligned with sibling groups; only the grip itself is hidden.
+  const canReorder = group.children.length > 1;
 
   const inner = (
     <Stack gap="xs">
@@ -172,18 +221,26 @@ function GroupNodeView({
         </Text>
       )}
 
-      {group.children.map((child, idx) => (
-        <ChildRow
-          // biome-ignore lint/suspicious/noArrayIndexKey: position is the identity in the tree
-          key={idx}
-          child={child}
-          target={target}
-          depth={depth}
-          path={[...path, idx]}
-          onChange={(next) => replaceChild(idx, next)}
-          onRemove={() => removeChild(idx)}
-        />
-      ))}
+      <SortableContext items={childIds} strategy={verticalListSortingStrategy}>
+        {group.children.map((child, idx) => (
+          <SortableRow
+            // biome-ignore lint/suspicious/noArrayIndexKey: position is the identity in the tree
+            key={idx}
+            id={childIds[idx]}
+            canReorder={canReorder}
+            label={isGroup(child) ? "Reorder group" : "Reorder filter"}
+          >
+            <ChildRow
+              child={child}
+              target={target}
+              depth={depth}
+              path={[...path, idx]}
+              onChange={(next) => replaceChild(idx, next)}
+              onRemove={() => removeChild(idx)}
+            />
+          </SortableRow>
+        ))}
+      </SortableContext>
 
       <Group gap="xs">
         <Button
@@ -238,6 +295,70 @@ function pickDefaultField(
   // "title" is now a shared field that works on both targets, so the
   // default-field picker no longer needs target-specific logic.
   return findField(target, "title") ?? fields[0];
+}
+
+interface SortableRowProps {
+  id: string;
+  canReorder: boolean;
+  /** Accessible name for the grip, e.g. "Reorder filter". */
+  label: string;
+  children: ReactNode;
+}
+
+/**
+ * Wraps a sibling (leaf row or nested group card) in a drag gutter. Wrapping
+ * at this level means both kinds of sibling share one grip column and the
+ * LeafEditor stays unaware of dragging entirely.
+ */
+function SortableRow({ id, canReorder, label, children }: SortableRowProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id, disabled: !canReorder });
+
+  return (
+    <Group
+      ref={setNodeRef}
+      gap="xs"
+      wrap="nowrap"
+      align="flex-start"
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : undefined,
+        // Keep the row being dragged above the group cards it passes over.
+        position: "relative",
+        zIndex: isDragging ? 1 : undefined,
+      }}
+    >
+      <ActionIcon
+        ref={setActivatorNodeRef}
+        variant="subtle"
+        color="gray"
+        size="sm"
+        mt={4}
+        aria-label={label}
+        title={canReorder ? "Drag to reorder" : undefined}
+        style={{
+          cursor: canReorder ? "grab" : "default",
+          // Without this the browser claims the gesture for scrolling and the
+          // drag never starts on touch.
+          touchAction: "none",
+          visibility: canReorder ? undefined : "hidden",
+        }}
+        {...attributes}
+        {...listeners}
+      >
+        <IconGripVertical size={14} />
+      </ActionIcon>
+      <Box style={{ flex: 1, minWidth: 0 }}>{children}</Box>
+    </Group>
+  );
 }
 
 interface ChildRowProps {
