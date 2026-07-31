@@ -73,6 +73,10 @@ pub struct StubPaginationQuery {
     /// Unpaged flag (ignored - accepted for Komic compatibility)
     #[serde(default)]
     pub unpaged: Option<bool>,
+    /// Sort parameter in Komga's `field,direction` form (e.g.
+    /// `createdDate,asc`, `metadata.titleSort,desc`)
+    #[serde(default)]
+    pub sort: Option<String>,
 }
 
 fn default_stub_page_size() -> i32 {

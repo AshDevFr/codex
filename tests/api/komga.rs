@@ -5428,3 +5428,146 @@ async fn test_komga_automatic_collection_reads_like_any_other() {
         "an automatic collection must not be reported as containing the series"
     );
 }
+
+/// Komga clients (Komic among them) sort a collection's series with the same
+/// `field,direction` parameter the top-level series list takes. The sort has to
+/// agree with the fields the returned DTOs carry, so `createdDate` orders by the
+/// series' own `created` value rather than by when it joined the collection.
+#[tokio::test]
+async fn test_komga_collection_series_honours_sort() {
+    use chrono::{Duration, Utc};
+    use sea_orm::{ActiveModelTrait, Set};
+
+    let (db, _temp_dir) = setup_test_db().await;
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Title order, creation order and manual position are all different, so an
+    // assertion can only pass if the requested sort was actually applied.
+    let charlie = SeriesRepository::create(&db, library.id, "Charlie", None)
+        .await
+        .unwrap();
+    let alpha = SeriesRepository::create(&db, library.id, "Alpha", None)
+        .await
+        .unwrap();
+    let bravo = SeriesRepository::create(&db, library.id, "Bravo", None)
+        .await
+        .unwrap();
+    // Pin the creation timestamps: bravo oldest, then alpha, then charlie.
+    for (series, days_ago) in [(&bravo, 3), (&alpha, 2), (&charlie, 1)] {
+        codex::db::entities::series::ActiveModel {
+            id: Set(series.id),
+            created_at: Set(Utc::now() - Duration::days(days_ago)),
+            ..Default::default()
+        }
+        .update(&db)
+        .await
+        .unwrap();
+    }
+
+    // Manual order: charlie, bravo, alpha.
+    let coll = CollectionRepository::create(&db, "Manual", None, true, None)
+        .await
+        .unwrap();
+    for series in [&charlie, &bravo, &alpha] {
+        CollectionRepository::add_series(&db, coll.id, series.id)
+            .await
+            .unwrap();
+    }
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    async fn ids_for(
+        app: axum::Router,
+        token: &str,
+        collection_id: uuid::Uuid,
+        query: &str,
+    ) -> (i64, Vec<String>) {
+        let request = get_request_with_auth(
+            &format!("/komga/api/v1/collections/{collection_id}/series{query}"),
+            token,
+        );
+        let (status, page): (StatusCode, Option<KomgaPage<KomgaSeriesDto>>) =
+            make_json_request(app, request).await;
+        assert_eq!(status, StatusCode::OK);
+        let page = page.unwrap();
+        (
+            page.total_elements,
+            page.content.into_iter().map(|s| s.id).collect(),
+        )
+    }
+
+    // No sort: the collection's own arrangement is preserved.
+    let (total, ids) = ids_for(app.clone(), &token, coll.id, "").await;
+    assert_eq!(total, 3);
+    assert_eq!(
+        ids,
+        vec![
+            charlie.id.to_string(),
+            bravo.id.to_string(),
+            alpha.id.to_string()
+        ],
+        "manual order must survive when no sort is requested"
+    );
+
+    // createdDate: oldest first, then reversed.
+    let (_, ids) = ids_for(app.clone(), &token, coll.id, "?sort=createdDate,asc").await;
+    assert_eq!(
+        ids,
+        vec![
+            bravo.id.to_string(),
+            alpha.id.to_string(),
+            charlie.id.to_string()
+        ]
+    );
+
+    let (_, ids) = ids_for(app.clone(), &token, coll.id, "?sort=createdDate,desc").await;
+    assert_eq!(
+        ids,
+        vec![
+            charlie.id.to_string(),
+            alpha.id.to_string(),
+            bravo.id.to_string()
+        ]
+    );
+
+    // titleSort, in both the bare and metadata-prefixed spelling.
+    for field in ["metadata.titleSort", "titleSort"] {
+        let (_, ids) = ids_for(app.clone(), &token, coll.id, &format!("?sort={field},asc")).await;
+        assert_eq!(
+            ids,
+            vec![
+                alpha.id.to_string(),
+                bravo.id.to_string(),
+                charlie.id.to_string()
+            ],
+            "sort={field},asc"
+        );
+    }
+
+    // Pagination applies to the sorted list, not to a sorted page.
+    let (total, ids) = ids_for(
+        app.clone(),
+        &token,
+        coll.id,
+        "?sort=createdDate,asc&page=1&size=1",
+    )
+    .await;
+    assert_eq!(total, 3, "totalElements counts every member, not the page");
+    assert_eq!(ids, vec![alpha.id.to_string()]);
+
+    // An unrecognised field falls back to the collection's own order rather
+    // than erroring, matching how the series list handles unknown sorts.
+    let (_, ids) = ids_for(app, &token, coll.id, "?sort=nonsense,asc").await;
+    assert_eq!(
+        ids,
+        vec![
+            charlie.id.to_string(),
+            bravo.id.to_string(),
+            alpha.id.to_string()
+        ]
+    );
+}

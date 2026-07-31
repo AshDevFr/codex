@@ -36023,7 +36023,10 @@ export interface operations {
     };
     komga_get_collection_series: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Sort as `field,direction` (e.g. `createdDate,asc`). Defaults to the collection's own order. */
+                sort?: string;
+            };
             header?: never;
             path: {
                 /** @description Komga API prefix */

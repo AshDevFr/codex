@@ -27,9 +27,9 @@ use axum::{
     response::{IntoResponse, Redirect},
 };
 use codex_db::repositories::{
-    CollectionRepository, WantToReadRepository, visibility::SeriesVisibility,
+    CollectionRepository, SeriesRepository, WantToReadRepository, visibility::SeriesVisibility,
 };
-use codex_models::sort::{SortDirection, WantToReadSort};
+use codex_models::sort::{SeriesSortField, SeriesSortParam, SortDirection, WantToReadSort};
 use codex_services::CollectionMembershipService;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -41,6 +41,40 @@ pub(crate) const WANT_TO_READ_NAME: &str = "Want to Read";
 
 fn parse_id(value: &str) -> Result<Uuid, ApiError> {
     Uuid::parse_str(value).map_err(|_| ApiError::NotFound("Collection not found".to_string()))
+}
+
+/// Map a Komga `sort` parameter onto a series sort.
+///
+/// Komga clients send `field,direction`, where the field names are the ones on
+/// the series DTO. The ordering therefore has to be a *series* ordering, not the
+/// collection's: a client asking for `createdDate` is asking for the order of
+/// the `created` values it can see in the response, which for a manual
+/// collection is not the order the series were added to it. Field names match
+/// the top-level series list so both endpoints answer the same parameter the
+/// same way.
+///
+/// `None` means "nothing usable here" — an absent parameter, or a field Codex
+/// has no equivalent for — and leaves the collection's own order in place
+/// rather than failing the request.
+fn parse_komga_collection_sort(sort: Option<&str>) -> Option<SeriesSortParam> {
+    let mut parts = sort?.trim().split(',');
+    let field = parts.next()?.trim();
+    let direction = match parts.next().map(str::trim) {
+        Some(d) if d.eq_ignore_ascii_case("desc") => SortDirection::Desc,
+        _ => SortDirection::Asc,
+    };
+
+    let field = match field {
+        "metadata.titleSort" | "titleSort" | "metadata.title" | "name" => SeriesSortField::Name,
+        "createdDate" | "created" | "dateAdded" => SeriesSortField::DateAdded,
+        "lastModifiedDate" | "lastModified" => SeriesSortField::DateUpdated,
+        "metadata.releaseDate" | "releaseDate" | "year" => SeriesSortField::ReleaseDate,
+        "readProgress.lastReadDate" | "lastReadDate" => SeriesSortField::DateRead,
+        "booksCount" => SeriesSortField::BookCount,
+        _ => return None,
+    };
+
+    Some(SeriesSortParam { field, direction })
 }
 
 async fn user_visibility(
@@ -201,7 +235,11 @@ pub async fn get_collection(
     get,
     path = "/{prefix}/api/v1/collections/{collection_id}/series",
     responses((status = 200, body = KomgaPage<KomgaSeriesDto>), (status = 404)),
-    params(("prefix" = String, Path, description = "Komga API prefix"), ("collection_id" = String, Path)),
+    params(
+        ("prefix" = String, Path, description = "Komga API prefix"),
+        ("collection_id" = String, Path),
+        ("sort" = Option<String>, Query, description = "Sort as `field,direction` (e.g. `createdDate,asc`). Defaults to the collection's own order."),
+    ),
     security(("jwt_bearer" = []), ("api_key" = [])),
     tag = "Komga"
 )]
@@ -238,12 +276,36 @@ pub async fn get_collection_series(
 
     let page = query.page.max(0);
     let size = query.size.clamp(1, 500);
-    let start = (page as usize).saturating_mul(size as usize);
-    let page_members: Vec<_> = members
-        .into_iter()
-        .skip(start)
-        .take(size as usize)
-        .collect();
+    let start = (page as u64).saturating_mul(size as u64);
+
+    // An explicit sort reorders the whole membership in the database and takes
+    // the page from there; without one the members keep the order the
+    // collection defines (manual position, or title) and the page is a slice of
+    // that. Sorting a slice would only order the page.
+    let page_members = match parse_komga_collection_sort(query.sort.as_deref()) {
+        Some(sort) => {
+            let ids: Vec<Uuid> = members.iter().map(|s| s.id).collect();
+            // `members` is already visibility-filtered, so no visibility is
+            // passed here — it would only re-apply the same predicate.
+            SeriesRepository::list_by_ids_sorted(
+                &state.db,
+                &ids,
+                &sort,
+                Some(auth.user_id),
+                start,
+                size as u64,
+                None,
+            )
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to sort collection series: {e}")))?
+            .0
+        }
+        None => members
+            .into_iter()
+            .skip(start as usize)
+            .take(size as usize)
+            .collect(),
+    };
 
     let mut content = Vec::with_capacity(page_members.len());
     for series in page_members {
@@ -348,4 +410,57 @@ pub async fn get_series_collections(
         out.push(build_collection_dto(&state, model, vis.as_ref(), Some(auth.user_id)).await?);
     }
     Ok(Json(out))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_title_sort_spellings() {
+        for field in ["metadata.titleSort", "titleSort", "metadata.title", "name"] {
+            let parsed = parse_komga_collection_sort(Some(&format!("{field},asc")))
+                .unwrap_or_else(|| panic!("{field} should parse"));
+            assert_eq!(parsed.field, SeriesSortField::Name);
+            assert_eq!(parsed.direction, SortDirection::Asc);
+        }
+    }
+
+    #[test]
+    fn parses_date_fields() {
+        let parsed = parse_komga_collection_sort(Some("createdDate,desc")).unwrap();
+        assert_eq!(parsed.field, SeriesSortField::DateAdded);
+        assert_eq!(parsed.direction, SortDirection::Desc);
+
+        let parsed = parse_komga_collection_sort(Some("lastModifiedDate,asc")).unwrap();
+        assert_eq!(parsed.field, SeriesSortField::DateUpdated);
+
+        let parsed = parse_komga_collection_sort(Some("readProgress.lastReadDate,desc")).unwrap();
+        assert_eq!(parsed.field, SeriesSortField::DateRead);
+    }
+
+    #[test]
+    fn direction_defaults_to_ascending() {
+        // Komga clients sometimes send a bare field, and anything that is not
+        // "desc" is ascending.
+        let parsed = parse_komga_collection_sort(Some("createdDate")).unwrap();
+        assert_eq!(parsed.direction, SortDirection::Asc);
+
+        let parsed = parse_komga_collection_sort(Some("createdDate,DESC")).unwrap();
+        assert_eq!(parsed.direction, SortDirection::Desc);
+
+        let parsed = parse_komga_collection_sort(Some("createdDate,sideways")).unwrap();
+        assert_eq!(parsed.direction, SortDirection::Asc);
+    }
+
+    #[test]
+    fn unknown_and_absent_sorts_yield_none() {
+        // Both leave the collection's own order in place.
+        assert!(parse_komga_collection_sort(None).is_none());
+        assert!(parse_komga_collection_sort(Some("nonsense,asc")).is_none());
+        assert!(parse_komga_collection_sort(Some("")).is_none());
+        // Komga's own collection-position sort has no series-level equivalent,
+        // and falling through to the collection order is exactly right for it.
+        assert!(parse_komga_collection_sort(Some("collection.number,asc")).is_none());
+    }
 }

@@ -19855,6 +19855,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "Sort as `field,direction` (e.g. `createdDate,asc`). Defaults to the collection's own order.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
