@@ -2,6 +2,37 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.43.0] - 2026-07-30
+
+### 🚀 Features
+
+- *(web)* Explain each release action in its tooltip
+- *(search)* Add rating filters and multi-library selection
+- *(collections)* Resolve rule-backed collection membership at read time
+- *(api)* Create and edit rule-backed collections, and refuse to edit them by hand
+- *(web)* Build and browse automatic collections
+- *(db)* Add an append-only read-completion log
+- *(db)* Bank a completion on every finished read-through
+- *(api)* Expose read completion history and let users reset it
+- *(web)* Show read history on detail pages and let users reset it
+- *(web)* Suggest existing tags and genres in the filter builder
+
+### 🐛 Bug Fixes
+
+- *(web)* Repair the frontend build broken by the collection rule types
+- *(web)* Align the membership toggle's selected pill
+- *(web)* Refresh automatic collections when series metadata changes
+- *(api)* Stop shared caches storing the collection thumbnail redirect
+
+### 📚 Documentation
+
+- Document automatic collections and the new filter conditions
+- Document reading progress and re-read history
+
+### ⚡ Performance
+
+- *(collections)* Stop resolving a whole rule to render one cover
+
 ## [1.42.3] - 2026-07-29
 
 ### 🐛 Bug Fixes
