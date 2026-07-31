@@ -266,7 +266,8 @@ pub async fn get_page_thumbnail(
         .map_err(|e| ApiError::Internal(format!("Failed to extract page: {}", e)))?;
 
     // Generate thumbnail (max 300px for page thumbnails)
-    let thumbnail_data = generate_thumbnail(&image_data, 300)
+    let thumbnail_data = generate_thumbnail(image_data, 300)
+        .await
         .map_err(|e| ApiError::Internal(format!("Failed to generate thumbnail: {}", e)))?;
 
     // Build response with caching headers

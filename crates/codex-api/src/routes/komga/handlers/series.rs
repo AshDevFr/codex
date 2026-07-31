@@ -9,7 +9,7 @@ use super::super::dto::series::{
     KomgaSeriesMetadataDto, KomgaSeriesSearchRequestDto, KomgaWebLinkDto,
     codex_to_komga_reading_direction, codex_to_komga_status, extract_read_status_from_condition,
 };
-use super::libraries::{extract_page_image, generate_thumbnail};
+use super::libraries::{THUMBNAIL_CACHE_CONTROL, extract_page_image, generate_thumbnail};
 use crate::require_permission;
 use crate::{
     error::ApiError,
@@ -20,7 +20,7 @@ use axum::{
     Json,
     body::Body,
     extract::{Path, Query, State},
-    http::{StatusCode, header},
+    http::{HeaderMap, StatusCode, header},
     response::Response,
 };
 use codex_db::repositories::{
@@ -591,9 +591,51 @@ pub async fn get_series(
 pub async fn get_series_thumbnail(
     State(state): State<Arc<AuthState>>,
     FlexibleAuthContext(auth): FlexibleAuthContext,
+    headers: HeaderMap,
     Path(series_id): Path<Uuid>,
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
+
+    // Serve from the on-disk series thumbnail cache before touching the
+    // database: a Komga client painting a series shelf asks for every cover at
+    // once, and rebuilding each one means reading a book archive and decoding a
+    // full-resolution scan.
+    if let Some(meta) = state
+        .thumbnail_service
+        .get_series_thumbnail_metadata(series_id)
+        .await
+    {
+        if let Some(if_none_match) = headers.get(header::IF_NONE_MATCH)
+            && let Ok(client_etag) = if_none_match.to_str()
+        {
+            let client_etag = client_etag.trim().trim_start_matches("W/");
+            if client_etag == meta.etag
+                || client_etag.trim_matches('"') == meta.etag.trim_matches('"')
+            {
+                return Ok(Response::builder()
+                    .status(StatusCode::NOT_MODIFIED)
+                    .header(header::ETAG, &meta.etag)
+                    .header(header::CACHE_CONTROL, THUMBNAIL_CACHE_CONTROL)
+                    .body(Body::empty())
+                    .unwrap());
+            }
+        }
+
+        if let Some(stream) = state
+            .thumbnail_service
+            .get_series_thumbnail_stream(series_id)
+            .await
+        {
+            return Ok(Response::builder()
+                .status(StatusCode::OK)
+                .header(header::CONTENT_TYPE, "image/jpeg")
+                .header(header::CACHE_CONTROL, THUMBNAIL_CACHE_CONTROL)
+                .header(header::CONTENT_LENGTH, meta.size)
+                .header(header::ETAG, &meta.etag)
+                .body(Body::from_stream(stream))
+                .unwrap());
+        }
+    }
 
     // Verify series exists
     let _series = SeriesRepository::get_by_id(&state.db, series_id)
@@ -615,17 +657,39 @@ pub async fn get_series_thumbnail(
     };
 
     // Generate thumbnail (max 400px width or height)
-    let thumbnail_data = generate_thumbnail(&image_data, 400)
+    let thumbnail_data = generate_thumbnail(image_data, 400)
+        .await
         .map_err(|e| ApiError::Internal(format!("Failed to generate thumbnail: {}", e)))?;
 
-    // Build response with caching headers
-    Ok(Response::builder()
+    // Populate the cache so the next request is a file read. A failure here
+    // only costs the next caller a regeneration, so it must not fail the
+    // response that already has an image in hand.
+    if let Err(e) = state
+        .thumbnail_service
+        .save_series_thumbnail(series_id, &thumbnail_data)
+        .await
+    {
+        tracing::warn!("Failed to cache series thumbnail for {}: {}", series_id, e);
+    }
+
+    // Read the ETag back off the file just written rather than deriving one
+    // here: it has to be byte-identical to what the cache-hit branch above will
+    // send, or the client's first revalidation misses and re-downloads the
+    // cover it already has.
+    let mut response = Response::builder()
         .status(StatusCode::OK)
         .header(header::CONTENT_TYPE, "image/jpeg")
-        .header(header::CACHE_CONTROL, "public, max-age=3600")
-        .header(header::CONTENT_LENGTH, thumbnail_data.len())
-        .body(Body::from(thumbnail_data))
-        .unwrap())
+        .header(header::CACHE_CONTROL, THUMBNAIL_CACHE_CONTROL)
+        .header(header::CONTENT_LENGTH, thumbnail_data.len());
+    if let Some(meta) = state
+        .thumbnail_service
+        .get_series_thumbnail_metadata(series_id)
+        .await
+    {
+        response = response.header(header::ETAG, meta.etag);
+    }
+
+    Ok(response.body(Body::from(thumbnail_data)).unwrap())
 }
 
 /// Get books in a series

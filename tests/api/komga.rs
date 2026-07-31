@@ -5719,3 +5719,121 @@ async fn test_komga_readlist_books_honours_sort() {
         ]
     );
 }
+
+/// A Komga client repaints a whole shelf of covers on every scroll, so the
+/// thumbnail endpoint has to answer from the cache rather than reopening the
+/// archive and re-decoding the scan each time. Rebuilding it per request is
+/// what used to park a runtime worker per in-flight cover.
+#[tokio::test]
+async fn test_komga_book_thumbnail_is_cached_and_revalidates() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let cbz_dir = tempfile::TempDir::new().unwrap();
+    let cbz_path = create_test_cbz(&cbz_dir, 3, false);
+
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Spider-Man", None)
+        .await
+        .unwrap();
+    let book = create_test_book_with_hash(
+        &db,
+        &library,
+        &series,
+        "Issue 1",
+        cbz_path.to_str().unwrap(),
+        "hash_thumb_cache",
+    )
+    .await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+    let uri = format!("/komga/api/v1/books/{}/thumbnail", book.id);
+
+    // Cache miss: the cover is built from the archive and served as JPEG.
+    let request = get_request_with_auth(&uri, &token);
+    let (status, headers, body) = make_full_request(app.clone(), request).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(headers.get("content-type").unwrap(), "image/jpeg");
+    assert!(!body.is_empty(), "a generated thumbnail must have bytes");
+    let etag = headers
+        .get("etag")
+        .expect("thumbnail must carry an ETag so clients can revalidate cheaply")
+        .to_str()
+        .unwrap()
+        .to_string();
+
+    // Cache hit: same bytes, same ETag, served from disk rather than rebuilt.
+    let request = get_request_with_auth(&uri, &token);
+    let (status, headers, cached_body) = make_full_request(app.clone(), request).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(headers.get("etag").unwrap().to_str().unwrap(), etag);
+    assert_eq!(
+        cached_body, body,
+        "cached bytes must match the generated ones"
+    );
+
+    // A client that already holds the cover gets a 304 instead of the bytes.
+    let request = axum::http::Request::builder()
+        .method("GET")
+        .uri(&uri)
+        .header("Authorization", format!("Bearer {token}"))
+        .header("If-None-Match", &etag)
+        .body(String::new())
+        .unwrap();
+    let (status, _, body) = make_full_request(app, request).await;
+    assert_eq!(status, StatusCode::NOT_MODIFIED);
+    assert!(body.is_empty(), "a 304 must not carry a body");
+}
+
+/// Same contract for a series shelf: the cover is built once, then revalidated.
+#[tokio::test]
+async fn test_komga_series_thumbnail_is_cached_and_revalidates() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let cbz_dir = tempfile::TempDir::new().unwrap();
+    let cbz_path = create_test_cbz(&cbz_dir, 3, false);
+
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Spider-Man", None)
+        .await
+        .unwrap();
+    create_test_book_with_hash(
+        &db,
+        &library,
+        &series,
+        "Issue 1",
+        cbz_path.to_str().unwrap(),
+        "hash_series_thumb_cache",
+    )
+    .await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+    let uri = format!("/komga/api/v1/series/{}/thumbnail", series.id);
+
+    let request = get_request_with_auth(&uri, &token);
+    let (status, headers, body) = make_full_request(app.clone(), request).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(!body.is_empty());
+    let etag = headers
+        .get("etag")
+        .expect("series thumbnail must carry an ETag")
+        .to_str()
+        .unwrap()
+        .to_string();
+
+    let request = axum::http::Request::builder()
+        .method("GET")
+        .uri(&uri)
+        .header("Authorization", format!("Bearer {token}"))
+        .header("If-None-Match", &etag)
+        .body(String::new())
+        .unwrap();
+    let (status, _, body) = make_full_request(app, request).await;
+    assert_eq!(status, StatusCode::NOT_MODIFIED);
+    assert!(body.is_empty());
+}

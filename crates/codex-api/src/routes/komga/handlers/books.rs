@@ -8,8 +8,9 @@ use super::super::dto::book::{
     extract_series_id_from_condition,
 };
 use super::super::dto::pagination::KomgaPage;
-use super::libraries::{extract_page_image, generate_thumbnail};
+use super::libraries::THUMBNAIL_CACHE_CONTROL;
 use crate::require_permission;
+use crate::routes::v1::handlers::pages::generate_book_thumbnail;
 use crate::{
     error::ApiError,
     extractors::{AuthState, ContentFilter, FlexibleAuthContext},
@@ -19,7 +20,7 @@ use axum::{
     Json,
     body::Body,
     extract::{Path, Query, State},
-    http::{StatusCode, header},
+    http::{HeaderMap, StatusCode, header},
     response::Response,
 };
 use chrono::Datelike;
@@ -201,11 +202,50 @@ pub async fn get_book(
 pub async fn get_book_thumbnail(
     State(state): State<Arc<AuthState>>,
     FlexibleAuthContext(auth): FlexibleAuthContext,
+    headers: HeaderMap,
     Path(book_id): Path<Uuid>,
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
 
-    // Fetch book
+    // Serve from the on-disk thumbnail cache without touching the database.
+    // A Komga client painting a shelf asks for every cover at once, and the
+    // whole point of the cache is that those requests cost a file read rather
+    // than an archive read plus a full image decode. Skipping the database here
+    // also keeps a burst of covers from exhausting the connection pool.
+    if let Some(meta) = state
+        .thumbnail_service
+        .get_thumbnail_metadata(book_id)
+        .await
+    {
+        if let Some(if_none_match) = headers.get(header::IF_NONE_MATCH)
+            && let Ok(client_etag) = if_none_match.to_str()
+        {
+            let client_etag = client_etag.trim().trim_start_matches("W/");
+            if client_etag == meta.etag
+                || client_etag.trim_matches('"') == meta.etag.trim_matches('"')
+            {
+                return Ok(Response::builder()
+                    .status(StatusCode::NOT_MODIFIED)
+                    .header(header::ETAG, &meta.etag)
+                    .header(header::CACHE_CONTROL, THUMBNAIL_CACHE_CONTROL)
+                    .body(Body::empty())
+                    .unwrap());
+            }
+        }
+
+        if let Some(stream) = state.thumbnail_service.get_thumbnail_stream(book_id).await {
+            return Ok(Response::builder()
+                .status(StatusCode::OK)
+                .header(header::CONTENT_TYPE, "image/jpeg")
+                .header(header::CACHE_CONTROL, THUMBNAIL_CACHE_CONTROL)
+                .header(header::CONTENT_LENGTH, meta.size)
+                .header(header::ETAG, &meta.etag)
+                .body(Body::from_stream(stream))
+                .unwrap());
+        }
+    }
+
+    // Cache miss: fetch the book so we can build the cover from its first page.
     let book = BookRepository::get_by_id(&state.db, book_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch book: {}", e)))?
@@ -216,23 +256,43 @@ pub async fn get_book_thumbnail(
         return Err(ApiError::NotFound("Book has no pages".to_string()));
     }
 
-    // Extract first page from the book
-    let image_data = extract_page_image(&book.path, &book.format, 1)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to extract cover image: {}", e)))?;
+    // Deduplicate concurrent misses for the same book: a shelf paint after a
+    // cache eviction would otherwise decode the same cover once per request.
+    let thumbnail_data = match state.inflight_thumbnails.try_start(book_id) {
+        Ok(guard) => match generate_book_thumbnail(&state, &book).await {
+            Ok(data) => {
+                guard.complete(data.clone());
+                data
+            }
+            Err(e) => {
+                guard.fail(format!("{:?}", e));
+                return Err(e);
+            }
+        },
+        Err(handle) => handle
+            .wait()
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to generate thumbnail: {}", e)))?,
+    };
 
-    // Generate thumbnail (max 400px width or height)
-    let thumbnail_data = generate_thumbnail(&image_data, 400)
-        .map_err(|e| ApiError::Internal(format!("Failed to generate thumbnail: {}", e)))?;
-
-    // Build response with caching headers
-    Ok(Response::builder()
+    // Read the ETag back off the file just written rather than deriving one
+    // here: it has to be byte-identical to what the cache-hit branch above will
+    // send, or the client's first revalidation misses and re-downloads the
+    // cover it already has.
+    let mut response = Response::builder()
         .status(StatusCode::OK)
         .header(header::CONTENT_TYPE, "image/jpeg")
-        .header(header::CACHE_CONTROL, "public, max-age=3600")
-        .header(header::CONTENT_LENGTH, thumbnail_data.len())
-        .body(Body::from(thumbnail_data))
-        .unwrap())
+        .header(header::CACHE_CONTROL, THUMBNAIL_CACHE_CONTROL)
+        .header(header::CONTENT_LENGTH, thumbnail_data.len());
+    if let Some(meta) = state
+        .thumbnail_service
+        .get_thumbnail_metadata(book_id)
+        .await
+    {
+        response = response.header(header::ETAG, meta.etag);
+    }
+
+    Ok(response.body(Body::from(thumbnail_data)).unwrap())
 }
 
 /// Get "on deck" books

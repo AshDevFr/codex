@@ -628,7 +628,10 @@ pub async fn get_book_thumbnail(
 }
 
 /// Generate a thumbnail for a book (handles extraction, resizing, and caching)
-async fn generate_book_thumbnail(
+///
+/// Shared with the Komga-compatible thumbnail endpoint so both entry points get
+/// the same blocking-pool offload, PDF page cache and persisted result.
+pub(crate) async fn generate_book_thumbnail(
     state: &Arc<AuthState>,
     book: &codex_db::entities::books::Model,
 ) -> Result<Vec<u8>, ApiError> {

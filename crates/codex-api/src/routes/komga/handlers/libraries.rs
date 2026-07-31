@@ -198,7 +198,8 @@ pub async fn get_library_thumbnail(
     };
 
     // Generate thumbnail (max 400px width or height)
-    let thumbnail_data = generate_thumbnail(&image_data, 400)
+    let thumbnail_data = generate_thumbnail(image_data, 400)
+        .await
         .map_err(|e| ApiError::Internal(format!("Failed to generate thumbnail: {}", e)))?;
 
     // Build response with caching headers
@@ -236,10 +237,28 @@ async fn get_default_series_cover(
         .map_err(|e| ApiError::Internal(format!("Failed to extract cover image: {}", e)))
 }
 
-/// Generate a thumbnail from an image
-pub fn generate_thumbnail(image_data: &[u8], max_dimension: u32) -> anyhow::Result<Vec<u8>> {
-    // Load image from bytes
-    let img = image::load_from_memory(image_data)?;
+/// `Cache-Control` for Komga thumbnail responses.
+///
+/// Deliberately shorter than the year the native endpoints use. Those are
+/// fetched by the web UI, which appends the record's `updated_at` to the URL and
+/// so gets a fresh URL whenever a cover changes. Komga clients build the URL
+/// from the id alone and have no way to bust it, so a long max-age would pin a
+/// stale cover in the client for as long as it kept the entry. An hour, paired
+/// with the `ETag` these handlers now send, means a revalidation costs a 304
+/// rather than the image bytes.
+pub const THUMBNAIL_CACHE_CONTROL: &str = "public, max-age=3600";
+
+/// Resize an image to fit `max_dimension` and re-encode it as JPEG.
+///
+/// Synchronous core; call [`generate_thumbnail`] instead unless you are already
+/// inside a blocking task.
+fn generate_thumbnail_sync(image_data: &[u8], max_dimension: u32) -> anyhow::Result<Vec<u8>> {
+    // Bounded decode: a hostile or absurdly large page must not be able to
+    // allocate its way through the process while holding a limiter permit.
+    let img = crate::image_limit::decode_image_limited(
+        image_data,
+        crate::image_limit::MAX_DECODE_ALLOC_BYTES,
+    )?;
 
     // Calculate new dimensions while maintaining aspect ratio
     let (width, height) = (img.width(), img.height());
@@ -261,30 +280,50 @@ pub fn generate_thumbnail(image_data: &[u8], max_dimension: u32) -> anyhow::Resu
     Ok(output.into_inner())
 }
 
-/// Extract page image from book file
+/// Generate a thumbnail from an image.
+///
+/// Decoding, a Lanczos3 resize and a JPEG encode are CPU-bound and allocate a
+/// full uncompressed bitmap, so this runs on the blocking pool behind the
+/// process-wide image limiter rather than on an async worker. Doing it inline
+/// parks a runtime thread for the whole job: a client painting a shelf of
+/// covers issues one request per tile, and enough of them at once starve the
+/// runtime of workers and stall every other request, health checks included.
+pub async fn generate_thumbnail(
+    image_data: Vec<u8>,
+    max_dimension: u32,
+) -> anyhow::Result<Vec<u8>> {
+    let limiter = crate::image_limit::image_decode_limiter();
+    crate::image_limit::run_bounded_image_job(&limiter, move || {
+        generate_thumbnail_sync(&image_data, max_dimension)
+    })
+    .await
+}
+
+/// Extract page image from book file.
+///
+/// ZIP/RAR/EPUB parsing and PDF rendering are blocking file work, so they go to
+/// the blocking pool for the same reason [`generate_thumbnail`] does.
 pub async fn extract_page_image(
     path: &str,
     file_format: &str,
     page_number: i32,
 ) -> anyhow::Result<Vec<u8>> {
-    let path = std::path::Path::new(path);
+    let path = std::path::PathBuf::from(path);
+    let format = file_format.to_uppercase();
 
-    // Use the appropriate parser based on format
-    let image_data = match file_format.to_uppercase().as_str() {
-        "CBZ" => codex_parsers::cbz::extract_page_from_cbz(path, page_number)?,
+    tokio::task::spawn_blocking(move || match format.as_str() {
+        "CBZ" => codex_parsers::cbz::extract_page_from_cbz(&path, page_number),
         #[cfg(feature = "rar")]
-        "CBR" => codex_parsers::cbr::extract_page_from_cbr(path, page_number)?,
-        "EPUB" => codex_parsers::epub::extract_page_from_epub(path, page_number)?,
-        "PDF" => codex_parsers::pdf::extract_page_from_pdf(path, page_number)?,
-        _ => {
-            return Err(anyhow::anyhow!(
-                "Unsupported format for page extraction: {}",
-                file_format
-            ));
-        }
-    };
-
-    Ok(image_data)
+        "CBR" => codex_parsers::cbr::extract_page_from_cbr(&path, page_number),
+        "EPUB" => codex_parsers::epub::extract_page_from_epub(&path, page_number),
+        "PDF" => codex_parsers::pdf::extract_page_from_pdf(&path, page_number),
+        _ => Err(anyhow::anyhow!(
+            "Unsupported format for page extraction: {}",
+            format
+        )),
+    })
+    .await
+    .map_err(|e| anyhow::anyhow!("image extraction join error: {e}"))?
 }
 
 #[cfg(test)]
@@ -325,5 +364,38 @@ mod tests {
         let dto = KomgaLibraryDto::from_codex(id, "Test Library", "/path/to/library", false, None);
 
         assert!(dto.unavailable);
+    }
+
+    /// Encode a solid-colour image of the given size to PNG bytes.
+    fn png_bytes(width: u32, height: u32) -> Vec<u8> {
+        let img = image::RgbImage::from_pixel(width, height, image::Rgb([40, 80, 120]));
+        let mut bytes = Vec::new();
+        image::DynamicImage::ImageRgb8(img)
+            .write_to(&mut Cursor::new(&mut bytes), ImageFormat::Png)
+            .unwrap();
+        bytes
+    }
+
+    #[tokio::test]
+    async fn thumbnail_fits_the_long_edge_to_the_requested_bound() {
+        // Landscape: width is the long edge and gets pinned to the bound.
+        let jpeg = generate_thumbnail(png_bytes(800, 400), 200).await.unwrap();
+        let img = image::load_from_memory(&jpeg).unwrap();
+        assert_eq!(img.width(), 200);
+        assert_eq!(img.height(), 100);
+
+        // Portrait: height is the long edge instead.
+        let jpeg = generate_thumbnail(png_bytes(400, 800), 200).await.unwrap();
+        let img = image::load_from_memory(&jpeg).unwrap();
+        assert_eq!(img.width(), 100);
+        assert_eq!(img.height(), 200);
+    }
+
+    #[tokio::test]
+    async fn thumbnail_generation_rejects_undecodable_input() {
+        // Runs on the blocking pool, so a decode failure has to surface as an
+        // error rather than a panic that would take the worker down with it.
+        let err = generate_thumbnail(b"not an image at all".to_vec(), 200).await;
+        assert!(err.is_err());
     }
 }
