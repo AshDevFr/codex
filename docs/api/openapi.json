@@ -20351,6 +20351,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "Sort as `field,direction` (e.g. `metadata.numberSort,asc`). Defaults to the read list's own order.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {

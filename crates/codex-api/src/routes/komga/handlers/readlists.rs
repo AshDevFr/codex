@@ -26,15 +26,51 @@ use axum::{
     response::Redirect,
 };
 use codex_db::repositories::{
-    BookMetadataRepository, ReadListRepository, ReadProgressRepository, WantToReadRepository,
-    visibility::SeriesVisibility,
+    BookMetadataRepository, BookRepository, ReadListRepository, ReadProgressRepository,
+    WantToReadRepository, visibility::SeriesVisibility,
 };
-use codex_models::sort::{SortDirection, WantToReadSort};
+use codex_models::sort::{BookSortField, BookSortParam, SortDirection, WantToReadSort};
 use std::sync::Arc;
 use uuid::Uuid;
 
 fn parse_id(value: &str) -> Result<Uuid, ApiError> {
     Uuid::parse_str(value).map_err(|_| ApiError::NotFound("Read list not found".to_string()))
+}
+
+/// Map a Komga `sort` parameter onto a book sort.
+///
+/// Komga clients send `field,direction` using the names on the book DTO, so the
+/// ordering has to be a *book* ordering: `createdDate` means the book's own
+/// `created`, which is when it entered the library, not when it was put on this
+/// read list.
+///
+/// `None` means "nothing usable here" — an absent parameter, or a field Codex
+/// has no equivalent for, including Komga's own `readListNumber`. Those keep
+/// the read list's own order, which for a reading order is a better answer than
+/// rejecting the request.
+fn parse_komga_readlist_sort(sort: Option<&str>) -> Option<BookSortParam> {
+    let mut parts = sort?.trim().split(',');
+    let field = parts.next()?.trim();
+    let direction = match parts.next().map(str::trim) {
+        Some(d) if d.eq_ignore_ascii_case("desc") => SortDirection::Desc,
+        _ => SortDirection::Asc,
+    };
+
+    let field = match field {
+        "metadata.numberSort" | "numberSort" | "metadata.number" | "number" => {
+            BookSortField::ChapterNumber
+        }
+        "metadata.titleSort" | "titleSort" | "metadata.title" | "name" => BookSortField::Title,
+        "createdDate" | "created" | "dateAdded" => BookSortField::DateAdded,
+        "metadata.releaseDate" | "releaseDate" => BookSortField::ReleaseDate,
+        "readProgress.readDate" | "readDate" | "lastReadDate" => BookSortField::LastRead,
+        "media.pagesCount" | "pagesCount" => BookSortField::PageCount,
+        "fileSize" | "size" => BookSortField::FileSize,
+        "fileName" | "url" => BookSortField::Filename,
+        _ => return None,
+    };
+
+    Some(BookSortParam { field, direction })
 }
 
 async fn user_visibility(
@@ -170,7 +206,11 @@ pub async fn get_readlist(
     get,
     path = "/{prefix}/api/v1/readlists/{read_list_id}/books",
     responses((status = 200, body = KomgaPage<KomgaBookDto>), (status = 404)),
-    params(("prefix" = String, Path, description = "Komga API prefix"), ("read_list_id" = String, Path)),
+    params(
+        ("prefix" = String, Path, description = "Komga API prefix"),
+        ("read_list_id" = String, Path),
+        ("sort" = Option<String>, Query, description = "Sort as `field,direction` (e.g. `metadata.numberSort,asc`). Defaults to the read list's own order."),
+    ),
     security(("jwt_bearer" = []), ("api_key" = [])),
     tag = "Komga"
 )]
@@ -206,12 +246,39 @@ pub async fn get_readlist_books(
 
     let page = query.page.max(0);
     let size = query.size.clamp(1, 500);
-    let start = (page as usize).saturating_mul(size as usize);
-    let page_members: Vec<_> = members
-        .into_iter()
-        .skip(start)
-        .take(size as usize)
-        .collect();
+    let start = (page as u64).saturating_mul(size as u64);
+
+    // An explicit sort reorders the whole membership in the database and takes
+    // the page from there; without one the books keep the read list's own order
+    // (manual position, or release date) and the page is a slice of that.
+    // Sorting a slice would only order the page.
+    let page_members = match parse_komga_readlist_sort(query.sort.as_deref()) {
+        Some(sort) => {
+            let ids: Vec<Uuid> = members.iter().map(|b| b.id).collect();
+            // `members` is already visibility-filtered, so no visibility is
+            // passed here. Soft-deleted books are kept for the same reason:
+            // the unsorted path returns whatever the membership holds, and a
+            // sort must not quietly change which books are in the list.
+            BookRepository::list_by_ids_sorted(
+                &state.db,
+                &ids,
+                &sort,
+                Some(auth.user_id),
+                true,
+                start,
+                size as u64,
+                None,
+            )
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to sort read list books: {e}")))?
+            .0
+        }
+        None => members
+            .into_iter()
+            .skip(start as usize)
+            .take(size as usize)
+            .collect(),
+    };
 
     let book_ids: Vec<Uuid> = page_members.iter().map(|b| b.id).collect();
     let metadata_map = BookMetadataRepository::get_by_book_ids(&state.db, &book_ids)
@@ -326,4 +393,76 @@ pub async fn get_book_readlists(
         out.push(build_readlist_dto(&state, model, vis.as_ref()).await?);
     }
     Ok(Json(out))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_book_number_spellings() {
+        for field in [
+            "metadata.numberSort",
+            "numberSort",
+            "metadata.number",
+            "number",
+        ] {
+            let parsed = parse_komga_readlist_sort(Some(&format!("{field},asc")))
+                .unwrap_or_else(|| panic!("{field} should parse"));
+            assert_eq!(parsed.field, BookSortField::ChapterNumber);
+            assert_eq!(parsed.direction, SortDirection::Asc);
+        }
+    }
+
+    #[test]
+    fn parses_the_remaining_fields() {
+        for (field, expected) in [
+            ("metadata.title", BookSortField::Title),
+            ("createdDate", BookSortField::DateAdded),
+            ("metadata.releaseDate", BookSortField::ReleaseDate),
+            ("readProgress.readDate", BookSortField::LastRead),
+            ("media.pagesCount", BookSortField::PageCount),
+            ("fileSize", BookSortField::FileSize),
+            ("fileName", BookSortField::Filename),
+        ] {
+            let parsed = parse_komga_readlist_sort(Some(&format!("{field},desc")))
+                .unwrap_or_else(|| panic!("{field} should parse"));
+            assert_eq!(parsed.field, expected, "field {field}");
+            assert_eq!(parsed.direction, SortDirection::Desc);
+        }
+    }
+
+    #[test]
+    fn direction_defaults_to_ascending() {
+        // A bare field, or anything that is not "desc", is ascending.
+        assert_eq!(
+            parse_komga_readlist_sort(Some("createdDate"))
+                .unwrap()
+                .direction,
+            SortDirection::Asc
+        );
+        assert_eq!(
+            parse_komga_readlist_sort(Some("createdDate,DESC"))
+                .unwrap()
+                .direction,
+            SortDirection::Desc
+        );
+        assert_eq!(
+            parse_komga_readlist_sort(Some("createdDate,sideways"))
+                .unwrap()
+                .direction,
+            SortDirection::Asc
+        );
+    }
+
+    #[test]
+    fn unknown_and_absent_sorts_yield_none() {
+        // Each leaves the read list's own reading order in place.
+        assert!(parse_komga_readlist_sort(None).is_none());
+        assert!(parse_komga_readlist_sort(Some("")).is_none());
+        assert!(parse_komga_readlist_sort(Some("nonsense,asc")).is_none());
+        // Komga's own read-list position sort has no book-level equivalent, and
+        // falling through to the read list's order is exactly right for it.
+        assert!(parse_komga_readlist_sort(Some("readListNumber,asc")).is_none());
+    }
 }

@@ -5571,3 +5571,151 @@ async fn test_komga_collection_series_honours_sort() {
         ]
     );
 }
+
+/// The same contract as a collection's series: a Komga client sorts a read
+/// list's books with `field,direction`, and the ordering has to be a book
+/// ordering, so `createdDate` is when the book entered the library rather than
+/// when it joined the read list.
+#[tokio::test]
+async fn test_komga_readlist_books_honours_sort() {
+    use chrono::{Duration, Utc};
+    use sea_orm::{ActiveModelTrait, Set};
+
+    let (db, _temp_dir) = setup_test_db().await;
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Spider-Man", None)
+        .await
+        .unwrap();
+
+    // Chapter number, creation order and manual reading order all differ.
+    let third = create_test_book_with_hash(&db, &library, &series, "c", "/c.cbz", "h_c").await;
+    let first = create_test_book_with_hash(&db, &library, &series, "a", "/a.cbz", "h_a").await;
+    let second = create_test_book_with_hash(&db, &library, &series, "b", "/b.cbz", "h_b").await;
+    for (book, number) in [(&first, 1i32), (&second, 2), (&third, 3)] {
+        BookMetadataRepository::create_with_title_and_number(
+            &db,
+            book.id,
+            Some(format!("Chapter {number}")),
+            Some(sea_orm::prelude::Decimal::from(number)),
+        )
+        .await
+        .unwrap();
+    }
+
+    // Pin creation timestamps: third oldest, then second, then first.
+    for (book, days_ago) in [(&third, 3), (&second, 2), (&first, 1)] {
+        codex::db::entities::books::ActiveModel {
+            id: Set(book.id),
+            created_at: Set(Utc::now() - Duration::days(days_ago)),
+            ..Default::default()
+        }
+        .update(&db)
+        .await
+        .unwrap();
+    }
+
+    // Manual reading order: third, first, second.
+    let rl = ReadListRepository::create(&db, "Reading Order", None, true)
+        .await
+        .unwrap();
+    for book in [&third, &first, &second] {
+        ReadListRepository::add_book(&db, rl.id, book.id)
+            .await
+            .unwrap();
+    }
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    async fn ids_for(
+        app: axum::Router,
+        token: &str,
+        read_list_id: uuid::Uuid,
+        query: &str,
+    ) -> (i64, Vec<String>) {
+        let request = get_request_with_auth(
+            &format!("/komga/api/v1/readlists/{read_list_id}/books{query}"),
+            token,
+        );
+        let (status, page): (StatusCode, Option<KomgaPage<KomgaBookDto>>) =
+            make_json_request(app, request).await;
+        assert_eq!(status, StatusCode::OK);
+        let page = page.unwrap();
+        (
+            page.total_elements,
+            page.content.into_iter().map(|b| b.id).collect(),
+        )
+    }
+
+    // No sort: the read list's own reading order is preserved.
+    let (total, ids) = ids_for(app.clone(), &token, rl.id, "").await;
+    assert_eq!(total, 3);
+    assert_eq!(
+        ids,
+        vec![
+            third.id.to_string(),
+            first.id.to_string(),
+            second.id.to_string()
+        ],
+        "manual reading order must survive when no sort is requested"
+    );
+
+    // Chapter number, the sort Komga clients reach for most.
+    let (_, ids) = ids_for(app.clone(), &token, rl.id, "?sort=metadata.numberSort,asc").await;
+    assert_eq!(
+        ids,
+        vec![
+            first.id.to_string(),
+            second.id.to_string(),
+            third.id.to_string()
+        ]
+    );
+
+    let (_, ids) = ids_for(app.clone(), &token, rl.id, "?sort=metadata.numberSort,desc").await;
+    assert_eq!(
+        ids,
+        vec![
+            third.id.to_string(),
+            second.id.to_string(),
+            first.id.to_string()
+        ]
+    );
+
+    // createdDate: oldest first, which is neither the reading order nor the
+    // chapter order.
+    let (_, ids) = ids_for(app.clone(), &token, rl.id, "?sort=createdDate,asc").await;
+    assert_eq!(
+        ids,
+        vec![
+            third.id.to_string(),
+            second.id.to_string(),
+            first.id.to_string()
+        ]
+    );
+
+    // Pagination applies to the sorted list, not to a sorted page.
+    let (total, ids) = ids_for(
+        app.clone(),
+        &token,
+        rl.id,
+        "?sort=metadata.numberSort,asc&page=1&size=1",
+    )
+    .await;
+    assert_eq!(total, 3, "totalElements counts every member, not the page");
+    assert_eq!(ids, vec![second.id.to_string()]);
+
+    // readListNumber has no book-level equivalent, so it keeps the read list's
+    // own order rather than erroring.
+    let (_, ids) = ids_for(app, &token, rl.id, "?sort=readListNumber,asc").await;
+    assert_eq!(
+        ids,
+        vec![
+            third.id.to_string(),
+            first.id.to_string(),
+            second.id.to_string()
+        ]
+    );
+}

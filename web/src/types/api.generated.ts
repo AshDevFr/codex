@@ -36337,7 +36337,10 @@ export interface operations {
     };
     komga_get_readlist_books: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Sort as `field,direction` (e.g. `metadata.numberSort,asc`). Defaults to the read list's own order. */
+                sort?: string;
+            };
             header?: never;
             path: {
                 /** @description Komga API prefix */
