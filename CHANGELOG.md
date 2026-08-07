@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.43.3] - 2026-08-07
+
+### 🐛 Bug Fixes
+
+- *(tasks)* Show a real label for every active task
+
 ## [1.43.2] - 2026-07-31
 
 ### 🐛 Bug Fixes
