@@ -3,7 +3,9 @@ use chrono::{DateTime, Duration, Utc};
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, DbBackend, EntityTrait,
     FromQueryResult, JoinType, QueryFilter, QueryOrder, QuerySelect, RelationTrait, Set, Statement,
-    TransactionTrait, entity::prelude::*,
+    TransactionTrait,
+    entity::prelude::*,
+    sea_query::{Expr, Func},
 };
 use tracing::{info, warn};
 use uuid::Uuid;
@@ -22,9 +24,11 @@ use codex_models::task::{DEFAULT_MAX_RESCHEDULES, TaskStats, TaskType};
 #[derive(Debug, Clone)]
 pub struct TaskWithTargets {
     pub task: tasks::Model,
-    /// Title from `book_metadata.title` when `task.book_id` is set and metadata exists.
+    /// Resolved book label when `task.book_id` is set: `book_metadata.title`,
+    /// falling back to `books.file_name` while metadata does not exist yet.
     pub book_title: Option<String>,
-    /// Title from `series_metadata.title` when `task.series_id` is set and metadata exists.
+    /// Resolved series label when `task.series_id` is set: `series_metadata.title`,
+    /// falling back to `series.name` while metadata does not exist yet.
     pub series_title: Option<String>,
     /// Name from `libraries.name` when `task.library_id` is set.
     pub library_name: Option<String>,
@@ -1037,9 +1041,26 @@ impl TaskRepository {
             .column(tasks::Column::CreatedAt)
             .column(tasks::Column::StartedAt)
             .column(tasks::Column::CompletedAt)
-            // joined target name columns (aliased to avoid collisions on `id` / `title`)
-            .column_as(book_metadata::Column::Title, "book_title")
-            .column_as(series_metadata::Column::Title, "series_title")
+            // Joined target name columns (aliased to avoid collisions on `id` / `title`).
+            // Metadata rows are written by analysis, so a task that is still
+            // running analysis has none yet — coalesce onto the columns that
+            // always exist so the UI never has to render a task with no label.
+            // `books.file_name` also matches the label the analyze handler puts
+            // in its progress events, so both channels agree on one string.
+            .column_as(
+                Expr::expr(Func::coalesce([
+                    Expr::col((book_metadata::Entity, book_metadata::Column::Title)).into(),
+                    Expr::col((books::Entity, books::Column::FileName)).into(),
+                ])),
+                "book_title",
+            )
+            .column_as(
+                Expr::expr(Func::coalesce([
+                    Expr::col((series_metadata::Entity, series_metadata::Column::Title)).into(),
+                    Expr::col((series::Entity, series::Column::Name)).into(),
+                ])),
+                "series_title",
+            )
             .column_as(libraries::Column::Name, "library_name")
             .join(JoinType::LeftJoin, tasks::Relation::Books.def())
             .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())

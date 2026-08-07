@@ -1,10 +1,11 @@
 import { Box, Group, Paper, Progress, Stack, Text } from "@mantine/core";
 import { IconCircleCheck, IconCircleX, IconLoader2 } from "@tabler/icons-react";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
-import type { TaskProgressEvent } from "@/types";
+import type { ActiveTask } from "@/types";
+import { getTaskLabel } from "@/utils/tasks";
 
 interface TaskProgressItemProps {
-  task: TaskProgressEvent;
+  task: ActiveTask;
 }
 
 function TaskProgressItem({ task }: TaskProgressItemProps) {
@@ -83,11 +84,9 @@ function TaskProgressItem({ task }: TaskProgressItemProps) {
             )}
           </Group>
 
-          {task.progress?.message && (
-            <Text size="xs" c="dimmed">
-              {task.progress.message}
-            </Text>
-          )}
+          <Text size="xs" c="dimmed">
+            {getTaskLabel(task)}
+          </Text>
 
           {task.error && (
             <Text size="xs" c="red">

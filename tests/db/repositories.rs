@@ -1622,7 +1622,7 @@ async fn test_list_with_targets_resolves_book_series_library_titles() {
 }
 
 #[tokio::test]
-async fn test_list_with_targets_omits_titles_when_metadata_missing() {
+async fn test_list_with_targets_falls_back_when_metadata_missing() {
     let (db, _temp_dir) = setup_test_db_wrapper().await;
     let conn = db.sea_orm_connection();
 
@@ -1642,8 +1642,10 @@ async fn test_list_with_targets_omits_titles_when_metadata_missing() {
         "def456",
     )
     .await;
-    // Intentionally do NOT create book_metadata: book_title should remain None
-    // even though tasks.book_id is populated.
+    // Intentionally do NOT create book_metadata / series_metadata. Analysis is
+    // what populates those rows, so an in-flight analyze task is exactly the
+    // case where they are still absent — the resolved labels must fall back to
+    // the always-present columns rather than coming back empty.
 
     TaskRepository::enqueue(
         conn,
@@ -1655,17 +1657,38 @@ async fn test_list_with_targets_omits_titles_when_metadata_missing() {
     )
     .await
     .unwrap();
+    TaskRepository::enqueue(
+        conn,
+        TaskType::AnalyzeSeries {
+            series_id: series.id,
+        },
+        None,
+    )
+    .await
+    .unwrap();
 
     let rows = TaskRepository::list_with_targets(conn, None, None, Some(10))
         .await
         .unwrap();
-    let task = rows
+
+    let book_task = rows
         .iter()
         .find(|r| r.task.task_type == "analyze_book")
         .expect("analyze_book row missing");
-    assert!(
-        task.book_title.is_none(),
-        "book_title should be None when book_metadata row is absent"
+    assert_eq!(
+        book_task.book_title.as_deref(),
+        Some("i1.cbz"),
+        "book_title should fall back to books.file_name when metadata is absent"
+    );
+
+    let series_task = rows
+        .iter()
+        .find(|r| r.task.task_type == "analyze_series")
+        .expect("analyze_series row missing");
+    assert_eq!(
+        series_task.series_title.as_deref(),
+        Some("Mystery Series"),
+        "series_title should fall back to series.name when metadata is absent"
     );
 
     db.close().await;

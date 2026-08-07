@@ -27,15 +27,13 @@ import {
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { throttle } from "es-toolkit";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "@/api/client";
-import {
-  fetchTaskStats,
-  fetchTasksByStatus,
-  subscribeToTaskProgress,
-} from "@/api/tasks";
+import { fetchTaskStats, fetchTasksByStatus } from "@/api/tasks";
 import { ResponsiveTable } from "@/components/ui";
-import type { TaskProgressEvent, TaskResponse } from "@/types";
+import { useTaskProgress } from "@/hooks/useTaskProgress";
+import type { TaskResponse } from "@/types";
+import { getTaskLabel } from "@/utils/tasks";
 
 // Stat card component
 function StatCard({
@@ -136,9 +134,14 @@ export function TasksSettings() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [purgeModalOpened, setPurgeModalOpened] = useState(false);
   const [nukeModalOpened, setNukeModalOpened] = useState(false);
-  const [activeProgress, setActiveProgress] = useState<
-    Map<string, TaskProgressEvent>
-  >(new Map());
+
+  // Live task state comes from the shared manager, which is the only thing that
+  // sees both halves of a task's label: the polling snapshot resolves target
+  // titles (SSE events carry raw IDs only) and the SSE stream carries progress
+  // messages (the `/tasks` payload has none). It also means this page reuses the
+  // app-wide poll loop and SSE subscription instead of opening its own.
+  const { activeTasks } = useTaskProgress();
+  const runningTasks = activeTasks.filter((task) => task.status === "running");
 
   // Fetch task stats
   const { data: stats, isLoading: statsLoading } = useQuery({
@@ -166,92 +169,34 @@ export function TasksSettings() {
     refetchInterval: 5000,
   });
 
-  // Seed `activeProgress` from currently-processing tasks so the "Active
-  // Tasks" panel reflects them immediately on page load, even before any
-  // SSE progress event arrives. Without this, opening the page mid-poll
-  // shows an empty panel until the running task fires its next progress
-  // emit (which can be many seconds for slow polls or never for handlers
-  // that don't emit progress at all).
-  //
-  // Existing entries (already populated by SSE) win — we never overwrite
-  // a richer, more recent event with a bare polling snapshot.
+  // A bulk analyze/scan can finish thousands of tasks, each one a state change
+  // here. Refetching the task list (4 status fetches when the filter is "all")
+  // + stats for every one is a request storm, so a completion flood coalesces
+  // into <=1 refetch per interval; the 5s refetchInterval on both queries is the
+  // backstop for anything the throttle drops.
+  const refreshTaskViews = useMemo(
+    () =>
+      throttle(() => {
+        refetchTasks();
+        queryClient.invalidateQueries({ queryKey: ["task-stats"] });
+      }, 1500),
+    [refetchTasks, queryClient],
+  );
+  useEffect(() => () => refreshTaskViews.cancel(), [refreshTaskViews]);
+
+  // Refresh the table and stats whenever the set of terminal tasks changes.
+  // Terminal tasks linger briefly in the shared manager before being dropped,
+  // so every completion is observable here. Keying the effect on the ID list
+  // (rather than the array identity) keeps it from firing on every progress
+  // tick of a still-running task.
+  const terminalTaskIds = activeTasks
+    .filter((task) => task.status === "completed" || task.status === "failed")
+    .map((task) => task.taskId)
+    .join(",");
   useEffect(() => {
-    if (!tasks || tasks.length === 0) return;
-    setActiveProgress((prev) => {
-      let changed = false;
-      const next = new Map(prev);
-      const processingIds = new Set<string>();
-      for (const t of tasks) {
-        if (t.status !== "processing") continue;
-        processingIds.add(t.id);
-        if (next.has(t.id)) continue;
-        next.set(t.id, {
-          taskId: t.id,
-          taskType: t.taskType,
-          status: "running",
-          progress: undefined,
-          error: undefined,
-          startedAt: t.startedAt ?? new Date().toISOString(),
-          completedAt: undefined,
-          libraryId: t.libraryId ?? undefined,
-          seriesId: t.seriesId ?? undefined,
-          bookId: t.bookId ?? undefined,
-        });
-        changed = true;
-      }
-      // Drop running entries that are no longer in the processing list —
-      // they completed/failed without an SSE delete reaching us (e.g. SSE
-      // dropped the event, or the page just opened post-completion).
-      for (const [id, ev] of prev) {
-        if (ev.status === "running" && !processingIds.has(id)) {
-          next.delete(id);
-          changed = true;
-        }
-      }
-      return changed ? next : prev;
-    });
-  }, [tasks]);
-
-  // Subscribe to real-time task progress
-  useEffect(() => {
-    // A bulk analyze/scan can complete thousands of tasks, each firing a
-    // terminal SSE event. Refetching the task list (4 status fetches when the
-    // filter is "all") + stats on every one is a request storm. Throttle the
-    // refresh so a completion flood coalesces into ≤1 refetch per interval; the
-    // 5s refetchInterval on both queries is the backstop for anything dropped.
-    const refreshTaskViews = throttle(() => {
-      refetchTasks();
-      queryClient.invalidateQueries({ queryKey: ["task-stats"] });
-    }, 1500);
-
-    const unsubscribe = subscribeToTaskProgress(
-      (event) => {
-        const terminal =
-          event.status === "completed" || event.status === "failed";
-        setActiveProgress((prev) => {
-          const next = new Map(prev);
-          if (terminal) {
-            next.delete(event.taskId);
-          } else {
-            next.set(event.taskId, event);
-          }
-          return next;
-        });
-        // Side-effect kept out of the state updater (updaters must stay pure).
-        if (terminal) {
-          refreshTaskViews();
-        }
-      },
-      (error) => {
-        console.error("Task progress error:", error);
-      },
-    );
-
-    return () => {
-      unsubscribe();
-      refreshTaskViews.cancel();
-    };
-  }, [refetchTasks, queryClient]);
+    if (!terminalTaskIds) return;
+    refreshTaskViews();
+  }, [terminalTaskIds, refreshTaskViews]);
 
   // Mutations
   const cancelTaskMutation = useMutation({
@@ -443,42 +388,37 @@ export function TasksSettings() {
         ) : null}
 
         {/* Active Progress */}
-        {activeProgress.size > 0 && (
+        {runningTasks.length > 0 && (
           <Card withBorder>
             <Stack gap="md">
               <Title order={3}>Active Tasks</Title>
-              {Array.from(activeProgress.values())
-                .sort((a, b) => a.taskType.localeCompare(b.taskType))
-                .map((event) => (
-                  <div key={event.taskId}>
-                    <Group justify="space-between" mb="xs">
-                      <Group gap="xs">
-                        <Badge variant="light">{event.taskType}</Badge>
-                        <Text size="sm">
-                          {event.progress?.message || "Processing..."}
-                        </Text>
-                      </Group>
-                      {event.progress?.current !== undefined &&
-                        event.progress?.total !== undefined && (
-                          <Text size="sm" c="dimmed">
-                            {event.progress.current} / {event.progress.total}
-                          </Text>
-                        )}
+              {runningTasks.map((task) => (
+                <div key={task.taskId}>
+                  <Group justify="space-between" mb="xs">
+                    <Group gap="xs">
+                      <Badge variant="light">{task.taskType}</Badge>
+                      <Text size="sm">{getTaskLabel(task)}</Text>
                     </Group>
-                    {event.progress?.current !== undefined &&
-                      event.progress?.total !== undefined &&
-                      event.progress.total > 0 && (
-                        <Progress
-                          value={
-                            (event.progress.current / event.progress.total) *
-                            100
-                          }
-                          size="sm"
-                          animated
-                        />
+                    {task.progress?.current !== undefined &&
+                      task.progress?.total !== undefined && (
+                        <Text size="sm" c="dimmed">
+                          {task.progress.current} / {task.progress.total}
+                        </Text>
                       )}
-                  </div>
-                ))}
+                  </Group>
+                  {task.progress?.current !== undefined &&
+                    task.progress?.total !== undefined &&
+                    task.progress.total > 0 && (
+                      <Progress
+                        value={
+                          (task.progress.current / task.progress.total) * 100
+                        }
+                        size="sm"
+                        animated
+                      />
+                    )}
+                </div>
+              ))}
             </Stack>
           </Card>
         )}

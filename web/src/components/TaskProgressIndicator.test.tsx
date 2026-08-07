@@ -3,7 +3,7 @@ import { render, screen } from "@testing-library/react";
 import type React from "react";
 import { describe, expect, it, vi } from "vitest";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
-import type { TaskProgressEvent } from "@/types";
+import type { ActiveTask, TaskProgressEvent } from "@/types";
 import { TaskProgressIndicator } from "./TaskProgressIndicator";
 
 // Mock the useTaskProgress hook
@@ -271,6 +271,62 @@ describe("TaskProgressIndicator", () => {
     renderWithMantine(<TaskProgressIndicator />);
 
     expect(screen.getByText("Analyzing metadata...")).toBeInTheDocument();
+  });
+
+  it("falls back to the resolved target when no message has arrived", () => {
+    // Poll-seeded tasks carry a title but no progress: the SSE stream is the
+    // only source of messages, and analyze tasks emit theirs once at start.
+    const mockTasks: ActiveTask[] = [
+      {
+        taskId: "task-1",
+        taskType: "analyze_book",
+        status: "running",
+        progress: undefined,
+        error: undefined,
+        startedAt: "2026-01-07T12:00:00Z",
+        libraryId: "lib-1",
+        bookTitle: "Naruto Vol. 12",
+      },
+    ];
+
+    vi.mocked(useTaskProgress).mockReturnValue({
+      activeTasks: mockTasks,
+      connectionState: "connected",
+      pendingCounts: {},
+      getTasksByStatus: vi.fn(() => mockTasks),
+      getTasksByLibrary: vi.fn(() => mockTasks),
+      getTask: vi.fn(() => mockTasks[0]),
+    });
+
+    renderWithMantine(<TaskProgressIndicator />);
+
+    expect(screen.getByText("Naruto Vol. 12")).toBeInTheDocument();
+  });
+
+  it("falls back to a generic label when neither message nor target is known", () => {
+    const mockTasks: ActiveTask[] = [
+      {
+        taskId: "task-1",
+        taskType: "cleanup",
+        status: "running",
+        progress: undefined,
+        error: undefined,
+        startedAt: "2026-01-07T12:00:00Z",
+      },
+    ];
+
+    vi.mocked(useTaskProgress).mockReturnValue({
+      activeTasks: mockTasks,
+      connectionState: "connected",
+      pendingCounts: {},
+      getTasksByStatus: vi.fn(() => mockTasks),
+      getTasksByLibrary: vi.fn(() => mockTasks),
+      getTask: vi.fn(() => mockTasks[0]),
+    });
+
+    renderWithMantine(<TaskProgressIndicator />);
+
+    expect(screen.getByText("Processing...")).toBeInTheDocument();
   });
 
   it("should display error message for failed tasks", () => {
