@@ -1,0 +1,1736 @@
+{
+  "status": 200,
+  "data": [
+    {
+      "score": 0.69555523762905,
+      "cosine": 0.4284922778606415,
+      "shared_tags": [
+        {
+          "id": 424,
+          "name": "Medieval"
+        },
+        {
+          "id": 525,
+          "name": "Time Loop"
+        },
+        {
+          "id": 637,
+          "name": "Summoned Into Another World"
+        },
+        {
+          "id": 635,
+          "name": "Transported to Another World"
+        },
+        {
+          "id": 26,
+          "name": "Suspense"
+        }
+      ],
+      "shared_tags_total": 54,
+      "matched_author": true,
+      "matched_related": true,
+      "matched_seed_ids": [3397, 84926],
+      "series": {
+        "id": 20299,
+        "state": "active",
+        "merged_with": null,
+        "title": "Re:ZERO -Starting Life in Another World-, Chapter 1: A Day in the Capital",
+        "native_title": "Ｒｅ：ゼロから始める異世界生活　第一章　王都の一日編",
+        "romanized_title": "Re:Zero kara Hajimeru Isekai Seikatsu: Dai 1-shou—Outo no Ichinichi-hen",
+        "secondary_titles": {
+          "en": [
+            {
+              "type": "alternative",
+              "title": "Re: Life in a different world from zero",
+              "note": "On  JP Covers"
+            }
+          ],
+          "ja-ro": [
+            {
+              "type": "native",
+              "title": "Re:Zero kara Hajimeru Isekai Seikatsu: Dai Ichi-shou—Outo no Ichinichi-hen",
+              "note": "Alternative reading 第一章 (not isshou)"
+            }
+          ]
+        },
+        "cover": {
+          "raw": {
+            "url": "https://images.mangabaka.dev/1/b/e/2/e/4/d/6/ad39/4203/8fba/f1b5a2b49800"
+          },
+          "x350": {
+            "x1": "https://cdn.mangabaka.dev/imgproxy/plain/x350@1/aHR0cHM6Ly9pbWFnZXMubWFuZ2FiYWthLmRldi8xL2IvZS8yL2UvNC9kLzYvYWQzOS80MjAzLzhmYmEvZjFiNWEyYjQ5ODAw"
+          }
+        },
+        "authors": ["Daichi Matsuse", "Tappei Nagatsuki"],
+        "artists": ["Daichi Matsuse"],
+        "description": "Subaru Natsuki was just trying to get to the convenience store but wound up summoned to another world. He encounters the usual things--life-threatening situations, silver haired beauties, cat fairies-",
+        "year": 2014,
+        "status": "completed",
+        "type": "manga",
+        "content_rating": "safe",
+        "genres": [
+          "action",
+          "adventure",
+          "comedy",
+          "drama",
+          "fantasy",
+          "romance",
+          "mystery",
+          "seinen",
+          "supernatural",
+          "suspense"
+        ],
+        "tags_v2": [
+          {
+            "id": 8,
+            "name": "Seinen",
+            "name_path": "Audience Demographics > Male Oriented > Seinen",
+            "weight": "defining",
+            "is_spoiler": false
+          },
+          {
+            "id": 1080,
+            "name": "Determined Protagonist",
+            "name_path": "Character Types > Determined Protagonist",
+            "weight": "recurrent",
+            "is_spoiler": false
+          },
+          {
+            "id": 58,
+            "name": "Male Lead",
+            "name_path": "Character Types > Male Lead",
+            "weight": "defining",
+            "is_spoiler": false
+          },
+          {
+            "id": 166,
+            "name": "Adapted to Anime",
+            "name_path": "Derivative Work > Adaptations > Adapted to Anime",
+            "weight": "unweighted",
+            "is_spoiler": false
+          },
+          {
+            "id": 76,
+            "name": "Based on a Light Novel",
+            "name_path": "Derivative Work > Based on > Based on Literature > Based on a Light Novel",
+            "weight": "unweighted",
+            "is_spoiler": false
+          },
+          {
+            "id": 75,
+            "name": "Based on a Novel",
+            "name_path": "Derivative Work > Based on > Based on Literature > Based on a Novel",
+            "weight": "core",
+            "is_spoiler": false
+          }
+        ],
+        "final_volume": "2",
+        "total_chapters": "11",
+        "rating": 76.74,
+        "popularity": {
+          "global": {
+            "current": 1627,
+            "history": {
+              "1d": 1626,
+              "1w": 1620,
+              "1mo": 1672,
+              "3mo": 1958,
+              "6mo": 1837,
+              "1y": 1621
+            }
+          },
+          "type": {
+            "current": 1058,
+            "history": {
+              "1d": 1059,
+              "1w": 1055,
+              "1mo": 1103,
+              "3mo": 1438,
+              "6mo": 1326,
+              "1y": 1258
+            }
+          }
+        },
+        "relationships": {
+          "main_story": [84926],
+          "prequel": [39977],
+          "sequel": [21593],
+          "side_story": [32970],
+          "spin_off": [26173]
+        },
+        "relationships_v2": [
+          {
+            "to_series_id": 39977,
+            "relation_type": "prequel"
+          },
+          {
+            "to_series_id": 21593,
+            "relation_type": "sequel"
+          },
+          {
+            "to_series_id": 32970,
+            "relation_type": "side_story"
+          },
+          {
+            "to_series_id": 84926,
+            "relation_type": "source"
+          }
+        ],
+        "source": {
+          "anilist": {
+            "id": 85736
+          },
+          "anime_planet": {
+            "id": "rezero-starting-life-in-another-world-chapter-1-a-day-in-the-capital"
+          },
+          "anime_news_network": {
+            "id": 17902
+          },
+          "kitsu": {
+            "id": 26985
+          },
+          "manga_updates": {
+            "id": "53olqck"
+          },
+          "my_anime_list": {
+            "id": 74695
+          },
+          "shikimori": {
+            "id": 74695
+          }
+        }
+      }
+    },
+    {
+      "score": 0.662768329126921,
+      "cosine": 0.43059074878692627,
+      "shared_tags": [
+        {
+          "id": 424,
+          "name": "Medieval"
+        },
+        {
+          "id": 525,
+          "name": "Time Loop"
+        },
+        {
+          "id": 26,
+          "name": "Suspense"
+        },
+        {
+          "id": 253,
+          "name": "Twins"
+        },
+        {
+          "id": 249,
+          "name": "Time Travel"
+        }
+      ],
+      "shared_tags_total": 60,
+      "matched_author": true,
+      "matched_related": true,
+      "matched_seed_ids": [3397, 84926],
+      "series": {
+        "id": 2634,
+        "state": "active",
+        "merged_with": null,
+        "title": "Re:ZERO -Starting Life in Another World- Chapter 4: The Sanctuary and the Witch of Greed",
+        "native_title": "Re:ゼロから始める異世界生活 第四章 聖域と強欲の魔女",
+        "romanized_title": "ReZero",
+        "secondary_titles": {
+          "ko": [
+            {
+              "type": "official",
+              "title": "Re：제로부터 시작하는 이세계 생활 제4장",
+              "note": null
+            }
+          ]
+        },
+        "cover": {
+          "raw": {
+            "url": "https://images.mangabaka.dev/3/1/f/4/d/6/8/4/e2c2/4ea0/ade8/0e653b77f9a2"
+          },
+          "x350": {
+            "x1": "https://cdn.mangabaka.dev/imgproxy/plain/x350@1/aHR0cHM6Ly9pbWFnZXMubWFuZ2FiYWthLmRldi8zLzEvZi80L2QvNi84LzQvZTJjMi80ZWEwL2FkZTgvMGU2NTNiNzdmOWEy"
+          }
+        },
+        "authors": ["Haruno Atori", "Tappei Nagatsuki"],
+        "artists": ["Haruno Atori"],
+        "description": "The 4th arc of the Re:Zero kara Hajimeru Isekai Seikatsu manga.\n\nOn to the next stage: the witch’s tomb known as the Sanctuary- Determined to release Rem from a mysterious slumber, Subaru and Emilia r",
+        "year": 2019,
+        "status": "releasing",
+        "type": "manga",
+        "content_rating": "safe",
+        "genres": [
+          "action",
+          "adventure",
+          "comedy",
+          "drama",
+          "fantasy",
+          "romance",
+          "mature",
+          "mystery",
+          "seinen",
+          "supernatural",
+          "suspense"
+        ],
+        "tags_v2": [
+          {
+            "id": 250,
+            "name": "Murder",
+            "name_path": "Activities > Crimes > Murder",
+            "weight": "unweighted",
+            "is_spoiler": false
+          },
+          {
+            "id": 8,
+            "name": "Seinen",
+            "name_path": "Audience Demographics > Male Oriented > Seinen",
+            "weight": "defining",
+            "is_spoiler": false
+          },
+          {
+            "id": 419,
+            "name": "Anti-Hero",
+            "name_path": "Character Archetype > Hero > Anti-Hero",
+            "weight": "defining",
+            "is_spoiler": false
+          },
+          {
+            "id": 58,
+            "name": "Male Lead",
+            "name_path": "Character Types > Male Lead",
+            "weight": "defining",
+            "is_spoiler": false
+          },
+          {
+            "id": 76,
+            "name": "Based on a Light Novel",
+            "name_path": "Derivative Work > Based on > Based on Literature > Based on a Light Novel",
+            "weight": "unweighted",
+            "is_spoiler": false
+          },
+          {
+            "id": 75,
+            "name": "Based on a Novel",
+            "name_path": "Derivative Work > Based on > Based on Literature > Based on a Novel",
+            "weight": "core",
+            "is_spoiler": false
+          }
+        ],
+        "final_volume": "13",
+        "total_chapters": "59",
+        "rating": 78.98,
+        "popularity": {
+          "global": {
+            "current": 6564,
+            "history": {
+              "1d": 6549,
+              "1w": 6464,
+              "1mo": 6432,
+              "3mo": 8117,
+              "6mo": 7997,
+              "1y": 6077
+            }
+          },
+          "type": {
+            "current": 4506,
+            "history": {
+              "1d": 4496,
+              "1w": 4457,
+              "1mo": 4459,
+              "3mo": 5972,
+              "6mo": 5814,
+              "1y": 4895
+            }
+          }
+        },
+        "relationships": {
+          "main_story": [84926],
+          "prequel": [23837],
+          "sequel": [3370],
+          "side_story": [32970],
+          "spin_off": [26173]
+        },
+        "relationships_v2": [
+          {
+            "to_series_id": 23837,
+            "relation_type": "prequel"
+          },
+          {
+            "to_series_id": 3370,
+            "relation_type": "sequel"
+          },
+          {
+            "to_series_id": 32970,
+            "relation_type": "side_story"
+          },
+          {
+            "to_series_id": 84926,
+            "relation_type": "source"
+          }
+        ],
+        "source": {
+          "anilist": {
+            "id": 112218
+          },
+          "anime_planet": {
+            "id": "rezero-starting-life-in-another-world-chapter-4-sanctuary-and-witch-of-greed"
+          },
+          "anime_news_network": {
+            "id": 35421
+          },
+          "kitsu": {
+            "id": 60044
+          },
+          "manga_updates": {
+            "id": "whkcy6u"
+          },
+          "my_anime_list": {
+            "id": 124470
+          },
+          "shikimori": {
+            "id": 124470
+          }
+        }
+      }
+    },
+    {
+      "score": 0.6617361638863724,
+      "cosine": 0.4246325194835663,
+      "shared_tags": [
+        {
+          "id": 424,
+          "name": "Medieval"
+        },
+        {
+          "id": 635,
+          "name": "Transported to Another World"
+        },
+        {
+          "id": 26,
+          "name": "Suspense"
+        },
+        {
+          "id": 253,
+          "name": "Twins"
+        },
+        {
+          "id": 249,
+          "name": "Time Travel"
+        }
+      ],
+      "shared_tags_total": 68,
+      "matched_author": true,
+      "matched_related": true,
+      "matched_seed_ids": [3397, 84926],
+      "series": {
+        "id": 21593,
+        "state": "active",
+        "merged_with": null,
+        "title": "Re:ZERO -Starting Life in Another World-, Chapter 2: A Week at the Mansion",
+        "native_title": "Ｒｅ：ゼロから始める異世界生活　第二章　屋敷の一週間編",
+        "romanized_title": "Re:Zero kara Hajimeru Isekai Seikatsu: Dai 2-shou—Yashiki no Isshuukan-hen",
+        "secondary_titles": {
+          "en": [
+            {
+              "type": "alternative",
+              "title": "Re: Life in a different world from zero",
+              "note": "On JP Covers"
+            }
+          ],
+          "ja-ro": [
+            {
+              "type": "native",
+              "title": "Re:Zero kara Hajimeru Isekai Seikatsu: Dai Ni-shou—Yashiki no Isshuukan-hen",
+              "note": "Alternative reading 第二章"
+            }
+          ]
+        },
+        "cover": {
+          "raw": {
+            "url": "https://images.mangabaka.dev/8/6/e/f/0/3/7/c/2eae/4cdd/a241/6337368688a2"
+          },
+          "x350": {
+            "x1": "https://cdn.mangabaka.dev/imgproxy/plain/x350@1/aHR0cHM6Ly9pbWFnZXMubWFuZ2FiYWthLmRldi84LzYvZS9mLzAvMy83L2MvMmVhZS80Y2RkL2EyNDEvNjMzNzM2ODY4OGEy"
+          }
+        },
+        "authors": ["Makoto Fuugetsu", "Tappei Nagatsuki"],
+        "artists": ["Makoto Fuugetsu"],
+        "description": "The 2nd arc of the Re:Zero kara Hajimeru Isekai Seikatsu manga.\n\nUsing his ability to repeat past events, a power named \"Return by Death,\" Subaru has saved the half-elf girl Emilia from a grim fate. H",
+        "year": 2014,
+        "status": "completed",
+        "type": "manga",
+        "content_rating": "safe",
+        "genres": [
+          "action",
+          "adventure",
+          "comedy",
+          "drama",
+          "fantasy",
+          "romance",
+          "mature",
+          "mystery",
+          "seinen",
+          "supernatural",
+          "suspense"
+        ],
+        "tags_v2": [
+          {
+            "id": 250,
+            "name": "Murder",
+            "name_path": "Activities > Crimes > Murder",
+            "weight": "recurrent",
+            "is_spoiler": false
+          },
+          {
+            "id": 8,
+            "name": "Seinen",
+            "name_path": "Audience Demographics > Male Oriented > Seinen",
+            "weight": "defining",
+            "is_spoiler": false
+          },
+          {
+            "id": 1080,
+            "name": "Determined Protagonist",
+            "name_path": "Character Types > Determined Protagonist",
+            "weight": "core",
+            "is_spoiler": false
+          },
+          {
+            "id": 58,
+            "name": "Male Lead",
+            "name_path": "Character Types > Male Lead",
+            "weight": "defining",
+            "is_spoiler": false
+          },
+          {
+            "id": 654,
+            "name": "Kind Male Lead",
+            "name_path": "Character Types > Male Lead > Kind Male Lead",
+            "weight": "defining",
+            "is_spoiler": false
+          },
+          {
+            "id": 166,
+            "name": "Adapted to Anime",
+            "name_path": "Derivative Work > Adaptations > Adapted to Anime",
+            "weight": "unweighted",
+            "is_spoiler": false
+          }
+        ],
+        "final_volume": "5",
+        "total_chapters": "31",
+        "rating": 79.6933333333333,
+        "popularity": {
+          "global": {
+            "current": 2452,
+            "history": {
+              "1d": 2454,
+              "1w": 2447,
+              "1mo": 2530,
+              "3mo": 2811,
+              "6mo": 2619,
+              "1y": 2294
+            }
+          },
+          "type": {
+            "current": 1632,
+            "history": {
+              "1d": 1635,
+              "1w": 1630,
+              "1mo": 1704,
+              "3mo": 2060,
+              "6mo": 1885,
+              "1y": 1788
+            }
+          }
+        },
+        "relationships": {
+          "main_story": [84926, 98585],
+          "prequel": [20299],
+          "sequel": [23837],
+          "side_story": [32970],
+          "spin_off": [26173]
+        },
+        "relationships_v2": [
+          {
+            "to_series_id": 297433,
+            "relation_type": "parody"
+          },
+          {
+            "to_series_id": 20299,
+            "relation_type": "prequel"
+          },
+          {
+            "to_series_id": 23837,
+            "relation_type": "sequel"
+          },
+          {
+            "to_series_id": 32970,
+            "relation_type": "side_story"
+          }
+        ],
+        "source": {
+          "anilist": {
+            "id": 85814
+          },
+          "anime_planet": {
+            "id": "rezero-starting-life-in-another-world-chapter-2-a-week-at-the-mansion"
+          },
+          "anime_news_network": {
+            "id": 17904
+          },
+          "kitsu": {
+            "id": 27723
+          },
+          "manga_updates": {
+            "id": "uqc5zck"
+          },
+          "my_anime_list": {
+            "id": 80719
+          },
+          "shikimori": {
+            "id": 80719
+          }
+        }
+      }
+    },
+    {
+      "score": 0.5616314866863458,
+      "cosine": 0.38946738839149475,
+      "shared_tags": [
+        {
+          "id": 1588,
+          "name": "Poor to Rich"
+        },
+        {
+          "id": 584,
+          "name": "Time Rewind"
+        },
+        {
+          "id": 1004,
+          "name": "Modern Era"
+        },
+        {
+          "id": 159,
+          "name": "Adult Cast"
+        },
+        {
+          "id": 1985,
+          "name": "Ruthless Protagonist"
+        }
+      ],
+      "shared_tags_total": 74,
+      "matched_author": false,
+      "matched_related": true,
+      "matched_seed_ids": [3397, 84926],
+      "series": {
+        "id": 85266,
+        "state": "active",
+        "merged_with": null,
+        "title": "Solo Leveling",
+        "native_title": "나 혼자만 레벨업",
+        "romanized_title": "Na Honjaman Level Up",
+        "secondary_titles": {
+          "unknown": [
+            {
+              "type": "unknown",
+              "title": "나 혼자만 레벨업 (소설)",
+              "note": null
+            },
+            {
+              "type": "unknown",
+              "title": "Only I Level Up",
+              "note": null
+            },
+            {
+              "type": "unknown",
+              "title": "Only I Level Up (Novel)",
+              "note": null
+            },
+            {
+              "type": "unknown",
+              "title": "Ore Dake Level Up na Ken (Novel)",
+              "note": null
+            },
+            {
+              "type": "unknown",
+              "title": "Solo Leveling",
+              "note": null
+            },
+            {
+              "type": "unknown",
+              "title": "俺だけレベルアップな件 （小説）",
+              "note": null
+            }
+          ]
+        },
+        "cover": {
+          "raw": {
+            "url": "https://images.mangabaka.dev/6/7/2/a/0/c/f/2/01b3/4137/ab76/b583e9452de6"
+          },
+          "x350": {
+            "x1": "https://cdn.mangabaka.dev/imgproxy/plain/x350@1/aHR0cHM6Ly9pbWFnZXMubWFuZ2FiYWthLmRldi82LzcvMi9hLzAvYy9mLzIvMDFiMy80MTM3L2FiNzYvYjU4M2U5NDUyZGU2"
+          }
+        },
+        "authors": ["Chugong"],
+        "artists": null,
+        "description": "**THE WEAKEST HUNTER OF ALL MANKIND!**\n\nE-rank hunter Jinwoo Sung has no money, no talent, and no prospects to speak of-and apparently, no luck, either! When he enters a hidden double dungeon one fate",
+        "year": 2016,
+        "status": "completed",
+        "type": "novel",
+        "content_rating": "safe",
+        "genres": ["action", "adventure", "drama", "fantasy", "shounen"],
+        "tags_v2": [
+          {
+            "id": 2103,
+            "name": "Dungeon Exploring",
+            "name_path": "Activities > Dungeon Exploring",
+            "weight": "core",
+            "is_spoiler": false
+          },
+          {
+            "id": 38,
+            "name": "Shounen",
+            "name_path": "Audience Demographics > Male Oriented > Shounen",
+            "weight": "defining",
+            "is_spoiler": false
+          },
+          {
+            "id": 1985,
+            "name": "Ruthless Protagonist",
+            "name_path": "Character Traits > Behavioral Traits > Ruthless Protagonist",
+            "weight": "defining",
+            "is_spoiler": false
+          },
+          {
+            "id": 1821,
+            "name": "Strong-Willed Character",
+            "name_path": "Character Traits > Strong-Willed Character",
+            "weight": "defining",
+            "is_spoiler": false
+          },
+          {
+            "id": 1588,
+            "name": "Poor to Rich",
+            "name_path": "Character Traits > Wealth > Rich Protagonist > Poor to Rich",
+            "weight": "defining",
+            "is_spoiler": false
+          },
+          {
+            "id": 1093,
+            "name": "Calm Protagonist",
+            "name_path": "Character Types > Calm Protagonist",
+            "weight": "defining",
+            "is_spoiler": false
+          }
+        ],
+        "final_volume": "14",
+        "total_chapters": "270",
+        "rating": 81.97,
+        "popularity": {
+          "global": {
+            "current": 1026,
+            "history": {
+              "1d": 1027,
+              "1w": 1023,
+              "1mo": 1017,
+              "3mo": 1064,
+              "6mo": 865,
+              "1y": 5232
+            }
+          },
+          "type": {
+            "current": 24,
+            "history": {
+              "1d": 24,
+              "1w": 24,
+              "1mo": 25,
+              "3mo": 29,
+              "6mo": 22,
+              "1y": 150
+            }
+          }
+        },
+        "relationships": {
+          "sequel": [85267],
+          "spin_off": [3397]
+        },
+        "relationships_v2": [
+          {
+            "to_series_id": 3397,
+            "relation_type": "adaptation"
+          },
+          {
+            "to_series_id": 85267,
+            "relation_type": "sequel"
+          }
+        ],
+        "source": {
+          "anime_planet": {
+            "id": "only-i-level-up-novel"
+          },
+          "anime_news_network": {
+            "id": 32926
+          },
+          "kitsu": {
+            "id": 56076
+          },
+          "manga_updates": {
+            "id": "621v4gu"
+          },
+          "my_anime_list": {
+            "id": 119184
+          },
+          "shikimori": {
+            "id": 119184
+          }
+        }
+      }
+    },
+    {
+      "score": 0.6526229871453632,
+      "cosine": 0.3697647452354431,
+      "shared_tags": [
+        {
+          "id": 635,
+          "name": "Transported to Another World"
+        },
+        {
+          "id": 26,
+          "name": "Suspense"
+        },
+        {
+          "id": 253,
+          "name": "Twins"
+        },
+        {
+          "id": 249,
+          "name": "Time Travel"
+        },
+        {
+          "id": 764,
+          "name": "Dark Fantasy"
+        }
+      ],
+      "shared_tags_total": 52,
+      "matched_author": true,
+      "matched_related": true,
+      "matched_seed_ids": [3397, 84926],
+      "series": {
+        "id": 23837,
+        "state": "active",
+        "merged_with": null,
+        "title": "Re:ZERO -Starting Life in Another World-, Chapter 3: Truth of Zero",
+        "native_title": "Ｒｅ：ゼロから始める異世界生活　第三章　Truth of Zero",
+        "romanized_title": "Re: Life in a Different World from Zero: Truth of Zero",
+        "secondary_titles": {
+          "en": [
+            {
+              "type": "alternative",
+              "title": "Re: Life in a different world from zero",
+              "note": "On JP Covers"
+            }
+          ],
+          "ja-ro": [
+            {
+              "type": "native",
+              "title": "Re:Zero kara Hajimeru Isekai Seikatsu: Dai San-shou—Truth of Zero",
+              "note": "Alternative reading 第三章"
+            }
+          ]
+        },
+        "cover": {
+          "raw": {
+            "url": "https://images.mangabaka.dev/6/3/d/e/d/b/4/8/ce8a/419e/b0da/9d757db9ab93"
+          },
+          "x350": {
+            "x1": "https://cdn.mangabaka.dev/imgproxy/plain/x350@1/aHR0cHM6Ly9pbWFnZXMubWFuZ2FiYWthLmRldi82LzMvZC9lL2QvYi80LzgvY2U4YS80MTllL2IwZGEvOWQ3NTdkYjlhYjkz"
+          }
+        },
+        "authors": ["Daichi Matsuse", "Tappei Nagatsuki"],
+        "artists": ["Daichi Matsuse"],
+        "description": "The 3rd arc of the Re:Zero kara Hajimeru Isekai Seikatsu manga.\n\nHaving survived both his encounter with the demon beasts and the nigh endless week at Roswaal Manor, Subaru returns to the capital of L",
+        "year": 2015,
+        "status": "completed",
+        "type": "manga",
+        "content_rating": "safe",
+        "genres": [
+          "action",
+          "adventure",
+          "comedy",
+          "drama",
+          "fantasy",
+          "romance",
+          "mystery",
+          "seinen",
+          "supernatural",
+          "suspense"
+        ],
+        "tags_v2": [
+          {
+            "id": 391,
+            "name": "Travel",
+            "name_path": "Activities > Leisure > Travel",
+            "weight": "incidental",
+            "is_spoiler": false
+          },
+          {
+            "id": 8,
+            "name": "Seinen",
+            "name_path": "Audience Demographics > Male Oriented > Seinen",
+            "weight": "core",
+            "is_spoiler": false
+          },
+          {
+            "id": 460,
+            "name": "Nekomimi",
+            "name_path": "Character Traits > Animal Characteristics > Kemonomimi > Nekomimi",
+            "weight": "incidental",
+            "is_spoiler": false
+          },
+          {
+            "id": 1080,
+            "name": "Determined Protagonist",
+            "name_path": "Character Types > Determined Protagonist",
+            "weight": "core",
+            "is_spoiler": false
+          },
+          {
+            "id": 58,
+            "name": "Male Lead",
+            "name_path": "Character Types > Male Lead",
+            "weight": "defining",
+            "is_spoiler": false
+          },
+          {
+            "id": 166,
+            "name": "Adapted to Anime",
+            "name_path": "Derivative Work > Adaptations > Adapted to Anime",
+            "weight": "unweighted",
+            "is_spoiler": false
+          }
+        ],
+        "final_volume": "11",
+        "total_chapters": "55",
+        "rating": 80.0566666666667,
+        "popularity": {
+          "global": {
+            "current": 3151,
+            "history": {
+              "1d": 3146,
+              "1w": 3140,
+              "1mo": 3134,
+              "3mo": 3816,
+              "6mo": 3595,
+              "1y": 3044
+            }
+          },
+          "type": {
+            "current": 2110,
+            "history": {
+              "1d": 2108,
+              "1w": 2107,
+              "1mo": 2132,
+              "3mo": 2823,
+              "6mo": 2618,
+              "1y": 2414
+            }
+          }
+        },
+        "relationships": {
+          "main_story": [84926],
+          "prequel": [21593],
+          "sequel": [2634],
+          "side_story": [32970],
+          "spin_off": [26173]
+        },
+        "relationships_v2": [
+          {
+            "to_series_id": 21593,
+            "relation_type": "prequel"
+          },
+          {
+            "to_series_id": 2634,
+            "relation_type": "sequel"
+          },
+          {
+            "to_series_id": 32970,
+            "relation_type": "side_story"
+          },
+          {
+            "to_series_id": 84926,
+            "relation_type": "source"
+          }
+        ],
+        "source": {
+          "anilist": {
+            "id": 87259
+          },
+          "anime_planet": {
+            "id": "rezero-starting-life-in-another-world-chapter-3-truth-of-zero"
+          },
+          "anime_news_network": {
+            "id": 17905
+          },
+          "kitsu": {
+            "id": 35974
+          },
+          "manga_updates": {
+            "id": "jd10y4y"
+          },
+          "my_anime_list": {
+            "id": 89960
+          },
+          "shikimori": {
+            "id": 89960
+          }
+        }
+      }
+    },
+    {
+      "score": 0.594341616327389,
+      "cosine": 0.37429019808769226,
+      "shared_tags": [
+        {
+          "id": 424,
+          "name": "Medieval"
+        },
+        {
+          "id": 525,
+          "name": "Time Loop"
+        },
+        {
+          "id": 26,
+          "name": "Suspense"
+        },
+        {
+          "id": 249,
+          "name": "Time Travel"
+        },
+        {
+          "id": 764,
+          "name": "Dark Fantasy"
+        }
+      ],
+      "shared_tags_total": 49,
+      "matched_author": true,
+      "matched_related": true,
+      "matched_seed_ids": [3397, 84926],
+      "series": {
+        "id": 3370,
+        "state": "active",
+        "merged_with": null,
+        "title": "Re:Zero kara Hajimeru Isekai Seikatsu: Dai-5 Shou—Mizu no Miyako to Eiyuu no Uta",
+        "native_title": "Ｒｅ：ゼロから始める異世界生活　第五章　水の都と英雄の詩",
+        "romanized_title": "Re:Zero kara Hajimeru Isekai Seikatsu: Dai-5 Shou - Mizu no Machi to Eiyuu no Uta",
+        "secondary_titles": {
+          "unknown": [
+            {
+              "type": "unknown",
+              "title": "Re:Zero kara Hajimeru Isekai Seikatsu: Dai 5-shou—Mizu no Miyako to Eiyuu no Uta",
+              "note": null
+            },
+            {
+              "type": "unknown",
+              "title": "Re:Zero kara Hajimeru Isekai Seikatsu - Daigoshou - Mizu no Miyako to Eiyuu no Uta",
+              "note": null
+            },
+            {
+              "type": "unknown",
+              "title": "Re:Zero kara Hajimeru Isekai Seikatsu: Dai Go-shou—Mizu no Miyako to Eiyuu no Uta",
+              "note": null
+            },
+            {
+              "type": "unknown",
+              "title": "Re:ZERO -Starting Life in Another World- Chapter 5",
+              "note": null
+            },
+            {
+              "type": "unknown",
+              "title": "Re:ZERO -Starting Life in Another World-, Chapter 5: The City of Water and the Hero's Poem",
+              "note": null
+            },
+            {
+              "type": "unknown",
+              "title": "Ｒｅ：ゼロから始める異世界生活　第五章　水の都と英雄の詩",
+              "note": null
+            }
+          ]
+        },
+        "cover": {
+          "raw": {
+            "url": "https://images.mangabaka.dev/8/2/4/c/d/e/4/1/ffdb/494b/a4be/2898e999aeb9"
+          },
+          "x350": {
+            "x1": "https://cdn.mangabaka.dev/imgproxy/plain/x350@1/aHR0cHM6Ly9pbWFnZXMubWFuZ2FiYWthLmRldi84LzIvNC9jL2QvZS80LzEvZmZkYi80OTRiL2E0YmUvMjg5OGU5OTlhZWI5"
+          }
+        },
+        "authors": ["Tappei Nagatsuki", "Wakaya Takase"],
+        "artists": ["Wakaya Takase"],
+        "description": "The 5th arc of the Re:Zero kara Hajimeru Isekai Seikatsu manga. \n\nSubaru and Emilia receive an invitation to a party from Anastasia and decide to go to Priestella, the city of the watergates.",
+        "year": 2024,
+        "status": "releasing",
+        "type": "manga",
+        "content_rating": "safe",
+        "genres": [
+          "action",
+          "adventure",
+          "fantasy",
+          "psychological",
+          "thriller",
+          "comedy",
+          "drama",
+          "mystery",
+          "romance",
+          "seinen",
+          "supernatural",
+          "suspense"
+        ],
+        "tags_v2": [
+          {
+            "id": 8,
+            "name": "Seinen",
+            "name_path": "Audience Demographics > Male Oriented > Seinen",
+            "weight": "defining",
+            "is_spoiler": false
+          },
+          {
+            "id": 362,
+            "name": "Ensemble Cast",
+            "name_path": "Character Types > Ensemble Cast",
+            "weight": "defining",
+            "is_spoiler": false
+          },
+          {
+            "id": 76,
+            "name": "Based on a Light Novel",
+            "name_path": "Derivative Work > Based on > Based on Literature > Based on a Light Novel",
+            "weight": "unweighted",
+            "is_spoiler": false
+          },
+          {
+            "id": 75,
+            "name": "Based on a Novel",
+            "name_path": "Derivative Work > Based on > Based on Literature > Based on a Novel",
+            "weight": "core",
+            "is_spoiler": false
+          },
+          {
+            "id": 311,
+            "name": "Time Manipulation",
+            "name_path": "Narrative Tropes > Plot Structure > Time Manipulation",
+            "weight": "defining",
+            "is_spoiler": false
+          },
+          {
+            "id": 525,
+            "name": "Time Loop",
+            "name_path": "Narrative Tropes > Plot Structure > Time Manipulation > Time Loop",
+            "weight": "defining",
+            "is_spoiler": false
+          }
+        ],
+        "final_volume": "3",
+        "total_chapters": "12",
+        "rating": 73.64,
+        "popularity": {
+          "global": {
+            "current": 20383,
+            "history": {
+              "1d": 20459,
+              "1w": 20455,
+              "1mo": 27872,
+              "3mo": 25096,
+              "6mo": 26627,
+              "1y": 21727
+            }
+          },
+          "type": {
+            "current": 14155,
+            "history": {
+              "1d": 14211,
+              "1w": 14223,
+              "1mo": 19451,
+              "3mo": 18670,
+              "6mo": 19855,
+              "1y": 17339
+            }
+          }
+        },
+        "relationships": {
+          "main_story": [84926],
+          "prequel": [2634],
+          "side_story": [32970],
+          "spin_off": [26173]
+        },
+        "relationships_v2": [
+          {
+            "to_series_id": 2634,
+            "relation_type": "prequel"
+          },
+          {
+            "to_series_id": 32970,
+            "relation_type": "side_story"
+          },
+          {
+            "to_series_id": 84926,
+            "relation_type": "source"
+          },
+          {
+            "to_series_id": 26173,
+            "relation_type": "spin_off"
+          }
+        ],
+        "source": {
+          "anilist": {
+            "id": 175172
+          },
+          "anime_planet": {
+            "id": "rezero-starting-life-in-another-world-chapter-5"
+          },
+          "anime_news_network": {
+            "id": 35422
+          },
+          "manga_updates": {
+            "id": "wxijl8o"
+          },
+          "my_anime_list": {
+            "id": 167582
+          },
+          "shikimori": {
+            "id": 167582
+          }
+        }
+      }
+    },
+    {
+      "score": 0.34006612001216285,
+      "cosine": 0.32878217101097107,
+      "shared_tags": [
+        {
+          "id": 584,
+          "name": "Time Rewind"
+        },
+        {
+          "id": 249,
+          "name": "Time Travel"
+        },
+        {
+          "id": 1984,
+          "name": "Ruthless Male Lead"
+        },
+        {
+          "id": 764,
+          "name": "Dark Fantasy"
+        },
+        {
+          "id": 612,
+          "name": "Cool Male Lead"
+        }
+      ],
+      "shared_tags_total": 75,
+      "matched_author": false,
+      "matched_related": false,
+      "matched_seed_ids": [3397, 84926],
+      "series": {
+        "id": 808,
+        "state": "active",
+        "merged_with": null,
+        "title": "Revenge of the Baskerville Bloodhound",
+        "native_title": "철혈검가 사냥개의 회귀",
+        "romanized_title": "Cheolhyeolgeomga Sanyanggae ui Hoegwi",
+        "secondary_titles": {
+          "unknown": [
+            {
+              "type": "unknown",
+              "title": "철혈검가 사냥개의 회귀",
+              "note": null
+            },
+            {
+              "type": "unknown",
+              "title": "Cheolhyeolgeomga Sanyanggae ui Hoegwi",
+              "note": null
+            },
+            {
+              "type": "unknown",
+              "title": "Cheolhyeol Geomga Sanyanggae-ui Hoegwi",
+              "note": null
+            },
+            {
+              "type": "unknown",
+              "title": "Cheolhyeol Geomga Sanyanggaeui Hoegwi",
+              "note": null
+            },
+            {
+              "type": "unknown",
+              "title": "Demir Kanlı Kılıç Tazısının İntikamı",
+              "note": null
+            },
+            {
+              "type": "unknown",
+              "title": "Die Rückkehr des Jagdhundes aus Eisen und Blut",
+              "note": null
+            },
+            {
+              "type": "unknown",
+              "title": "El perro de metal",
+              "note": null
+            },
+            {
+              "type": "unknown",
+              "title": "Kuduz Hançerin İntikamı",
+              "note": null
+            },
+            {
+              "type": "unknown",
+              "title": "La revanche du limier des Baskerville",
+              "note": null
+            },
+            {
+              "type": "unknown",
+              "title": "La venganza del sabueso de la espada sangrienta",
+              "note": null
+            },
+            {
+              "type": "unknown",
+              "title": "La Venganza del Sabueso de Sangre de Hierro",
+              "note": null
+            },
+            {
+              "type": "unknown",
+              "title": "O retorno do cão de caça dos Baskerville",
+              "note": null
+            },
+            {
+              "type": "unknown",
+              "title": "Regression of the Ironblade Hound",
+              "note": null
+            },
+            {
+              "type": "unknown",
+              "title": "Return of the Iron-Blooded Hound",
+              "note": null
+            },
+            {
+              "type": "unknown",
+              "title": "Return of the Iron-Blooded Sword Hound",
+              "note": null
+            },
+            {
+              "type": "unknown",
+              "title": "Revenge of the Baskerville Bloodhound",
+              "note": null
+            },
+            {
+              "type": "unknown",
+              "title": "Revenge of the Iron-Blooded Sword Hound",
+              "note": null
+            },
+            {
+              "type": "unknown",
+              "title": "Revenge of the Sword Clan's Hound",
+              "note": null
+            },
+            {
+              "type": "unknown",
+              "title": "The Return of the Iron-Blood Sword Hound",
+              "note": null
+            },
+            {
+              "type": "unknown",
+              "title": "Thiết Huyết Kiếm Sĩ Hồi Quy",
+              "note": null
+            },
+            {
+              "type": "unknown",
+              "title": "عودة الكلب ذي الدم الحديدي",
+              "note": null
+            },
+            {
+              "type": "unknown",
+              "title": "การกลับมาของหมาล่าเนื้อตระกูลดาบเลือดเหล็ก",
+              "note": null
+            },
+            {
+              "type": "unknown",
+              "title": "回帰した鉄血の猟犬",
+              "note": null
+            },
+            {
+              "type": "unknown",
+              "title": "鐵血家族獵犬的重生",
+              "note": null
+            },
+            {
+              "type": "unknown",
+              "title": "铁血剑家猎犬的回归",
+              "note": null
+            }
+          ]
+        },
+        "cover": {
+          "raw": {
+            "url": "https://images.mangabaka.dev/2/4/3/d/1/c/9/1/885d/428a/86a4/e31e22d7805a"
+          },
+          "x350": {
+            "x1": "https://cdn.mangabaka.dev/imgproxy/plain/x350@1/aHR0cHM6Ly9pbWFnZXMubWFuZ2FiYWthLmRldi8yLzQvMy9kLzEvYy85LzEvODg1ZC80MjhhLzg2YTQvZTMxZTIyZDc4MDVh"
+          }
+        },
+        "authors": ["Lego Balbasseo", "San-Chaek Lee"],
+        "artists": ["Seol Arang"],
+        "description": "Raised to kill like a pack of loyal hounds, the Baskerville children took countless lives as a band of fearsome assassins. Despite being the shunned illegitimate son of the brood, Vikir served his fam",
+        "year": 2023,
+        "status": "releasing",
+        "type": "manhwa",
+        "content_rating": "safe",
+        "genres": [
+          "action",
+          "fantasy",
+          "adventure",
+          "drama",
+          "harem",
+          "romance",
+          "school_life",
+          "shounen"
+        ],
+        "tags_v2": [
+          {
+            "id": 120,
+            "name": "Cannibalism",
+            "name_path": "Activities > Crimes > Cannibalism",
+            "weight": "defining",
+            "is_spoiler": false
+          },
+          {
+            "id": 878,
+            "name": "Kidnapping",
+            "name_path": "Activities > Crimes > Kidnapping",
+            "weight": "defining",
+            "is_spoiler": false
+          },
+          {
+            "id": 417,
+            "name": "Slavery",
+            "name_path": "Activities > Crimes > Slavery",
+            "weight": "core",
+            "is_spoiler": false
+          },
+          {
+            "id": 167,
+            "name": "Crossdressing",
+            "name_path": "Activities > Leisure > Crossdressing",
+            "weight": "recurrent",
+            "is_spoiler": false
+          },
+          {
+            "id": 337,
+            "name": "Swordplay",
+            "name_path": "Activities > Physical Activities > Swordplay",
+            "weight": "defining",
+            "is_spoiler": false
+          },
+          {
+            "id": 695,
+            "name": "Training",
+            "name_path": "Activities > Physical Activities > Training",
+            "weight": "unweighted",
+            "is_spoiler": false
+          }
+        ],
+        "final_volume": null,
+        "total_chapters": "175",
+        "rating": 80.1916666666667,
+        "popularity": {
+          "global": {
+            "current": 65,
+            "history": {
+              "1d": 66,
+              "1w": 66,
+              "1mo": 75,
+              "3mo": 110,
+              "6mo": 93,
+              "1y": 564
+            }
+          },
+          "type": {
+            "current": 9,
+            "history": {
+              "1d": 9,
+              "1w": 8,
+              "1mo": 11,
+              "3mo": 17,
+              "6mo": 9,
+              "1y": 91
+            }
+          }
+        },
+        "relationships": null,
+        "relationships_v2": [],
+        "source": {
+          "anilist": {
+            "id": 163824
+          },
+          "anime_planet": {
+            "id": "revenge-of-the-baskerville-bloodhound"
+          },
+          "kitsu": {
+            "id": 66874
+          },
+          "manga_updates": {
+            "id": "5v7h9gf"
+          },
+          "my_anime_list": {
+            "id": 157888
+          },
+          "shikimori": {
+            "id": 157888
+          }
+        }
+      }
+    },
+    {
+      "score": 0.3443156030268262,
+      "cosine": 0.3401576578617096,
+      "shared_tags": [
+        {
+          "id": 1588,
+          "name": "Poor to Rich"
+        },
+        {
+          "id": 424,
+          "name": "Medieval"
+        },
+        {
+          "id": 635,
+          "name": "Transported to Another World"
+        },
+        {
+          "id": 1586,
+          "name": "Rich Protagonist"
+        },
+        {
+          "id": 317,
+          "name": "Dragons"
+        }
+      ],
+      "shared_tags_total": 56,
+      "matched_author": false,
+      "matched_related": false,
+      "matched_seed_ids": [3397, 84926],
+      "series": {
+        "id": 7559,
+        "state": "active",
+        "merged_with": null,
+        "title": "The 8th Son? Are You Kidding Me?",
+        "native_title": "八男って、それはないでしょう！",
+        "romanized_title": "Hachinan tte, Sore wa Nai deshou!",
+        "secondary_titles": {
+          "unknown": [
+            {
+              "type": "unknown",
+              "title": "팔남이라니, 그건 아니잖아요!",
+              "note": null
+            },
+            {
+              "type": "unknown",
+              "title": "¿El octavo hijo? ¡Eso no puede ser cierto!",
+              "note": null
+            },
+            {
+              "type": "unknown",
+              "title": "Hachinan tte, Sore wa Nai deshou!",
+              "note": null
+            },
+            {
+              "type": "unknown",
+              "title": "Hachinantte, Sore wa Nai Deshou!",
+              "note": null
+            },
+            {
+              "type": "unknown",
+              "title": "Le Huitième fils",
+              "note": null
+            },
+            {
+              "type": "unknown",
+              "title": "The 8th Son? Are You Kidding Me?",
+              "note": null
+            },
+            {
+              "type": "unknown",
+              "title": "The Eighth Son That Can’t Be Right!",
+              "note": null
+            },
+            {
+              "type": "unknown",
+              "title": "Восьмой сын? Да не может этого быть!",
+              "note": null
+            },
+            {
+              "type": "unknown",
+              "title": "Восьмой сын? Я не могу этого принять!",
+              "note": null
+            },
+            {
+              "type": "unknown",
+              "title": "хатинан ттэ, сорэ ва най дэсё:",
+              "note": null
+            },
+            {
+              "type": "unknown",
+              "title": "ผมเนี่ยนะ...ชายแปด!",
+              "note": null
+            },
+            {
+              "type": "unknown",
+              "title": "八男って、それはないでしょう！",
+              "note": null
+            },
+            {
+              "type": "unknown",
+              "title": "八男？别闹了！",
+              "note": null
+            }
+          ]
+        },
+        "cover": {
+          "raw": {
+            "url": "https://images.mangabaka.dev/f/c/6/9/1/2/7/7/4041/4065/bff7/7123865fc3aa"
+          },
+          "x350": {
+            "x1": "https://cdn.mangabaka.dev/imgproxy/plain/x350@1/aHR0cHM6Ly9pbWFnZXMubWFuZ2FiYWthLmRldi9mL2MvNi85LzEvMi83LzcvNDA0MS80MDY1L2JmZjcvNzEyMzg2NWZjM2Fh"
+          }
+        },
+        "authors": ["Hiroki Kusumoto", "Y.A"],
+        "artists": ["Hiroki Kusumoto"],
+        "description": "Ichinomiya Shingo, a 25-year-old man working at a firm company, while thinking of tomorrow's busy working day, goes to sleep. However, when he woke up, he found himself in a room unknown to him and re",
+        "year": 2015,
+        "status": "releasing",
+        "type": "manga",
+        "content_rating": "safe",
+        "genres": [
+          "action",
+          "drama",
+          "fantasy",
+          "adventure",
+          "comedy",
+          "harem",
+          "romance",
+          "seinen"
+        ],
+        "tags_v2": [
+          {
+            "id": 8,
+            "name": "Seinen",
+            "name_path": "Audience Demographics > Male Oriented > Seinen",
+            "weight": "defining",
+            "is_spoiler": false
+          },
+          {
+            "id": 787,
+            "name": "Young Male Lead",
+            "name_path": "Character Traits > Age > Young Male Lead",
+            "weight": "core",
+            "is_spoiler": false
+          },
+          {
+            "id": 1588,
+            "name": "Poor to Rich",
+            "name_path": "Character Traits > Wealth > Rich Protagonist > Poor to Rich",
+            "weight": "defining",
+            "is_spoiler": false
+          },
+          {
+            "id": 59,
+            "name": "Female Lead",
+            "name_path": "Character Types > Female Lead",
+            "weight": "unweighted",
+            "is_spoiler": false
+          },
+          {
+            "id": 58,
+            "name": "Male Lead",
+            "name_path": "Character Types > Male Lead",
+            "weight": "defining",
+            "is_spoiler": false
+          },
+          {
+            "id": 652,
+            "name": "Popular male lead",
+            "name_path": "Character Types > Male Lead > Popular male lead",
+            "weight": "defining",
+            "is_spoiler": false
+          }
+        ],
+        "final_volume": "15",
+        "total_chapters": "112",
+        "rating": 66.6533333333333,
+        "popularity": {
+          "global": {
+            "current": 1378,
+            "history": {
+              "1d": 1379,
+              "1w": 1382,
+              "1mo": 1361,
+              "3mo": 1871,
+              "6mo": 1871,
+              "1y": 1840
+            }
+          },
+          "type": {
+            "current": 892,
+            "history": {
+              "1d": 894,
+              "1w": 894,
+              "1mo": 891,
+              "3mo": 1373,
+              "6mo": 1349,
+              "1y": 1420
+            }
+          }
+        },
+        "relationships": {
+          "main_story": [83598],
+          "adaptation": [187442]
+        },
+        "relationships_v2": [
+          {
+            "to_series_id": 187442,
+            "relation_type": "adaptation"
+          },
+          {
+            "to_series_id": 98561,
+            "relation_type": "prequel"
+          },
+          {
+            "to_series_id": 83598,
+            "relation_type": "source"
+          }
+        ],
+        "source": {
+          "anilist": {
+            "id": 96344
+          },
+          "anime_planet": {
+            "id": "hachinantte-sore-wa-nai-deshou"
+          },
+          "kitsu": {
+            "id": 36603
+          },
+          "manga_updates": {
+            "id": "9tzebcz"
+          },
+          "my_anime_list": {
+            "id": 94181
+          },
+          "shikimori": {
+            "id": 94181
+          }
+        }
+      }
+    }
+  ],
+  "seed_count": 2
+}
