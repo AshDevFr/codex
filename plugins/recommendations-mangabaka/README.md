@@ -3,8 +3,8 @@
 Manga recommendations for [Codex](https://github.com/AshDevFr/codex), powered by
 [MangaBaka](https://mangabaka.org). **No account, no OAuth, and no API key required.**
 
-> **Status: in development.** Content-based recommendations work end to end. The collaborative
-> signal and the user-facing filter settings are not wired up yet.
+> **Status: in development.** Both recommendation signals work end to end. The user-facing filter
+> and blend settings are not exposed in the UI yet.
 
 ## How it works
 
@@ -22,6 +22,15 @@ with which seeds produced them.
 
 Tag similarity alone tends to return more of what you already own, so `readers-also-like` supplies
 the taste signal that content matching structurally cannot.
+
+The two are scored independently and then combined. Because their raw scores are not remotely
+comparable (content similarity is a bounded value around 0.35, while reader overlap is an unbounded
+co-occurrence weight that has been observed anywhere from 10 to 300 depending on how widely read the
+source is), each is rescaled against the strongest result in its own response before blending.
+
+A series that **both** signals return is the strongest evidence available, since the two are derived
+from completely different data. Those results are given room to rank above anything either signal
+found on its own. Each recommendation's reason says which signal produced it.
 
 ## Keeping franchises out of the list
 

@@ -94,8 +94,11 @@ function collidesWithSeedTitle(candidate: Candidate, seedTitleKeys: Set<string>)
  * Four independent reasons, checked in cost order: the candidate is a seed, the
  * host excluded it, the user dismissed it, or it belongs to a seed's franchise.
  */
-export function filterCandidates(candidates: Candidate[], context: FilterContext): Candidate[] {
-  const kept: Candidate[] = [];
+export function filterCandidates<T extends Candidate>(
+  candidates: T[],
+  context: FilterContext,
+): T[] {
+  const kept: T[] = [];
   let relatedDropped = 0;
 
   for (const candidate of candidates) {
@@ -137,7 +140,7 @@ export function filterCandidates(candidates: Candidate[], context: FilterContext
  * directly. Two series that both reference some absent third work are not
  * thereby the same franchise.
  */
-export function collapseFranchises(candidates: Candidate[]): Candidate[] {
+export function collapseFranchises<T extends Candidate>(candidates: T[]): T[] {
   if (candidates.length === 0) return [];
 
   // Union-find over candidate positions, so a chain (1-2, 2-3) collapses whole.

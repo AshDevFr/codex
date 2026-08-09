@@ -151,23 +151,44 @@ export interface MbSeries {
 /**
  * One recommendation result.
  *
- * Shared by `/v1/series/mix` and `/v1/series/{id}/readers-also-like`, which
- * differ only in which optional annotations they populate. `matched_seed_ids`
- * is mix-only (readers-also-like has a single implicit seed: the path ID).
+ * Shared by `/v1/series/mix` and `/v1/series/{id}/readers-also-like`, but the
+ * two populate different fields, and the differences matter:
+ *
+ * - **Mix** returns `cosine`, `shared_tags`, `matched_seed_ids`,
+ *   `matched_author`, and `matched_related`. Its `score` is a bounded
+ *   similarity, observed in the 0.3-0.8 range.
+ * - **Readers-also-like** returns `shared_users` and `rank`, and carries *none*
+ *   of the mix annotations. Its `score` is an unbounded co-occurrence weight
+ *   whose scale varies enormously between seeds (10, 46, and 306 as the top
+ *   score for three different series), so it is only meaningful relative to
+ *   other entries in the same response.
+ *
+ * The embedded `series` object is the full shape from both endpoints.
  */
 export interface MbRecommendationEntry {
-  /** Ranking score. Not normalised to any fixed range across endpoints. */
+  /**
+   * Ranking score.
+   *
+   * Not comparable across endpoints, nor across readers-also-like responses for
+   * different seeds. Normalise per response before combining.
+   */
   score?: number | null;
   /** Raw cosine similarity, before MMR diversification. Mix only. */
   cosine?: number | null;
+  /** Mix only. */
   shared_tags?: MbSharedTag[] | null;
+  /** Mix only. */
   shared_tags_total?: number | null;
-  /** True when the result shares an author or artist with a seed. */
+  /** True when the result shares an author or artist with a seed. Mix only. */
   matched_author?: boolean | null;
-  /** True when the result is a known related work of a seed. */
+  /** True when the result is a known related work of a seed. Mix only. */
   matched_related?: boolean | null;
   /** Which seed IDs contributed to this result. Mix only. */
   matched_seed_ids?: number[] | null;
+  /** How many readers hold both this series and the source. Collaborative only. */
+  shared_users?: number | null;
+  /** Position within this response, starting at 1. Collaborative only. */
+  rank?: number | null;
   series: MbSeries;
 }
 

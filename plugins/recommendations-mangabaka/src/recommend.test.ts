@@ -32,10 +32,22 @@ function unrelated(count: number): MbRecommendationEntry[] {
   }));
 }
 
-/** A client stub whose `mix` returns the supplied entries. */
-function clientReturning(entries: MbRecommendationEntry[]) {
+/**
+ * A client stub whose `mix` returns the supplied entries. `readersAlsoLike`
+ * defaults to empty so tests that only care about the content signal are not
+ * silently relying on a missing method throwing.
+ */
+function clientReturning(
+  entries: MbRecommendationEntry[],
+  collaborative: Record<number, MbRecommendationEntry[]> = {},
+) {
   const mix = vi.fn(async () => entries);
-  return { client: { mix } as unknown as MangaBakaRecommendationClient, mix };
+  const readersAlsoLike = vi.fn(async (seriesId: number) => collaborative[seriesId] ?? []);
+  return {
+    client: { mix, readersAlsoLike } as unknown as MangaBakaRecommendationClient,
+    mix,
+    readersAlsoLike,
+  };
 }
 
 function request(overrides: Partial<RecommendationRequest> = {}): RecommendationRequest {
@@ -182,13 +194,15 @@ describe("generateRecommendations", () => {
     const { client } = clientReturning([
       { score: 0.9, series: { id: 111, title: "Dup" } },
       { score: 0.4, series: { id: 111, title: "Dup" } },
+      { score: 0.6, series: { id: 112, title: "Other" } },
     ]);
 
     const result = await generateRecommendations(client, request(), new DismissalStore());
 
-    expect(result.recommendations).toHaveLength(1);
-    // The stronger score wins.
-    expect(result.recommendations[0].score).toBe(0.9);
+    expect(result.recommendations.map((r) => r.externalId)).toEqual(["111", "112"]);
+    // The stronger of the two duplicate scores is the one that survived, so it
+    // still outranks the unrelated entry.
+    expect(result.recommendations[0].score).toBeGreaterThan(result.recommendations[1].score);
   });
 
   it("stamps a generation timestamp and reports results as fresh", async () => {
@@ -324,5 +338,142 @@ describe("generateRecommendations franchise handling", () => {
     );
 
     expect(result.recommendations[0].inLibrary).toBe(true);
+  });
+});
+
+describe("generateRecommendations collaborative blend", () => {
+  it("surfaces a series only the collaborative signal found", async () => {
+    // The point of the second signal: reachable by reader overlap, invisible
+    // to tag similarity.
+    const { client } = clientReturning([{ score: 0.5, series: { id: 900, title: "From Tags" } }], {
+      3397: [{ score: 40, series: { id: 901, title: "From Readers" } }],
+    });
+
+    const result = await generateRecommendations(client, request(), new DismissalStore());
+
+    expect(result.recommendations.map((r) => r.externalId)).toContain("901");
+  });
+
+  it("attributes a collaborative-only result to other readers", async () => {
+    const library = [entry(3397, { title: "Solo Leveling" })];
+    const { client } = clientReturning([], {
+      3397: [{ score: 40, series: { id: 901, title: "From Readers" } }],
+    });
+
+    const result = await generateRecommendations(
+      client,
+      request({ library }),
+      new DismissalStore(),
+    );
+
+    expect(result.recommendations[0].reason).toBe("Readers of Solo Leveling also read this");
+  });
+
+  it("ranks a series both signals agree on above an equally-similar content-only one", async () => {
+    // Identical content scores, so the collaborative endorsement is the only
+    // thing separating them.
+    const { client } = clientReturning(
+      [
+        { score: 0.6, series: { id: 900, title: "Content Only" } },
+        { score: 0.6, series: { id: 902, title: "Both Signals" } },
+      ],
+      { 3397: [{ score: 100, series: { id: 902, title: "Both Signals" } }] },
+    );
+
+    const result = await generateRecommendations(client, request(), new DismissalStore());
+
+    expect(result.recommendations[0].externalId).toBe("902");
+  });
+
+  it("queries the collaborative endpoint once per chosen seed", async () => {
+    const { client, readersAlsoLike } = clientReturning([]);
+
+    await generateRecommendations(client, request(), new DismissalStore(), {
+      collaborativeSeeds: 2,
+    });
+
+    expect(readersAlsoLike).toHaveBeenCalledTimes(2);
+  });
+
+  it("reproduces content-only behaviour when the collaborative signal is disabled", async () => {
+    // The escape hatch has to actually work, or the blend cannot be backed out.
+    const entries = [{ score: 0.5, series: { id: 900, title: "From Tags" } }];
+    const collaborative = { 3397: [{ score: 40, series: { id: 901, title: "From Readers" } }] };
+
+    const withBlend = clientReturning(entries, collaborative);
+    const withoutBlend = clientReturning(entries, collaborative);
+
+    const blended = await generateRecommendations(
+      withBlend.client,
+      request(),
+      new DismissalStore(),
+    );
+    const contentOnly = await generateRecommendations(
+      withoutBlend.client,
+      request(),
+      new DismissalStore(),
+      { collaborativeSeeds: 0 },
+    );
+
+    expect(blended.recommendations.map((r) => r.externalId)).toContain("901");
+    expect(contentOnly.recommendations.map((r) => r.externalId)).toEqual(["900"]);
+  });
+
+  it("drops a related work that arrives only through the collaborative path", async () => {
+    // Collaborative results carry no matched_related flag, so the relationship
+    // data is the only thing standing between the user and franchise spam here.
+    const { client } = clientReturning([], {
+      3397: [
+        { score: 100, series: { id: 950, title: "Spin-off", relationships: { other: [3397] } } },
+        { score: 90, series: { id: 951, title: "Genuinely Different" } },
+      ],
+    });
+
+    const result = await generateRecommendations(client, request(), new DismissalStore());
+
+    expect(result.recommendations.map((r) => r.externalId)).toEqual(["951"]);
+  });
+
+  it("still returns content results when every collaborative lookup fails", async () => {
+    const client = {
+      mix: vi.fn(async () => [{ score: 0.5, series: { id: 900, title: "From Tags" } }]),
+      readersAlsoLike: vi.fn(async () => {
+        throw new ApiError("API error: 503", 503);
+      }),
+    } as unknown as MangaBakaRecommendationClient;
+
+    const result = await generateRecommendations(client, request(), new DismissalStore());
+
+    expect(result.recommendations.map((r) => r.externalId)).toEqual(["900"]);
+  });
+
+  it("still returns collaborative results when the content probe fails", async () => {
+    const client = {
+      mix: vi.fn(async () => {
+        throw new ApiError("API error: 503", 503);
+      }),
+      readersAlsoLike: vi.fn(async (seriesId: number) =>
+        seriesId === 3397 ? [{ score: 40, series: { id: 901, title: "From Readers" } }] : [],
+      ),
+    } as unknown as MangaBakaRecommendationClient;
+
+    const result = await generateRecommendations(client, request(), new DismissalStore());
+
+    expect(result.recommendations.map((r) => r.externalId)).toEqual(["901"]);
+  });
+
+  it("returns nothing when both signals fail", async () => {
+    const client = {
+      mix: vi.fn(async () => {
+        throw new ApiError("API error: 503", 503);
+      }),
+      readersAlsoLike: vi.fn(async () => {
+        throw new ApiError("API error: 503", 503);
+      }),
+    } as unknown as MangaBakaRecommendationClient;
+
+    const result = await generateRecommendations(client, request(), new DismissalStore());
+
+    expect(result.recommendations).toEqual([]);
   });
 });

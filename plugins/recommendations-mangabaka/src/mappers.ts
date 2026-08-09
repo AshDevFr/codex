@@ -187,6 +187,20 @@ function joinWords(values: string[]): string {
 }
 
 /**
+ * Render a list of seed titles, summarising once it grows past what a reader
+ * will actually take in.
+ */
+export function summariseTitles(titles: string[]): string {
+  if (titles.length === 0) return "";
+  if (titles.length <= MAX_REASON_TITLES) return joinWords(titles);
+
+  // Comma-join rather than joinWords here: the trailing "and N more" is already
+  // the final conjunction, so "A and B and 1 more" would double it.
+  const shown = titles.slice(0, MAX_REASON_TITLES);
+  return `${shown.join(", ")} and ${titles.length - MAX_REASON_TITLES} more`;
+}
+
+/**
  * Compose the human-readable justification.
  *
  * The protocol offers only a free-text `reason` string, so MangaBaka's
@@ -203,17 +217,7 @@ export function buildReason(
     .slice(0, MAX_REASON_TAGS)
     .map((tag) => tag.name);
 
-  let titles: string;
-  if (basedOn.length === 0) {
-    titles = "";
-  } else if (basedOn.length <= MAX_REASON_TITLES) {
-    titles = joinWords(basedOn);
-  } else {
-    // Comma-join rather than joinWords here: the trailing "and N more" is
-    // already the final conjunction, so "A and B and 1 more" would double it.
-    const shown = basedOn.slice(0, MAX_REASON_TITLES);
-    titles = `${shown.join(", ")} and ${basedOn.length - MAX_REASON_TITLES} more`;
-  }
+  const titles = summariseTitles(basedOn);
 
   if (tagNames.length > 0 && titles) {
     return `Shares ${joinWords(tagNames)} with ${titles}`;
