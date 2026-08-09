@@ -3,8 +3,33 @@
 Manga recommendations for [Codex](https://github.com/AshDevFr/codex), powered by
 [MangaBaka](https://mangabaka.org). **No account, no OAuth, and no API key required.**
 
-> **Status: in development.** Both recommendation signals work end to end. The user-facing filter
-> and blend settings are not exposed in the UI yet.
+> **Status: in development.** Both recommendation signals and all settings work. The plugin is not
+> yet registered in the plugin gallery or the development environment.
+
+## Settings
+
+All per-user, all optional, all with sensible defaults.
+
+| Setting                      | What it does                                                             |
+| ---------------------------- | ------------------------------------------------------------------------ |
+| Content Ratings              | Limit results to `safe`, `suggestive`, `erotica`, or `pornographic`       |
+| Included / Excluded Types    | Keep or drop `manga`, `manhwa`, `manhua`, `novel`, `oel`                  |
+| Excluded Genres              | Drop results carrying any of these genres                                 |
+| Excluded Tags                | Drop results carrying any of these tags, **by name**                      |
+| Minimum Rating               | Only recommend series rated at least this highly on MangaBaka             |
+| Similarity vs. Reader Overlap | Balance the two signals, 0 to 1. Defaults to 0.5, treating them equally  |
+| Reader Overlap Seeds         | How many favourites to look up reader overlap for. 0 turns the signal off |
+| Exclude Same Author          | Hide, rather than de-rank, series by an author you already read           |
+
+Multi-value settings are comma-separated, for example `safe,suggestive`.
+
+Filters are sent to MangaBaka as part of the request wherever the API supports it, so a filtered-out
+series never takes up a slot in the results. The reader-overlap endpoint accepts only the content
+rating and tag filters, so the rest are additionally applied locally to anything it returns.
+
+Excluded tags are given as names (`Death Game`, `Gore`), matched case-insensitively against
+MangaBaka's tag list. Names that don't match anything are skipped with a warning rather than failing
+the run. The underlying API requires numeric tag IDs; the plugin looks them up so you don't have to.
 
 ## How it works
 

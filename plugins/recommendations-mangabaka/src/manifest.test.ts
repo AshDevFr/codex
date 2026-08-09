@@ -40,3 +40,64 @@ describe("seriesUrl", () => {
     expect(seriesUrl(57372)).toBe("https://mangabaka.org/57372");
   });
 });
+
+describe("userConfigSchema", () => {
+  const fields = manifest.userConfigSchema.fields;
+  const keys = fields.map((f) => f.key);
+
+  it("exposes every filter and tuning setting", () => {
+    expect(keys).toEqual([
+      "contentRating",
+      "includedTypes",
+      "excludedTypes",
+      "excludedGenres",
+      "excludedTags",
+      "minimumRating",
+      "contentWeight",
+      "collaborativeSeeds",
+      "excludeSameAuthor",
+    ]);
+  });
+
+  it("uses only field types the settings UI can render", () => {
+    // Anything other than boolean, number, or json falls back to a plain text
+    // input, so an array type would render as an unexplained text box.
+    for (const field of fields) {
+      expect(["string", "number", "boolean"]).toContain(field.type);
+    }
+  });
+
+  it("describes tag exclusion in terms of names, not IDs", () => {
+    const tags = fields.find((f) => f.key === "excludedTags");
+
+    expect(tags?.description).toMatch(/name/i);
+    expect(tags?.description).not.toMatch(/\bID\b/);
+  });
+
+  it("defaults every field, so an untouched plugin is fully configured", () => {
+    for (const field of fields) {
+      expect(field.default).toBeDefined();
+      expect(field.required ?? false).toBe(false);
+    }
+  });
+
+  it("keeps same-author results by default", () => {
+    expect(fields.find((f) => f.key === "excludeSameAuthor")?.default).toBe(false);
+  });
+
+  it("documents that zero seeds disables reader overlap", () => {
+    expect(fields.find((f) => f.key === "collaborativeSeeds")?.description).toMatch(/0/);
+  });
+});
+
+describe("configSchema", () => {
+  it("exposes the admin-level client settings", () => {
+    expect(manifest.configSchema.fields.map((f) => f.key)).toEqual(["timeout", "base_url"]);
+  });
+
+  it("offers a base URL override as an escape hatch for the beta endpoints", () => {
+    const baseUrl = manifest.configSchema.fields.find((f) => f.key === "base_url");
+
+    expect(baseUrl?.default).toBe("https://api.mangabaka.org");
+  });
+});

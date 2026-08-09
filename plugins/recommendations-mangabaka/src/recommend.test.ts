@@ -477,3 +477,92 @@ describe("generateRecommendations collaborative blend", () => {
     expect(result.recommendations).toEqual([]);
   });
 });
+
+describe("generateRecommendations upstream filters", () => {
+  it("sends every filter to the content probe rather than applying it afterwards", async () => {
+    // Filtering upstream means a rejected series never occupies a slot in the
+    // response, so the over-fetch is not spent on results destined for the bin.
+    const { client, mix } = clientReturning([]);
+
+    await generateRecommendations(client, request(), new DismissalStore(), {
+      filters: {
+        contentRating: ["safe", "suggestive"],
+        includedTypes: ["manga", "manhwa"],
+        excludedTypes: ["novel"],
+        excludedGenres: ["hentai"],
+        excludedTagIds: [1120, 39],
+        minimumRating: 70,
+      },
+    });
+
+    expect(mix.mock.calls[0][0]).toMatchObject({
+      contentRating: ["safe", "suggestive"],
+      type: ["manga", "manhwa"],
+      typeNot: ["novel"],
+      genreNot: ["hentai"],
+      tagNot: [1120, 39],
+      ratingLower: 70,
+    });
+  });
+
+  it("sends the two filters the collaborative endpoint supports", async () => {
+    const { client, readersAlsoLike } = clientReturning([]);
+
+    await generateRecommendations(client, request(), new DismissalStore(), {
+      collaborativeSeeds: 1,
+      filters: { contentRating: ["safe"], excludedTagIds: [1120], minimumRating: 70 },
+    });
+
+    expect(readersAlsoLike.mock.calls[0][1]).toMatchObject({
+      contentRating: ["safe"],
+      tagNot: [1120],
+    });
+    // readers-also-like has no rating parameter, so it must not be forwarded.
+    expect(readersAlsoLike.mock.calls[0][1]).not.toHaveProperty("ratingLower");
+  });
+
+  it("omits filters entirely when none are configured", async () => {
+    const { client, mix } = clientReturning([]);
+
+    await generateRecommendations(client, request(), new DismissalStore());
+
+    const params = mix.mock.calls[0][0];
+    expect(params.contentRating).toBeUndefined();
+    expect(params.tagNot).toBeUndefined();
+    expect(params.ratingLower).toBeUndefined();
+  });
+});
+
+describe("generateRecommendations filter enforcement across signals", () => {
+  it("applies type filters to collaborative-only results the endpoint cannot filter", async () => {
+    // readers-also-like has no type parameter, so without a local check an
+    // excluded type would still show up and the setting would look broken.
+    const { client } = clientReturning([], {
+      3397: [
+        { score: 100, series: { id: 950, title: "A Novel", type: "novel" } },
+        { score: 90, series: { id: 951, title: "A Manhwa", type: "manhwa" } },
+      ],
+    });
+
+    const result = await generateRecommendations(client, request(), new DismissalStore(), {
+      filters: { excludedTypes: ["novel"] },
+    });
+
+    expect(result.recommendations.map((r) => r.externalId)).toEqual(["951"]);
+  });
+
+  it("applies the minimum rating to collaborative-only results", async () => {
+    const { client } = clientReturning([], {
+      3397: [
+        { score: 100, series: { id: 960, title: "Poorly Rated", rating: 40 } },
+        { score: 90, series: { id: 961, title: "Well Rated", rating: 90 } },
+      ],
+    });
+
+    const result = await generateRecommendations(client, request(), new DismissalStore(), {
+      filters: { minimumRating: 80 },
+    });
+
+    expect(result.recommendations.map((r) => r.externalId)).toEqual(["961"]);
+  });
+});

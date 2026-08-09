@@ -31,7 +31,7 @@ import {
 } from "./scoring.js";
 import { type LibraryIndex, type ResolvedSeed, resolveSeeds } from "./seeds.js";
 import { normalizeTitle } from "./titles.js";
-import type { MbRecommendationEntry } from "./types.js";
+import type { MbContentRating, MbRecommendationEntry, MbSeriesType } from "./types.js";
 
 /** Upstream cap on `/v1/series/mix`. */
 const MIX_LIMIT_MAX = 50;
@@ -48,7 +48,31 @@ const DEFAULT_LIMIT = 20;
  */
 export const MIX_OVERFETCH_FACTOR = 3;
 
-export type GenerateOptions = AuthorAdjustmentOptions & BlendOptions & CollaborativeOptions;
+export type GenerateOptions = AuthorAdjustmentOptions &
+  BlendOptions &
+  CollaborativeOptions & {
+    /**
+     * Filters to apply upstream.
+     *
+     * Sent as query parameters rather than applied to the response. MangaBaka
+     * exposes the whole filter surface, so a filtered-out series never occupies
+     * a slot in the response and the over-fetch is not wasted on results that
+     * were going to be discarded. The AniList provider filters after the fact
+     * only because AniList has no equivalent parameters.
+     */
+    filters?: UpstreamFilters;
+  };
+
+/** Filters passed straight through to MangaBaka. */
+export interface UpstreamFilters {
+  contentRating?: MbContentRating[];
+  includedTypes?: MbSeriesType[];
+  excludedTypes?: MbSeriesType[];
+  excludedGenres?: string[];
+  /** Already resolved from names to numeric IDs. */
+  excludedTagIds?: number[];
+  minimumRating?: number;
+}
 
 /** An empty, well-formed response. */
 function emptyResponse(): RecommendationResponse {
@@ -230,6 +254,7 @@ export async function generateRecommendations(
 
   const seedTitles = new Map(seeds.map((seed) => [seed.id, seed.title]));
   const seedIds = new Set(seeds.map((seed) => seed.id));
+  const filters = options.filters ?? {};
 
   // Both signals are independent, so they go out together. The content probe is
   // the primary one: if it fails there is nothing to recommend, whereas the
@@ -242,13 +267,24 @@ export async function generateRecommendations(
         // Tag rules should steer the probe vector, not hard-filter candidates
         // out of it. Upstream defaults this to true.
         strict: false,
+        contentRating: filters.contentRating,
+        tagNot: filters.excludedTagIds,
+        type: filters.includedTypes,
+        typeNot: filters.excludedTypes,
+        genreNot: filters.excludedGenres,
+        ratingLower: filters.minimumRating,
       })
       .catch((error: unknown) => {
         const message = error instanceof Error ? error.message : "Unknown error";
         logger.warn(`Mix request failed: ${message}`);
         return null;
       }),
-    fetchCollaborative(client, seeds, options),
+    fetchCollaborative(client, seeds, {
+      ...options,
+      // The collaborative endpoint accepts only these two of the filters.
+      contentRating: filters.contentRating,
+      excludedTagIds: filters.excludedTagIds,
+    }),
   ]);
 
   if (mixResult === null && collaborative.size === 0) {
@@ -268,6 +304,9 @@ export async function generateRecommendations(
     seedTitleKeys: seedTitleKeys(entries, seeds),
     excludeIds: new Set(excludeIds),
     isDismissed: (externalId) => dismissed.has(externalId),
+    // Redundant for content candidates, which were filtered upstream, but the
+    // collaborative endpoint only supports two of these parameters.
+    userFilters: filters,
   });
 
   // Scoring after filtering, so the doomed franchise entries do not set the

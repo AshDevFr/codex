@@ -6,6 +6,7 @@ import {
   collapseFranchises,
   type FilterContext,
   filterCandidates,
+  matchesUserFilters,
   relatedIdsOf,
 } from "./filters.js";
 import { mapRecommendation } from "./mappers.js";
@@ -245,5 +246,87 @@ describe("collapseFranchises", () => {
 
   it("handles an empty input", () => {
     expect(collapseFranchises([])).toEqual([]);
+  });
+});
+
+describe("matchesUserFilters", () => {
+  it("accepts anything when no filters are set", () => {
+    expect(matchesUserFilters(series({ type: "novel" }), {})).toBe(true);
+  });
+
+  it("enforces included types", () => {
+    expect(matchesUserFilters(series({ type: "manhwa" }), { includedTypes: ["manhwa"] })).toBe(
+      true,
+    );
+    expect(matchesUserFilters(series({ type: "novel" }), { includedTypes: ["manhwa"] })).toBe(
+      false,
+    );
+  });
+
+  it("enforces excluded types", () => {
+    expect(matchesUserFilters(series({ type: "novel" }), { excludedTypes: ["novel"] })).toBe(false);
+  });
+
+  it("enforces excluded genres case-insensitively", () => {
+    expect(
+      matchesUserFilters(series({ genres: ["Action", "Hentai"] }), { excludedGenres: ["hentai"] }),
+    ).toBe(false);
+    expect(matchesUserFilters(series({ genres: ["action"] }), { excludedGenres: ["hentai"] })).toBe(
+      true,
+    );
+  });
+
+  it("enforces the minimum rating", () => {
+    expect(matchesUserFilters(series({ rating: 85 }), { minimumRating: 80 })).toBe(true);
+    expect(matchesUserFilters(series({ rating: 70 }), { minimumRating: 80 })).toBe(false);
+  });
+
+  it("keeps an unrated series rather than assuming the worst", () => {
+    // A missing rating is unknown, not zero. Dropping these would silently
+    // remove newer series that nobody has scored yet.
+    expect(matchesUserFilters(series({ rating: null }), { minimumRating: 80 })).toBe(true);
+  });
+
+  it("enforces content ratings", () => {
+    expect(
+      matchesUserFilters(series({ content_rating: "safe" }), { contentRating: ["safe"] }),
+    ).toBe(true);
+    expect(
+      matchesUserFilters(series({ content_rating: "erotica" }), { contentRating: ["safe"] }),
+    ).toBe(false);
+  });
+
+  it("enforces excluded tags by ID", () => {
+    const tagged = series({ tags_v2: [{ id: 1120, name: "Death Game" }] });
+
+    expect(matchesUserFilters(tagged, { excludedTagIds: [1120] })).toBe(false);
+    expect(matchesUserFilters(tagged, { excludedTagIds: [39] })).toBe(true);
+  });
+
+  it("keeps a series whose type is unknown", () => {
+    // Only drop on positive evidence the series violates the filter.
+    expect(matchesUserFilters(series({ type: null }), { includedTypes: ["manga"] })).toBe(true);
+  });
+});
+
+describe("filterCandidates user filters", () => {
+  it("drops a candidate the collaborative endpoint could not filter upstream", () => {
+    // readers-also-like accepts neither a type nor a rating parameter, so
+    // without this the setting would appear not to work.
+    const kept = filterCandidates(
+      [candidate({ score: 0.9, series: { id: 100, title: "A Novel", type: "novel" } })],
+      ctx({ userFilters: { excludedTypes: ["novel"] } }),
+    );
+
+    expect(kept).toEqual([]);
+  });
+
+  it("keeps a candidate that satisfies the filters", () => {
+    const kept = filterCandidates(
+      [candidate({ score: 0.9, series: { id: 100, title: "A Manhwa", type: "manhwa" } })],
+      ctx({ userFilters: { excludedTypes: ["novel"] } }),
+    );
+
+    expect(kept).toHaveLength(1);
   });
 });

@@ -16,7 +16,7 @@
 import type { MangaBakaRecommendationClient } from "./api.js";
 import { logger } from "./logger.js";
 import type { ResolvedSeed } from "./seeds.js";
-import type { MbRecommendationEntry } from "./types.js";
+import type { MbContentRating, MbRecommendationEntry } from "./types.js";
 
 /** How many of the user's top-rated seeds to query by default. */
 export const DEFAULT_COLLABORATIVE_SEEDS = 5;
@@ -30,6 +30,16 @@ const PER_SEED_LIMIT = 24;
 export interface CollaborativeOptions {
   /** How many top-rated seeds to query. Zero disables the signal entirely. */
   collaborativeSeeds?: number;
+  /**
+   * Allowed content ratings, passed upstream.
+   *
+   * This endpoint accepts only `content_rating` and `tag_not` of the filter
+   * surface `/mix` supports; the rest have no equivalent here and are applied
+   * to the content probe only.
+   */
+  contentRating?: MbContentRating[];
+  /** Tag IDs to exclude, passed upstream. */
+  excludedTagIds?: number[];
 }
 
 /** A series endorsed by the reading habits of one or more seeds' readers. */
@@ -92,7 +102,11 @@ export async function fetchCollaborative(
   const settled = await withConcurrency(
     chosen.map((seed) => async () => ({
       seed,
-      entries: await client.readersAlsoLike(seed.id, { limit: PER_SEED_LIMIT }),
+      entries: await client.readersAlsoLike(seed.id, {
+        limit: PER_SEED_LIMIT,
+        contentRating: options.contentRating,
+        tagNot: options.excludedTagIds,
+      }),
     })),
     COLLABORATIVE_CONCURRENCY,
   );

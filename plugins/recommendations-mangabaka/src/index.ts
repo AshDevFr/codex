@@ -30,18 +30,58 @@ import {
   type RecommendationResponse,
 } from "@ashdev/codex-plugin-sdk";
 import { MangaBakaRecommendationClient } from "./api.js";
+import {
+  describeSettings,
+  parseAdminConfig,
+  parseUserConfig,
+  type UserSettings,
+} from "./config.js";
 import { DismissalStore } from "./dismissals.js";
 import { logger } from "./logger.js";
 import { manifest } from "./manifest.js";
-import { generateRecommendations } from "./recommend.js";
+import { type GenerateOptions, generateRecommendations } from "./recommend.js";
+import { TagResolver } from "./tags.js";
 
 // Plugin state (set during initialization)
 let client: MangaBakaRecommendationClient | null = null;
+let tagResolver: TagResolver | null = null;
+let settings: UserSettings = parseUserConfig(undefined);
 const dismissals = new DismissalStore();
 
 /** Set the MangaBaka client (exported for testing) */
 export function setClient(c: MangaBakaRecommendationClient | null): void {
   client = c;
+}
+
+/**
+ * Turn the parsed settings into generation options, resolving tag names to the
+ * numeric IDs `tag_not` requires.
+ *
+ * Resolution is deferred to the first run rather than done during
+ * initialization so that startup involves no network I/O: a slow or
+ * unreachable tag catalogue would otherwise delay the plugin coming up, for a
+ * filter that most users never set. The resolver caches in memory and in
+ * storage, so this costs at most one request per process.
+ */
+async function buildOptions(): Promise<GenerateOptions> {
+  const excludedTagIds =
+    settings.excludedTagNames.length > 0 && tagResolver
+      ? await tagResolver.resolve(settings.excludedTagNames)
+      : [];
+
+  return {
+    contentWeight: settings.contentWeight,
+    collaborativeSeeds: settings.collaborativeSeeds,
+    excludeSameAuthor: settings.excludeSameAuthor,
+    filters: {
+      contentRating: settings.contentRating.length > 0 ? settings.contentRating : undefined,
+      includedTypes: settings.includedTypes.length > 0 ? settings.includedTypes : undefined,
+      excludedTypes: settings.excludedTypes.length > 0 ? settings.excludedTypes : undefined,
+      excludedGenres: settings.excludedGenres.length > 0 ? settings.excludedGenres : undefined,
+      excludedTagIds: excludedTagIds.length > 0 ? excludedTagIds : undefined,
+      minimumRating: settings.minimumRating,
+    },
+  };
 }
 
 const provider: RecommendationProvider = {
@@ -50,7 +90,7 @@ const provider: RecommendationProvider = {
       throw new Error("Plugin not initialized - no MangaBaka client");
     }
 
-    return generateRecommendations(client, params, dismissals);
+    return generateRecommendations(client, params, dismissals, await buildOptions());
   },
 
   async dismiss(params: RecommendationDismissRequest): Promise<RecommendationDismissResponse> {
@@ -76,12 +116,16 @@ createRecommendationPlugin({
     // Honor the host-supplied log level (Codex `plugins.log_level` config).
     if (params.logLevel) logger.setLevel(params.logLevel);
 
-    client = new MangaBakaRecommendationClient();
+    client = new MangaBakaRecommendationClient(parseAdminConfig(params.adminConfig));
+    tagResolver = new TagResolver(client, params.storage);
+    settings = parseUserConfig(params.userConfig);
+
     await dismissals.hydrate(params.storage);
 
     logger.info(
       `MangaBaka recommendations ready (${client.baseUrl}, ${dismissals.size} dismissed)`,
     );
+    logger.info(`Settings: ${describeSettings(settings)}`);
   },
 });
 

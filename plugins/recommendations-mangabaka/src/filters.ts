@@ -12,7 +12,7 @@
 import type { Recommendation } from "@ashdev/codex-plugin-sdk";
 import { logger } from "./logger.js";
 import { normalizeTitle } from "./titles.js";
-import type { MbRecommendationEntry, MbSeries } from "./types.js";
+import type { MbContentRating, MbRecommendationEntry, MbSeries, MbSeriesType } from "./types.js";
 
 /** An upstream entry paired with its mapped form, so filters can read both. */
 export interface Candidate {
@@ -29,6 +29,13 @@ export interface FilterContext {
   excludeIds: Set<string>;
   /** Whether the user has dismissed this external ID before. */
   isDismissed: (externalId: string) => boolean;
+  /**
+   * User filters to enforce locally.
+   *
+   * Redundant for candidates from the content probe, which already applied them
+   * upstream, but necessary for collaborative-only ones.
+   */
+  userFilters?: UserFilterRules;
 }
 
 /**
@@ -89,6 +96,60 @@ function collidesWithSeedTitle(candidate: Candidate, seedTitleKeys: Set<string>)
 }
 
 /**
+ * Filters a user configured that the plugin may have to enforce itself.
+ *
+ * `/mix` applies all of these upstream, but `/readers-also-like` accepts only
+ * `content_rating` and `tag_not`. Without a local check, a collaborative-only
+ * result would sail past a type, genre, or rating filter the user explicitly
+ * set, which reads as the setting being broken.
+ */
+export interface UserFilterRules {
+  contentRating?: MbContentRating[];
+  includedTypes?: MbSeriesType[];
+  excludedTypes?: MbSeriesType[];
+  excludedGenres?: string[];
+  excludedTagIds?: number[];
+  minimumRating?: number;
+}
+
+/**
+ * Whether a series satisfies the user's filters.
+ *
+ * Only ever rejects on positive evidence. A series with no type, rating, or
+ * genre data recorded is kept rather than assumed to violate the filter:
+ * missing data is unknown, not disqualifying, and dropping it would quietly
+ * remove newer titles nobody has catalogued yet.
+ */
+export function matchesUserFilters(series: MbSeries, rules: UserFilterRules): boolean {
+  if (rules.includedTypes?.length && series.type && !rules.includedTypes.includes(series.type)) {
+    return false;
+  }
+  if (rules.excludedTypes?.length && series.type && rules.excludedTypes.includes(series.type)) {
+    return false;
+  }
+
+  if (rules.contentRating?.length && series.content_rating) {
+    if (!rules.contentRating.includes(series.content_rating)) return false;
+  }
+
+  if (rules.excludedGenres?.length && Array.isArray(series.genres)) {
+    const excluded = new Set(rules.excludedGenres.map((genre) => genre.toLowerCase()));
+    if (series.genres.some((genre) => excluded.has(String(genre).toLowerCase()))) return false;
+  }
+
+  if (rules.excludedTagIds?.length && Array.isArray(series.tags_v2)) {
+    const excluded = new Set(rules.excludedTagIds);
+    if (series.tags_v2.some((tag) => excluded.has(tag?.id))) return false;
+  }
+
+  if (rules.minimumRating !== undefined && typeof series.rating === "number") {
+    if (series.rating < rules.minimumRating) return false;
+  }
+
+  return true;
+}
+
+/**
  * Drop candidates that should never reach the user.
  *
  * Four independent reasons, checked in cost order: the candidate is a seed, the
@@ -100,6 +161,7 @@ export function filterCandidates<T extends Candidate>(
 ): T[] {
   const kept: T[] = [];
   let relatedDropped = 0;
+  let filteredOut = 0;
 
   for (const candidate of candidates) {
     const { series } = candidate.entry;
@@ -118,11 +180,19 @@ export function filterCandidates<T extends Candidate>(
       continue;
     }
 
+    if (context.userFilters && !matchesUserFilters(series, context.userFilters)) {
+      filteredOut++;
+      continue;
+    }
+
     kept.push(candidate);
   }
 
   if (relatedDropped > 0) {
     logger.debug(`Dropped ${relatedDropped} candidates related to a seed`);
+  }
+  if (filteredOut > 0) {
+    logger.debug(`Dropped ${filteredOut} candidates that did not match the configured filters`);
   }
 
   return kept;
