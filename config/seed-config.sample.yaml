@@ -129,6 +129,18 @@ plugins:
     scopes: []
     credential_delivery: env
 
+  # MangaBaka Recommendations - Manga recommendations, no account needed
+  # Every endpoint it uses is public, so there are no credentials to configure.
+  - name: recommendations-mangabaka
+    display_name: MangaBaka Recommendations
+    description: Manga recommendations from MangaBaka, combining tag similarity with reader overlap
+    plugin_type: user
+    command: node
+    args: ["/opt/codex/plugins/recommendations-mangabaka/dist/index.js"]
+    permissions: []
+    scopes: []
+    credential_delivery: env
+
   # AniList Sync - Reading progress sync
   # Sync plugins are gated by manifest capability + per-user enable; they don't
   # write series/book metadata, so no `permissions` or `scopes` are needed.

@@ -182,6 +182,7 @@ Auto-match only applies high-confidence matches. If a wrong match landed, run **
 
 ## Next steps
 
+- [MangaBaka Recommendations](./mangabaka-recommendations.md): recommend new series from your library. It seeds from the MangaBaka IDs this plugin writes, so run this one first.
 - [AniList Sync](./anilist-sync.md): keep reading progress in sync once the AniList ID has been populated.
 - [MangaUpdates Releases](./release-mangaupdates.md): announce new chapters once the MangaUpdates ID has been populated.
 - [Library Jobs](../library-jobs.md): schedule periodic refreshes against MangaBaka.

@@ -101,6 +101,7 @@ services:
       - ./plugins/sync-echo/dist:/opt/codex/plugins/sync-echo/dist:ro
       - ./plugins/recommendations-echo/dist:/opt/codex/plugins/recommendations-echo/dist:ro
       - ./plugins/recommendations-anilist/dist:/opt/codex/plugins/recommendations-anilist/dist:ro
+      - ./plugins/recommendations-mangabaka/dist:/opt/codex/plugins/recommendations-mangabaka/dist:ro
       - ./plugins/sync-anilist/dist:/opt/codex/plugins/sync-anilist/dist:ro
       - ./plugins/release-mangaupdates/dist:/opt/codex/plugins/release-mangaupdates/dist:ro
       - ./plugins/release-nyaa/dist:/opt/codex/plugins/release-nyaa/dist:ro
@@ -188,6 +189,7 @@ services:
       - ./plugins/sync-echo/dist:/opt/codex/plugins/sync-echo/dist:ro
       - ./plugins/recommendations-echo/dist:/opt/codex/plugins/recommendations-echo/dist:ro
       - ./plugins/recommendations-anilist/dist:/opt/codex/plugins/recommendations-anilist/dist:ro
+      - ./plugins/recommendations-mangabaka/dist:/opt/codex/plugins/recommendations-mangabaka/dist:ro
       - ./plugins/sync-anilist/dist:/opt/codex/plugins/sync-anilist/dist:ro
       - ./plugins/release-mangaupdates/dist:/opt/codex/plugins/release-mangaupdates/dist:ro
       - ./plugins/release-nyaa/dist:/opt/codex/plugins/release-nyaa/dist:ro
@@ -260,6 +262,7 @@ services:
       - /plugins/metadata-mangabaka/node_modules
       - /plugins/metadata-openlibrary/node_modules
       - /plugins/recommendations-anilist/node_modules
+      - /plugins/recommendations-mangabaka/node_modules
       - /plugins/sync-anilist/node_modules
       - /plugins/release-mangaupdates/node_modules
       - /plugins/release-nyaa/node_modules
@@ -276,13 +279,14 @@ services:
         cd /plugins/metadata-mangabaka && npm install && npm run build &&
         cd /plugins/metadata-openlibrary && npm install && npm run build &&
         cd /plugins/recommendations-anilist && npm install && npm run build &&
+        cd /plugins/recommendations-mangabaka && npm install && npm run build &&
         cd /plugins/sync-anilist && npm install && npm run build &&
         cd /plugins/release-mangaupdates && npm install && npm run build &&
         cd /plugins/release-nyaa && npm install && npm run build &&
         cd /plugins/release-tsundoku && npm install && npm run build &&
         echo 'Initial build complete. Watching for changes...' &&
         npm install -g concurrently &&
-        concurrently --names 'sdk,echo,sync-echo,rec-echo,mangabaka,openlibrary,rec-anilist,sync-anilist,rel-mu,rel-nyaa,rel-tsundoku' --prefix-colors 'blue,green,greenBright,cyanBright,yellow,magenta,cyan,red,gray,white,blueBright' \
+        concurrently --names 'sdk,echo,sync-echo,rec-echo,mangabaka,openlibrary,rec-anilist,rec-mangabaka,sync-anilist,rel-mu,rel-nyaa,rel-tsundoku' --prefix-colors 'blue,green,greenBright,cyanBright,yellow,magenta,cyan,magentaBright,red,gray,white,blueBright' \
           "cd /plugins/sdk-typescript && npm run dev" \
           "cd /plugins/metadata-echo && npm run dev" \
           "cd /plugins/sync-echo && npm run dev" \
@@ -290,6 +294,7 @@ services:
           "cd /plugins/metadata-mangabaka && npm run dev" \
           "cd /plugins/metadata-openlibrary && npm run dev" \
           "cd /plugins/recommendations-anilist && npm run dev" \
+          "cd /plugins/recommendations-mangabaka && npm run dev" \
           "cd /plugins/sync-anilist && npm run dev" \
           "cd /plugins/release-mangaupdates && npm run dev" \
           "cd /plugins/release-nyaa && npm run dev" \

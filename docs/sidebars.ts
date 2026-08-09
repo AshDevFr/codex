@@ -84,6 +84,7 @@ const sidebars: SidebarsConfig = {
             "plugins/mangabaka",
             "plugins/anilist-sync",
             "plugins/anilist-recommendations",
+            "plugins/mangabaka-recommendations",
             "plugins/release-mangaupdates",
             "plugins/release-nyaa",
           ],

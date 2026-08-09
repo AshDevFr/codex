@@ -1878,7 +1878,10 @@ describe("PluginsSettings - Official Plugins section", () => {
     await waitFor(() => {
       // Each plugin type should appear as a badge
       expect(screen.getByText("Sync")).toBeInTheDocument();
-      expect(screen.getByText("Recommendations")).toBeInTheDocument();
+      // "Recommendations" appears for the AniList and MangaBaka plugins
+      expect(
+        screen.getAllByText("Recommendations").length,
+      ).toBeGreaterThanOrEqual(2);
       // "Metadata" appears for the Mangabaka and Open Library plugins
       expect(screen.getAllByText("Metadata").length).toBeGreaterThanOrEqual(2);
       // "Releases" appears for MangaUpdates and Nyaa plugins

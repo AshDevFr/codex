@@ -125,6 +125,22 @@ export const OFFICIAL_PLUGINS: OfficialPlugin[] = [
     },
   },
   {
+    name: "recommendations-mangabaka",
+    displayName: "MangaBaka Recommendations",
+    description:
+      "Manga recommendations from MangaBaka with no account required. Combines tag similarity across your whole library with what readers of your favourites also read. Covers manga, manhwa, and manhua only.",
+    type: "Recommendations",
+    packageName: "@ashdev/codex-plugin-recommendations-mangabaka",
+    authInfo: "No authentication required",
+    author: "Codex Team",
+    scope: "user",
+    formDefaults: {
+      command: "npx",
+      args: "-y\n@ashdev/codex-plugin-recommendations-mangabaka",
+      credentialDelivery: "env",
+    },
+  },
+  {
     name: "release-mangaupdates",
     displayName: "MangaUpdates Releases",
     description:

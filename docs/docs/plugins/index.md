@@ -27,6 +27,7 @@ Codex supports metadata plugins that can automatically fetch and enrich your lib
 | Plugin | Description | Source |
 |--------|-------------|--------|
 | [AniList Recommendations](./anilist-recommendations) | Personalized manga recommendations seeded by your highest-rated library entries | Free, requires AniList account |
+| [MangaBaka Recommendations](./mangabaka-recommendations) | Manga recommendations combining tag similarity with reader overlap | Free, no account required |
 | Recommendations Echo (built-in) | Development/testing plugin that echoes library seeds back as recommendations; records all request/response payloads to files | Included with Codex |
 
 ### Release Tracking Plugins
@@ -179,7 +180,7 @@ The data sent to external services depends on the plugin type:
 |-------------|-----------|-------------|
 | **Metadata** | Series titles, ISBNs, search queries | Metadata provider API (e.g., Open Library) |
 | **Sync** | Series titles, reading progress (books read plus the highest read volume/chapter), scores, dates, reading status | Tracking service API (e.g., AniList) |
-| **Recommendations** | Library series titles (used as "seed" entries) | Recommendation service API (e.g., AniList) |
+| **Recommendations** | Identifiers, or titles, for the library series used as "seed" entries. Which of the two depends on the plugin: MangaBaka Recommendations sends only IDs | Recommendation service API (e.g., AniList, MangaBaka) |
 
 Codex never sends file contents, file paths, or raw images to external services.
 
