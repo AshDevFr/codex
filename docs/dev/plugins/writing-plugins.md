@@ -962,13 +962,14 @@ async function getCachedOrFetch(key: string): Promise<unknown> {
 
 ## Reference Implementations
 
-The Codex repository includes three reference plugins:
+The Codex repository includes four reference plugins:
 
 | Plugin | Location | Type | Description |
 |--------|----------|------|-------------|
 | **Echo** | `plugins/metadata-echo/` | Metadata | Minimal test plugin; echoes back queries as results. Great starting point. |
 | **AniList Sync** | `plugins/sync-anilist/` | Sync | Full bidirectional sync with AniList. Shows OAuth, GraphQL, conflict resolution, staleness detection. |
 | **AniList Recommendations** | `plugins/recommendations-anilist/` | Recommendation | Personalized recommendations from AniList. Shows scoring, deduplication, external ID resolution. |
+| **MangaBaka Recommendations** | `plugins/recommendations-mangabaka/` | Recommendation | Credential-free recommendations. Shows blending two ranked signals, bounded concurrent fan-out, and upstream-side filtering. |
 
 ## Security Notes
 

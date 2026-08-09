@@ -149,6 +149,7 @@ jobs:
           - metadata-mangabaka
           - metadata-openlibrary
           - recommendations-anilist
+          - recommendations-mangabaka
           - sync-anilist
           - release-mangaupdates
           - release-nyaa
@@ -574,6 +575,7 @@ jobs:
           - metadata-mangabaka
           - metadata-openlibrary
           - recommendations-anilist
+          - recommendations-mangabaka
           - sync-anilist
           - release-mangaupdates
           - release-nyaa

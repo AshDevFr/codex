@@ -41,12 +41,13 @@ Plugins are external processes that Codex spawns and communicates with. They can
 
 ### Official Plugins
 
-| Plugin                  | Package                                        | Type           | Description                                 |
-| ----------------------- | ---------------------------------------------- | -------------- | ------------------------------------------- |
-| Echo Metadata           | `@ashdev/codex-plugin-metadata-echo`           | Metadata       | Test plugin for development (series + book) |
-| Open Library Metadata   | `@ashdev/codex-plugin-metadata-openlibrary`    | Metadata       | Book metadata via ISBN or title search      |
-| AniList Sync            | `@ashdev/codex-plugin-sync-anilist`            | Sync           | Bidirectional manga reading progress sync   |
-| AniList Recommendations | `@ashdev/codex-plugin-recommendations-anilist` | Recommendation | Personalized manga recommendations          |
+| Plugin                    | Package                                          | Type           | Description                                 |
+| ------------------------- | ------------------------------------------------ | -------------- | ------------------------------------------- |
+| Echo Metadata             | `@ashdev/codex-plugin-metadata-echo`             | Metadata       | Test plugin for development (series + book) |
+| Open Library Metadata     | `@ashdev/codex-plugin-metadata-openlibrary`      | Metadata       | Book metadata via ISBN or title search      |
+| AniList Sync              | `@ashdev/codex-plugin-sync-anilist`              | Sync           | Bidirectional manga reading progress sync   |
+| AniList Recommendations   | `@ashdev/codex-plugin-recommendations-anilist`   | Recommendation | Personalized manga recommendations          |
+| MangaBaka Recommendations | `@ashdev/codex-plugin-recommendations-mangabaka` | Recommendation | Manga recommendations, no account required  |
 
 ### Community Plugins
 
