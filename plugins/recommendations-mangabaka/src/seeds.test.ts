@@ -1,6 +1,6 @@
 import type { UserLibraryEntry } from "@ashdev/codex-plugin-sdk";
 import { describe, expect, it } from "vitest";
-import { resolveSeeds } from "./seeds.js";
+import { LibraryIndex, resolveSeeds } from "./seeds.js";
 
 /** Build a library entry with only the fields seed resolution reads. */
 function entry(overrides: Partial<UserLibraryEntry> = {}): UserLibraryEntry {
@@ -147,13 +147,87 @@ describe("resolveSeeds", () => {
   });
 });
 
-describe("resolveSeeds in-library ID collection", () => {
-  it("collects MangaBaka IDs from every entry, not just resolvable seeds", () => {
+describe("resolveSeeds in-library index", () => {
+  it("indexes the MangaBaka ID of every entry", () => {
     const result = resolveSeeds([
       entry({ externalIds: [{ source: "api:mangabaka", externalId: "10" }] }),
       entry({ externalIds: [{ source: "api:mangabaka", externalId: "20" }] }),
     ]);
 
-    expect([...result.libraryIds].sort((a, b) => a - b)).toEqual([10, 20]);
+    expect(result.library.has({ id: 10 })).toBe(true);
+    expect(result.library.has({ id: 20 })).toBe(true);
+    expect(result.library.has({ id: 30 })).toBe(false);
+  });
+});
+
+describe("LibraryIndex", () => {
+  it("matches on the MangaBaka ID", () => {
+    const index = new LibraryIndex();
+    index.addMangaBakaId(500);
+
+    expect(index.has({ id: 500 })).toBe(true);
+    expect(index.has({ id: 501 })).toBe(false);
+  });
+
+  it("matches a series the user holds under a different provider's ID", () => {
+    // The user matched this series with the AniList plugin, so it carries no
+    // MangaBaka ID. It is still the same work and must not be recommended
+    // back as though it were new.
+    const index = new LibraryIndex();
+    index.addEntry(entry({ externalIds: [{ source: "api:anilist", externalId: "144738" }] }));
+
+    expect(index.has({ id: 99999, source: { anilist: { id: 144738 } } })).toBe(true);
+  });
+
+  it("translates underscored MangaBaka source keys to Codex source names", () => {
+    // MangaBaka says `manga_updates`; Codex stores `api:mangaupdates`.
+    const index = new LibraryIndex();
+    index.addEntry(entry({ externalIds: [{ source: "api:mangaupdates", externalId: "7" }] }));
+
+    expect(index.has({ id: 1, source: { manga_updates: { id: 7 } } })).toBe(true);
+  });
+
+  it("compares cross-source IDs as strings", () => {
+    // Codex stores external IDs as strings; MangaBaka returns numbers.
+    const index = new LibraryIndex();
+    index.addEntry(entry({ externalIds: [{ source: "api:myanimelist", externalId: "42" }] }));
+
+    expect(index.has({ id: 1, source: { my_anime_list: { id: 42 } } })).toBe(true);
+  });
+
+  it("does not match on a null cross-source ID", () => {
+    // Most series have several sources with no ID; treating those as a match
+    // would flag nearly everything as in-library.
+    const index = new LibraryIndex();
+    index.addEntry(entry({ externalIds: [{ source: "api:kitsu", externalId: "1" }] }));
+
+    expect(index.has({ id: 2, source: { kitsu: { id: null }, anilist: { id: null } } })).toBe(
+      false,
+    );
+  });
+
+  it("does not match across different providers", () => {
+    const index = new LibraryIndex();
+    index.addEntry(entry({ externalIds: [{ source: "api:anilist", externalId: "5" }] }));
+
+    // Same numeric ID, different service. Not the same series.
+    expect(index.has({ id: 1, source: { kitsu: { id: 5 } } })).toBe(false);
+  });
+
+  it("reports no match for a series with no source block", () => {
+    const index = new LibraryIndex();
+    index.addEntry(entry({ externalIds: [{ source: "api:anilist", externalId: "5" }] }));
+
+    expect(index.has({ id: 1 })).toBe(false);
+  });
+
+  it("is populated by resolveSeeds from unresolvable entries too", () => {
+    // An entry with no MangaBaka ID cannot seed the probe, but it still tells
+    // us the user owns that series.
+    const { library } = resolveSeeds([
+      entry({ externalIds: [{ source: "api:anilist", externalId: "144738" }] }),
+    ]);
+
+    expect(library.has({ id: 1, source: { anilist: { id: 144738 } } })).toBe(true);
   });
 });

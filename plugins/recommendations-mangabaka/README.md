@@ -3,8 +3,8 @@
 Manga recommendations for [Codex](https://github.com/AshDevFr/codex), powered by
 [MangaBaka](https://mangabaka.org). **No account, no OAuth, and no API key required.**
 
-> **Status: in development.** The client and manifest are in place; recommendation generation is
-> not implemented yet.
+> **Status: in development.** Content-based recommendations work end to end. The collaborative
+> signal and the user-facing filter settings are not wired up yet.
 
 ## How it works
 
@@ -22,6 +22,22 @@ with which seeds produced them.
 
 Tag similarity alone tends to return more of what you already own, so `readers-also-like` supplies
 the taste signal that content matching structurally cannot.
+
+## Keeping franchises out of the list
+
+Tag-vector similarity ranks a series' own spin-offs and per-arc volumes as its nearest neighbours,
+because they genuinely are. Left alone, seeding with Re:Zero returns five Re:Zero chapter volumes
+and nothing else. The plugin therefore:
+
+- drops anything MangaBaka flags as related to a seed, or whose own relationship data names a seed,
+  or whose title matches a seed's once normalised;
+- collapses each remaining franchise to its single strongest entry, which catches franchises you
+  hold no seed for;
+- de-ranks (but keeps) series sharing an author with a seed, since an author's *unrelated* other
+  work is often exactly what you want next.
+
+This is deliberately aggressive. On a library dominated by one franchise you will get fewer
+recommendations than you asked for rather than a list padded with spin-offs.
 
 ## Requirements
 

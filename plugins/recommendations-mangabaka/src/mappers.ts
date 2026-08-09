@@ -9,6 +9,7 @@
 
 import type { Recommendation, SeriesStatus } from "@ashdev/codex-plugin-sdk";
 import { seriesUrl } from "./manifest.js";
+import type { LibraryIndex } from "./seeds.js";
 import type {
   MbRecommendationEntry,
   MbSeries,
@@ -27,8 +28,8 @@ const MAX_REASON_TITLES = 2;
 export interface MappingContext {
   /** MangaBaka seed ID to the Codex title it was resolved from. */
   seedTitles: Map<number, string>;
-  /** Every MangaBaka ID present in the user's library. */
-  libraryIds: Set<number>;
+  /** What the user already has, for in-library flagging. */
+  library: LibraryIndex;
 }
 
 /**
@@ -287,7 +288,7 @@ export function mapRecommendation(
     reason: buildReason(entry.shared_tags, basedOn),
     basedOn,
 
-    inLibrary: context.libraryIds.has(series.id),
+    inLibrary: context.library.has(series),
 
     status: mapStatus(series.status),
     format: mapFormat(series.type),

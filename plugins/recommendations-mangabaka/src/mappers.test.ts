@@ -8,6 +8,7 @@ import {
   mapTags,
   pickTitle,
 } from "./mappers.js";
+import { LibraryIndex } from "./seeds.js";
 import type { MbRecommendationEntry, MbSeries } from "./types.js";
 
 const entries = fixture.data as unknown as MbRecommendationEntry[];
@@ -19,7 +20,7 @@ function ctx(overrides: Partial<Parameters<typeof mapRecommendation>[1]> = {}) {
       [3397, "Solo Leveling"],
       [84926, "Re:Zero"],
     ]),
-    libraryIds: new Set<number>(),
+    library: new LibraryIndex(),
     ...overrides,
   };
 }
@@ -281,10 +282,10 @@ describe("mapRecommendation", () => {
   });
 
   it("flags results already present in the user's library", () => {
-    const rec = mapRecommendation(
-      { series: series({ id: 500 }) },
-      ctx({ libraryIds: new Set([500]) }),
-    );
+    const library = new LibraryIndex();
+    library.addMangaBakaId(500);
+
+    const rec = mapRecommendation({ series: series({ id: 500 }) }, ctx({ library }));
 
     expect(rec?.inLibrary).toBe(true);
   });

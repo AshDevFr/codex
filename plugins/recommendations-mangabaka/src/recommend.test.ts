@@ -24,6 +24,14 @@ function entry(id: number, overrides: Partial<UserLibraryEntry> = {}): UserLibra
   };
 }
 
+/** N mutually-unrelated candidates with descending scores. */
+function unrelated(count: number): MbRecommendationEntry[] {
+  return Array.from({ length: count }, (_, i) => ({
+    score: 0.9 - i * 0.05,
+    series: { id: 1000 + i, title: `Distinct Series ${i}` },
+  }));
+}
+
 /** A client stub whose `mix` returns the supplied entries. */
 function clientReturning(entries: MbRecommendationEntry[]) {
   const mix = vi.fn(async () => entries);
@@ -97,7 +105,7 @@ describe("generateRecommendations", () => {
   });
 
   it("maps upstream entries into recommendations", async () => {
-    const { client } = clientReturning(fixtureEntries);
+    const { client } = clientReturning(unrelated(5));
 
     const result = await generateRecommendations(client, request(), new DismissalStore());
 
@@ -111,7 +119,7 @@ describe("generateRecommendations", () => {
   });
 
   it("honours the requested limit", async () => {
-    const { client } = clientReturning(fixtureEntries);
+    const { client } = clientReturning(unrelated(10));
 
     const result = await generateRecommendations(
       client,
@@ -123,7 +131,7 @@ describe("generateRecommendations", () => {
   });
 
   it("returns results in descending score order", async () => {
-    const { client } = clientReturning(fixtureEntries);
+    const { client } = clientReturning(unrelated(5));
 
     const result = await generateRecommendations(client, request(), new DismissalStore());
 
@@ -132,8 +140,9 @@ describe("generateRecommendations", () => {
   });
 
   it("excludes IDs the host says the user has already read", async () => {
-    const { client } = clientReturning(fixtureEntries);
-    const excluded = String(fixtureEntries[0].series.id);
+    const entries = unrelated(5);
+    const { client } = clientReturning(entries);
+    const excluded = String(entries[0].series.id);
 
     const result = await generateRecommendations(
       client,
@@ -145,9 +154,10 @@ describe("generateRecommendations", () => {
   });
 
   it("excludes previously dismissed recommendations", async () => {
-    const { client } = clientReturning(fixtureEntries);
+    const entries = unrelated(5);
+    const { client } = clientReturning(entries);
     const dismissed = new DismissalStore();
-    const target = String(fixtureEntries[1].series.id);
+    const target = String(entries[1].series.id);
     await dismissed.add(target);
 
     const result = await generateRecommendations(client, request(), dismissed);
@@ -182,7 +192,7 @@ describe("generateRecommendations", () => {
   });
 
   it("stamps a generation timestamp and reports results as fresh", async () => {
-    const { client } = clientReturning(fixtureEntries);
+    const { client } = clientReturning(unrelated(3));
 
     const result = await generateRecommendations(client, request(), new DismissalStore());
 
@@ -228,5 +238,91 @@ describe("generateRecommendations", () => {
     );
 
     expect(result.recommendations[0].basedOn).toEqual(["My Local Title"]);
+  });
+});
+
+describe("generateRecommendations against the captured Re:Zero probe", () => {
+  it("returns only genuine recommendations, not franchise members of the seeds", async () => {
+    // The end-to-end regression for the problem this filtering exists to solve.
+    // Untreated, this response yields five Re:Zero chapter volumes plus the
+    // Solo Leveling novel, and nothing the user could actually act on.
+    const { client } = clientReturning(fixtureEntries);
+
+    const result = await generateRecommendations(client, request(), new DismissalStore());
+
+    expect(result.recommendations.map((r) => r.externalId).sort()).toEqual(["7559", "808"]);
+  });
+
+  it("returns fewer than requested rather than padding with franchise entries", async () => {
+    const { client } = clientReturning(fixtureEntries);
+
+    const result = await generateRecommendations(
+      client,
+      request({ limit: 20 }),
+      new DismissalStore(),
+    );
+
+    expect(result.recommendations).toHaveLength(2);
+  });
+
+  it("still yields results when the user opts out of same-author entries", async () => {
+    const { client } = clientReturning(fixtureEntries);
+
+    const result = await generateRecommendations(client, request(), new DismissalStore(), {
+      excludeSameAuthor: true,
+    });
+
+    // Neither survivor shares an author with a seed, so the stricter setting
+    // costs nothing here.
+    expect(result.recommendations.map((r) => r.externalId).sort()).toEqual(["7559", "808"]);
+  });
+});
+
+describe("generateRecommendations franchise handling", () => {
+  it("keeps only the best entry when several volumes of one work are returned", async () => {
+    const { client } = clientReturning([
+      { score: 0.5, series: { id: 501, title: "Unknown Work, Vol. 1" } },
+      { score: 0.8, series: { id: 502, title: "Unknown Work Vol. 2" } },
+      { score: 0.6, series: { id: 503, title: "A Different Work" } },
+    ]);
+
+    const result = await generateRecommendations(client, request(), new DismissalStore());
+
+    expect(result.recommendations.map((r) => r.externalId)).toEqual(["502", "503"]);
+  });
+
+  it("de-ranks a same-author result below a stronger unrelated one", async () => {
+    const { client } = clientReturning([
+      { score: 0.9, matched_author: true, series: { id: 601, title: "By The Same Author" } },
+      { score: 0.7, series: { id: 602, title: "By Someone Else" } },
+    ]);
+
+    const result = await generateRecommendations(client, request(), new DismissalStore());
+
+    expect(result.recommendations.map((r) => r.externalId)).toEqual(["602", "601"]);
+  });
+
+  it("flags a recommendation the user already holds under another provider's ID", async () => {
+    const library = [
+      entry(3397),
+      {
+        ...entry(999),
+        externalIds: [{ source: "api:anilist", externalId: "144738" }],
+      },
+    ];
+    const { client } = clientReturning([
+      {
+        score: 0.8,
+        series: { id: 700, title: "Held Elsewhere", source: { anilist: { id: 144738 } } },
+      },
+    ]);
+
+    const result = await generateRecommendations(
+      client,
+      request({ library }),
+      new DismissalStore(),
+    );
+
+    expect(result.recommendations[0].inLibrary).toBe(true);
   });
 });
