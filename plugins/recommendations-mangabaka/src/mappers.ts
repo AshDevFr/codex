@@ -302,6 +302,10 @@ export function mapRecommendation(
     totalVolumeCount: volumes && volumes > 0 ? Math.round(volumes) : undefined,
     totalChapterCount: chapters && chapters > 0 ? chapters : undefined,
     rating: rating !== undefined ? Math.round(rating) : undefined,
-    popularity: series.popularity ?? undefined,
+    // `popularity` is deliberately not mapped. MangaBaka reports a rank, where
+    // lower is more popular, while this field is rendered as a count where
+    // higher is. Passing the rank through would invert the meaning, and it also
+    // arrives as a nested object rather than a number, which the host rejects
+    // outright when deserialising.
   };
 }

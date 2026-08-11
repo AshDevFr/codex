@@ -89,6 +89,22 @@ export interface MbRelationshipV2 {
   relation_type?: string | null;
 }
 
+/**
+ * Popularity standing, as a **rank** rather than a count.
+ *
+ * `global.current` is a position in the overall ranking, so *lower* means more
+ * popular. That is the opposite of what Codex's `Recommendation.popularity`
+ * conveys: the UI renders that field as a formatted count behind a
+ * trending-up badge, and the host's own tests use values in the tens of
+ * thousands to mean "widely read". Feeding a rank into it would show a small
+ * number for the most popular series and a large one for the obscure, so this
+ * is deliberately not mapped through.
+ */
+export interface MbPopularity {
+  global?: { current?: number | null; history?: Record<string, number> | null } | null;
+  type?: { current?: number | null; history?: Record<string, number> | null } | null;
+}
+
 /** Cross-service identity and rating for one external source. */
 export interface MbSourceEntry {
   id?: number | string | null;
@@ -140,7 +156,8 @@ export interface MbSeries {
   total_chapters?: number | string | null;
   /** 0-100 scale, fractional (e.g. 67.16). */
   rating?: number | null;
-  popularity?: number | null;
+  /** A nested rank object, not a number. See {@link MbPopularity}. */
+  popularity?: MbPopularity | null;
 
   /** Map of relation type to related series IDs, e.g. `{ "other": [57367] }`. */
   relationships?: Record<string, number[]> | null;

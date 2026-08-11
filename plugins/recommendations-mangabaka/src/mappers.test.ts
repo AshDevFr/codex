@@ -334,3 +334,82 @@ describe("mapRecommendation", () => {
     expect(rec?.totalVolumeCount).toBeUndefined();
   });
 });
+
+describe("host schema conformance", () => {
+  /**
+   * The host deserialises into a strongly-typed Rust struct and rejects the
+   * whole batch on a single type mismatch, so a nested object where an integer
+   * is expected fails every recommendation, not just one field.
+   *
+   * This is exactly how `popularity` slipped through to a real task failure:
+   * MangaBaka returns a nested rank object, the local type wrongly declared it
+   * a number, and no assertion checked the mapped value's runtime type. The
+   * fixture contained the object all along.
+   */
+  const NUMERIC_FIELDS = [
+    "score",
+    "startYear",
+    "totalVolumeCount",
+    "totalChapterCount",
+    "rating",
+    "popularity",
+  ] as const;
+
+  const STRING_FIELDS = [
+    "externalId",
+    "externalUrl",
+    "title",
+    "coverUrl",
+    "summary",
+    "reason",
+    "status",
+    "format",
+    "countryOfOrigin",
+  ] as const;
+
+  it.each(entries.map((entry, index) => [index, entry] as const))(
+    "emits only host-compatible primitives for fixture entry %i",
+    (_index, entry) => {
+      const rec = mapRecommendation(entry, ctx());
+      expect(rec).not.toBeNull();
+      if (!rec) return;
+
+      for (const field of NUMERIC_FIELDS) {
+        const value = rec[field];
+        if (value !== undefined) {
+          expect(typeof value, `${field} must be a number`).toBe("number");
+          expect(Number.isFinite(value as number)).toBe(true);
+        }
+      }
+
+      for (const field of STRING_FIELDS) {
+        const value = rec[field];
+        if (value !== undefined) {
+          expect(typeof value, `${field} must be a string`).toBe("string");
+        }
+      }
+
+      expect(Array.isArray(rec.genres)).toBe(true);
+      for (const genre of rec.genres) expect(typeof genre).toBe("string");
+
+      expect(Array.isArray(rec.basedOn)).toBe(true);
+      for (const title of rec.basedOn) expect(typeof title).toBe("string");
+
+      expect(typeof rec.inLibrary).toBe("boolean");
+
+      for (const tag of rec.tags ?? []) {
+        expect(typeof tag.name).toBe("string");
+        expect(typeof tag.rank).toBe("number");
+        expect(typeof tag.category).toBe("string");
+      }
+    },
+  );
+
+  it("does not forward the popularity rank, whose meaning is inverted here", () => {
+    // MangaBaka ranks (lower is more popular); the field is rendered as a count
+    // (higher is more popular). Passing it would be wrong even once the type is.
+    const rec = mapRecommendation(entries[0], ctx());
+
+    expect(rec?.popularity).toBeUndefined();
+  });
+});
