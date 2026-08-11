@@ -2,6 +2,25 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.43.4] - 2026-08-11
+
+### 🚀 Features
+
+- *(plugins)* Scaffold the mangabaka recommendations plugin
+- *(plugins)* Generate mangabaka recommendations from library seeds
+- *(plugins)* Keep franchise spam out of mangabaka recommendations
+- *(plugins)* Blend reader-overlap recommendations into mangabaka results
+- *(plugins)* Make mangabaka recommendations configurable per user
+- *(plugins)* Register the mangabaka recommendations plugin
+
+### 🐛 Bug Fixes
+
+- *(plugins)* Stop sending the mangabaka popularity rank to the host
+
+### ⚙️ Miscellaneous Tasks
+
+- *(plugins)* Run and publish the mangabaka recommendations plugin
+
 ## [1.43.3] - 2026-08-07
 
 ### 🐛 Bug Fixes
