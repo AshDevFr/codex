@@ -1,7 +1,7 @@
 use codex_cli_common::{
     TracingHandles, display_database_config, ensure_data_directories, get_worker_count,
     init_database, init_settings_service, init_tracing, load_config, shutdown_workers,
-    spawn_workers,
+    spawn_workers, warn_if_pg_budget_exceeded,
 };
 use codex_config::DatabaseType;
 use std::path::PathBuf;
@@ -116,21 +116,26 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     // NOTE: on Postgres this pool is additive to the API pool, so the server's
     // max_connections must accommodate the total. The common multi-pod Postgres
     // deployment runs serve with CODEX_DISABLE_WORKERS=true, so no extra pool is
-    // created there. Phase 3 makes the size configurable and validates the total.
+    // created there.
+    let background_max = if disable_workers {
+        0
+    } else {
+        config.database.background_max_connections()
+    };
+
+    // Warn whether or not a background pool is coming: with workers disabled the
+    // API pool is still one of several on a shared server, and that is precisely
+    // the deployment where the budget gets overrun.
+    warn_if_pg_budget_exceeded(
+        db.sea_orm_connection(),
+        config.database.max_connections(),
+        background_max,
+    )
+    .await;
+
     let background_db = if disable_workers {
         None
     } else {
-        let background_max = config.database.background_max_connections();
-        // On Postgres the background pool is additive to the API pool; warn (not
-        // fatal) if the combined demand likely exceeds the server's limit.
-        if config.database.db_type == DatabaseType::Postgres {
-            warn_if_pg_budget_exceeded(
-                db.sea_orm_connection(),
-                config.database.max_connections(),
-                background_max,
-            )
-            .await;
-        }
         Some(codex_db::Database::new_background(&config.database, background_max).await?)
     };
     // Connection handed to background subsystems: the dedicated pool when one
@@ -729,57 +734,6 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     info!("Shutdown complete");
     server_result?;
     Ok(())
-}
-
-/// Warn (non-fatal) when the API pool plus the additive background pool exceed
-/// the PostgreSQL server's `max_connections`. Best-effort: if the value can't be
-/// read, the check is skipped quietly. SQLite has no server-side connection
-/// limit, so this only runs for Postgres.
-async fn warn_if_pg_budget_exceeded(
-    conn: &sea_orm::DatabaseConnection,
-    api_max: u32,
-    background_max: u32,
-) {
-    use sea_orm::{ConnectionTrait, Statement};
-
-    let requested = api_max + background_max;
-    let backend = conn.get_database_backend();
-    match conn
-        .query_one(Statement::from_string(
-            backend,
-            "SHOW max_connections".to_string(),
-        ))
-        .await
-    {
-        Ok(Some(row)) => {
-            // Postgres returns max_connections as a text column.
-            let server_max = row
-                .try_get::<String>("", "max_connections")
-                .ok()
-                .and_then(|s| s.parse::<u32>().ok());
-            match server_max {
-                Some(server_max) if requested > server_max => {
-                    tracing::warn!(
-                        "Configured connection pools (API {api_max} + background {background_max} \
-                         = {requested}) exceed PostgreSQL server max_connections ({server_max}). \
-                         Reduce database.postgres.max_connections or background_max_connections, \
-                         or raise the server limit, to avoid connection failures."
-                    );
-                }
-                Some(server_max) => {
-                    info!(
-                        "PostgreSQL connection budget OK: API {api_max} + background \
-                         {background_max} = {requested} <= server max {server_max}"
-                    );
-                }
-                None => {}
-            }
-        }
-        Ok(None) => {}
-        Err(e) => {
-            tracing::warn!("Could not read PostgreSQL max_connections for budget check: {e}");
-        }
-    }
 }
 
 /// Wait for shutdown signal (SIGTERM or SIGINT/Ctrl+C)

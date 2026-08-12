@@ -289,91 +289,153 @@ pub fn display_database_config(config: &Config) {
     }
 }
 
-/// Wait for migrations to complete
+/// How long to wait for migrations, and how often to look.
 ///
-/// Polls the database until migrations are complete or timeout is reached.
+/// Parameters win over environment variables, which win over the defaults.
+struct MigrationWait {
+    timeout: Duration,
+    check_interval: Duration,
+}
+
+impl MigrationWait {
+    /// Environment variables (used when the parameter is None):
+    /// - CODEX_MIGRATION_WAIT_TIMEOUT: Timeout in seconds (default: 300)
+    /// - CODEX_MIGRATION_WAIT_INTERVAL: Check interval in seconds (default: 2)
+    fn resolve(timeout_seconds: Option<u64>, check_interval_seconds: Option<u64>) -> Self {
+        fn from_env(name: &str) -> Option<u64> {
+            std::env::var(name).ok().and_then(|v| v.parse().ok())
+        }
+
+        Self {
+            timeout: Duration::from_secs(
+                timeout_seconds
+                    .or_else(|| from_env("CODEX_MIGRATION_WAIT_TIMEOUT"))
+                    .unwrap_or(300), // Default 5 minutes
+            ),
+            check_interval: Duration::from_secs(
+                check_interval_seconds
+                    .or_else(|| from_env("CODEX_MIGRATION_WAIT_INTERVAL"))
+                    .unwrap_or(2), // Default 2 seconds
+            ),
+        }
+    }
+
+    fn log(&self) {
+        info!("Waiting for migrations to complete...");
+        info!("  Timeout: {} seconds", self.timeout.as_secs());
+        info!(
+            "  Check interval: {} seconds",
+            self.check_interval.as_secs()
+        );
+    }
+
+    fn expired(&self, start_time: std::time::Instant) -> bool {
+        start_time.elapsed() > self.timeout
+    }
+
+    fn timed_out(&self) -> anyhow::Error {
+        anyhow::anyhow!(
+            "Timeout waiting for migrations to complete ({} seconds)",
+            self.timeout.as_secs()
+        )
+    }
+}
+
+/// Wait for migrations to complete, polling over an existing connection.
+///
+/// Prefer this over [`wait_for_migrations_complete`] wherever the caller has
+/// already connected: a process that is up and waiting must not keep opening
+/// connections to ask the same question. On a PostgreSQL server whose limit is
+/// shared across a deployment that turns a wait into an attack on the pods it is
+/// waiting for — each poll claims connections, holds them for the acquire
+/// timeout, and drops them, while the process already holds a working pool it
+/// could have asked instead.
+pub async fn wait_for_migrations_on(
+    db: &Database,
+    timeout_seconds: Option<u64>,
+    check_interval_seconds: Option<u64>,
+) -> anyhow::Result<()> {
+    let wait = MigrationWait::resolve(timeout_seconds, check_interval_seconds);
+    wait.log();
+    poll_until_migrated(db, &wait, std::time::Instant::now()).await
+}
+
+/// Wait for migrations to complete, for callers with no connection yet.
+///
+/// Opens a single-connection probe pool (retrying while the server is
+/// unreachable, which is the normal state of an init container racing the
+/// database) and then polls over it. Callers that already hold a pool want
+/// [`wait_for_migrations_on`] instead.
 ///
 /// Parameters:
 /// - `timeout_seconds`: Optional timeout in seconds (overrides env var)
 /// - `check_interval_seconds`: Optional check interval in seconds (overrides env var)
-///
-/// Environment variables (used if parameters are None):
-/// - CODEX_MIGRATION_WAIT_TIMEOUT: Timeout in seconds (default: 300)
-/// - CODEX_MIGRATION_WAIT_INTERVAL: Check interval in seconds (default: 2)
 pub async fn wait_for_migrations_complete(
     config: &DatabaseConfig,
     timeout_seconds: Option<u64>,
     check_interval_seconds: Option<u64>,
 ) -> anyhow::Result<()> {
-    let timeout_seconds = timeout_seconds
-        .or_else(|| {
-            std::env::var("CODEX_MIGRATION_WAIT_TIMEOUT")
-                .ok()
-                .and_then(|v| v.parse().ok())
-        })
-        .unwrap_or(300); // Default 5 minutes
-    let check_interval_seconds = check_interval_seconds
-        .or_else(|| {
-            std::env::var("CODEX_MIGRATION_WAIT_INTERVAL")
-                .ok()
-                .and_then(|v| v.parse().ok())
-        })
-        .unwrap_or(2); // Default 2 seconds
-
-    let timeout = Duration::from_secs(timeout_seconds);
-    let check_interval = Duration::from_secs(check_interval_seconds);
+    let wait = MigrationWait::resolve(timeout_seconds, check_interval_seconds);
+    wait.log();
     let start_time = std::time::Instant::now();
 
-    info!("Waiting for migrations to complete...");
-    info!("  Timeout: {} seconds", timeout.as_secs());
-    info!("  Check interval: {} seconds", check_interval.as_secs());
-
-    loop {
-        // Check if we've exceeded the timeout
-        if start_time.elapsed() > timeout {
-            anyhow::bail!(
-                "Timeout waiting for migrations to complete ({} seconds)",
-                timeout.as_secs()
-            );
+    // Connect once. The retry is for the server not being up yet, not for
+    // re-establishing a pool we already have.
+    let db = loop {
+        if wait.expired(start_time) {
+            return Err(wait.timed_out());
         }
 
-        // Try to connect to database
-        match Database::new(config).await {
-            Ok(db) => {
-                // Check if migrations are complete
-                match db.migrations_complete().await {
-                    Ok(true) => {
-                        info!("✓ All migrations are complete");
-                        return Ok(());
-                    }
-                    Ok(false) => {
-                        let elapsed = start_time.elapsed().as_secs();
-                        warn!(
-                            "Migrations not complete yet (elapsed: {}s, remaining: {}s)",
-                            elapsed,
-                            timeout.as_secs().saturating_sub(elapsed)
-                        );
-                    }
-                    Err(e) => {
-                        let elapsed = start_time.elapsed().as_secs();
-                        warn!(
-                            "Failed to check migration status (elapsed: {}s): {}",
-                            elapsed, e
-                        );
-                    }
-                }
+        match Database::new_probe(config).await {
+            Ok(db) => break db,
+            Err(e) => {
+                warn!(
+                    "Failed to connect to database (elapsed: {}s): {}",
+                    start_time.elapsed().as_secs(),
+                    e
+                );
+                tokio::time::sleep(wait.check_interval).await;
+            }
+        }
+    };
+
+    poll_until_migrated(&db, &wait, start_time).await
+}
+
+/// Poll `db` until every migration has been applied or the budget runs out.
+async fn poll_until_migrated(
+    db: &Database,
+    wait: &MigrationWait,
+    start_time: std::time::Instant,
+) -> anyhow::Result<()> {
+    loop {
+        if wait.expired(start_time) {
+            return Err(wait.timed_out());
+        }
+
+        match db.migrations_complete().await {
+            Ok(true) => {
+                info!("✓ All migrations are complete");
+                return Ok(());
+            }
+            Ok(false) => {
+                let elapsed = start_time.elapsed().as_secs();
+                warn!(
+                    "Migrations not complete yet (elapsed: {}s, remaining: {}s)",
+                    elapsed,
+                    wait.timeout.as_secs().saturating_sub(elapsed)
+                );
             }
             Err(e) => {
                 let elapsed = start_time.elapsed().as_secs();
                 warn!(
-                    "Failed to connect to database (elapsed: {}s): {}",
+                    "Failed to check migration status (elapsed: {}s): {}",
                     elapsed, e
                 );
             }
         }
 
-        // Wait before checking again
-        tokio::time::sleep(check_interval).await;
+        tokio::time::sleep(wait.check_interval).await;
     }
 }
 
@@ -396,9 +458,12 @@ pub async fn init_database(config: &Config) -> anyhow::Result<Database> {
     if skip_migrations {
         info!("Skipping migrations (CODEX_SKIP_MIGRATIONS is set)");
         info!("Waiting for migrations to complete (run externally)...");
-        // Wait for migrations to complete (run by external process)
-        // Use environment variables for timeout/interval configuration
-        wait_for_migrations_complete(&config.database, None, None).await?;
+        // Poll over the pool opened above rather than opening more. This process
+        // is already connected; a wait that reconnects each time would spend the
+        // whole timeout competing for connections with the deployment it is
+        // waiting to join.
+        // Timeout/interval come from the environment.
+        wait_for_migrations_on(&db, None, None).await?;
         info!("Migrations are complete");
     } else {
         // Run migrations to ensure database schema is up to date
@@ -411,6 +476,119 @@ pub async fn init_database(config: &Config) -> anyhow::Result<Database> {
     info!("Database health check passed");
 
     Ok(db)
+}
+
+/// Verdict of comparing this process's pools against the PostgreSQL server.
+#[derive(Debug, PartialEq, Eq)]
+pub enum PgBudget {
+    /// The pools fit alongside everything already connected.
+    Fits,
+    /// This process alone asks for more than the server can ever hand out.
+    ExceedsServer { usable: u32 },
+    /// The pools fit on their own but not next to the connections already in
+    /// use, which is the shape a multi-replica deployment fails in.
+    ExceedsRemaining { usable: u32, in_use: u32 },
+}
+
+/// Compare a process's requested connections against the server's supply.
+///
+/// `in_use` covers the whole server, so this sees the other replicas a
+/// per-process check would miss. It includes this process's own connections,
+/// which makes the estimate slightly pessimistic; that is the right direction
+/// for a warning.
+fn assess_pg_budget(requested: u32, server_max: u32, reserved: u32, in_use: u32) -> PgBudget {
+    let usable = server_max.saturating_sub(reserved);
+
+    if requested > usable {
+        PgBudget::ExceedsServer { usable }
+    } else if in_use.saturating_add(requested) > usable {
+        PgBudget::ExceedsRemaining { usable, in_use }
+    } else {
+        PgBudget::Fits
+    }
+}
+
+/// Warn (non-fatal) when this process's connection pools do not fit the
+/// PostgreSQL server's budget.
+///
+/// Every Codex process opens its own pools while `max_connections` is a limit
+/// for the whole server, so the sizing that works for one process silently
+/// breaks when a deployment runs several. Checking against connections already
+/// in use catches that: the warning fires on the replica that is about to tip
+/// the server over, not only on a process that is oversized on its own.
+///
+/// Best-effort. If the values cannot be read the check is skipped quietly, and
+/// SQLite has no server-side limit so it is skipped there too.
+pub async fn warn_if_pg_budget_exceeded(
+    conn: &DatabaseConnection,
+    api_max: u32,
+    background_max: u32,
+) {
+    use sea_orm::{ConnectionTrait, Statement};
+
+    if conn.get_database_backend() != sea_orm::DatabaseBackend::Postgres {
+        return;
+    }
+
+    let requested = api_max + background_max;
+    let row = conn
+        .query_one(Statement::from_string(
+            sea_orm::DatabaseBackend::Postgres,
+            "SELECT current_setting('max_connections')::int AS max_connections, \
+             current_setting('superuser_reserved_connections')::int AS reserved, \
+             (SELECT count(*)::int FROM pg_stat_activity) AS in_use"
+                .to_string(),
+        ))
+        .await;
+
+    let row = match row {
+        Ok(Some(row)) => row,
+        Ok(None) => return,
+        Err(e) => {
+            warn!("Could not read PostgreSQL connection limits for budget check: {e}");
+            return;
+        }
+    };
+
+    let (Ok(server_max), Ok(reserved), Ok(in_use)) = (
+        row.try_get::<i32>("", "max_connections"),
+        row.try_get::<i32>("", "reserved"),
+        row.try_get::<i32>("", "in_use"),
+    ) else {
+        return;
+    };
+
+    match assess_pg_budget(
+        requested,
+        server_max.max(0) as u32,
+        reserved.max(0) as u32,
+        in_use.max(0) as u32,
+    ) {
+        PgBudget::Fits => {
+            info!(
+                "PostgreSQL connection budget OK: API {api_max} + background {background_max} \
+                 = {requested} requested, {in_use} of {server_max} in use"
+            );
+        }
+        PgBudget::ExceedsServer { usable } => {
+            warn!(
+                "Configured connection pools (API {api_max} + background {background_max} \
+                 = {requested}) exceed what this PostgreSQL server can hand out ({usable} \
+                 of {server_max}, {reserved} reserved for the superuser). Reduce \
+                 database.postgres.max_connections or background_max_connections, or raise \
+                 the server limit."
+            );
+        }
+        PgBudget::ExceedsRemaining { usable, in_use } => {
+            warn!(
+                "Connection pools for this process ({requested}) do not fit alongside the \
+                 {in_use} connections already open on this PostgreSQL server ({usable} \
+                 usable). Other processes sharing this database are using the budget; size \
+                 max_connections per process as (server limit / number of processes), or \
+                 raise the server limit."
+            );
+        }
+    }
 }
 
 /// Initialize settings service with auto-reload
@@ -593,6 +771,119 @@ mod tests {
     use codex_db::test_helpers::create_test_db;
     use codex_services::SettingsService;
     use tempfile::TempDir;
+
+    fn sqlite_config_at(db_path: &Path) -> DatabaseConfig {
+        DatabaseConfig {
+            db_type: DatabaseType::SQLite,
+            postgres: None,
+            sqlite: Some(SQLiteConfig {
+                path: db_path.to_str().unwrap().to_string(),
+                pragmas: None,
+                ..SQLiteConfig::default()
+            }),
+        }
+    }
+
+    /// Unlink the database out from under an open pool.
+    ///
+    /// POSIX keeps the inode alive for the already-open handle, so the existing
+    /// connection carries on reading the migrated schema, while anything that
+    /// opens a *new* connection gets a fresh empty database (the URL uses
+    /// `mode=rwc`). That asymmetry is what lets a test tell "reused the
+    /// connection it was handed" apart from "opened another one".
+    fn unlink_database(db_path: &Path) {
+        for suffix in ["", "-wal", "-shm"] {
+            let _ = fs::remove_file(format!("{}{}", db_path.display(), suffix));
+        }
+    }
+
+    #[tokio::test]
+    async fn wait_for_migrations_polls_over_the_connection_it_was_given() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("migrated.db");
+        let config = sqlite_config_at(&db_path);
+
+        let db = Database::new(&config).await.unwrap();
+        db.run_migrations().await.unwrap();
+        // Force the pool to hold a live connection before the file goes away.
+        assert!(db.migrations_complete().await.unwrap());
+
+        unlink_database(&db_path);
+
+        // Guard the premise: a fresh connection now lands on an empty database.
+        // Without this the test would pass for the wrong reason if unlinking
+        // ever stopped separating the two cases.
+        let reconnected = Database::new(&config).await.unwrap();
+        assert!(
+            !reconnected.migrations_complete().await.unwrap(),
+            "a new connection should see an unmigrated database"
+        );
+        drop(reconnected);
+
+        let result = wait_for_migrations_on(&db, Some(2), Some(1)).await;
+
+        assert!(
+            result.is_ok(),
+            "the wait must poll over the caller's connection rather than opening \
+             its own; opening one here lands on an empty database: {result:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn wait_for_migrations_on_times_out_when_the_schema_never_lands() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("empty.db");
+        let config = sqlite_config_at(&db_path);
+
+        // Connected, but no migrations ever run against it.
+        let db = Database::new(&config).await.unwrap();
+
+        let start = std::time::Instant::now();
+        let result = wait_for_migrations_on(&db, Some(2), Some(1)).await;
+
+        assert!(
+            result.is_err(),
+            "an unmigrated database must not report ready"
+        );
+        assert!(start.elapsed() >= Duration::from_secs(2));
+    }
+
+    #[test]
+    fn pg_budget_fits_when_the_process_and_its_neighbours_leave_room() {
+        // 25 + 16 against a stock server with 40 already open: 81 of 97.
+        assert_eq!(assess_pg_budget(41, 100, 3, 40), PgBudget::Fits);
+    }
+
+    #[test]
+    fn pg_budget_flags_a_process_sized_for_the_whole_server() {
+        // The old default: one process claiming every slot the server has.
+        assert_eq!(
+            assess_pg_budget(100, 100, 3, 0),
+            PgBudget::ExceedsServer { usable: 97 }
+        );
+    }
+
+    #[test]
+    fn pg_budget_flags_the_replica_that_tips_the_server_over() {
+        // Each process fits on its own; together they do not. This is the case a
+        // per-process check cannot see, and the one that takes a deployment down.
+        assert_eq!(
+            assess_pg_budget(25, 100, 3, 80),
+            PgBudget::ExceedsRemaining {
+                usable: 97,
+                in_use: 80
+            }
+        );
+    }
+
+    #[test]
+    fn pg_budget_survives_a_server_that_reserves_everything() {
+        // saturating_sub, so a nonsense reading warns rather than panicking.
+        assert_eq!(
+            assess_pg_budget(1, 3, 100, 0),
+            PgBudget::ExceedsServer { usable: 0 }
+        );
+    }
 
     #[test]
     fn test_ensure_dir_exists_creates_directory() {

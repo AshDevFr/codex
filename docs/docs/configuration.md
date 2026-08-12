@@ -113,8 +113,8 @@ database:
     database_name: codex
     ssl_mode: prefer
     # Connection pool settings
-    max_connections: 100       # Maximum pool size (default: 100)
-    min_connections: 5         # Minimum warm connections (default: 5)
+    max_connections: 25        # Maximum pool size (default: 25)
+    min_connections: 2         # Minimum warm connections (default: 2)
     acquire_timeout_seconds: 30  # Wait time for connection (default: 30)
     idle_timeout_seconds: 600    # Idle connection timeout (default: 600 = 10 min)
     max_lifetime_seconds: 3600   # Max connection lifetime (default: 3600 = 1 hour)
@@ -123,7 +123,15 @@ database:
 ```
 
 :::warning PostgreSQL connection budget
-`background_max_connections` is **additive** to `max_connections` whenever task workers run in the same process as the web server. Ensure the PostgreSQL server's own `max_connections` covers the total (API pool + background pool). Multi-pod deployments run the web server with `CODEX_DISABLE_WORKERS=true`, so no background pool is created there. Codex logs a warning at startup if the configured pools exceed the server limit.
+These pool sizes are **per process**, while PostgreSQL's own `max_connections` (100 by default, a few of them reserved for the superuser) is a limit for the whole server. Every replica, worker, migration Job and backup CronJob opens its own pool, so the budget to check is:
+
+```
+(web replicas x max_connections) + (workers x max_connections) + jobs  <=  server max_connections - superuser_reserved_connections
+```
+
+`background_max_connections` is **additive** to `max_connections` whenever task workers run in the same process as the web server. Multi-pod deployments run the web server with `CODEX_DISABLE_WORKERS=true`, so no background pool is created there.
+
+Overrunning the budget does not degrade gracefully: the server refuses new connections with `FATAL: remaining connection slots are reserved`, and because a starting process needs a connection before it can do anything, **new pods fail to start while the running ones carry on looking healthy**. Codex logs a warning at startup when its pools do not fit, including when the connections already open on the server leave no room.
 :::
 
 #### PostgreSQL SSL Modes

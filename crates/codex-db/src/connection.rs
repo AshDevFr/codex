@@ -187,6 +187,28 @@ impl Database {
     /// an independent pool capped at `max_connections`. It deliberately does
     /// **not** run migrations — the primary connection owns schema setup.
     pub async fn new_background(config: &DatabaseConfig, max_connections: u32) -> Result<Self> {
+        info!("Initializing separate background connection pool...");
+        Self::new(&Self::with_pool_max(config, max_connections)).await
+    }
+
+    /// Open a single-connection pool for asking the database one question.
+    ///
+    /// Startup probes (is the schema current? is the server up?) need one
+    /// connection, not a pool. Opening a full pool for them is actively harmful
+    /// on a server whose connection limit is shared across a deployment: a pod
+    /// that cannot start claims `min_connections` on every retry, competing with
+    /// the very pods it is waiting for and deepening the exhaustion it is stuck
+    /// behind. One connection makes a starting pod cost one slot.
+    pub async fn new_probe(config: &DatabaseConfig) -> Result<Self> {
+        Self::new(&Self::with_pool_max(config, 1)).await
+    }
+
+    /// Clone `config` with the pool ceiling replaced by `max_connections`.
+    ///
+    /// The configured minimum is clamped to the new ceiling, so asking for a
+    /// pool smaller than `min_connections` still yields a valid configuration
+    /// rather than a pool whose floor exceeds its ceiling.
+    fn with_pool_max(config: &DatabaseConfig, max_connections: u32) -> DatabaseConfig {
         let mut cfg = config.clone();
         match cfg.db_type {
             DatabaseType::SQLite => {
@@ -202,8 +224,7 @@ impl Database {
                 }
             }
         }
-        info!("Initializing separate background connection pool...");
-        Self::new(&cfg).await
+        cfg
     }
 
     /// Run database migrations
@@ -582,6 +603,55 @@ mod tests {
             .unwrap();
         let count: i64 = row.try_get("", "n").unwrap();
         assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn with_pool_max_clamps_the_minimum_to_the_new_ceiling() {
+        let config = DatabaseConfig {
+            db_type: DatabaseType::Postgres,
+            postgres: Some(codex_config::PostgresConfig {
+                max_connections: 100,
+                min_connections: 5,
+                ..codex_config::PostgresConfig::default()
+            }),
+            sqlite: None,
+        };
+
+        let capped = Database::with_pool_max(&config, 1);
+        let pg = capped.postgres.unwrap();
+
+        assert_eq!(pg.max_connections, 1);
+        // A floor above the ceiling would be an invalid pool, so the minimum
+        // has to come down with it.
+        assert_eq!(pg.min_connections, 1);
+    }
+
+    #[tokio::test]
+    async fn probe_pool_opens_a_single_connection_whatever_the_config_asks_for() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test.db");
+
+        let config = DatabaseConfig {
+            db_type: DatabaseType::SQLite,
+            postgres: None,
+            sqlite: Some(SQLiteConfig {
+                path: db_path.to_str().unwrap().to_string(),
+                pragmas: None,
+                max_connections: 64,
+                min_connections: 8,
+                ..SQLiteConfig::default()
+            }),
+        };
+
+        let probe = Database::new_probe(&config).await.unwrap();
+        assert!(probe.health_check().await.is_ok());
+
+        let pool = probe.sea_orm_connection().get_sqlite_connection_pool();
+        assert_eq!(
+            pool.options().get_max_connections(),
+            1,
+            "a probe must cost the server one connection, not the configured pool"
+        );
     }
 
     #[tokio::test]

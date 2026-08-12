@@ -76,16 +76,16 @@ database:
     username: codex
     password: your-password
     database_name: codex
-    max_connections: 100
-    min_connections: 5
+    max_connections: 25
+    min_connections: 2
     connect_timeout: 30
     idle_timeout: 600
 ```
 
 **Guidelines:**
-- `max_connections`: 10 × expected concurrent users + workers
-- `min_connections`: Number of background workers
-- Keep total connections under PostgreSQL's `max_connections` setting
+- `max_connections` is a **per-process** ceiling. Divide the server's budget between the processes that share it: `(server max_connections - superuser_reserved_connections) / peak process count`, counting every web replica, worker, migration Job and backup CronJob, plus the surge pods a rolling update briefly adds.
+- `min_connections`: keep it small. Warm connections are held per process whether or not it is busy, so this multiplies by replica count.
+- Raise `max_connections` for throughput only once you have confirmed the total still fits. Overrunning it stops new pods from starting, since a process needs a connection before it can do anything at all.
 
 #### PostgreSQL Tuning
 

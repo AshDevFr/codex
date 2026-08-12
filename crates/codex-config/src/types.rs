@@ -606,12 +606,25 @@ pub struct PostgresConfig {
     pub database_name: String,
 
     // Connection Pool Settings
-    /// Maximum number of connections in the pool (default: 100)
-    /// PostgreSQL handles concurrent connections well, so higher values are fine
+    /// Maximum number of connections in the pool (default: 25)
+    ///
+    /// This is a ceiling *per process*, while PostgreSQL's own `max_connections`
+    /// (100 out of the box, of which some are reserved for the superuser) is a
+    /// ceiling for the whole server. Defaulting this to the server's own limit,
+    /// as Codex used to, lets a single process consume every slot and locks
+    /// every other process out — including new replicas, which then cannot even
+    /// start. 25 leaves room for a handful of processes against a stock server.
+    ///
+    /// Raise it for a single-process deployment with a dedicated server; when
+    /// running several replicas, size it as
+    /// `(server max_connections - reserved) / peak process count` instead.
     pub max_connections: u32,
 
-    /// Minimum number of connections to maintain in the pool (default: 5)
-    /// Keeps connections warm for better latency
+    /// Minimum number of connections to maintain in the pool (default: 2)
+    ///
+    /// Warm connections trade idle server slots for latency, and the cost is
+    /// paid per process: every replica parks this many whether or not it is
+    /// serving traffic.
     pub min_connections: u32,
 
     /// Connection acquire timeout in seconds (default: 30)
@@ -658,8 +671,8 @@ impl Default for PostgresConfig {
             database_name: env_string_opt("CODEX_DATABASE_POSTGRES_DATABASE_NAME")
                 .unwrap_or_else(|| "codex".to_string()),
             // Pool settings - PostgreSQL can handle more concurrent connections
-            max_connections: env_or("CODEX_DATABASE_POSTGRES_MAX_CONNECTIONS", 100),
-            min_connections: env_or("CODEX_DATABASE_POSTGRES_MIN_CONNECTIONS", 5),
+            max_connections: env_or("CODEX_DATABASE_POSTGRES_MAX_CONNECTIONS", 25),
+            min_connections: env_or("CODEX_DATABASE_POSTGRES_MIN_CONNECTIONS", 2),
             acquire_timeout_seconds: env_or("CODEX_DATABASE_POSTGRES_ACQUIRE_TIMEOUT", 30),
             idle_timeout_seconds: env_or("CODEX_DATABASE_POSTGRES_IDLE_TIMEOUT", 600),
             max_lifetime_seconds: env_or("CODEX_DATABASE_POSTGRES_MAX_LIFETIME", 3600),
@@ -1551,6 +1564,24 @@ verification_url_base: https://codex.example.com
         assert_eq!(postgres.batch_fan_out(), 12);
         assert_eq!(postgres.background_max_connections(), 20);
         assert_eq!(postgres.max_connections(), 100);
+    }
+
+    #[test]
+    fn postgres_pool_default_leaves_room_for_other_processes() {
+        // PostgreSQL ships with max_connections = 100, three of which are held
+        // back for the superuser. The pool default is a *per-process* ceiling,
+        // so it has to leave room for the rest of a deployment (web replicas,
+        // workers, migration and backup jobs). A default equal to the server's
+        // own limit lets one process lock every other one out, new replicas
+        // included, which is exactly how a scale-up turns into a crash loop.
+        let postgres = PostgresConfig::default();
+
+        assert_eq!(postgres.max_connections, 25);
+        assert_eq!(postgres.min_connections, 2);
+        assert!(
+            postgres.max_connections * 3 <= 97,
+            "three processes on their default pools must still fit a stock server"
+        );
     }
 
     #[test]

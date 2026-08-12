@@ -107,11 +107,13 @@ For high-traffic deployments, configure connection pooling:
 ```yaml
 database:
   postgres:
-    max_connections: 100
-    min_connections: 5
+    max_connections: 25
+    min_connections: 2
     connect_timeout: 30
     idle_timeout: 600
 ```
+
+`max_connections` is a per-process ceiling, not a server-wide one. When several Codex processes share a database (web replicas, workers, the migration Job, the backup CronJob), the sum of their pools has to stay under the server's own `max_connections` less `superuser_reserved_connections`. See [Performance tuning](./performance.md) for how to size it.
 
 ### Backups
 

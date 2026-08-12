@@ -1,7 +1,7 @@
 use codex_cli_common::{
     TracingHandles, display_database_config, ensure_data_directories, get_worker_count,
     init_database, init_settings_service, init_tracing, load_config, shutdown_workers,
-    spawn_workers,
+    spawn_workers, warn_if_pg_budget_exceeded,
 };
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -32,6 +32,15 @@ pub async fn worker_command(config_path: PathBuf) -> anyhow::Result<()> {
 
     // Initialize database connection
     let db = init_database(&config).await?;
+
+    // The worker keeps a single pool, but it shares the server with the web
+    // replicas, so its own size is only half the question.
+    warn_if_pg_budget_exceeded(
+        db.sea_orm_connection(),
+        config.database.max_connections(),
+        0,
+    )
+    .await;
 
     // Create cancellation token for graceful shutdown of background tasks
     let background_task_cancel = CancellationToken::new();
