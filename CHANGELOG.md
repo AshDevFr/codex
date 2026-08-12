@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.43.5] - 2026-08-12
+
+### 🐛 Bug Fixes
+
+- *(db)* Stop starting processes from exhausting the connection limit
+
 ## [1.43.4] - 2026-08-11
 
 ### 🚀 Features
