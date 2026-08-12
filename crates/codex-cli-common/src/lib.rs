@@ -289,15 +289,19 @@ pub fn display_database_config(config: &Config) {
     }
 }
 
-/// How long to wait for migrations, and how often to look.
+/// How long to wait for the database, and how often to look.
+///
+/// Governs both waiting for a database to accept connections and waiting for
+/// its schema to be current: during a release those are the same budget, a
+/// deployment's tolerance for the database being briefly unavailable.
 ///
 /// Parameters win over environment variables, which win over the defaults.
-struct MigrationWait {
+struct DbWait {
     timeout: Duration,
     check_interval: Duration,
 }
 
-impl MigrationWait {
+impl DbWait {
     /// Environment variables (used when the parameter is None):
     /// - CODEX_MIGRATION_WAIT_TIMEOUT: Timeout in seconds (default: 300)
     /// - CODEX_MIGRATION_WAIT_INTERVAL: Check interval in seconds (default: 2)
@@ -320,8 +324,8 @@ impl MigrationWait {
         }
     }
 
-    fn log(&self) {
-        info!("Waiting for migrations to complete...");
+    fn log(&self, what: &str) {
+        info!("Waiting for {what}...");
         info!("  Timeout: {} seconds", self.timeout.as_secs());
         info!(
             "  Check interval: {} seconds",
@@ -336,6 +340,13 @@ impl MigrationWait {
     fn timed_out(&self) -> anyhow::Error {
         anyhow::anyhow!(
             "Timeout waiting for migrations to complete ({} seconds)",
+            self.timeout.as_secs()
+        )
+    }
+
+    fn timed_out_connecting(&self) -> anyhow::Error {
+        anyhow::anyhow!(
+            "Timeout waiting for the database to accept connections ({} seconds)",
             self.timeout.as_secs()
         )
     }
@@ -355,9 +366,59 @@ pub async fn wait_for_migrations_on(
     timeout_seconds: Option<u64>,
     check_interval_seconds: Option<u64>,
 ) -> anyhow::Result<()> {
-    let wait = MigrationWait::resolve(timeout_seconds, check_interval_seconds);
-    wait.log();
+    let wait = DbWait::resolve(timeout_seconds, check_interval_seconds);
+    wait.log("migrations to complete");
     poll_until_migrated(db, &wait, std::time::Instant::now()).await
+}
+
+/// Connect, retrying while the database refuses connections.
+///
+/// A database that is briefly unavailable is a normal condition, not a reason
+/// to abort: it restarts to apply a parameter that cannot be reloaded, it fails
+/// over, it moves between nodes. A command that gives up on the first refused
+/// connection turns seconds of that into a failed release, because the
+/// migration Job burns its backoff limit inside the window and everything
+/// gated on that Job never rolls out.
+///
+/// Uses the configured pool, so the caller gets a connection it can work over.
+/// Callers that only need to ask one question want [`Database::new_probe`].
+pub async fn connect_with_retry(
+    config: &DatabaseConfig,
+    timeout_seconds: Option<u64>,
+    check_interval_seconds: Option<u64>,
+) -> anyhow::Result<Database> {
+    let wait = DbWait::resolve(timeout_seconds, check_interval_seconds);
+    wait.log("the database to accept connections");
+    retry_connect(&wait, std::time::Instant::now(), || Database::new(config)).await
+}
+
+/// Open a connection, retrying on failure until the budget runs out.
+async fn retry_connect<F, Fut>(
+    wait: &DbWait,
+    start_time: std::time::Instant,
+    open: F,
+) -> anyhow::Result<Database>
+where
+    F: Fn() -> Fut,
+    Fut: std::future::Future<Output = anyhow::Result<Database>>,
+{
+    loop {
+        if wait.expired(start_time) {
+            return Err(wait.timed_out_connecting());
+        }
+
+        match open().await {
+            Ok(db) => return Ok(db),
+            Err(e) => {
+                warn!(
+                    "Failed to connect to database (elapsed: {}s): {}",
+                    start_time.elapsed().as_secs(),
+                    e
+                );
+                tokio::time::sleep(wait.check_interval).await;
+            }
+        }
+    }
 }
 
 /// Wait for migrations to complete, for callers with no connection yet.
@@ -375,29 +436,13 @@ pub async fn wait_for_migrations_complete(
     timeout_seconds: Option<u64>,
     check_interval_seconds: Option<u64>,
 ) -> anyhow::Result<()> {
-    let wait = MigrationWait::resolve(timeout_seconds, check_interval_seconds);
-    wait.log();
+    let wait = DbWait::resolve(timeout_seconds, check_interval_seconds);
+    wait.log("migrations to complete");
     let start_time = std::time::Instant::now();
 
     // Connect once. The retry is for the server not being up yet, not for
     // re-establishing a pool we already have.
-    let db = loop {
-        if wait.expired(start_time) {
-            return Err(wait.timed_out());
-        }
-
-        match Database::new_probe(config).await {
-            Ok(db) => break db,
-            Err(e) => {
-                warn!(
-                    "Failed to connect to database (elapsed: {}s): {}",
-                    start_time.elapsed().as_secs(),
-                    e
-                );
-                tokio::time::sleep(wait.check_interval).await;
-            }
-        }
-    };
+    let db = retry_connect(&wait, start_time, || Database::new_probe(config)).await?;
 
     poll_until_migrated(&db, &wait, start_time).await
 }
@@ -405,7 +450,7 @@ pub async fn wait_for_migrations_complete(
 /// Poll `db` until every migration has been applied or the budget runs out.
 async fn poll_until_migrated(
     db: &Database,
-    wait: &MigrationWait,
+    wait: &DbWait,
     start_time: std::time::Instant,
 ) -> anyhow::Result<()> {
     loop {
@@ -795,6 +840,59 @@ mod tests {
         for suffix in ["", "-wal", "-shm"] {
             let _ = fs::remove_file(format!("{}{}", db_path.display(), suffix));
         }
+    }
+
+    /// Put a regular file where the database's parent directory needs to be.
+    ///
+    /// Opening the database then fails for everyone, root included, until the
+    /// blocker is removed — a database that is not up yet, without needing a
+    /// server. Removing it makes the very same config connect.
+    fn block_database_path(temp_dir: &TempDir) -> (PathBuf, DatabaseConfig) {
+        let blocker = temp_dir.path().join("db_dir");
+        fs::write(&blocker, b"not a directory").unwrap();
+        let config = sqlite_config_at(&blocker.join("codex.db"));
+        (blocker, config)
+    }
+
+    #[tokio::test]
+    async fn connect_with_retry_waits_for_a_database_that_is_not_up_yet() {
+        let temp_dir = TempDir::new().unwrap();
+        let (blocker, config) = block_database_path(&temp_dir);
+
+        // A database restarting to apply a parameter, or failing over, looks
+        // like this: refused now, fine in a moment.
+        assert!(Database::new(&config).await.is_err());
+
+        let connecting = tokio::spawn({
+            let config = config.clone();
+            async move { connect_with_retry(&config, Some(10), Some(1)).await }
+        });
+
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        fs::remove_file(&blocker).unwrap();
+
+        let result = connecting.await.unwrap();
+        assert!(
+            result.is_ok(),
+            "a database that comes back within the budget must not fail the \
+             command: {:?}",
+            result.err()
+        );
+    }
+
+    #[tokio::test]
+    async fn connect_with_retry_gives_up_at_the_timeout() {
+        let temp_dir = TempDir::new().unwrap();
+        let (_blocker, config) = block_database_path(&temp_dir);
+
+        let start = std::time::Instant::now();
+        let result = connect_with_retry(&config, Some(2), Some(1)).await;
+
+        assert!(
+            result.is_err(),
+            "a database that never comes back must fail"
+        );
+        assert!(start.elapsed() >= Duration::from_secs(2));
     }
 
     #[tokio::test]

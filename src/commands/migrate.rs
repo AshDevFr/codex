@@ -1,6 +1,5 @@
 use anyhow::{Context, Result};
-use codex_cli_common::{display_database_config, init_tracing, load_config};
-use codex_db::Database;
+use codex_cli_common::{connect_with_retry, display_database_config, init_tracing, load_config};
 use std::path::PathBuf;
 use tracing::info;
 
@@ -22,10 +21,16 @@ pub async fn migrate_command(config_path: PathBuf) -> Result<()> {
     // Display database configuration
     display_database_config(&config);
 
-    // Initialize database connection
+    // Initialize database connection.
+    //
+    // Retried, because a release is exactly when the database is likely to be
+    // briefly unavailable: applying a parameter that needs a restart, failing
+    // over, moving nodes. Failing on the first refused connection makes the
+    // migration Job burn its retries inside that window and fail the release
+    // for a database that was seconds away from being ready.
     info!("========================================");
     info!("Connecting to database...");
-    let db = Database::new(&config.database)
+    let db = connect_with_retry(&config.database, None, None)
         .await
         .context("Failed to connect to database")?;
     info!("Database connected successfully");
