@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.43.6] - 2026-08-12
+
+### 🐛 Bug Fixes
+
+- *(db)* Retry the initial connection when running migrations
+
 ## [1.43.5] - 2026-08-12
 
 ### 🐛 Bug Fixes
