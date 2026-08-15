@@ -113,6 +113,9 @@ If Codex is useful to you and you want to support its development, you can [buy 
 
 ## License
 
-This project is licensed under the [GNU Affero General Public License v3.0](LICENSE).
+This project is licensed under the [GNU Affero General Public License v3.0](LICENSE),
+with an additional permission under section 7 allowing it to be linked with UnRAR
+(used for CBR support, enabled by default). Third-party notices, including the
+UnRAR license, are in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
 For commercial licensing options, contact [@AshDevFr](https://github.com/AshDevFr).

@@ -1,3 +1,30 @@
+                 ADDITIONAL PERMISSION UNDER AGPL-3.0 SECTION 7
+
+Codex is licensed under the GNU Affero General Public License version 3 or
+later, the full text of which follows below. In addition, as permitted by
+section 7 of that license, the copyright holder grants the following
+additional permission:
+
+  As a special exception, the copyright holder of Codex gives you permission
+  to link the code of this program with the UnRAR source code (or with
+  modified versions of UnRAR that use the same license as UnRAR), and to
+  distribute linked combinations including the two. You must obey the GNU
+  Affero General Public License in all respects for all of the code used
+  other than UnRAR. If you modify this file, you may extend this exception
+  to your version of the file, but you are not obligated to do so. If you
+  do not wish to do so, delete this exception statement from your version.
+
+This exception exists because the UnRAR license places a restriction on use
+(UnRAR source code may not be used to develop a RAR-compatible archiver or to
+re-create the RAR compression algorithm) which AGPL-3.0 section 7 would
+otherwise prohibit. UnRAR is compiled into Codex builds when the `rar` feature
+is enabled, which it is by default.
+
+The UnRAR license and other third-party notices are reproduced in
+THIRD-PARTY-NOTICES.md.
+
+-------------------------------------------------------------------------------
+
                     GNU AFFERO GENERAL PUBLIC LICENSE
                        Version 3, 19 November 2007
 
