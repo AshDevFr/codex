@@ -111,7 +111,6 @@ database:
     username: codex
     password: codex
     database_name: codex
-    ssl_mode: prefer
     # Connection pool settings
     max_connections: 25        # Maximum pool size (default: 25)
     min_connections: 2         # Minimum warm connections (default: 2)
@@ -356,21 +355,19 @@ Additional thumbnail settings are stored in the database and can be changed via 
 
 ## Plugins Configuration
 
-Settings for the plugin runtime.
+Plugins run with the log level the host is using. There is no separate
+`plugins` section: the level comes from [`logging.level`](#logging-configuration),
+and `trace` is delivered to plugins as `debug` (the plugin SDK logger has no
+`trace` level).
 
-```yaml
-plugins:
-  log_level: info
-```
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `log_level` | `info` | Log level sent to plugins at startup (`error`, `warn`, `info`, `debug`, `trace`). Independent of the host's own `logging.level`, so you can make plugins verbose without flooding the host's logs. `trace` is delivered to plugins as `debug` (the plugin SDK logger has no `trace` level). Plugins honor it on a best-effort basis. |
-
-The host sends this level to every plugin in the `initialize` message; the plugin SDK applies it to its own logger and exposes it so each plugin can adopt it for its own logging. Override with the `CODEX_PLUGINS_LOG_LEVEL` environment variable.
+The host sends the level to every plugin in the `initialize` message; the
+plugin SDK applies it to its own logger and exposes it so each plugin can adopt
+it for its own logging. Plugins honor it on a best-effort basis.
 
 :::tip
-Set `plugins.log_level: debug` (or `CODEX_PLUGINS_LOG_LEVEL=debug`) when debugging a misbehaving plugin to surface its diagnostic logging, then revert to `info` to keep logs quiet.
+Set `logging.level: debug` (or `CODEX_LOGGING_LEVEL=debug`) when debugging a
+misbehaving plugin to surface its diagnostic logging, then revert to `info` to
+keep logs quiet. Note that this makes the host verbose too.
 :::
 
 ## Email Configuration (Optional)
@@ -811,6 +808,18 @@ Configuration paths are converted to environment variables:
 - Replace dots with underscores
 - Prefix with `CODEX_`
 
+:::warning These names change in Codex 2.0
+Because a single `_` separates both nesting levels and the words inside a field
+name, `CODEX_RATE_LIMIT_ANONYMOUS_RPS` is ambiguous: nothing in the name says
+the section is `rate_limit` rather than `rate`. Codex 2.0 uses `__` between
+nesting levels instead, so that variable becomes
+`CODEX_RATE_LIMIT__ANONYMOUS_RPS`.
+
+Run `codex config check` to see the new name for every variable you currently
+set. **Do not rename anything until you upgrade**: this version does not read
+the new spelling, and a variable renamed early is silently ignored.
+:::
+
 | Config Path | Environment Variable |
 |-------------|---------------------|
 | `database.db_type` | `CODEX_DATABASE_DB_TYPE` |
@@ -829,7 +838,6 @@ CODEX_DATABASE_POSTGRES_PORT=5432
 CODEX_DATABASE_POSTGRES_USERNAME=codex
 CODEX_DATABASE_POSTGRES_PASSWORD=secret
 CODEX_DATABASE_POSTGRES_DATABASE_NAME=codex
-CODEX_DATABASE_POSTGRES_SSL_MODE=require
 
 # Application
 CODEX_APPLICATION_HOST=0.0.0.0
@@ -972,7 +980,6 @@ database:
     username: codex
     password: ${DB_PASSWORD}
     database_name: codex
-    ssl_mode: verify-full
 
 application:
   name: My Library
@@ -1032,6 +1039,37 @@ CODEX_DATABASE_POSTGRES_DATABASE_NAME=codex
 CODEX_AUTH_JWT_SECRET=<from secret>
 CODEX_ENCRYPTION_KEY=<from secret>
 ```
+
+## Checking Your Configuration
+
+`codex config check` resolves the configuration exactly as `serve` would, then
+reports anything wrong with it. It opens no database connection and writes
+nothing, so it is safe to run against a read-only config mount or before a
+database is available.
+
+```bash
+codex config check                       # findings plus the resolved config
+codex config check --quiet               # findings only
+codex config check --strict              # exit 1 if anything was reported
+codex config check -c /etc/codex.yaml    # a specific config file
+```
+
+It reports three things:
+
+| Reported | Meaning |
+|----------|---------|
+| Changes name in Codex 2.0 | Correct today. The next major version spells it differently. |
+| Not being read right now | Set, but this version does not read it, so the setting is being ignored. |
+| Unrecognized | Not a Codex setting. Usually a typo; a suggestion is offered when there is a near match. |
+
+The resolved configuration is printed with every secret replaced by
+`<redacted>` (set) or `<unset>` (empty), so the output is safe in logs.
+
+:::tip Use it as a Kubernetes initContainer
+Because it needs no database and exits non-zero under `--strict`, `config
+check` fails a pod before the app container starts rather than after. See
+[Kubernetes deployment](./deployment/kubernetes.md).
+:::
 
 ## Configuration Validation
 
@@ -1124,7 +1162,7 @@ For detailed configuration, see the [Preprocessing Rules Guide](./preprocessing-
 1. **Use strong JWT secrets** - Generate with `openssl rand -base64 32`
 2. **Set a plugin encryption key** - Required for sync/recommendation plugins; generate with `openssl rand -base64 32`
 3. **Never commit secrets** - Use environment variables or secret managers
-4. **Use SSL for PostgreSQL** - Set `ssl_mode: verify-full` in production
+4. **Terminate PostgreSQL traffic securely** - Codex has no TLS setting of its own; keep the database on a private network, or front it with a proxy or sidecar that enforces TLS
 5. **Restrict bind address** - Use `127.0.0.1` unless needed externally
 6. **Disable API docs in production** - Set `enable_api_docs: false`
 

@@ -1,3 +1,4 @@
+pub mod config;
 pub mod copy;
 pub mod export;
 pub mod import;
@@ -10,6 +11,7 @@ pub mod tasks;
 pub mod wait_for_migrations;
 pub mod worker;
 
+pub use config::{ConfigSubcommand, config_command};
 pub use copy::copy_command;
 pub use export::export_command;
 pub use import::import_command;

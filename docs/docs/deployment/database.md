@@ -85,9 +85,9 @@ database:
   postgres:
     host: localhost
     port: 5432
-    user: codex
+    username: codex
     password: your-secure-password
-    database: codex
+    database_name: codex
 ```
 
 Or via environment variables:
@@ -95,9 +95,9 @@ Or via environment variables:
 CODEX_DATABASE_DB_TYPE=postgres
 CODEX_DATABASE_POSTGRES_HOST=localhost
 CODEX_DATABASE_POSTGRES_PORT=5432
-CODEX_DATABASE_POSTGRES_USER=codex
+CODEX_DATABASE_POSTGRES_USERNAME=codex
 CODEX_DATABASE_POSTGRES_PASSWORD=your-secure-password
-CODEX_DATABASE_POSTGRES_DATABASE=codex
+CODEX_DATABASE_POSTGRES_DATABASE_NAME=codex
 ```
 
 ### Connection Pooling

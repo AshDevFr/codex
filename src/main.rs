@@ -2,9 +2,9 @@ mod commands;
 
 use clap::{Parser, Subcommand};
 use commands::{
-    OpenApiFormat, TasksSubcommand, copy_command, export_command, import_command, migrate_command,
-    openapi_command, scan_command, seed_command, serve_command, tasks_command,
-    wait_for_migrations_command, worker_command,
+    ConfigSubcommand, OpenApiFormat, TasksSubcommand, config_command, copy_command, export_command,
+    import_command, migrate_command, openapi_command, scan_command, seed_command, serve_command,
+    tasks_command, wait_for_migrations_command, worker_command,
 };
 use std::path::PathBuf;
 
@@ -37,6 +37,16 @@ enum Commands {
         /// Enable verbose output
         #[arg(short, long)]
         verbose: bool,
+    },
+
+    /// Inspect and validate configuration without starting the server
+    Config {
+        /// Path to configuration file
+        #[arg(short, long, default_value = DEFAULT_CONFIG_PATH)]
+        config: PathBuf,
+
+        #[command(subcommand)]
+        command: ConfigSubcommand,
     },
 
     /// Start the media server
@@ -221,6 +231,9 @@ async fn main() -> anyhow::Result<()> {
             verbose,
         } => {
             scan_command(path, json, pages, verbose)?;
+        }
+        Commands::Config { config, command } => {
+            config_command(config, command)?;
         }
         Commands::Serve { config } => {
             serve_command(config).await?;

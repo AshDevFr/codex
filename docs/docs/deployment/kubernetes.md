@@ -56,6 +56,29 @@ spec:
       labels:
         app: codex
     spec:
+      initContainers:
+        # Fail the pod before the app container starts if any CODEX_ variable
+        # is misspelled or is not read by this version. Needs no database, so
+        # it runs whether or not PostgreSQL is up yet.
+        #
+        # It must be given the SAME environment as the codex container below,
+        # otherwise it validates something the app will never see.
+        - name: config-check
+          image: codex:latest
+          args: ["config", "check", "--strict", "--quiet"]
+          env:
+            - name: CODEX_DATABASE_DB_TYPE
+              value: "postgres"
+            - name: CODEX_DATABASE_POSTGRES_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: codex-config
+                  key: postgres-host
+            - name: CODEX_AUTH_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: codex-secrets
+                  key: jwt-secret
       containers:
         - name: codex
           image: codex:latest
