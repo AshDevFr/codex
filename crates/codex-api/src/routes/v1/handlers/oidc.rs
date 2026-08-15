@@ -17,7 +17,7 @@ use axum::{
     Json,
     extract::{Path, Query, State},
     http::{HeaderMap, header},
-    response::{IntoResponse, Redirect, Response},
+    response::{IntoResponse, Response},
 };
 use base64::{Engine as _, engine::general_purpose};
 use chrono::Utc;
@@ -178,11 +178,11 @@ pub async fn login(
     path = "/api/v1/auth/oidc/{provider}/callback",
     params(
         ("provider" = String, Path, description = "OIDC provider name"),
-        ("code" = String, Query, description = "Authorization code from IdP"),
-        ("state" = String, Query, description = "State parameter for CSRF protection"),
+        ("code" = Option<String>, Query, description = "Authorization code from IdP. Absent when the flow failed at the IdP"),
+        ("state" = Option<String>, Query, description = "State parameter for CSRF protection"),
     ),
     responses(
-        (status = 302, description = "Redirect to frontend with auth cookie set"),
+        (status = 303, description = "Redirect to the requesting client with auth data, or with an error"),
         (status = 400, description = "Invalid callback parameters or OIDC error"),
         (status = 500, description = "Internal server error during authentication"),
     ),
@@ -206,13 +206,22 @@ pub async fn callback(
             description = %description,
             "OIDC authentication failed at IdP"
         );
-        // Redirect to login page with error
-        return Ok(Redirect::to(&format!(
-            "/login?error={}&error_description={}",
-            urlencoding::encode(&error),
-            urlencoding::encode(&description)
-        ))
-        .into_response());
+
+        // Send the refusal wherever the flow was started from. A native client
+        // that only ever hears about success hangs on the failure it can do
+        // something about.
+        let target = query.state.as_deref().and_then(|state_token| {
+            state
+                .oidc_service
+                .as_ref()
+                .and_then(|service| service.take_pending_redirect_uri(state_token))
+        });
+
+        return redirect_response(&build_error_redirect(
+            target.as_deref(),
+            &error,
+            &description,
+        ));
     }
 
     // Check if OIDC is enabled
@@ -227,9 +236,17 @@ pub async fn callback(
         ));
     }
 
+    // Past the error branch, this is a success callback and both are required
+    let code = query.code.as_deref().ok_or_else(|| {
+        ApiError::BadRequest("Missing 'code' parameter in OIDC callback".to_string())
+    })?;
+    let state_token = query.state.as_deref().ok_or_else(|| {
+        ApiError::BadRequest("Missing 'state' parameter in OIDC callback".to_string())
+    })?;
+
     // Exchange code for tokens and validate
     let auth_result = oidc_service
-        .exchange_code(&provider, &query.code, &query.state)
+        .exchange_code(&provider, code, state_token)
         .await
         .map_err(|e| {
             warn!(error = %e, provider = %provider, "OIDC code exchange failed");
@@ -485,9 +502,60 @@ pub async fn callback(
         .map_err(|e| ApiError::Internal(format!("Failed to serialize response: {}", e)))?;
     let encoded = general_purpose::URL_SAFE_NO_PAD.encode(response_json.as_bytes());
 
-    // Redirect to frontend callback page with auth data in URL fragment
-    let redirect_url = format!("/login/oidc/complete#{}", encoded);
-    Ok((headers, Redirect::to(&redirect_url)).into_response())
+    // Send the browser wherever the client asked at login. The default is the
+    // frontend's completion page; a native client gets its own scheme, which is
+    // the only thing its authentication session can match on.
+    let target = auth_result
+        .redirect_uri
+        .as_deref()
+        .unwrap_or(DEFAULT_COMPLETION_PATH);
+    let redirect_url = format!("{}#{}", target, encoded);
+    let redirect = redirect_response(&redirect_url)?;
+    Ok((headers, redirect).into_response())
+}
+
+/// Where the callback sends the browser when the client asked for nothing else.
+const DEFAULT_COMPLETION_PATH: &str = "/login/oidc/complete";
+
+/// Build the URL a failed flow returns to.
+///
+/// The error travels as query parameters, the same shape the web app has always
+/// received, rather than in the fragment the success payload uses: an error is
+/// not a secret and this keeps one shape for both kinds of client.
+fn build_error_redirect(target: Option<&str>, error: &str, description: &str) -> String {
+    let query = format!(
+        "error={}&error_description={}",
+        urlencoding::encode(error),
+        urlencoding::encode(description)
+    );
+    match target {
+        // An allowlisted target may already carry a query of its own
+        Some(target) => {
+            let separator = if target.contains('?') { '&' } else { '?' };
+            format!("{}{}{}", target, separator, query)
+        }
+        None => format!("/login?{}", query),
+    }
+}
+
+/// Turn a redirect URL into a response.
+///
+/// `Redirect::to` panics on a URL that is not a valid header value, and part of
+/// this one comes from operator-supplied config. A misconfigured allowlist entry
+/// should surface as a 500, not take the worker thread down.
+fn redirect_response(url: &str) -> Result<Response, ApiError> {
+    header::HeaderValue::try_from(url)
+        .map_err(|_| {
+            warn!(url = %url, "OIDC redirect target is not a valid URL");
+            ApiError::Internal("Invalid OIDC redirect target".to_string())
+        })
+        .map(|location| {
+            (
+                axum::http::StatusCode::SEE_OTHER,
+                [(header::LOCATION, location)],
+            )
+                .into_response()
+        })
 }
 
 /// Sync user role from IdP group mapping on every OIDC login.

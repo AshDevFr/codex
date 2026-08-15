@@ -1,8 +1,11 @@
 //! OIDC Authentication API Integration Tests
 //!
 //! Tests for OpenID Connect (OIDC) authentication endpoints.
-//! Note: Full flow tests require mocking external IdPs, so these tests
-//! focus on endpoint behavior with disabled and enabled OIDC configurations.
+//!
+//! Most tests exercise endpoint behaviour with OIDC disabled or enabled but
+//! unreachable. The `full_flow` module drives a complete authorization-code
+//! round trip against a local axum IdP stub, which is the only way to observe
+//! where the callback actually sends the browser.
 
 #[path = "../common/mod.rs"]
 mod common;
@@ -656,6 +659,57 @@ async fn test_callback_with_error_no_description() {
 }
 
 #[tokio::test]
+async fn test_callback_denial_without_code_redirects_instead_of_400() {
+    // IdPs omit `code` entirely when the user denies consent. The handler must
+    // still run and produce the friendly redirect, not a bare 400 from the query
+    // extractor.
+    let (db, _temp_dir) = setup_test_db().await;
+    let oidc_config = create_test_oidc_config();
+    let state = create_test_state_with_oidc(db, oidc_config).await;
+    let config = create_test_config_with_oidc();
+    let app = create_router(state, &config);
+
+    let request = get_request(
+        "/api/v1/auth/oidc/test-provider/callback?state=xyz&error=access_denied&error_description=User%20cancelled",
+    );
+
+    use axum::body::Body;
+    use tower::ServiceExt;
+
+    let response = app.oneshot(request.map(Body::from)).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::SEE_OTHER);
+    let location = response
+        .headers()
+        .get("location")
+        .unwrap()
+        .to_str()
+        .unwrap();
+    assert!(location.starts_with("/login?"), "got: {location}");
+    assert!(location.contains("error=access_denied"));
+}
+
+#[tokio::test]
+async fn test_callback_denial_without_code_or_state_redirects() {
+    // Some IdPs also drop `state` on denial. Nothing can be resolved from it, but
+    // that is still no reason to answer 400.
+    let (db, _temp_dir) = setup_test_db().await;
+    let oidc_config = create_test_oidc_config();
+    let state = create_test_state_with_oidc(db, oidc_config).await;
+    let config = create_test_config_with_oidc();
+    let app = create_router(state, &config);
+
+    let request = get_request("/api/v1/auth/oidc/test-provider/callback?error=access_denied");
+
+    use axum::body::Body;
+    use tower::ServiceExt;
+
+    let response = app.oneshot(request.map(Body::from)).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::SEE_OTHER);
+}
+
+#[tokio::test]
 async fn test_callback_missing_code_and_state() {
     let (db, _temp_dir) = setup_test_db().await;
     let oidc_config = create_test_oidc_config();
@@ -1187,4 +1241,413 @@ providers:
     assert_eq!(provider.groups_claim, "groups"); // Default
     assert_eq!(provider.username_claim, "preferred_username"); // Default
     assert_eq!(provider.email_claim, "email"); // Default
+}
+
+// =============================================================================
+// Full Authorization-Code Flow
+// =============================================================================
+
+/// A complete login -> IdP -> callback round trip against a local IdP stub.
+///
+/// This is the only place the callback's `Location` header can be observed, so
+/// it is where the native-client redirect target is actually verified. The stub
+/// serves discovery, a JWKS built from the shared RSA test keys, and a token
+/// endpoint returning an ID token the test mints once it knows the nonce the
+/// server generated.
+mod full_flow {
+    use super::*;
+    use axum::body::Body;
+    use axum::routing::{get, post};
+    use axum::{Json, Router};
+    use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
+    use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
+    use std::sync::Mutex;
+    use tower::ServiceExt;
+
+    const CLIENT_ID: &str = "test-client-id";
+    const SUBJECT: &str = "oidc-subject-1";
+    const EMAIL: &str = "native@example.com";
+    const NATIVE_TARGET: &str = "codexreader://auth";
+
+    fn fixture_path(name: &str) -> String {
+        format!(
+            "{}/crates/codex-services/tests/fixtures/idp_bearer/{name}",
+            env!("CARGO_MANIFEST_DIR")
+        )
+    }
+
+    /// Local IdP: discovery, JWKS, and a token endpoint whose ID token the test
+    /// installs after reading the nonce out of the authorization URL.
+    struct IdpStub {
+        url: String,
+        id_token: Arc<Mutex<Option<String>>>,
+    }
+
+    impl IdpStub {
+        async fn start() -> Self {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+                .await
+                .expect("bind ephemeral port");
+            let url = format!("http://{}", listener.local_addr().unwrap());
+
+            let jwks: serde_json::Value = serde_json::from_str(
+                &std::fs::read_to_string(fixture_path("jwks_key_a.json")).expect("jwks fixture"),
+            )
+            .expect("jwks fixture parses");
+
+            let id_token: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
+
+            let issuer = url.clone();
+            let token_slot = Arc::clone(&id_token);
+            let app = Router::new()
+                .route(
+                    "/.well-known/openid-configuration",
+                    get(move || {
+                        let issuer = issuer.clone();
+                        async move {
+                            Json(serde_json::json!({
+                                "issuer": issuer,
+                                "authorization_endpoint": format!("{issuer}/authorize"),
+                                "token_endpoint": format!("{issuer}/token"),
+                                "jwks_uri": format!("{issuer}/jwks"),
+                                "response_types_supported": ["code"],
+                                "subject_types_supported": ["public"],
+                                "id_token_signing_alg_values_supported": ["RS256"],
+                            }))
+                        }
+                    }),
+                )
+                .route("/jwks", get(move || async move { Json(jwks.clone()) }))
+                .route(
+                    "/token",
+                    post(move || {
+                        let token_slot = Arc::clone(&token_slot);
+                        async move {
+                            let id_token = token_slot
+                                .lock()
+                                .unwrap()
+                                .clone()
+                                .expect("test installs an ID token before the exchange");
+                            Json(serde_json::json!({
+                                "access_token": "stub-access-token",
+                                "token_type": "Bearer",
+                                "expires_in": 3600,
+                                "id_token": id_token,
+                            }))
+                        }
+                    }),
+                );
+
+            tokio::spawn(async move {
+                axum::serve(listener, app).await.expect("stub IdP serves");
+            });
+
+            Self { url, id_token }
+        }
+
+        /// Mint an ID token the server will accept and arm the token endpoint.
+        fn install_id_token(&self, nonce: &str) {
+            let claims = serde_json::json!({
+                "iss": self.url,
+                "sub": SUBJECT,
+                "aud": CLIENT_ID,
+                "exp": chrono::Utc::now().timestamp() + 3600,
+                "iat": chrono::Utc::now().timestamp(),
+                "nonce": nonce,
+                "email": EMAIL,
+                "preferred_username": "nativeuser",
+                "groups": ["codex-users"],
+            });
+
+            let pem = std::fs::read(fixture_path("key_a.pem")).expect("test key fixture");
+            let mut header = Header::new(Algorithm::RS256);
+            header.kid = Some("key-a".to_string());
+            let token = encode(
+                &header,
+                &claims,
+                &EncodingKey::from_rsa_pem(&pem).expect("test key parses"),
+            )
+            .expect("token signs");
+
+            *self.id_token.lock().unwrap() = Some(token);
+        }
+    }
+
+    fn config_for_stub(issuer_url: &str, allowed_redirect_uris: Vec<String>) -> OidcConfig {
+        let mut role_mapping = HashMap::new();
+        role_mapping.insert("reader".to_string(), vec!["codex-users".to_string()]);
+
+        let mut providers = HashMap::new();
+        providers.insert(
+            "test-provider".to_string(),
+            OidcProviderConfig {
+                display_name: "Test Provider".to_string(),
+                issuer_url: issuer_url.to_string(),
+                client_id: CLIENT_ID.to_string(),
+                client_secret: Some("test-client-secret".to_string()),
+                client_secret_env: None,
+                scopes: vec!["email".to_string(), "profile".to_string()],
+                role_mapping,
+                groups_claim: "groups".to_string(),
+                username_claim: "preferred_username".to_string(),
+                email_claim: "email".to_string(),
+                accepted_audiences: vec![],
+            },
+        );
+
+        OidcConfig {
+            enabled: true,
+            auto_create_users: true,
+            default_role: OidcDefaultRole::Reader,
+            redirect_uri_base: None,
+            allowed_redirect_uris,
+            providers,
+        }
+    }
+
+    /// Read a query parameter out of a URL. The values read here (`state`,
+    /// `nonce`) are URL-safe base64 from the OIDC client, so no decoding.
+    fn query_param(url: &str, key: &str) -> Option<String> {
+        let query = url.split_once('?')?.1;
+        query.split('&').find_map(|pair| {
+            let (k, v) = pair.split_once('=')?;
+            (k == key).then(|| v.to_string())
+        })
+    }
+
+    /// Everything a test needs to drive one flow.
+    struct Harness {
+        app: axum::Router,
+        stub: IdpStub,
+        _temp_dir: tempfile::TempDir,
+    }
+
+    async fn harness(allowed_redirect_uris: Vec<String>) -> Harness {
+        let (db, _temp_dir) = setup_test_db().await;
+        let stub = IdpStub::start().await;
+        let oidc_config = config_for_stub(&stub.url, allowed_redirect_uris);
+
+        let state = create_test_state_with_oidc(db, oidc_config.clone()).await;
+        let mut config = Config::default();
+        config.api.cors_enabled = false;
+        config.api.enable_api_docs = false;
+        config.auth.oidc = oidc_config;
+
+        Harness {
+            app: create_router(state, &config),
+            stub,
+            _temp_dir,
+        }
+    }
+
+    /// Start a flow, returning the CSRF state token the callback needs. Arms the
+    /// stub's token endpoint with an ID token carrying the matching nonce.
+    async fn begin_flow(harness: &Harness, redirect_uri: Option<&str>) -> String {
+        let request = match redirect_uri {
+            Some(uri) => post_json_request(
+                "/api/v1/auth/oidc/test-provider/login",
+                &serde_json::json!({ "redirectUri": uri }),
+            ),
+            None => post_request("/api/v1/auth/oidc/test-provider/login"),
+        };
+
+        let (status, response): (_, Option<serde_json::Value>) =
+            make_json_request(harness.app.clone(), request).await;
+        assert_eq!(status, StatusCode::OK, "login should succeed: {response:?}");
+
+        let auth_url = response.expect("Expected JSON response")["redirectUrl"]
+            .as_str()
+            .expect("redirectUrl is a string")
+            .to_string();
+
+        let nonce = query_param(&auth_url, "nonce").expect("authorization URL carries a nonce");
+        harness.stub.install_id_token(&nonce);
+
+        query_param(&auth_url, "state").expect("authorization URL carries a state")
+    }
+
+    async fn location_of(app: axum::Router, uri: &str) -> (StatusCode, String) {
+        let response = app
+            .oneshot(get_request(uri).map(Body::from))
+            .await
+            .expect("request completes");
+        let status = response.status();
+        let location = response
+            .headers()
+            .get("location")
+            .map(|value| value.to_str().unwrap().to_string())
+            .unwrap_or_default();
+        (status, location)
+    }
+
+    #[tokio::test]
+    async fn test_callback_redirects_to_native_target_with_payload_in_fragment() {
+        let harness = harness(vec![NATIVE_TARGET.to_string()]).await;
+        let state_token = begin_flow(&harness, Some(NATIVE_TARGET)).await;
+
+        let (status, location) = location_of(
+            harness.app.clone(),
+            &format!(
+                "/api/v1/auth/oidc/test-provider/callback?code=stub-code&state={}",
+                state_token
+            ),
+        )
+        .await;
+
+        assert_eq!(status, StatusCode::SEE_OTHER);
+        let fragment = location
+            .strip_prefix(&format!("{NATIVE_TARGET}#"))
+            .unwrap_or_else(|| panic!("expected a fragment on the native target, got: {location}"));
+
+        // The payload is byte-for-byte what the web flow receives
+        let decoded = URL_SAFE_NO_PAD.decode(fragment).expect("fragment decodes");
+        let payload: serde_json::Value =
+            serde_json::from_slice(&decoded).expect("fragment is JSON");
+        assert!(!payload["accessToken"].as_str().unwrap().is_empty());
+        assert_eq!(payload["tokenType"], "Bearer");
+        assert_eq!(payload["provider"], "test-provider");
+        assert_eq!(payload["user"]["email"], EMAIL);
+        assert_eq!(payload["newAccount"], true);
+    }
+
+    #[tokio::test]
+    async fn test_callback_without_requested_target_uses_the_web_completion_page() {
+        let harness = harness(vec![NATIVE_TARGET.to_string()]).await;
+        let state_token = begin_flow(&harness, None).await;
+
+        let (status, location) = location_of(
+            harness.app.clone(),
+            &format!(
+                "/api/v1/auth/oidc/test-provider/callback?code=stub-code&state={}",
+                state_token
+            ),
+        )
+        .await;
+
+        assert_eq!(status, StatusCode::SEE_OTHER);
+        assert!(
+            location.starts_with("/login/oidc/complete#"),
+            "an unmodified web flow must land on the completion page, got: {location}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_callback_sets_auth_cookie_for_native_target() {
+        let harness = harness(vec![NATIVE_TARGET.to_string()]).await;
+        let state_token = begin_flow(&harness, Some(NATIVE_TARGET)).await;
+
+        let response = harness
+            .app
+            .clone()
+            .oneshot(
+                get_request(&format!(
+                    "/api/v1/auth/oidc/test-provider/callback?code=stub-code&state={}",
+                    state_token
+                ))
+                .map(Body::from),
+            )
+            .await
+            .expect("request completes");
+
+        assert_eq!(response.status(), StatusCode::SEE_OTHER);
+        assert!(
+            response.headers().get("set-cookie").is_some(),
+            "the auth cookie is set regardless of where the browser is sent next"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_denial_returns_the_error_to_the_native_target() {
+        let harness = harness(vec![NATIVE_TARGET.to_string()]).await;
+        let state_token = begin_flow(&harness, Some(NATIVE_TARGET)).await;
+
+        // The user cancels at the IdP: no code comes back, only the error
+        let (status, location) = location_of(
+            harness.app.clone(),
+            &format!(
+                "/api/v1/auth/oidc/test-provider/callback?state={}&error=access_denied&error_description=User%20cancelled",
+                state_token
+            ),
+        )
+        .await;
+
+        assert_eq!(status, StatusCode::SEE_OTHER);
+        assert_eq!(
+            location,
+            "codexreader://auth?error=access_denied&error_description=User%20cancelled"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_denial_without_a_requested_target_returns_to_the_login_page() {
+        let harness = harness(vec![NATIVE_TARGET.to_string()]).await;
+        let state_token = begin_flow(&harness, None).await;
+
+        let (status, location) = location_of(
+            harness.app.clone(),
+            &format!(
+                "/api/v1/auth/oidc/test-provider/callback?state={}&error=access_denied",
+                state_token
+            ),
+        )
+        .await;
+
+        assert_eq!(status, StatusCode::SEE_OTHER);
+        assert!(
+            location.starts_with("/login?error=access_denied"),
+            "got: {location}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_state_is_consumed_so_a_callback_cannot_be_replayed() {
+        let harness = harness(vec![NATIVE_TARGET.to_string()]).await;
+        let state_token = begin_flow(&harness, Some(NATIVE_TARGET)).await;
+        let uri = format!(
+            "/api/v1/auth/oidc/test-provider/callback?code=stub-code&state={}",
+            state_token
+        );
+
+        let (first, _) = location_of(harness.app.clone(), &uri).await;
+        assert_eq!(first, StatusCode::SEE_OTHER);
+
+        let response = harness
+            .app
+            .clone()
+            .oneshot(get_request(&uri).map(Body::from))
+            .await
+            .expect("request completes");
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn test_denial_consumes_the_pending_state() {
+        let harness = harness(vec![NATIVE_TARGET.to_string()]).await;
+        let state_token = begin_flow(&harness, Some(NATIVE_TARGET)).await;
+
+        let (status, _) = location_of(
+            harness.app.clone(),
+            &format!(
+                "/api/v1/auth/oidc/test-provider/callback?state={}&error=access_denied",
+                state_token
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::SEE_OTHER);
+
+        // An abandoned flow must not leave a usable state behind
+        let response = harness
+            .app
+            .clone()
+            .oneshot(
+                get_request(&format!(
+                    "/api/v1/auth/oidc/test-provider/callback?code=stub-code&state={}",
+                    state_token
+                ))
+                .map(Body::from),
+            )
+            .await
+            .expect("request completes");
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
 }

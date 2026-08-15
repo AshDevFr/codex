@@ -64,6 +64,10 @@ pub struct OidcAuthResult {
     pub access_token: String,
     /// When the access token expires
     pub token_expires_at: Option<chrono::DateTime<Utc>>,
+    /// Redirect target the client asked for when it started the flow, taken from
+    /// the pending state this exchange consumed. `None` means the built-in web
+    /// completion page.
+    pub redirect_uri: Option<String>,
 }
 
 /// Pending authentication state
@@ -433,6 +437,8 @@ impl OidcService {
 
         let client = self.build_client(provider_name).await?;
 
+        let redirect_uri = pending.redirect_uri;
+
         // Reconstruct PKCE verifier
         let pkce_verifier = PkceCodeVerifier::new(pending.pkce_verifier);
 
@@ -501,7 +507,20 @@ impl OidcService {
             mapped_role,
             access_token: token_response.access_token().secret().clone(),
             token_expires_at,
+            redirect_uri,
         })
+    }
+
+    /// Consume the pending state for `state` and return the redirect target it
+    /// was started with.
+    ///
+    /// Used by the callback when the IdP reports a failure: there is no code to
+    /// exchange, but the browser still has to be sent back to whichever client
+    /// began the flow. The entry is removed either way, since the flow is over.
+    pub fn take_pending_redirect_uri(&self, state: &str) -> Option<String> {
+        self.pending_states
+            .remove(state)
+            .and_then(|(_, pending)| pending.redirect_uri)
     }
 
     /// Extract groups from an ID token's raw claims

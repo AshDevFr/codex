@@ -59,13 +59,21 @@ pub struct OidcLoginResponse {
 }
 
 /// Query parameters for OIDC callback
+///
+/// `code` and `state` are both optional at the extractor, and required only on
+/// the success path. An IdP that the user denies consent at sends neither, and
+/// declaring them required made the whole request fail to deserialize: the
+/// caller got a bare 400 instead of the error redirect this handler exists to
+/// produce.
 #[derive(Debug, Deserialize)]
 pub struct OidcCallbackQuery {
-    /// Authorization code from the identity provider
-    pub code: String,
+    /// Authorization code from the identity provider. Absent when the flow
+    /// failed at the IdP.
+    pub code: Option<String>,
 
-    /// State parameter for CSRF protection
-    pub state: String,
+    /// State parameter for CSRF protection. Echoed back on success, and by a
+    /// spec-compliant IdP on failure too, but not every IdP does.
+    pub state: Option<String>,
 
     /// Error code if authentication failed
     pub error: Option<String>,
@@ -178,8 +186,8 @@ mod tests {
         let json = r#"{"code":"abc123","state":"xyz789"}"#;
         let query: OidcCallbackQuery = serde_json::from_str(json).unwrap();
 
-        assert_eq!(query.code, "abc123");
-        assert_eq!(query.state, "xyz789");
+        assert_eq!(query.code.as_deref(), Some("abc123"));
+        assert_eq!(query.state.as_deref(), Some("xyz789"));
         assert!(query.error.is_none());
     }
 
@@ -190,6 +198,18 @@ mod tests {
 
         assert_eq!(query.error.as_deref(), Some("access_denied"));
         assert_eq!(query.error_description.as_deref(), Some("User cancelled"));
+    }
+
+    #[test]
+    fn test_callback_query_denial_without_code_or_state() {
+        // The shape an IdP sends when the user cancels: no code, and not every
+        // IdP echoes state either. This must still deserialize.
+        let json = r#"{"error":"access_denied"}"#;
+        let query: OidcCallbackQuery = serde_json::from_str(json).unwrap();
+
+        assert!(query.code.is_none());
+        assert!(query.state.is_none());
+        assert_eq!(query.error.as_deref(), Some("access_denied"));
     }
 
     fn sample_callback_response(refresh_token: Option<String>) -> OidcCallbackResponse {

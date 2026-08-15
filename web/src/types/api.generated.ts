@@ -23500,11 +23500,11 @@ export interface operations {
     };
     callback: {
         parameters: {
-            query: {
-                /** @description Authorization code from IdP */
-                code: string;
+            query?: {
+                /** @description Authorization code from IdP. Absent when the flow failed at the IdP */
+                code?: string;
                 /** @description State parameter for CSRF protection */
-                state: string;
+                state?: string;
             };
             header?: never;
             path: {
@@ -23515,8 +23515,8 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Redirect to frontend with auth cookie set */
-            302: {
+            /** @description Redirect to the requesting client with auth data, or with an error */
+            303: {
                 headers: {
                     [name: string]: unknown;
                 };
