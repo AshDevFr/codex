@@ -60,6 +60,7 @@ async fn small_pool_sqlite() -> (sea_orm::DatabaseConnection, TempDir) {
             acquire_timeout_seconds: 5,
             ..SQLiteConfig::default()
         }),
+        ..DatabaseConfig::default()
     };
 
     let database = Database::new(&config).await.unwrap();

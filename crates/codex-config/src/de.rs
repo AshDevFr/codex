@@ -24,47 +24,97 @@ pub fn truthy_bool<'de, D>(deserializer: D) -> Result<bool, D::Error>
 where
     D: Deserializer<'de>,
 {
-    struct TruthyBool;
+    deserializer.deserialize_any(TruthyBool)
+}
 
-    impl<'de> Visitor<'de> for TruthyBool {
-        type Value = bool;
+struct TruthyBool;
 
-        fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            f.write_str("a boolean: true/false, 1/0, yes/no or on/off")
-        }
+impl<'de> Visitor<'de> for TruthyBool {
+    type Value = bool;
 
-        fn visit_bool<E: de::Error>(self, value: bool) -> Result<bool, E> {
-            Ok(value)
-        }
+    fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str("a boolean: true/false, 1/0, yes/no or on/off")
+    }
 
-        fn visit_u64<E: de::Error>(self, value: u64) -> Result<bool, E> {
-            match value {
-                0 => Ok(false),
-                1 => Ok(true),
-                other => Err(E::custom(format!("expected 0 or 1, found {other}"))),
-            }
-        }
+    fn visit_bool<E: de::Error>(self, value: bool) -> Result<bool, E> {
+        Ok(value)
+    }
 
-        fn visit_i64<E: de::Error>(self, value: i64) -> Result<bool, E> {
-            match value {
-                0 => Ok(false),
-                1 => Ok(true),
-                other => Err(E::custom(format!("expected 0 or 1, found {other}"))),
-            }
-        }
-
-        fn visit_str<E: de::Error>(self, value: &str) -> Result<bool, E> {
-            match value.trim().to_ascii_lowercase().as_str() {
-                "true" | "1" | "yes" | "on" => Ok(true),
-                "false" | "0" | "no" | "off" => Ok(false),
-                other => Err(E::custom(format!(
-                    "expected true/false, 1/0, yes/no or on/off, found `{other}`"
-                ))),
-            }
+    fn visit_u64<E: de::Error>(self, value: u64) -> Result<bool, E> {
+        match value {
+            0 => Ok(false),
+            1 => Ok(true),
+            other => Err(E::custom(format!("expected 0 or 1, found {other}"))),
         }
     }
 
-    deserializer.deserialize_any(TruthyBool)
+    fn visit_i64<E: de::Error>(self, value: i64) -> Result<bool, E> {
+        match value {
+            0 => Ok(false),
+            1 => Ok(true),
+            other => Err(E::custom(format!("expected 0 or 1, found {other}"))),
+        }
+    }
+
+    fn visit_str<E: de::Error>(self, value: &str) -> Result<bool, E> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "true" | "1" | "yes" | "on" => Ok(true),
+            "false" | "0" | "no" | "off" => Ok(false),
+            other => Err(E::custom(format!(
+                "expected true/false, 1/0, yes/no or on/off, found `{other}`"
+            ))),
+        }
+    }
+}
+
+/// An optional bool with the same lenient spellings.
+///
+/// Needed because `Option<bool>` does not route through [`truthy_bool`]:
+/// serde hands the inner value to the option's own deserializer, so
+/// `CODEX_AUTH__COOKIE_SECURE=1` would otherwise fail with "expected a
+/// boolean".
+pub fn optional_truthy_bool<'de, D>(deserializer: D) -> Result<Option<bool>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    struct OptionalTruthyBool;
+
+    impl<'de> Visitor<'de> for OptionalTruthyBool {
+        type Value = Option<bool>;
+
+        fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            f.write_str("a boolean, or nothing")
+        }
+
+        fn visit_none<E: de::Error>(self) -> Result<Self::Value, E> {
+            Ok(None)
+        }
+
+        fn visit_unit<E: de::Error>(self) -> Result<Self::Value, E> {
+            Ok(None)
+        }
+
+        fn visit_bool<E: de::Error>(self, value: bool) -> Result<Self::Value, E> {
+            Ok(Some(value))
+        }
+
+        fn visit_u64<E: de::Error>(self, value: u64) -> Result<Self::Value, E> {
+            TruthyBool.visit_u64(value).map(Some)
+        }
+
+        fn visit_str<E: de::Error>(self, value: &str) -> Result<Self::Value, E> {
+            if value.is_empty() {
+                return Ok(None);
+            }
+            TruthyBool.visit_str(value).map(Some)
+        }
+
+        fn visit_some<D2: Deserializer<'de>>(self, inner: D2) -> Result<Self::Value, D2::Error> {
+            inner.deserialize_any(TruthyBool).map(Some)
+        }
+    }
+
+    deserializer.deserialize_option(OptionalTruthyBool)
 }
 
 /// A list of strings from a real list or a comma-separated string.

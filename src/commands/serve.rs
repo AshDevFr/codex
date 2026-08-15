@@ -98,10 +98,8 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         info!("For SSE to work with SQLite, workers must run in the same process");
     }
 
-    // Check if workers should be disabled (useful for web-only pods in k8s)
-    let disable_workers = std::env::var("CODEX_DISABLE_WORKERS")
-        .map(|v| v.eq_ignore_ascii_case("true") || v == "1")
-        .unwrap_or(false);
+    // Web-only replicas run workers in their own pods.
+    let disable_workers = !config.task.run_in_process;
 
     // Background connection pool isolation.
     //
@@ -252,11 +250,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     // bitmaps in memory at once. Each permit maps to one in-flight uncompressed
     // bitmap, so peak image memory ≈ permits × per-decode footprint. Small by
     // default; env-tunable for larger boxes.
-    let image_decode_concurrency = std::env::var("CODEX_IMAGE_DECODE_CONCURRENCY")
-        .ok()
-        .and_then(|v| v.parse::<usize>().ok())
-        .filter(|n| *n > 0)
-        .unwrap_or(3);
+    let image_decode_concurrency = config.images.decode_concurrency.max(1);
     codex_api::image_limit::init_image_decode_limiter(image_decode_concurrency);
     info!(
         "Image decode limiter initialized (max concurrent decode/resize/render: {})",
@@ -422,6 +416,11 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     let scheduler_handle: codex_services::scheduler_handle::SharedSchedulerReconciler = Arc::new(
         codex_scheduler::LockedSchedulerReconciler::new(scheduler.clone()),
     );
+    // Install the configured plugin command allowlist before anything can
+    // spawn a plugin; it is a process-wide value read from handlers that have
+    // no config in scope.
+    codex_services::plugin::process::init_command_allowlist(&config.plugins.allowed_commands);
+
     let plugin_manager = Arc::new(
         codex_services::plugin::PluginManager::with_defaults(Arc::new(
             db.sea_orm_connection().clone(),
@@ -459,19 +458,12 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     let mut worker_count = 0u32;
 
     if disable_workers {
-        info!("Workers disabled via CODEX_DISABLE_WORKERS environment variable");
+        info!("Workers disabled (task.run_in_process is false)");
     } else {
         // Get worker count from config (which includes env override) or settings fallback
         worker_count = get_worker_count(Some(&config.task), Some(&settings_service)).await;
 
-        if let Ok(env_count) = std::env::var("CODEX_TASK_WORKER_COUNT") {
-            info!(
-                "Worker count from environment variable CODEX_TASK_WORKER_COUNT: {}",
-                env_count
-            );
-        } else {
-            info!("Worker count from settings: {}", worker_count);
-        }
+        info!("Worker count: {}", worker_count);
 
         // Reconcile orphaned series exports from prior crash/restart
         if let Err(e) = codex_tasks::handlers::cleanup_series_exports::reconcile_on_startup(

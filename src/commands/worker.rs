@@ -52,14 +52,7 @@ pub async fn worker_command(config_path: PathBuf) -> anyhow::Result<()> {
     // Get worker count from config (which includes env override) or settings fallback
     let worker_count = get_worker_count(Some(&config.task), Some(&settings_service)).await;
 
-    if let Ok(env_count) = std::env::var("CODEX_TASK_WORKER_COUNT") {
-        info!(
-            "Worker count from environment variable CODEX_TASK_WORKER_COUNT: {}",
-            env_count
-        );
-    } else {
-        info!("Worker count from config: {}", worker_count);
-    }
+    info!("Worker count: {}", worker_count);
 
     info!("Starting {} task queue worker(s)...", worker_count);
 
@@ -172,6 +165,11 @@ pub async fn worker_command(config_path: PathBuf) -> anyhow::Result<()> {
     let plugin_file_storage = Arc::new(codex_services::PluginFileStorage::new(
         &config.files.plugins_dir,
     ));
+    // Install the configured plugin command allowlist before anything can
+    // spawn a plugin; it is a process-wide value read from handlers that have
+    // no config in scope.
+    codex_services::plugin::process::init_command_allowlist(&config.plugins.allowed_commands);
+
     let plugin_manager = Arc::new(
         codex_services::plugin::PluginManager::with_defaults(Arc::new(
             db.sea_orm_connection().clone(),

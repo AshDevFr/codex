@@ -38,6 +38,7 @@ async fn test_migrations_complete_on_fresh_database() {
             pragmas: None,
             ..SQLiteConfig::default()
         }),
+        ..DatabaseConfig::default()
     };
 
     let db = Database::new(&config).await.unwrap();
@@ -131,6 +132,7 @@ async fn setup_db_before_migration_056() -> (Database, TempDir) {
             pragmas: None,
             ..SQLiteConfig::default()
         }),
+        ..DatabaseConfig::default()
     };
 
     let db = Database::new(&config).await.unwrap();
@@ -307,6 +309,7 @@ async fn test_migration_056_fresh_run_postgres() {
             ..PostgresConfig::default()
         }),
         sqlite: None,
+        ..DatabaseConfig::default()
     };
 
     let db = match Database::new(&config).await {
@@ -385,6 +388,7 @@ async fn setup_db_before_migration_067() -> (Database, TempDir) {
             pragmas: None,
             ..SQLiteConfig::default()
         }),
+        ..DatabaseConfig::default()
     };
 
     let db = Database::new(&config).await.unwrap();
@@ -556,6 +560,7 @@ async fn setup_db_before_migration_069() -> (Database, TempDir) {
             pragmas: None,
             ..SQLiteConfig::default()
         }),
+        ..DatabaseConfig::default()
     };
 
     let db = Database::new(&config).await.unwrap();

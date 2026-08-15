@@ -949,6 +949,7 @@ async fn test_database_reconnect() {
             pragmas: None,
             ..SQLiteConfig::default()
         }),
+        ..DatabaseConfig::default()
     };
 
     let db2 = Database::new(&config).await.unwrap();

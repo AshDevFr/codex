@@ -484,6 +484,7 @@ pub async fn callback(
 
     // Create HTTP-only auth cookie (for image/resource requests)
     let cookie = build_auth_cookie(
+        &state.auth_config,
         &access_token,
         state.auth_config.jwt_expiry_hours as u64 * 3600,
     );
