@@ -3,7 +3,7 @@ use chrono::Utc;
 use codex_api::permissions::{
     ADMIN_PERMISSIONS, MAINTAINER_PERMISSIONS, READER_PERMISSIONS, serialize_permissions,
 };
-use codex_config::{Config, EnvOverride};
+use codex_config::Config;
 use codex_db::Database;
 use codex_db::entities::{api_keys, plugins::PluginPermission, users};
 use codex_db::repositories::{
@@ -155,8 +155,7 @@ pub async fn seed_command(config_path: PathBuf, seed_config_path: Option<PathBuf
     };
 
     // Load application configuration
-    let mut config = Config::from_file(config_path.to_str().unwrap())?;
-    config.apply_env_overrides("CODEX");
+    let config = Config::load(&config_path)?;
 
     // Initialize database connection
     let db = Database::new(&config.database).await?;

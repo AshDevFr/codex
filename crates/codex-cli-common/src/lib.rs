@@ -1,5 +1,5 @@
 use codex_api::observability::ObservabilityHandle;
-use codex_config::{Config, DatabaseConfig, DatabaseType, EnvOverride};
+use codex_config::{Config, DatabaseConfig, DatabaseType};
 use codex_db::Database;
 use codex_events::{EventBroadcaster, TaskProgressEvent};
 use codex_services::{SettingsService, TaskMetricsService};
@@ -114,19 +114,7 @@ pub fn load_config(config_path: PathBuf) -> anyhow::Result<(Config, bool)> {
 /// against a read-only mount, and a validation step that writes a config file
 /// as a side effect would be its own bug.
 pub fn resolve_config(config_path: &Path) -> anyhow::Result<Config> {
-    let mut config = if config_path.exists() {
-        Config::from_file(config_path)?
-    } else {
-        Config::default()
-    };
-
-    // Apply environment variable overrides
-    config.apply_env_overrides("CODEX");
-
-    // Resolve sub-directory paths relative to data_dir
-    config.resolve_data_dir();
-
-    Ok(config)
+    Config::load(config_path)
 }
 
 /// Emit a single line when environment variables will need renaming in the

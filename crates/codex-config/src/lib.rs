@@ -4,7 +4,6 @@
 //! the workspace-split plan. Has no dependencies on other Codex crates.
 
 mod env_audit;
-mod env_override;
 mod keys;
 mod loader;
 mod redact;
@@ -20,9 +19,9 @@ pub use types::{
 };
 
 pub use env_audit::{
-    ENV_PREFIX, Finding, NON_CONFIG_VARS, audit, audit_env, audit_env_with_config, classify,
+    Finding, NON_CONFIG_VARS, audit, audit_env, audit_env_with_config, classify,
     secret_env_targets, v1_name_for, v2_name_for,
 };
-pub use env_override::EnvOverride;
 pub use keys::{KeyRegistry, registry};
+pub use loader::{ENV_NESTING_SEPARATOR, ENV_PREFIX};
 pub use redact::{REDACTED, UNSET, redacted_value, redacted_yaml};
