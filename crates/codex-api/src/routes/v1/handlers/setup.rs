@@ -216,7 +216,7 @@ pub async fn initialize_setup(
     };
 
     // Create HTTP-only cookie for image authentication (same as login)
-    let cookie = build_auth_cookie(&access_token, 24 * 3600);
+    let cookie = build_auth_cookie(&state.auth_config, &access_token, 24 * 3600);
 
     // Build response with cookie
     let mut headers = HeaderMap::new();

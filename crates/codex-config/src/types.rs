@@ -5,6 +5,14 @@ use std::collections::HashMap;
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(default)]
 pub struct TaskConfig {
+    /// Run task workers inside this process.
+    ///
+    /// Set false for a web-only replica in a deployment that runs workers in
+    /// their own pods. Note that SSE task progress only reaches the browser
+    /// when workers share the process, unless a progress bridge is configured.
+    #[serde(deserialize_with = "crate::de::truthy_bool")]
+    pub run_in_process: bool,
+
     /// Number of parallel task workers to process tasks from the queue
     /// This is a startup-time setting - changes require a restart
     pub worker_count: u32,
@@ -274,7 +282,10 @@ impl Default for KomgaApiConfig {
 
 impl Default for TaskConfig {
     fn default() -> Self {
-        Self { worker_count: 2 }
+        Self {
+            worker_count: 2,
+            run_in_process: true,
+        }
     }
 }
 
@@ -302,6 +313,10 @@ pub struct Config {
     pub task: TaskConfig,
     #[serde(default)]
     pub scanner: ScannerConfig,
+    #[serde(default)]
+    pub images: ImagesConfig,
+    #[serde(default)]
+    pub plugins: PluginsConfig,
     #[serde(default)]
     pub scheduler: SchedulerConfig,
     #[serde(default)]
@@ -466,6 +481,7 @@ impl Default for Config {
                 db_type,
                 postgres: postgres_config,
                 sqlite: sqlite_config,
+                ..DatabaseConfig::default()
             },
             application: ApplicationConfig::default(),
             logging: LoggingConfig::default(),
@@ -474,6 +490,8 @@ impl Default for Config {
             email: EmailConfig::default(),
             task: TaskConfig::default(),
             scanner: ScannerConfig::default(),
+            images: ImagesConfig::default(),
+            plugins: PluginsConfig::default(),
             scheduler: SchedulerConfig::default(),
             files: FilesConfig::default(),
             pdf: PdfConfig::default(),
@@ -490,6 +508,18 @@ impl Default for Config {
 #[serde(default)]
 pub struct AuthConfig {
     pub jwt_secret: String,
+
+    /// Send the `Secure` attribute on auth cookies.
+    ///
+    /// Left unset it is off, which is what plain-HTTP development needs. Any
+    /// deployment terminating TLS should set it to true, or the session cookie
+    /// will also be sent over a plaintext downgrade.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "crate::de::optional_truthy_bool"
+    )]
+    pub cookie_secure: Option<bool>,
     pub jwt_expiry_hours: u32,
     #[serde(deserialize_with = "crate::de::truthy_bool")]
     pub refresh_token_enabled: bool,
@@ -504,10 +534,18 @@ pub struct AuthConfig {
     pub oidc: OidcConfig,
 }
 
+impl AuthConfig {
+    /// Whether auth cookies carry `Secure`. Unset means off.
+    pub fn cookie_secure(&self) -> bool {
+        self.cookie_secure.unwrap_or(false)
+    }
+}
+
 impl Default for AuthConfig {
     fn default() -> Self {
         Self {
             jwt_secret: "INSECURE_DEFAULT_SECRET_CHANGE_IN_PRODUCTION".to_string(),
+            cookie_secure: None,
             jwt_expiry_hours: 24,
             refresh_token_enabled: true,
             refresh_token_expiry_days: 30,
@@ -551,6 +589,20 @@ impl Default for ApiConfig {
 #[serde(default)]
 pub struct DatabaseConfig {
     pub db_type: DatabaseType,
+
+    /// Apply pending migrations at startup.
+    ///
+    /// Set false when a separate Job or init container owns migrations; this
+    /// process then waits for the schema to be current instead of applying it.
+    #[serde(deserialize_with = "crate::de::truthy_bool")]
+    pub run_migrations: bool,
+
+    /// How long to wait for the database to accept connections, and for its
+    /// schema to be current, before giving up.
+    pub migration_wait_timeout_secs: u64,
+
+    /// How often to re-check while waiting.
+    pub migration_wait_interval_secs: u64,
 
     // Postgres Specific
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -634,6 +686,9 @@ impl Default for DatabaseConfig {
 
         Self {
             db_type,
+            run_migrations: true,
+            migration_wait_timeout_secs: 300,
+            migration_wait_interval_secs: 2,
             postgres: postgres_config,
             sqlite: sqlite_config,
         }
@@ -894,6 +949,37 @@ impl LogLevel {
             LogLevel::Error => "error",
         }
     }
+}
+
+/// Image decode/resize/render limits.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(default)]
+pub struct ImagesConfig {
+    /// Maximum concurrent decode/resize/render operations.
+    ///
+    /// Each permit corresponds to one in-flight uncompressed bitmap, so peak
+    /// image memory is roughly this times the per-decode footprint. Kept small
+    /// so a reader prefetching many pages cannot hold many full-resolution
+    /// bitmaps at once.
+    pub decode_concurrency: usize,
+}
+
+impl Default for ImagesConfig {
+    fn default() -> Self {
+        Self {
+            decode_concurrency: 3,
+        }
+    }
+}
+
+/// Plugin runtime settings.
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[serde(default)]
+pub struct PluginsConfig {
+    /// Executables plugins may spawn, in addition to the built-in runtimes
+    /// (`node`, `npx`, `python`, `python3`, `uv`, `uvx`).
+    #[serde(deserialize_with = "crate::de::string_list")]
+    pub allowed_commands: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -1485,6 +1571,9 @@ verification_url_base: https://codex.example.com
     fn test_database_config_postgres() {
         let config = DatabaseConfig {
             db_type: DatabaseType::Postgres,
+            run_migrations: true,
+            migration_wait_timeout_secs: 300,
+            migration_wait_interval_secs: 2,
             postgres: Some(PostgresConfig {
                 host: "localhost".to_string(),
                 port: 5432,
@@ -1505,6 +1594,9 @@ verification_url_base: https://codex.example.com
     fn test_database_config_sqlite() {
         let config = DatabaseConfig {
             db_type: DatabaseType::SQLite,
+            run_migrations: true,
+            migration_wait_timeout_secs: 300,
+            migration_wait_interval_secs: 2,
             postgres: None,
             sqlite: Some(SQLiteConfig {
                 path: "/var/lib/codex.db".to_string(),
@@ -1522,6 +1614,9 @@ verification_url_base: https://codex.example.com
     fn test_operation_deadline_seconds_sqlite() {
         let config = DatabaseConfig {
             db_type: DatabaseType::SQLite,
+            run_migrations: true,
+            migration_wait_timeout_secs: 300,
+            migration_wait_interval_secs: 2,
             postgres: None,
             sqlite: Some(SQLiteConfig {
                 path: "./test.db".to_string(),
@@ -1538,6 +1633,9 @@ verification_url_base: https://codex.example.com
     fn test_operation_deadline_seconds_postgres() {
         let config = DatabaseConfig {
             db_type: DatabaseType::Postgres,
+            run_migrations: true,
+            migration_wait_timeout_secs: 300,
+            migration_wait_interval_secs: 2,
             postgres: Some(PostgresConfig {
                 host: "localhost".to_string(),
                 port: 5432,
@@ -1565,6 +1663,9 @@ verification_url_base: https://codex.example.com
         // SQLite: explicit values flow through the accessors.
         let sqlite = DatabaseConfig {
             db_type: DatabaseType::SQLite,
+            run_migrations: true,
+            migration_wait_timeout_secs: 300,
+            migration_wait_interval_secs: 2,
             postgres: None,
             sqlite: Some(SQLiteConfig {
                 batch_fan_out: 6,
@@ -1580,6 +1681,9 @@ verification_url_base: https://codex.example.com
         // batch_fan_out is clamped to at least 1 (a 0 would deadlock a request).
         let zero = DatabaseConfig {
             db_type: DatabaseType::SQLite,
+            run_migrations: true,
+            migration_wait_timeout_secs: 300,
+            migration_wait_interval_secs: 2,
             postgres: None,
             sqlite: Some(SQLiteConfig {
                 batch_fan_out: 0,
@@ -1591,6 +1695,9 @@ verification_url_base: https://codex.example.com
         // Postgres: explicit values flow through the accessors.
         let postgres = DatabaseConfig {
             db_type: DatabaseType::Postgres,
+            run_migrations: true,
+            migration_wait_timeout_secs: 300,
+            migration_wait_interval_secs: 2,
             postgres: Some(PostgresConfig {
                 batch_fan_out: 12,
                 background_max_connections: 20,
@@ -1628,6 +1735,9 @@ verification_url_base: https://codex.example.com
             data_dir: "data".to_string(),
             database: DatabaseConfig {
                 db_type: DatabaseType::SQLite,
+                run_migrations: true,
+                migration_wait_timeout_secs: 300,
+                migration_wait_interval_secs: 2,
                 postgres: None,
                 sqlite: Some(SQLiteConfig {
                     path: "./codex.db".to_string(),
@@ -1646,6 +1756,8 @@ verification_url_base: https://codex.example.com
             email: EmailConfig::default(),
             task: TaskConfig::default(),
             scanner: ScannerConfig::default(),
+            images: ImagesConfig::default(),
+            plugins: PluginsConfig::default(),
             scheduler: SchedulerConfig::default(),
             files: FilesConfig::default(),
             pdf: PdfConfig::default(),
@@ -1711,6 +1823,7 @@ verification_url_base: https://codex.example.com
             argon2_time_cost: 3,
             argon2_parallelism: 2,
             oidc: OidcConfig::default(),
+            ..AuthConfig::default()
         };
 
         let yaml = serde_yaml::to_string(&config).unwrap();
@@ -1752,7 +1865,10 @@ verification_url_base: https://codex.example.com
 
     #[test]
     fn test_task_config_serialization() {
-        let config = TaskConfig { worker_count: 8 };
+        let config = TaskConfig {
+            worker_count: 8,
+            ..TaskConfig::default()
+        };
 
         let yaml = serde_yaml::to_string(&config).unwrap();
         assert!(yaml.contains("worker_count"));

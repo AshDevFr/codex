@@ -15,6 +15,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use chrono::Utc;
+use codex_config::AuthConfig;
 use codex_db::{
     entities::users,
     repositories::{EmailVerificationTokenRepository, SettingsRepository, UserRepository},
@@ -23,7 +24,6 @@ use codex_services::{RefreshTokenError, RefreshTokenService};
 use codex_utils::password;
 use sea_orm::ActiveModelTrait;
 use sea_orm::Set;
-use std::env;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -84,20 +84,13 @@ fn parse_permissions_json(json: &serde_json::Value) -> Vec<String> {
         .unwrap_or_default()
 }
 
-/// Build authentication cookie string
+/// Build the authentication cookie.
 ///
-/// Conditionally includes `Secure` flag based on environment:
-/// - If `CODEX_COOKIE_SECURE` env var is set, uses that value
-/// - Otherwise, defaults to `false` for development (allows HTTP cookies)
-/// - In production, should be set to `true` via env var
-pub(crate) fn build_auth_cookie(token: &str, max_age: u64) -> String {
-    // Check environment variable first
-    let use_secure = env::var("CODEX_COOKIE_SECURE")
-        .ok()
-        .and_then(|v| v.parse::<bool>().ok())
-        .unwrap_or(false); // Default to false for development (allows HTTP)
-
-    if use_secure {
+/// `Secure` comes from `auth.cookie_secure`, which is off unless set so that
+/// plain-HTTP development keeps working. Any deployment terminating TLS should
+/// turn it on.
+pub(crate) fn build_auth_cookie(auth: &AuthConfig, token: &str, max_age: u64) -> String {
+    if auth.cookie_secure() {
         format!(
             "auth_token={}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age={}",
             token, max_age
@@ -198,7 +191,7 @@ pub async fn login(
 
     // Create HTTP-only cookie for image authentication
     // Using SameSite=Lax instead of Strict to allow images to load from direct links
-    let cookie = build_auth_cookie(&access_token, 24 * 3600);
+    let cookie = build_auth_cookie(&state.auth_config, &access_token, 24 * 3600);
 
     // Build response with cookie
     let mut headers = HeaderMap::new();
@@ -355,7 +348,7 @@ pub async fn refresh(
 
     // Reissue the image-auth cookie so the new access token is in effect for
     // browser image requests as well as Authorization-header requests.
-    let cookie = build_auth_cookie(&access_token, 24 * 3600);
+    let cookie = build_auth_cookie(&state.auth_config, &access_token, 24 * 3600);
     let mut headers = HeaderMap::new();
     headers.insert(
         header::SET_COOKIE,
@@ -573,7 +566,7 @@ pub async fn register(
         };
 
         // Create HTTP-only cookie for image authentication
-        let cookie = build_auth_cookie(&access_token, 24 * 3600);
+        let cookie = build_auth_cookie(&state.auth_config, &access_token, 24 * 3600);
 
         // Build response with cookie
         let mut headers = HeaderMap::new();
@@ -673,7 +666,7 @@ pub async fn verify_email(
     };
 
     // Create HTTP-only cookie for image authentication
-    let cookie = build_auth_cookie(&access_token, 24 * 3600);
+    let cookie = build_auth_cookie(&state.auth_config, &access_token, 24 * 3600);
 
     // Build response with cookie
     let mut headers = HeaderMap::new();

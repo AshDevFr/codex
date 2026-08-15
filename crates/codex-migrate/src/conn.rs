@@ -30,6 +30,7 @@ pub fn database_config_from_url(raw: &str) -> Result<DatabaseConfig> {
                 path: path.to_string(),
                 ..SQLiteConfig::default()
             }),
+            ..DatabaseConfig::default()
         });
     }
 
@@ -55,6 +56,7 @@ pub fn database_config_from_url(raw: &str) -> Result<DatabaseConfig> {
                 ..PostgresConfig::default()
             }),
             sqlite: None,
+            ..DatabaseConfig::default()
         });
     }
 

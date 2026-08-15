@@ -531,6 +531,7 @@ mod tests {
                 pragmas: None,
                 ..SQLiteConfig::default()
             }),
+            ..DatabaseConfig::default()
         };
 
         let db = Database::new(&config).await.unwrap();
@@ -561,6 +562,7 @@ mod tests {
                 max_connections: 16,
                 ..SQLiteConfig::default()
             }),
+            ..DatabaseConfig::default()
         };
 
         // Primary pool owns schema setup.
@@ -615,6 +617,7 @@ mod tests {
                 ..codex_config::PostgresConfig::default()
             }),
             sqlite: None,
+            ..DatabaseConfig::default()
         };
 
         let capped = Database::with_pool_max(&config, 1);
@@ -641,6 +644,7 @@ mod tests {
                 min_connections: 8,
                 ..SQLiteConfig::default()
             }),
+            ..DatabaseConfig::default()
         };
 
         let probe = Database::new_probe(&config).await.unwrap();
@@ -674,6 +678,7 @@ mod tests {
                 ..codex_config::PostgresConfig::default()
             }),
             sqlite: None,
+            ..DatabaseConfig::default()
         };
 
         let db = Database::new(&config).await.unwrap();

@@ -37,6 +37,7 @@ async fn create_test_postgres_db() -> Database {
             ..PostgresConfig::default()
         }),
         sqlite: None,
+        ..DatabaseConfig::default()
     };
 
     let db = Database::new(&config).await.unwrap();

@@ -133,6 +133,11 @@ fn walk(value: &Value, path: &str, out: &mut KeyRegistry) {
 /// Two tests guard this against drift: the serialized probe must contain no
 /// `null` (which would mean an `Option` was left unpopulated) and no empty
 /// object (which would mean a map was left empty).
+///
+/// Those two do not cover an `Option` carrying
+/// `skip_serializing_if = "Option::is_none"`, which disappears entirely rather
+/// than serializing as `null`. Such fields must be listed in
+/// `optional_leaves_are_present` as well.
 fn key_probe() -> Config {
     let mut config = Config::default();
 
@@ -143,6 +148,7 @@ fn key_probe() -> Config {
     });
 
     config.application.base_url = Some(String::new());
+    config.auth.cookie_secure = Some(false);
     config.logging.file = Some(String::new());
     config.email.verification_url_base = Some(String::new());
     config.pdf.pdfium_library_path = Some(String::new());
@@ -255,6 +261,9 @@ mod tests {
             "pdf.pdfium_library_path",
             "observability.otlp.proxy_endpoint",
             "auth.oidc.redirect_uri_base",
+            // Carries `skip_serializing_if`, so it vanishes from the probe
+            // rather than showing up as `null`; the drift tests cannot see it.
+            "auth.cookie_secure",
         ] {
             assert!(registry.contains(path), "missing `{path}`");
         }

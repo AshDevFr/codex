@@ -30,9 +30,6 @@ use tracing::{debug, error, info, warn};
 // Command Allowlist
 // =============================================================================
 
-/// Environment variable for customizing allowed plugin commands
-pub const ALLOWED_COMMANDS_ENV: &str = "CODEX_PLUGIN_ALLOWED_COMMANDS";
-
 /// Default allowed commands for plugin execution
 ///
 /// These are common runtimes used by plugins:
@@ -161,26 +158,46 @@ pub fn filter_blocked_env_vars(env: &HashMap<String, String>) -> HashMap<String,
     filtered
 }
 
-/// Get the command allowlist, initializing from env var if needed
-fn get_command_allowlist() -> &'static Vec<String> {
-    COMMAND_ALLOWLIST.get_or_init(|| {
-        let mut allowlist: Vec<String> = DEFAULT_ALLOWED_COMMANDS
-            .iter()
-            .map(|s| s.to_string())
-            .collect();
+/// Install the configured extras on top of the built-in runtimes.
+///
+/// Call once during startup, before anything can spawn a plugin. The allowlist
+/// is a process-wide `OnceLock` because [`is_command_allowed`] is reached from
+/// request handlers that have no configuration in scope; passing it down every
+/// call path would mean threading config through the whole plugin surface for
+/// a value that never changes after boot.
+///
+/// A later call is ignored, so a first use that beats initialization cannot be
+/// silently overridden by a different allowlist afterwards.
+pub fn init_command_allowlist(extra: &[String]) {
+    if COMMAND_ALLOWLIST
+        .set(build_command_allowlist(extra))
+        .is_err()
+    {
+        warn!(
+            "Plugin command allowlist was already initialized; \
+             configured `plugins.allowed_commands` entries were not applied"
+        );
+    }
+}
 
-        // Add custom commands from environment variable
-        if let Ok(custom) = std::env::var(ALLOWED_COMMANDS_ENV) {
-            for cmd in custom.split(',') {
-                let cmd = cmd.trim();
-                if !cmd.is_empty() && !allowlist.contains(&cmd.to_string()) {
-                    allowlist.push(cmd.to_string());
-                }
-            }
+fn build_command_allowlist(extra: &[String]) -> Vec<String> {
+    let mut allowlist: Vec<String> = DEFAULT_ALLOWED_COMMANDS
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+    for command in extra {
+        let command = command.trim();
+        if !command.is_empty() && !allowlist.iter().any(|a| a == command) {
+            allowlist.push(command.to_string());
         }
+    }
+    allowlist
+}
 
-        allowlist
-    })
+/// The allowlist, falling back to the built-in runtimes when startup never
+/// installed one (tests, and any tool that does not load configuration).
+fn get_command_allowlist() -> &'static Vec<String> {
+    COMMAND_ALLOWLIST.get_or_init(|| build_command_allowlist(&[]))
 }
 
 /// Check if a command is in the allowlist

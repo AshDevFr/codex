@@ -31,24 +31,58 @@ use std::sync::OnceLock;
 /// by `codex-api`'s build script via `cargo:rustc-env` and read with `env!()`,
 /// so it never exists in a running process's environment.
 pub const NON_CONFIG_VARS: &[&str] = &[
-    // Cookie `Secure` attribute override, applied per-response.
-    "CODEX_COOKIE_SECURE",
-    // Runs `serve` without in-process task workers.
-    "CODEX_DISABLE_WORKERS",
-    // Credential encryption key, read deep in codex-utils / codex-db.
+    // Credential encryption key. Read at its point of use deep in
+    // codex-utils / codex-db, which have no configuration in scope; bringing
+    // it into `Config` means threading config through those crates.
     "CODEX_ENCRYPTION_KEY",
-    // Bound on concurrent image decodes.
-    "CODEX_IMAGE_DECODE_CONCURRENCY",
-    // How often, and for how long, to poll while waiting on migrations.
-    "CODEX_MIGRATION_WAIT_INTERVAL",
-    "CODEX_MIGRATION_WAIT_TIMEOUT",
-    // Extra executables plugins are permitted to spawn.
-    "CODEX_PLUGIN_ALLOWED_COMMANDS",
-    // Leaves migrations to an external job and waits for them instead.
-    "CODEX_SKIP_MIGRATIONS",
-    // Per-invocation endpoints for `codex copy`; also available as CLI flags.
+    // Per-invocation endpoints for `codex copy`, also available as CLI flags.
     "CODEX_SOURCE_DATABASE_URL",
     "CODEX_TARGET_DATABASE_URL",
+];
+
+/// Variables that were removed in favour of a real config key.
+///
+/// These cannot be derived by re-spelling, either because the setting was
+/// renamed outright or because its sense was inverted, so they need saying
+/// explicitly. Getting one of them wrong is not cosmetic: a deployment that
+/// keeps `CODEX_DISABLE_WORKERS=true` and is not told about it starts task
+/// workers in a pod meant to serve web traffic only.
+pub const REMOVED_VARS: &[(&str, &str, &str)] = &[
+    (
+        "CODEX_COOKIE_SECURE",
+        "CODEX_AUTH__COOKIE_SECURE",
+        "same meaning",
+    ),
+    (
+        "CODEX_DISABLE_WORKERS",
+        "CODEX_TASK__RUN_IN_PROCESS",
+        "INVERTED: `DISABLE_WORKERS=true` becomes `RUN_IN_PROCESS=false`",
+    ),
+    (
+        "CODEX_IMAGE_DECODE_CONCURRENCY",
+        "CODEX_IMAGES__DECODE_CONCURRENCY",
+        "same meaning",
+    ),
+    (
+        "CODEX_MIGRATION_WAIT_INTERVAL",
+        "CODEX_DATABASE__MIGRATION_WAIT_INTERVAL_SECS",
+        "same meaning",
+    ),
+    (
+        "CODEX_MIGRATION_WAIT_TIMEOUT",
+        "CODEX_DATABASE__MIGRATION_WAIT_TIMEOUT_SECS",
+        "same meaning",
+    ),
+    (
+        "CODEX_PLUGIN_ALLOWED_COMMANDS",
+        "CODEX_PLUGINS__ALLOWED_COMMANDS",
+        "same meaning",
+    ),
+    (
+        "CODEX_SKIP_MIGRATIONS",
+        "CODEX_DATABASE__RUN_MIGRATIONS",
+        "INVERTED: `SKIP_MIGRATIONS=true` becomes `RUN_MIGRATIONS=false`",
+    ),
 ];
 
 /// What the classifier concluded about one environment variable.
@@ -74,6 +108,15 @@ pub enum Finding {
         /// The name this version does read.
         v1_name: String,
     },
+    /// Removed in favour of a config key that cannot be derived by
+    /// re-spelling the old name.
+    Removed {
+        var: String,
+        /// The variable to set instead.
+        replacement: String,
+        /// How the meaning maps over, including any inversion.
+        note: String,
+    },
     /// Not a recognized setting. Never fatal: a sibling tool may legitimately
     /// use the `CODEX_` prefix.
     Unknown {
@@ -89,13 +132,17 @@ impl Finding {
         match self {
             Finding::WillRename { var, .. }
             | Finding::NotYetValid { var, .. }
+            | Finding::Removed { var, .. }
             | Finding::Unknown { var, .. } => var,
         }
     }
 
     /// Whether this finding means a setting is being ignored right now.
     pub fn is_ignored_now(&self) -> bool {
-        matches!(self, Finding::NotYetValid { .. } | Finding::Unknown { .. })
+        matches!(
+            self,
+            Finding::NotYetValid { .. } | Finding::Removed { .. } | Finding::Unknown { .. }
+        )
     }
 }
 
@@ -152,6 +199,17 @@ pub fn classify(var: &str, registry: &KeyRegistry) -> Option<Finding> {
     let rest = var.strip_prefix(ENV_PREFIX)?;
     if rest.is_empty() || NON_CONFIG_VARS.contains(&var) {
         return None;
+    }
+
+    // Checked before any spelling heuristic: these moved to a differently
+    // named key, sometimes with the sense flipped, so guessing would be worse
+    // than saying nothing.
+    if let Some((_, replacement, note)) = REMOVED_VARS.iter().find(|(old, _, _)| *old == var) {
+        return Some(Finding::Removed {
+            var: var.to_string(),
+            replacement: (*replacement).to_string(),
+            note: (*note).to_string(),
+        });
     }
 
     // A `__` anywhere means the operator wrote a v2-style name.
@@ -491,6 +549,68 @@ mod tests {
 
     /// The compile-time build-script value must not be on the allowlist: it
     /// never appears in a running process's environment.
+    /// Three entries, not ten: the operator-tunable settings moved into
+    /// `Config`, leaving only a secret read too deep to reach and two
+    /// per-invocation arguments.
+    #[test]
+    fn the_allowlist_is_only_what_cannot_be_config() {
+        assert_eq!(
+            NON_CONFIG_VARS,
+            [
+                "CODEX_ENCRYPTION_KEY",
+                "CODEX_SOURCE_DATABASE_URL",
+                "CODEX_TARGET_DATABASE_URL"
+            ]
+        );
+    }
+
+    /// Every removed variable must report its replacement. Silence here means
+    /// a deployment keeps a setting that no longer does anything.
+    #[test]
+    fn removed_variables_name_their_replacement() {
+        for (old, replacement, _) in REMOVED_VARS {
+            match classify_one(old) {
+                Some(Finding::Removed {
+                    replacement: got, ..
+                }) => assert_eq!(&got, replacement, "wrong replacement for {old}"),
+                other => panic!("{old} should be Removed, got {other:?}"),
+            }
+        }
+    }
+
+    /// The two inverted ones are the dangerous pair: keeping the old variable
+    /// and ignoring it silently flips behaviour.
+    #[test]
+    fn inverted_replacements_say_so() {
+        for var in ["CODEX_DISABLE_WORKERS", "CODEX_SKIP_MIGRATIONS"] {
+            match classify_one(var) {
+                Some(Finding::Removed { note, .. }) => assert!(
+                    note.contains("INVERTED"),
+                    "{var} flips sense and must say so, got: {note}"
+                ),
+                other => panic!("{var} should be Removed, got {other:?}"),
+            }
+        }
+    }
+
+    /// Their new names must resolve as ordinary settings.
+    #[test]
+    fn the_replacements_are_real_settings() {
+        for (_, replacement, _) in REMOVED_VARS {
+            let path = replacement
+                .strip_prefix(ENV_PREFIX)
+                .unwrap()
+                .split("__")
+                .map(str::to_lowercase)
+                .collect::<Vec<_>>()
+                .join(".");
+            assert!(
+                registry().contains(&path),
+                "{replacement} maps to `{path}`, which is not a config key"
+            );
+        }
+    }
+
     #[test]
     fn bin_version_is_not_allowlisted() {
         assert!(!NON_CONFIG_VARS.contains(&"CODEX_BIN_VERSION"));

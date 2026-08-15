@@ -30,6 +30,7 @@ pub async fn create_test_db() -> (Database, TempDir) {
             pragmas: Some(pragmas),
             ..SQLiteConfig::default()
         }),
+        ..DatabaseConfig::default()
     };
 
     let db = Database::new(&config).await.unwrap();

@@ -233,6 +233,7 @@ mod tests {
                 pragmas: Some(pragmas),
                 ..SQLiteConfig::default()
             }),
+            ..DatabaseConfig::default()
         };
 
         let db = Database::new(&config).await.unwrap();

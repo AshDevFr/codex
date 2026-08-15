@@ -708,6 +708,79 @@ auth:
         });
     }
 
+    // ---- settings that used to be ad-hoc environment reads ----
+
+    /// Each of these was `std::env::var` at its point of use. They must now be
+    /// settable from the file and from the environment like anything else.
+    #[test]
+    fn the_relocated_settings_are_real_config_keys() {
+        Jail::expect_with(|jail| {
+            jail.create_file(
+                "codex.yaml",
+                r#"
+auth:
+  cookie_secure: true
+task:
+  run_in_process: false
+images:
+  decode_concurrency: 9
+plugins:
+  allowed_commands: deno,bun
+database:
+  run_migrations: false
+  migration_wait_timeout_secs: 42
+  migration_wait_interval_secs: 7
+"#,
+            )?;
+
+            let config = Config::load(jail.directory().join("codex.yaml")).unwrap();
+
+            assert_eq!(config.auth.cookie_secure, Some(true));
+            assert!(!config.task.run_in_process);
+            assert_eq!(config.images.decode_concurrency, 9);
+            assert_eq!(config.plugins.allowed_commands, vec!["deno", "bun"]);
+            assert!(!config.database.run_migrations);
+            assert_eq!(config.database.migration_wait_timeout_secs, 42);
+            assert_eq!(config.database.migration_wait_interval_secs, 7);
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn the_relocated_settings_are_settable_from_the_environment() {
+        Jail::expect_with(|jail| {
+            jail.set_env("CODEX_AUTH__COOKIE_SECURE", "1");
+            jail.set_env("CODEX_TASK__RUN_IN_PROCESS", "false");
+            jail.set_env("CODEX_IMAGES__DECODE_CONCURRENCY", "12");
+            jail.set_env("CODEX_PLUGINS__ALLOWED_COMMANDS", "deno, bun");
+            jail.set_env("CODEX_DATABASE__RUN_MIGRATIONS", "no");
+            jail.set_env("CODEX_DATABASE__MIGRATION_WAIT_TIMEOUT_SECS", "60");
+
+            let config = Config::load(jail.directory().join("absent.yaml")).unwrap();
+
+            assert_eq!(config.auth.cookie_secure, Some(true));
+            assert!(!config.task.run_in_process);
+            assert_eq!(config.images.decode_concurrency, 12);
+            assert_eq!(config.plugins.allowed_commands, vec!["deno", "bun"]);
+            assert!(!config.database.run_migrations);
+            assert_eq!(config.database.migration_wait_timeout_secs, 60);
+            Ok(())
+        });
+    }
+
+    /// The inverted pair must default to today's behaviour: workers run and
+    /// migrations are applied unless something says otherwise.
+    #[test]
+    fn the_inverted_settings_default_to_the_previous_behaviour() {
+        let config = Config::default();
+        assert!(config.task.run_in_process, "workers ran by default before");
+        assert!(
+            config.database.run_migrations,
+            "migrations were applied by default before"
+        );
+        assert!(!config.auth.cookie_secure(), "Secure was off by default");
+    }
+
     #[test]
     fn overlay_path_gets_a_local_infix() {
         assert_eq!(

@@ -359,24 +359,18 @@ struct DbWait {
 }
 
 impl DbWait {
-    /// Environment variables (used when the parameter is None):
-    /// - CODEX_MIGRATION_WAIT_TIMEOUT: Timeout in seconds (default: 300)
-    /// - CODEX_MIGRATION_WAIT_INTERVAL: Check interval in seconds (default: 2)
-    fn resolve(timeout_seconds: Option<u64>, check_interval_seconds: Option<u64>) -> Self {
-        fn from_env(name: &str) -> Option<u64> {
-            std::env::var(name).ok().and_then(|v| v.parse().ok())
-        }
-
+    /// A CLI flag wins over the configured budget, which carries the default.
+    fn resolve(
+        config: &DatabaseConfig,
+        timeout_seconds: Option<u64>,
+        check_interval_seconds: Option<u64>,
+    ) -> Self {
         Self {
             timeout: Duration::from_secs(
-                timeout_seconds
-                    .or_else(|| from_env("CODEX_MIGRATION_WAIT_TIMEOUT"))
-                    .unwrap_or(300), // Default 5 minutes
+                timeout_seconds.unwrap_or(config.migration_wait_timeout_secs),
             ),
             check_interval: Duration::from_secs(
-                check_interval_seconds
-                    .or_else(|| from_env("CODEX_MIGRATION_WAIT_INTERVAL"))
-                    .unwrap_or(2), // Default 2 seconds
+                check_interval_seconds.unwrap_or(config.migration_wait_interval_secs),
             ),
         }
     }
@@ -420,10 +414,11 @@ impl DbWait {
 /// could have asked instead.
 pub async fn wait_for_migrations_on(
     db: &Database,
+    config: &DatabaseConfig,
     timeout_seconds: Option<u64>,
     check_interval_seconds: Option<u64>,
 ) -> anyhow::Result<()> {
-    let wait = DbWait::resolve(timeout_seconds, check_interval_seconds);
+    let wait = DbWait::resolve(config, timeout_seconds, check_interval_seconds);
     wait.log("migrations to complete");
     poll_until_migrated(db, &wait, std::time::Instant::now()).await
 }
@@ -444,7 +439,7 @@ pub async fn connect_with_retry(
     timeout_seconds: Option<u64>,
     check_interval_seconds: Option<u64>,
 ) -> anyhow::Result<Database> {
-    let wait = DbWait::resolve(timeout_seconds, check_interval_seconds);
+    let wait = DbWait::resolve(config, timeout_seconds, check_interval_seconds);
     wait.log("the database to accept connections");
     retry_connect(&wait, std::time::Instant::now(), || Database::new(config)).await
 }
@@ -493,7 +488,7 @@ pub async fn wait_for_migrations_complete(
     timeout_seconds: Option<u64>,
     check_interval_seconds: Option<u64>,
 ) -> anyhow::Result<()> {
-    let wait = DbWait::resolve(timeout_seconds, check_interval_seconds);
+    let wait = DbWait::resolve(config, timeout_seconds, check_interval_seconds);
     wait.log("migrations to complete");
     let start_time = std::time::Instant::now();
 
@@ -543,29 +538,24 @@ async fn poll_until_migrated(
 
 /// Initialize database connection and run migrations
 ///
-/// If CODEX_SKIP_MIGRATIONS environment variable is set to "true" or "1",
-/// migrations will be skipped and the function will wait for migrations to complete
-/// (useful when migrations are run separately via a job/init container).
+/// When `database.run_migrations` is false, this waits for the schema to be
+/// current instead of applying it, which is what a deployment whose migrations
+/// belong to a separate Job or init container needs.
 pub async fn init_database(config: &Config) -> anyhow::Result<Database> {
     info!("========================================");
     info!("Initializing database connection...");
     let db = Database::new(&config.database).await?;
     info!("Database connected successfully");
 
-    // Check if migrations should be skipped
-    let skip_migrations = std::env::var("CODEX_SKIP_MIGRATIONS")
-        .map(|v| v.eq_ignore_ascii_case("true") || v == "1")
-        .unwrap_or(false);
-
-    if skip_migrations {
-        info!("Skipping migrations (CODEX_SKIP_MIGRATIONS is set)");
+    if !config.database.run_migrations {
+        info!("Skipping migrations (database.run_migrations is false)");
         info!("Waiting for migrations to complete (run externally)...");
         // Poll over the pool opened above rather than opening more. This process
         // is already connected; a wait that reconnects each time would spend the
         // whole timeout competing for connections with the deployment it is
         // waiting to join.
         // Timeout/interval come from the environment.
-        wait_for_migrations_on(&db, None, None).await?;
+        wait_for_migrations_on(&db, &config.database, None, None).await?;
         info!("Migrations are complete");
     } else {
         // Run migrations to ensure database schema is up to date
@@ -883,6 +873,7 @@ mod tests {
                 pragmas: None,
                 ..SQLiteConfig::default()
             }),
+            ..DatabaseConfig::default()
         }
     }
 
@@ -975,7 +966,7 @@ mod tests {
         );
         drop(reconnected);
 
-        let result = wait_for_migrations_on(&db, Some(2), Some(1)).await;
+        let result = wait_for_migrations_on(&db, &config, Some(2), Some(1)).await;
 
         assert!(
             result.is_ok(),
@@ -994,7 +985,7 @@ mod tests {
         let db = Database::new(&config).await.unwrap();
 
         let start = std::time::Instant::now();
-        let result = wait_for_migrations_on(&db, Some(2), Some(1)).await;
+        let result = wait_for_migrations_on(&db, &config, Some(2), Some(1)).await;
 
         assert!(
             result.is_err(),
@@ -1134,6 +1125,7 @@ mod tests {
                     ..SQLiteConfig::default()
                 }),
                 postgres: None,
+                ..DatabaseConfig::default()
             },
             pdf: codex_config::PdfConfig {
                 cache_dir: pdf_cache_dir.to_string_lossy().to_string(),
@@ -1258,7 +1250,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_worker_count_from_config() {
-        let task_config = TaskConfig { worker_count: 8 };
+        let task_config = TaskConfig {
+            worker_count: 8,
+            ..TaskConfig::default()
+        };
         let worker_count = get_worker_count(Some(&task_config), None).await;
         assert_eq!(worker_count, 8);
     }
@@ -1291,7 +1286,10 @@ mod tests {
         );
 
         // Config should be used when provided (task.worker_count is now in config, not database)
-        let task_config = TaskConfig { worker_count: 5 };
+        let task_config = TaskConfig {
+            worker_count: 5,
+            ..TaskConfig::default()
+        };
         let worker_count = get_worker_count(Some(&task_config), Some(&settings_service)).await;
         assert_eq!(worker_count, 5); // Config value takes priority
     }
@@ -1312,70 +1310,58 @@ mod tests {
                     pragmas: None,
                     ..SQLiteConfig::default()
                 }),
+                ..DatabaseConfig::default()
             },
             ..Config::default()
         }
     }
 
+    /// A config that leaves migrations to something else, with a short budget
+    /// so the waiting tests do not sit for the five-minute default.
+    fn skip_migrations(db_path: &std::path::Path, timeout: u64) -> Config {
+        let mut config = make_sqlite_config(db_path);
+        config.database.run_migrations = false;
+        config.database.migration_wait_timeout_secs = timeout;
+        config.database.migration_wait_interval_secs = 1;
+        config
+    }
+
     #[tokio::test]
-    #[serial_test::serial(codex_migration_env)]
     async fn init_database_runs_migrations_by_default() {
         let temp_dir = TempDir::new().unwrap();
         let db_path = temp_dir.path().join("test.db");
-        unsafe {
-            std::env::remove_var("CODEX_SKIP_MIGRATIONS");
-        }
 
         let config = make_sqlite_config(&db_path);
         let db = init_database(&config)
             .await
-            .expect("init_database should succeed when skip is unset");
+            .expect("init_database should apply migrations by default");
 
-        let complete = db.migrations_complete().await.unwrap();
-        assert!(complete, "migrations should be complete");
+        assert!(db.migrations_complete().await.unwrap());
     }
 
     #[tokio::test]
-    #[serial_test::serial(codex_migration_env)]
-    async fn init_database_with_skip_succeeds_when_migrations_already_complete() {
+    async fn init_database_succeeds_when_migrations_already_ran_elsewhere() {
         let temp_dir = TempDir::new().unwrap();
         let db_path = temp_dir.path().join("test.db");
 
         let config = make_sqlite_config(&db_path);
-
-        // Run migrations out of band first.
         let db = Database::new(&config.database).await.unwrap();
         db.run_migrations().await.unwrap();
         drop(db);
 
-        unsafe {
-            std::env::set_var("CODEX_SKIP_MIGRATIONS", "true");
-        }
-        let result = init_database(&config).await;
-        unsafe {
-            std::env::remove_var("CODEX_SKIP_MIGRATIONS");
-        }
+        let result = init_database(&skip_migrations(&db_path, 10)).await;
 
         assert!(
             result.is_ok(),
-            "init_database should succeed when skip is set and migrations are done: {:?}",
-            result
+            "should succeed when the schema is already current: {result:?}"
         );
     }
 
     #[tokio::test]
-    #[serial_test::serial(codex_migration_env)]
-    async fn init_database_with_skip_waits_for_concurrent_migrations() {
+    async fn init_database_waits_for_migrations_running_elsewhere() {
         let temp_dir = TempDir::new().unwrap();
         let db_path = temp_dir.path().join("test.db");
-
-        unsafe {
-            std::env::set_var("CODEX_SKIP_MIGRATIONS", "true");
-            std::env::set_var("CODEX_MIGRATION_WAIT_TIMEOUT", "10");
-            std::env::set_var("CODEX_MIGRATION_WAIT_INTERVAL", "1");
-        }
-
-        let config = make_sqlite_config(&db_path);
+        let config = skip_migrations(&db_path, 10);
 
         let config_clone = config.clone();
         let migration_handle = tokio::spawn(async move {
@@ -1387,70 +1373,22 @@ mod tests {
         let result = init_database(&config).await;
         migration_handle.await.unwrap();
 
-        unsafe {
-            std::env::remove_var("CODEX_SKIP_MIGRATIONS");
-            std::env::remove_var("CODEX_MIGRATION_WAIT_TIMEOUT");
-            std::env::remove_var("CODEX_MIGRATION_WAIT_INTERVAL");
-        }
-
         let db = result.expect("init_database should succeed once migrations complete");
         assert!(db.migrations_complete().await.unwrap());
     }
 
     #[tokio::test]
-    #[serial_test::serial(codex_migration_env)]
-    async fn init_database_with_skip_accepts_one_as_truthy() {
+    async fn init_database_times_out_when_migrations_never_run() {
         let temp_dir = TempDir::new().unwrap();
         let db_path = temp_dir.path().join("test.db");
 
-        let config = make_sqlite_config(&db_path);
-
-        let db = Database::new(&config.database).await.unwrap();
-        db.run_migrations().await.unwrap();
-        drop(db);
-
-        unsafe {
-            std::env::set_var("CODEX_SKIP_MIGRATIONS", "1");
-        }
-        let result = init_database(&config).await;
-        unsafe {
-            std::env::remove_var("CODEX_SKIP_MIGRATIONS");
-        }
+        let err = init_database(&skip_migrations(&db_path, 2))
+            .await
+            .expect_err("should time out when migrations never complete");
 
         assert!(
-            result.is_ok(),
-            "'1' should be treated as truthy: {:?}",
-            result
-        );
-    }
-
-    #[tokio::test]
-    #[serial_test::serial(codex_migration_env)]
-    async fn init_database_with_skip_times_out_when_migrations_never_run() {
-        let temp_dir = TempDir::new().unwrap();
-        let db_path = temp_dir.path().join("test.db");
-
-        unsafe {
-            std::env::set_var("CODEX_SKIP_MIGRATIONS", "true");
-            std::env::set_var("CODEX_MIGRATION_WAIT_TIMEOUT", "2");
-            std::env::set_var("CODEX_MIGRATION_WAIT_INTERVAL", "1");
-        }
-
-        let config = make_sqlite_config(&db_path);
-        let result = init_database(&config).await;
-
-        unsafe {
-            std::env::remove_var("CODEX_SKIP_MIGRATIONS");
-            std::env::remove_var("CODEX_MIGRATION_WAIT_TIMEOUT");
-            std::env::remove_var("CODEX_MIGRATION_WAIT_INTERVAL");
-        }
-
-        let err = result.expect_err("should time out when migrations never complete");
-        let msg = err.to_string();
-        assert!(
-            msg.to_lowercase().contains("timeout"),
-            "error should mention timeout: {}",
-            msg
+            err.to_string().to_lowercase().contains("timeout"),
+            "error should mention timeout: {err}"
         );
     }
 }

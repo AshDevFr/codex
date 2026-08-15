@@ -21,6 +21,7 @@ pub async fn setup_test_db() -> (sea_orm::DatabaseConnection, TempDir) {
             pragmas: Some(pragmas),
             ..SQLiteConfig::default()
         }),
+        ..DatabaseConfig::default()
     };
 
     let db = Database::new(&config).await.unwrap();
@@ -43,6 +44,7 @@ pub async fn setup_test_db_wrapper() -> (Database, TempDir) {
             pragmas: None,
             ..SQLiteConfig::default()
         }),
+        ..DatabaseConfig::default()
     };
 
     let db = Database::new(&config).await.unwrap();
@@ -94,6 +96,7 @@ pub async fn setup_test_db_postgres() -> Option<sea_orm::DatabaseConnection> {
             database_name: extract_database(&postgres_url),
             ..PostgresConfig::default()
         }),
+        ..DatabaseConfig::default()
     };
 
     // Try to create database connection

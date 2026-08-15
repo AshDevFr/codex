@@ -2,11 +2,14 @@
   "data_dir": "data",
   "database": {
     "db_type": "sqlite",
+    "run_migrations": true,
+    "migration_wait_timeout_secs": 300,
+    "migration_wait_interval_secs": 2,
     "sqlite": {
       "path": "data/codex.db",
       "pragmas": {
-        "journal_mode": "WAL",
-        "foreign_keys": "ON"
+        "foreign_keys": "ON",
+        "journal_mode": "WAL"
       },
       "max_connections": 64,
       "min_connections": 2,
@@ -64,10 +67,17 @@
     "verification_token_expiry_hours": 24
   },
   "task": {
+    "run_in_process": true,
     "worker_count": 2
   },
   "scanner": {
     "max_concurrent_scans": 2
+  },
+  "images": {
+    "decode_concurrency": 3
+  },
+  "plugins": {
+    "allowed_commands": []
   },
   "scheduler": {
     "timezone": "UTC"
