@@ -8,23 +8,13 @@ use crate::entities::reading_sessions::SessionKind;
 use crate::entities::{read_progress, read_progress::Entity as ReadProgress};
 use crate::repositories::ReadCompletionRepository;
 use crate::repositories::reading_sessions::{
-    AppendOutcome, NewSession, ReadingSessionRepository, fold,
+    AppendOutcome, DeviceContext, NewSession, ReadingSessionRepository, fold,
 };
 use anyhow::{Result, anyhow};
 use chrono::Utc;
 use sea_orm::*;
 use std::collections::HashMap;
 use uuid::Uuid;
-
-/// Device identity for writes that arrive through a surface with no device
-/// concept of its own.
-///
-/// The native v1 routes, the Komga compatibility layer, and OPDS page streaming
-/// all report a position without saying which device produced it. They share one
-/// identity here so their page-by-page writes coalesce into single sessions
-/// instead of one row per page turn. Real per-device attribution, derived from
-/// the API key or user agent, replaces this for those surfaces later.
-const LEGACY_DEVICE_ID: &str = "legacy";
 
 pub struct ReadProgressRepository;
 
@@ -78,6 +68,31 @@ impl ReadProgressRepository {
             .await
     }
 
+    /// [`Self::upsert`] attributed to a device.
+    ///
+    /// For compatibility surfaces, whose requests carry enough to identify the
+    /// client even though the protocol has no device concept.
+    pub async fn upsert_with_device(
+        db: &DatabaseConnection,
+        user_id: Uuid,
+        book_id: Uuid,
+        current_page: i32,
+        completed: bool,
+        device: &DeviceContext,
+    ) -> Result<read_progress::Model> {
+        Self::upsert_with_percentage_and_device(
+            db,
+            user_id,
+            book_id,
+            current_page,
+            None,
+            completed,
+            None,
+            device,
+        )
+        .await
+    }
+
     /// Create or update reading progress for a user and book with optional percentage
     /// The percentage field is primarily used for EPUB books with reflowable content.
     /// The r2_progression field stores the full R2Progression JSON for Readium/OPDS 2.0 sync.
@@ -89,6 +104,31 @@ impl ReadProgressRepository {
         progress_percentage: Option<f64>,
         completed: bool,
         r2_progression: Option<String>,
+    ) -> Result<read_progress::Model> {
+        Self::upsert_with_percentage_and_device(
+            db,
+            user_id,
+            book_id,
+            current_page,
+            progress_percentage,
+            completed,
+            r2_progression,
+            &DeviceContext::legacy(),
+        )
+        .await
+    }
+
+    /// [`Self::upsert_with_percentage`] attributed to a device.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn upsert_with_percentage_and_device(
+        db: &DatabaseConnection,
+        user_id: Uuid,
+        book_id: Uuid,
+        current_page: i32,
+        progress_percentage: Option<f64>,
+        completed: bool,
+        r2_progression: Option<String>,
+        device: &DeviceContext,
     ) -> Result<read_progress::Model> {
         // Two concurrent writers for the same (user, book) can both miss the
         // existence check and race on the unique index. The loser retries the
@@ -103,6 +143,7 @@ impl ReadProgressRepository {
             progress_percentage,
             completed,
             r2_progression.clone(),
+            device,
         )
         .await
         {
@@ -116,6 +157,7 @@ impl ReadProgressRepository {
                     progress_percentage,
                     completed,
                     r2_progression,
+                    device,
                 )
                 .await
             }
@@ -130,6 +172,7 @@ impl ReadProgressRepository {
     /// and any completion it banks are one fact about what the reader did, and a
     /// process dying between them would leave the log and its projections
     /// disagreeing.
+    #[allow(clippy::too_many_arguments)]
     async fn upsert_txn(
         db: &DatabaseConnection,
         user_id: Uuid,
@@ -138,6 +181,7 @@ impl ReadProgressRepository {
         progress_percentage: Option<f64>,
         completed: bool,
         r2_progression: Option<String>,
+        device: &DeviceContext,
     ) -> Result<read_progress::Model> {
         let txn = db.begin().await?;
         let now = Utc::now();
@@ -147,7 +191,7 @@ impl ReadProgressRepository {
         } else {
             SessionKind::Progress
         };
-        let session = NewSession::from_legacy_write(user_id, book_id, LEGACY_DEVICE_ID, kind, now)
+        let session = NewSession::from_legacy_write(user_id, book_id, device, kind, now)
             .with_page(current_page)
             .with_percentage(progress_percentage)
             .with_progression(r2_progression);
@@ -259,19 +303,19 @@ impl ReadProgressRepository {
     /// ordering between "I finished this" and "I am starting over" recorded
     /// data. Two offline clients replaying those in either order then reach the
     /// same completion count.
-    async fn reset_txn(db: &DatabaseConnection, user_id: Uuid, book_id: Uuid) -> Result<bool> {
+    async fn reset_txn(
+        db: &DatabaseConnection,
+        user_id: Uuid,
+        book_id: Uuid,
+        device: &DeviceContext,
+    ) -> Result<bool> {
         let txn = db.begin().await?;
         let now = Utc::now();
 
         let existed = Self::get_in(&txn, user_id, book_id).await?.is_some();
 
-        let session = NewSession::from_legacy_write(
-            user_id,
-            book_id,
-            LEGACY_DEVICE_ID,
-            SessionKind::Reset,
-            now,
-        );
+        let session =
+            NewSession::from_legacy_write(user_id, book_id, device, SessionKind::Reset, now);
         ReadingSessionRepository::append(&txn, session, now).await?;
         Self::refold(&txn, user_id, book_id).await?;
 
@@ -334,7 +378,17 @@ impl ReadProgressRepository {
     /// reader is without erasing that the book was read. The completion log
     /// survives, and the next completion counts as a fresh read-through.
     pub async fn delete(db: &DatabaseConnection, user_id: Uuid, book_id: Uuid) -> Result<()> {
-        Self::reset_txn(db, user_id, book_id).await?;
+        Self::delete_with_device(db, user_id, book_id, &DeviceContext::legacy()).await
+    }
+
+    /// [`Self::delete`] attributed to a device.
+    pub async fn delete_with_device(
+        db: &DatabaseConnection,
+        user_id: Uuid,
+        book_id: Uuid,
+        device: &DeviceContext,
+    ) -> Result<()> {
+        Self::reset_txn(db, user_id, book_id, device).await?;
         Ok(())
     }
 
@@ -460,12 +514,21 @@ impl ReadProgressRepository {
         user_id: Uuid,
         book_ids: Vec<(Uuid, i32)>, // Vec of (book_id, page_count)
     ) -> Result<usize> {
-        let _now = Utc::now();
+        Self::mark_series_as_read_with_device(db, user_id, book_ids, &DeviceContext::legacy()).await
+    }
+
+    /// [`Self::mark_series_as_read`] attributed to a device.
+    pub async fn mark_series_as_read_with_device(
+        db: &DatabaseConnection,
+        user_id: Uuid,
+        book_ids: Vec<(Uuid, i32)>,
+        device: &DeviceContext,
+    ) -> Result<usize> {
         let mut count = 0;
 
         // Process each book - page_count is 1-indexed (last page = page_count)
         for (book_id, page_count) in book_ids {
-            Self::upsert(db, user_id, book_id, page_count, true).await?;
+            Self::upsert_with_device(db, user_id, book_id, page_count, true, device).await?;
             count += 1;
         }
 
@@ -484,10 +547,21 @@ impl ReadProgressRepository {
         user_id: Uuid,
         book_ids: Vec<Uuid>,
     ) -> Result<u64> {
+        Self::mark_series_as_unread_with_device(db, user_id, book_ids, &DeviceContext::legacy())
+            .await
+    }
+
+    /// [`Self::mark_series_as_unread`] attributed to a device.
+    pub async fn mark_series_as_unread_with_device(
+        db: &DatabaseConnection,
+        user_id: Uuid,
+        book_ids: Vec<Uuid>,
+        device: &DeviceContext,
+    ) -> Result<u64> {
         let mut cleared = 0;
 
         for book_id in book_ids {
-            if Self::reset_txn(db, user_id, book_id).await? {
+            if Self::reset_txn(db, user_id, book_id, device).await? {
                 cleared += 1;
             }
         }
@@ -1247,7 +1321,7 @@ mod tests {
         assert_eq!(sessions.len(), 1);
         assert_eq!(sessions[0].to_page, Some(10));
         assert_eq!(sessions[0].pass, 1);
-        assert_eq!(sessions[0].device_id, LEGACY_DEVICE_ID);
+        assert_eq!(sessions[0].device_id, "legacy");
     }
 
     /// Page-by-page writes from one device merge instead of accumulating a row
@@ -1377,6 +1451,125 @@ mod tests {
         assert_eq!(
             sessions[0].duration_source(),
             crate::entities::reading_sessions::DurationSource::Unknown
+        );
+    }
+
+    // ========================================================================
+    // Device attribution and reconstructed reading time
+    //
+    // The compatibility surfaces report a position and nothing else. These
+    // cover what can be rebuilt from that.
+    // ========================================================================
+
+    /// A device-attributed write is stored against that device, not the
+    /// anonymous catch-all.
+    #[tokio::test]
+    async fn a_device_attributed_write_records_its_device() {
+        let db = setup_test_db().await;
+        let user = create_test_user(&db).await;
+        let book = create_test_book(&db).await;
+
+        let device = DeviceContext::koreader("kobo-1", "Kobo Clara");
+        ReadProgressRepository::upsert_with_device(&db, user.id, book.id, 10, false, &device)
+            .await
+            .unwrap();
+
+        let sessions = sessions_for(&db, user.id, book.id).await;
+        assert_eq!(sessions[0].device_id, "koreader:kobo-1");
+        assert_eq!(sessions[0].device_name.as_deref(), Some("Kobo Clara"));
+    }
+
+    /// Successive writes from an inferring device accrue the gaps between them
+    /// as reading time. This is what makes reading through Komga apps, OPDS
+    /// readers and KOReader visible in the statistics at all.
+    #[tokio::test]
+    async fn successive_writes_from_a_compat_client_accrue_reading_time() {
+        let db = setup_test_db().await;
+        let user = create_test_user(&db).await;
+        let book = create_test_book(&db).await;
+
+        let device = DeviceContext::user_agent("Komic/1.0");
+        for page in 1..=5 {
+            ReadProgressRepository::upsert_with_device(&db, user.id, book.id, page, false, &device)
+                .await
+                .unwrap();
+        }
+
+        let sessions = sessions_for(&db, user.id, book.id).await;
+        assert_eq!(sessions.len(), 1, "the writes coalesce into one session");
+        assert_eq!(
+            sessions[0].duration_source(),
+            crate::entities::reading_sessions::DurationSource::Inferred,
+            "time rebuilt from request gaps must never masquerade as measured"
+        );
+        assert!(
+            sessions[0].active_duration_ms.is_some(),
+            "consecutive page turns must contribute some reconstructed time"
+        );
+    }
+
+    /// Writes from a client that reports its own sessions never contribute
+    /// inferred time. The web reader writes progress *and* posts measured
+    /// sessions for the same reading; inferring here too would count it twice.
+    #[tokio::test]
+    async fn writes_from_a_session_reporting_client_infer_nothing() {
+        let db = setup_test_db().await;
+        let user = create_test_user(&db).await;
+        let book = create_test_book(&db).await;
+
+        for page in 1..=5 {
+            ReadProgressRepository::upsert(&db, user.id, book.id, page, false)
+                .await
+                .unwrap();
+        }
+
+        let sessions = sessions_for(&db, user.id, book.id).await;
+        assert_eq!(sessions[0].active_duration_ms, None);
+        assert_eq!(
+            sessions[0].duration_source(),
+            crate::entities::reading_sessions::DurationSource::Unknown
+        );
+    }
+
+    /// Two clients reading the same book stay separable, which is the whole
+    /// point of attributing writes to a device.
+    #[tokio::test]
+    async fn different_devices_produce_separate_sessions() {
+        let db = setup_test_db().await;
+        let user = create_test_user(&db).await;
+        let book = create_test_book(&db).await;
+
+        ReadProgressRepository::upsert_with_device(
+            &db,
+            user.id,
+            book.id,
+            10,
+            false,
+            &DeviceContext::user_agent("Komic/1.0"),
+        )
+        .await
+        .unwrap();
+        ReadProgressRepository::upsert_with_device(
+            &db,
+            user.id,
+            book.id,
+            20,
+            false,
+            &DeviceContext::koreader("kobo-1", "Kobo"),
+        )
+        .await
+        .unwrap();
+
+        let sessions = sessions_for(&db, user.id, book.id).await;
+        assert_eq!(sessions.len(), 2, "one session per device, not one merged");
+
+        let progress = ReadProgressRepository::get_by_user_and_book(&db, user.id, book.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            progress.current_page, 20,
+            "position still folds to one value"
         );
     }
 

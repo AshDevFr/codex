@@ -11,7 +11,7 @@ use crate::routes::koreader::dto::progress::DocumentProgressDto;
 use axum::Json;
 use axum::extract::{Path, State};
 use codex_db::entities::books;
-use codex_db::repositories::{BookRepository, ReadProgressRepository};
+use codex_db::repositories::{BookRepository, DeviceContext, ReadProgressRepository};
 use codex_parsers::EpubPosition;
 use std::sync::Arc;
 
@@ -97,7 +97,15 @@ pub async fn update_progress(
     let completed =
         request.percentage >= 0.98 || (book.page_count > 0 && current_page >= book.page_count);
 
-    ReadProgressRepository::upsert_with_percentage(
+    // KOReader is the one compatibility protocol that names its own device, so
+    // its reading is attributed properly rather than reconstructed from a user
+    // agent. Note the caveat: KOReader typically downloads a book and reads it
+    // offline, syncing position occasionally, so the gaps between those syncs
+    // are a weak proxy for reading time. Its duration is the softest of the
+    // three inferring surfaces.
+    let device = DeviceContext::koreader(&request.device_id, &request.device);
+
+    ReadProgressRepository::upsert_with_percentage_and_device(
         &state.db,
         user_id,
         book.id,
@@ -105,6 +113,7 @@ pub async fn update_progress(
         Some(request.percentage),
         completed,
         r2_progression,
+        &device,
     )
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to update progress: {}", e)))?;

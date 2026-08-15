@@ -5,7 +5,7 @@ use crate::permissions::{Permission, UserRole};
 use axum::http::header::COOKIE;
 use axum::{extract::FromRequestParts, http::request::Parts};
 use chrono::{DateTime, Utc};
-use codex_db::repositories::{ApiKeyRepository, UserRepository};
+use codex_db::repositories::{ApiKeyRepository, DeviceContext, UserRepository};
 use codex_utils::{jwt::JwtService, password};
 use dashmap::DashMap;
 use sea_orm::DatabaseConnection;
@@ -177,6 +177,14 @@ pub struct AuthContext {
     /// For API key auth: the token's permissions (subset of user's)
     /// This is used to constrain token permissions at request time
     pub token_permissions: Option<Vec<Permission>>,
+    /// For API key auth: which key, and what it is called.
+    ///
+    /// The compatibility protocols (Komga, OPDS) have no device concept, so the
+    /// API key is the most durable device identity a request carries. Capturing
+    /// it here is what lets reading through those surfaces be attributed to a
+    /// named device rather than an anonymous pile of progress writes, and is
+    /// why the docs recommend one key per device.
+    pub api_key: Option<(Uuid, String)>,
 }
 
 #[derive(Debug, Clone)]
@@ -192,6 +200,24 @@ pub enum AuthMethod {
 }
 
 impl AuthContext {
+    /// Which device this request should be attributed to, for surfaces whose
+    /// protocol has no device concept of its own.
+    ///
+    /// Prefers the API key, which is stable for as long as the key lives and is
+    /// exactly one per device when users follow the recommended practice. Falls
+    /// back to a hash of the user agent, which collapses two devices running the
+    /// same app into one identity: that is the honest limit of what the request
+    /// carries, and the fix is a key rather than a cleverer hash.
+    pub fn device_context(&self, user_agent: Option<&str>) -> DeviceContext {
+        match &self.api_key {
+            Some((id, name)) => DeviceContext::api_key(*id, name.clone()),
+            None => match user_agent {
+                Some(agent) if !agent.is_empty() => DeviceContext::user_agent(agent),
+                _ => DeviceContext::legacy(),
+            },
+        }
+    }
+
     /// Get effective permissions (role permissions ∪ custom permissions)
     /// If authenticated via API token, permissions are intersected with token permissions
     pub fn effective_permissions(&self) -> HashSet<Permission> {
@@ -493,6 +519,7 @@ async fn resolve_user_context(
             custom_permissions: cached.custom_permissions,
             auth_method,
             token_permissions: None,
+            api_key: None,
         });
     }
 
@@ -534,6 +561,7 @@ async fn resolve_user_context(
         custom_permissions,
         auth_method,
         token_permissions: None,
+        api_key: None,
     })
 }
 
@@ -605,6 +633,7 @@ async fn extract_from_api_key(api_key: &str, state: &AppState) -> Result<AuthCon
         custom_permissions,
         auth_method: AuthMethod::ApiKey,
         token_permissions: Some(token_permissions),
+        api_key: Some((api_key_model.id, api_key_model.name.clone())),
     })
 }
 
@@ -686,6 +715,7 @@ async fn extract_from_credentials(
         custom_permissions,
         auth_method: AuthMethod::BasicAuth,
         token_permissions: None,
+        api_key: None,
     })
 }
 

@@ -28,6 +28,132 @@ use uuid::Uuid;
 /// differently depending on which client reported it.
 pub const COALESCE_WINDOW_MINUTES: i64 = 5;
 
+/// Who produced a write that carries no session of its own.
+///
+/// The compatibility surfaces report a position and nothing else: no device, no
+/// reading time. This reconstructs both from what the request does carry, so
+/// reading done through Komga apps, OPDS readers and KOReader is not simply
+/// absent from the record.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DeviceContext {
+    pub id: String,
+    pub name: Option<String>,
+    /// Whether reading time may be reconstructed from the gaps between this
+    /// device's writes.
+    ///
+    /// Off for anything whose client also reports measured sessions. The web
+    /// reader writes progress *and* posts sessions for the same reading, so
+    /// inferring from its progress writes as well would count that reading
+    /// twice, once measured and once reconstructed.
+    pub infer_duration: bool,
+}
+
+impl DeviceContext {
+    /// A write from a client that reports its own sessions, or from inside
+    /// Codex. Attributed, but never a source of inferred time.
+    pub fn measured_elsewhere(id: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            name: None,
+            infer_duration: false,
+        }
+    }
+
+    /// The historical catch-all, for writes with nothing to attribute them to.
+    pub fn legacy() -> Self {
+        Self::measured_elsewhere(LEGACY_DEVICE_ID)
+    }
+
+    /// A background job acting on the user's behalf, such as a tracker sync
+    /// marking books read. Real reading did not happen, so nothing is inferred.
+    pub fn internal() -> Self {
+        Self {
+            id: "codex-internal".to_string(),
+            name: Some("Codex".to_string()),
+            infer_duration: false,
+        }
+    }
+
+    /// A request authenticated with an API key.
+    ///
+    /// The key is the most durable device identity these protocols offer, which
+    /// is why the docs recommend one key per device: it turns an anonymous
+    /// stream of progress writes into a named device in the statistics.
+    pub fn api_key(key_id: Uuid, name: impl Into<String>) -> Self {
+        Self {
+            id: format!("apikey:{key_id}"),
+            name: Some(name.into()),
+            infer_duration: true,
+        }
+    }
+
+    /// Last resort when a request carries no key: a hash of the user agent.
+    ///
+    /// Two devices running the same app collapse into one identity here. That
+    /// is the honest limit of what the request tells us, and the fix is an API
+    /// key rather than a cleverer hash.
+    pub fn user_agent(user_agent: &str) -> Self {
+        Self {
+            id: format!("ua:{:x}", stable_hash(user_agent)),
+            name: Some(friendly_agent_name(user_agent)),
+            infer_duration: true,
+        }
+    }
+
+    /// A KOReader device, which uniquely among the compat surfaces sends its
+    /// own identity.
+    pub fn koreader(device_id: &str, device_name: &str) -> Self {
+        Self {
+            id: format!("koreader:{device_id}"),
+            name: Some(if device_name.is_empty() {
+                "KOReader".to_string()
+            } else {
+                device_name.to_string()
+            }),
+            infer_duration: true,
+        }
+    }
+}
+
+/// Device identity for writes with no attributable origin.
+pub const LEGACY_DEVICE_ID: &str = "legacy";
+
+/// Map a user agent onto a recognisable client name.
+///
+/// Deliberately a short list of the clients people actually point at Codex.
+/// Anything unrecognised keeps its raw agent string, which is more useful in a
+/// statistics table than "Unknown".
+fn friendly_agent_name(user_agent: &str) -> String {
+    const KNOWN: [(&str, &str); 6] = [
+        ("KOReader", "KOReader"),
+        ("Komic", "Komic"),
+        ("Chunky", "Chunky"),
+        ("Panels", "Panels"),
+        ("Paperback", "Paperback"),
+        ("Moon+", "Moon+ Reader"),
+    ];
+
+    for (needle, label) in KNOWN {
+        if user_agent.contains(needle) {
+            return label.to_string();
+        }
+    }
+
+    // Long agent strings are useless as a label and unbounded in length.
+    user_agent.chars().take(60).collect()
+}
+
+/// FNV-1a. Not cryptographic, and does not need to be: this only has to be
+/// stable across processes so one device keeps one identity between restarts.
+fn stable_hash(value: &str) -> u64 {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for byte in value.as_bytes() {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x1000_0000_01b3);
+    }
+    hash
+}
+
 /// What happened to an appended event.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum AppendOutcome {
@@ -70,6 +196,9 @@ pub struct NewSession {
     /// would look new, and its duration would be added a second time. Clients
     /// measure their own sessions as units and have already done this merging.
     pub coalesce: bool,
+    /// Whether merging this event into the previous session should count the
+    /// gap between them as reading time. See [`DeviceContext::infer_duration`].
+    pub infer_duration: bool,
 }
 
 impl NewSession {
@@ -83,7 +212,7 @@ impl NewSession {
     pub fn from_legacy_write(
         user_id: Uuid,
         book_id: Uuid,
-        device_id: impl Into<String>,
+        device: &DeviceContext,
         kind: SessionKind,
         now: DateTime<Utc>,
     ) -> Self {
@@ -91,8 +220,9 @@ impl NewSession {
             id: Uuid::new_v4(),
             user_id,
             book_id,
-            device_id: device_id.into(),
-            device_name: None,
+            device_id: device.id.clone(),
+            device_name: device.name.clone(),
+            infer_duration: device.infer_duration,
             kind,
             to_page: None,
             to_percentage: None,
@@ -155,6 +285,7 @@ impl NewSession {
             client_started_at,
             client_ended_at,
             coalesce: false,
+            infer_duration: false,
         }
     }
 
@@ -334,16 +465,31 @@ impl ReadingSessionRepository {
         active.client_started_at = Set(session.client_started_at.min(existing.client_started_at));
         active.server_recorded_at = Set(now);
 
-        active.active_duration_ms = Set(sum_options(
-            existing.active_duration_ms,
-            session.active_duration_ms,
-        ));
+        // Reconstruct reading time from the gap since the previous write, for
+        // clients that cannot report it themselves.
+        //
+        // The gap is bounded by the coalescing window, because a candidate is
+        // only found inside it, so a reader who wanders off simply starts a new
+        // session rather than accruing the time they were away. It undercounts:
+        // the last page before someone stops has no successor to be measured
+        // against, and a client that prefetches a whole book and reads offline
+        // is invisible here. Undercounting is the honest direction to be wrong.
+        let (contributed, source) = if session.infer_duration {
+            let gap = (session.client_ended_at - existing.client_ended_at)
+                .num_milliseconds()
+                .max(0);
+            (Some(gap), DurationSource::Inferred)
+        } else {
+            (session.active_duration_ms, session.duration_source)
+        };
+
+        active.active_duration_ms = Set(sum_options(existing.active_duration_ms, contributed));
         active.pages_read = Set(sum_options(existing.pages_read, session.pages_read));
 
         // A merged row is only as trustworthy as its weakest contributor: if
         // either side's duration was reconstructed rather than measured, the
         // total is reconstructed.
-        let merged_source = match (existing.duration_source(), session.duration_source) {
+        let merged_source = match (existing.duration_source(), source) {
             (DurationSource::Measured, DurationSource::Measured) => DurationSource::Measured,
             (DurationSource::Unknown, other) | (other, DurationSource::Unknown) => other,
             _ => DurationSource::Inferred,
@@ -471,11 +617,81 @@ mod tests {
         let session = NewSession::from_legacy_write(
             Uuid::nil(),
             Uuid::nil(),
-            "legacy",
+            &DeviceContext::legacy(),
             SessionKind::Progress,
             at(0),
         );
 
         assert!(session.coalesce);
+    }
+
+    /// The compat surfaces opt in to reconstruction; everything else does not.
+    #[test]
+    fn only_compat_surfaces_opt_into_inference() {
+        assert!(DeviceContext::api_key(Uuid::nil(), "Komic").infer_duration);
+        assert!(DeviceContext::user_agent("KOReader/2024").infer_duration);
+        assert!(DeviceContext::koreader("kobo-1", "Kobo").infer_duration);
+
+        // The web reader posts measured sessions for the same reading, so
+        // inferring from its progress writes too would count it twice.
+        assert!(!DeviceContext::legacy().infer_duration);
+        assert!(!DeviceContext::internal().infer_duration);
+    }
+
+    /// One device keeps one identity across restarts, and different clients
+    /// stay distinguishable.
+    #[test]
+    fn user_agent_identity_is_stable_and_distinct() {
+        assert_eq!(
+            DeviceContext::user_agent("Komic/1.2 iOS").id,
+            DeviceContext::user_agent("Komic/1.2 iOS").id
+        );
+        assert_ne!(
+            DeviceContext::user_agent("Komic/1.2 iOS").id,
+            DeviceContext::user_agent("Chunky/3.0 iPad").id
+        );
+    }
+
+    #[test]
+    fn known_clients_get_a_readable_name() {
+        assert_eq!(
+            DeviceContext::user_agent("Komic/1.2 (iOS 18)")
+                .name
+                .as_deref(),
+            Some("Komic")
+        );
+        assert_eq!(
+            DeviceContext::user_agent("KOReader/2024.04")
+                .name
+                .as_deref(),
+            Some("KOReader")
+        );
+    }
+
+    /// An unrecognised agent keeps its string rather than becoming "Unknown",
+    /// but bounded so a pathological header cannot fill the column.
+    #[test]
+    fn an_unknown_agent_keeps_a_truncated_label() {
+        let long = "x".repeat(500);
+        let name = DeviceContext::user_agent(&long).name.unwrap();
+
+        assert_eq!(name.len(), 60);
+    }
+
+    /// KOReader is the one compat protocol that sends its own device identity.
+    #[test]
+    fn koreader_uses_the_identity_it_sends() {
+        let device = DeviceContext::koreader("abc123", "Kobo Clara");
+
+        assert_eq!(device.id, "koreader:abc123");
+        assert_eq!(device.name.as_deref(), Some("Kobo Clara"));
+    }
+
+    #[test]
+    fn koreader_falls_back_to_a_generic_name() {
+        assert_eq!(
+            DeviceContext::koreader("abc123", "").name.as_deref(),
+            Some("KOReader")
+        );
     }
 }

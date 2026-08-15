@@ -63,6 +63,7 @@ use uuid::Uuid;
 pub async fn update_progress(
     State(state): State<Arc<AuthState>>,
     FlexibleAuthContext(auth): FlexibleAuthContext,
+    headers: axum::http::HeaderMap,
     Path(book_id): Path<Uuid>,
     axum::Json(request): axum::Json<KomgaReadProgressUpdateDto>,
 ) -> Result<StatusCode, ApiError> {
@@ -99,9 +100,16 @@ pub async fn update_progress(
     };
 
     // Update progress using existing repository
-    ReadProgressRepository::upsert(&state.db, user_id, book_id, current_page, completed)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to update reading progress: {}", e)))?;
+    ReadProgressRepository::upsert_with_device(
+        &state.db,
+        user_id,
+        book_id,
+        current_page,
+        completed,
+        &komga_device(&auth, &headers),
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to update reading progress: {}", e)))?;
 
     // Komga returns 204 No Content on success
     Ok(StatusCode::NO_CONTENT)
@@ -142,6 +150,7 @@ pub async fn update_progress(
 pub async fn delete_progress(
     State(state): State<Arc<AuthState>>,
     FlexibleAuthContext(auth): FlexibleAuthContext,
+    headers: axum::http::HeaderMap,
     Path(book_id): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
@@ -155,9 +164,14 @@ pub async fn delete_progress(
         .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
 
     // Delete progress using existing repository
-    ReadProgressRepository::delete(&state.db, user_id, book_id)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to delete reading progress: {}", e)))?;
+    ReadProgressRepository::delete_with_device(
+        &state.db,
+        user_id,
+        book_id,
+        &komga_device(&auth, &headers),
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to delete reading progress: {}", e)))?;
 
     // Komga returns 204 No Content on success
     Ok(StatusCode::NO_CONTENT)
@@ -293,6 +307,7 @@ pub async fn get_progression(
 pub async fn put_progression(
     State(state): State<Arc<AuthState>>,
     FlexibleAuthContext(auth): FlexibleAuthContext,
+    headers: axum::http::HeaderMap,
     Path(book_id): Path<Uuid>,
     axum::Json(body): axum::Json<serde_json::Value>,
 ) -> Result<StatusCode, ApiError> {
@@ -371,7 +386,7 @@ pub async fn put_progression(
     let json_str = serde_json::to_string(&body)
         .map_err(|e| ApiError::Internal(format!("Failed to serialize R2Progression: {}", e)))?;
 
-    ReadProgressRepository::upsert_with_percentage(
+    ReadProgressRepository::upsert_with_percentage_and_device(
         &state.db,
         auth.user_id,
         book_id,
@@ -379,6 +394,7 @@ pub async fn put_progression(
         Some(total_progression),
         completed,
         Some(json_str),
+        &komga_device(&auth, &headers),
     )
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to update progression: {}", e)))?;
@@ -518,4 +534,19 @@ pub async fn mark_series_as_unread(
 
     // Komga returns 204 No Content on success
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// Attribute a Komga-compatible request to a device.
+///
+/// The protocol has no device concept, so this leans on the API key when there
+/// is one and falls back to the user agent. Giving each app its own key is what
+/// turns "some Komga client" into a named device in the reading statistics.
+fn komga_device(
+    auth: &crate::extractors::AuthContext,
+    headers: &axum::http::HeaderMap,
+) -> codex_db::repositories::DeviceContext {
+    let user_agent = headers
+        .get(axum::http::header::USER_AGENT)
+        .and_then(|value| value.to_str().ok());
+    auth.device_context(user_agent)
 }

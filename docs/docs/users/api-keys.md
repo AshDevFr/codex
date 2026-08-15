@@ -262,6 +262,32 @@ Expired keys are automatically rejected.
 7. **Never commit to VCS** - Use environment variables or secret managers
 8. **Revoke compromised keys** - Delete immediately if exposed
 
+## One key per device
+
+Beyond security, there is a practical reason to give every device its own key:
+**it is what makes per-device reading statistics work.**
+
+The Komga-compatible and OPDS protocols have no concept of a device. A request
+from a comic reader app says which book and which page, and nothing about where
+it came from. So Codex identifies the device from the API key when there is one,
+and falls back to a hash of the user agent when there is not.
+
+That fallback works, but it is blunt. Two iPhones running the same app look
+identical, so their reading merges into one device in your statistics. Give each
+one its own key and they stay separate, named after the key.
+
+| Setup | How reading appears |
+|---|---|
+| One key shared by phone and tablet | One device, combined |
+| No key (username and password) | One device per *app*, not per device |
+| One key per device | Each device separately, under the key's name |
+
+Name keys after the device rather than the app (`Ash's iPhone`, not `Komic`),
+since that name is what shows up in the statistics.
+
+KOReader is the exception: it sends its own device identity, so it is attributed
+correctly regardless of how it authenticates.
+
 ## Troubleshooting
 
 ### Key Not Working

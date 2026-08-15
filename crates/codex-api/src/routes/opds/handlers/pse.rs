@@ -158,9 +158,25 @@ pub async fn book_page_image(
     if page_number >= 1
         && let Ok(Some(book)) = BookRepository::get_by_id(&state.db, book_id).await
     {
+        // OPDS page streaming is the richest inference source: the client
+        // fetches every page as it turns it, so the gaps between requests
+        // track reading closely. The batching service collapses them before
+        // they reach the database, so what is actually measured is the gap
+        // between flushes, which is coarser but still tracks a real sitting.
+        let device = auth.device_context(
+            headers
+                .get(axum::http::header::USER_AGENT)
+                .and_then(|value| value.to_str().ok()),
+        );
         state
             .read_progress_service
-            .record_progress(auth.user_id, book_id, page_number, book.page_count)
+            .record_progress_from_device(
+                auth.user_id,
+                book_id,
+                page_number,
+                book.page_count,
+                device,
+            )
             .await;
     }
 

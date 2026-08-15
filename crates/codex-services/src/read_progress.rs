@@ -13,7 +13,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, warn};
 use uuid::Uuid;
 
-use codex_db::repositories::ReadProgressRepository;
+use codex_db::repositories::{DeviceContext, ReadProgressRepository};
 
 /// Maximum number of entries before forcing a flush
 const MAX_BUFFER_SIZE: usize = 100;
@@ -26,6 +26,12 @@ const DEFAULT_FLUSH_INTERVAL_SECS: u64 = 5;
 struct PendingProgress {
     page_number: i32,
     total_pages: i32,
+    /// Which device produced the most recent write in this batch.
+    ///
+    /// Buffered entries collapse many page requests into one flush, so the
+    /// device has to survive the collapse or the reading arrives unattributed
+    /// and contributes nothing to per-device statistics.
+    device: DeviceContext,
 }
 
 /// Read progress batching service
@@ -67,6 +73,25 @@ impl ReadProgressService {
         page_number: i32,
         total_pages: i32,
     ) {
+        self.record_progress_from_device(
+            user_id,
+            book_id,
+            page_number,
+            total_pages,
+            DeviceContext::legacy(),
+        )
+        .await
+    }
+
+    /// [`Self::record_progress`] attributed to a device.
+    pub async fn record_progress_from_device(
+        &self,
+        user_id: Uuid,
+        book_id: Uuid,
+        page_number: i32,
+        total_pages: i32,
+        device: DeviceContext,
+    ) {
         let key = (user_id, book_id);
 
         // Check if we should update (only forward progress)
@@ -96,6 +121,7 @@ impl ReadProgressService {
                 PendingProgress {
                     page_number,
                     total_pages,
+                    device,
                 },
             );
 
@@ -142,12 +168,13 @@ impl ReadProgressService {
         for (user_id, book_id, progress) in entries {
             let is_completed = progress.page_number >= progress.total_pages;
 
-            if let Err(e) = ReadProgressRepository::upsert(
+            if let Err(e) = ReadProgressRepository::upsert_with_device(
                 &self.db,
                 user_id,
                 book_id,
                 progress.page_number,
                 is_completed,
+                &progress.device,
             )
             .await
             {
@@ -161,6 +188,7 @@ impl ReadProgressService {
                     PendingProgress {
                         page_number: progress.page_number,
                         total_pages: progress.total_pages,
+                        device: progress.device.clone(),
                     },
                 );
             }
