@@ -42,7 +42,11 @@ enum Commands {
     /// Inspect and validate configuration without starting the server
     Config {
         /// Path to configuration file
-        #[arg(short, long, default_value = DEFAULT_CONFIG_PATH)]
+        ///
+        /// Global so that both `config -c FILE check` and the shape every other
+        /// subcommand uses, `config check -c FILE`, are accepted. Without this
+        /// the latter fails, which is the one people actually type.
+        #[arg(short, long, global = true, default_value = DEFAULT_CONFIG_PATH)]
         config: PathBuf,
 
         #[command(subcommand)]
@@ -330,4 +334,68 @@ async fn main() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn config_path_of(args: &[&str]) -> PathBuf {
+        match Cli::try_parse_from(args)
+            .expect("arguments should parse")
+            .command
+        {
+            Commands::Config { config, .. } => config,
+            _ => panic!("expected the config subcommand"),
+        }
+    }
+
+    /// `--config` is declared on the `config` parent but marked global, so it
+    /// is accepted after the subcommand too. That is the form every other
+    /// command uses (`codex serve -c FILE`) and the one people actually type;
+    /// without `global` it fails with "unexpected argument '--config'".
+    #[test]
+    fn config_check_accepts_the_config_flag_in_either_position() {
+        let expected = PathBuf::from("/etc/codex.yaml");
+        for args in [
+            ["codex", "config", "check", "-c", "/etc/codex.yaml"],
+            ["codex", "config", "-c", "/etc/codex.yaml", "check"],
+            ["codex", "config", "check", "--config", "/etc/codex.yaml"],
+            ["codex", "config", "--config", "/etc/codex.yaml", "check"],
+        ] {
+            assert_eq!(config_path_of(&args), expected, "failed for {args:?}");
+        }
+    }
+
+    #[test]
+    fn config_check_falls_back_to_the_default_path() {
+        assert_eq!(
+            config_path_of(&["codex", "config", "check"]),
+            PathBuf::from(DEFAULT_CONFIG_PATH)
+        );
+    }
+
+    #[test]
+    fn config_check_accepts_its_own_flags_alongside_a_config_path() {
+        let parsed = Cli::try_parse_from([
+            "codex",
+            "config",
+            "check",
+            "-c",
+            "/etc/codex.yaml",
+            "--strict",
+            "--quiet",
+        ])
+        .expect("arguments should parse");
+        match parsed.command {
+            Commands::Config {
+                command: ConfigSubcommand::Check { strict, quiet },
+                ..
+            } => {
+                assert!(strict);
+                assert!(quiet);
+            }
+            _ => panic!("expected config check"),
+        }
+    }
 }

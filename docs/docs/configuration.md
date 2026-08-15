@@ -133,19 +133,59 @@ These pool sizes are **per process**, while PostgreSQL's own `max_connections` (
 Overrunning the budget does not degrade gracefully: the server refuses new connections with `FATAL: remaining connection slots are reserved`, and because a starting process needs a connection before it can do anything, **new pods fail to start while the running ones carry on looking healthy**. Codex logs a warning at startup when its pools do not fit, including when the connections already open on the server leave no room.
 :::
 
-#### PostgreSQL SSL Modes
+#### PostgreSQL TLS
 
-| Mode | Description |
-|------|-------------|
-| `disable` | No SSL (not recommended for production) |
-| `allow` | Try without SSL, use SSL if available |
-| `prefer` | Try SSL first, fallback to no SSL (default) |
-| `require` | SSL required, but don't verify certificate |
-| `verify-ca` | SSL required, verify server certificate |
-| `verify-full` | SSL required, verify certificate and hostname |
+TLS is **not** configured in `codex.yaml`. There is no `ssl_mode` setting.
+Codex builds a plain `postgres://` URL and lets the driver apply the standard
+libpq environment variables, so those are the supported way to control
+transport security:
 
-:::caution Production Security
-For production deployments, use `verify-ca` or `verify-full` SSL mode with proper certificates.
+| Variable | Purpose |
+|----------|---------|
+| `PGSSLMODE` | Negotiation mode (see the table below). Defaults to `prefer`. |
+| `PGSSLROOTCERT` | Path to the CA certificate used to verify the server. |
+| `PGSSLCERT`, `PGSSLKEY` | Client certificate and key, for mutual TLS. |
+
+| `PGSSLMODE` | Encrypted | Certificate verified | Hostname verified |
+|-------------|-----------|----------------------|-------------------|
+| `disable` | no | no | no |
+| `allow` | only if the server requires it | no | no |
+| `prefer` *(default)* | only if the server offers it | **no** | **no** |
+| `require` | yes | no | no |
+| `verify-ca` | yes | yes | no |
+| `verify-full` | yes | yes | yes |
+
+:::warning The default guards against eavesdropping, not against interception
+`prefer` encrypts the connection when the server offers TLS, but it accepts
+**any** certificate and **silently falls back to an unencrypted connection**
+when the server does not offer one. Neither the fallback nor a bogus
+certificate is logged, so a downgrade looks exactly like a healthy start.
+
+That is adequate on a private network you control. It is not adequate over any
+link an attacker could sit on. Require verification explicitly:
+
+```bash
+PGSSLMODE=verify-full
+PGSSLROOTCERT=/etc/ssl/certs/postgres-ca.crt
+```
+:::
+
+:::note These are not `CODEX_` variables
+They are read by the PostgreSQL driver rather than by Codex, so they carry no
+`CODEX_` prefix and will not appear in `codex config check` output. They apply
+to every command that opens a PostgreSQL connection, including `serve`,
+`worker`, `migrate`, `export`, `import` and `copy`.
+:::
+
+:::info Changing in Codex 2.0
+TLS becomes a first-class setting: `database.postgres.ssl_mode` and
+`database.postgres.ssl_root_cert` in `codex.yaml`, with matching
+`CODEX_DATABASE__POSTGRES__SSL_MODE` and `CODEX_DATABASE__POSTGRES__SSL_ROOT_CERT`
+environment variables. `codex config check` will then validate them like any
+other setting.
+
+The libpq variables above keep working as a fallback, so nothing you configure
+now has to be undone. Configuring both will make the Codex setting win.
 :::
 
 ## Application Configuration
@@ -1162,7 +1202,7 @@ For detailed configuration, see the [Preprocessing Rules Guide](./preprocessing-
 1. **Use strong JWT secrets** - Generate with `openssl rand -base64 32`
 2. **Set a plugin encryption key** - Required for sync/recommendation plugins; generate with `openssl rand -base64 32`
 3. **Never commit secrets** - Use environment variables or secret managers
-4. **Terminate PostgreSQL traffic securely** - Codex has no TLS setting of its own; keep the database on a private network, or front it with a proxy or sidecar that enforces TLS
+4. **Require verified TLS to PostgreSQL** - The default mode encrypts opportunistically but accepts any certificate and falls back to plaintext without warning. Set `PGSSLMODE=verify-full` and `PGSSLROOTCERT=/path/to/ca.crt` (see [PostgreSQL TLS](#postgresql-tls)). These are driver environment variables, not `codex.yaml` settings.
 5. **Restrict bind address** - Use `127.0.0.1` unless needed externally
 6. **Disable API docs in production** - Set `enable_api_docs: false`
 

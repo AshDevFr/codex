@@ -1,6 +1,6 @@
 # Makefile for Codex development and deployment
 
-.PHONY: help build test run dev-* test-* docs-* docker-* db-* screenshots screenshots-* plugins-*
+.PHONY: help build test run config-check dev-* test-* docs-* docker-* db-* screenshots screenshots-* plugins-*
 
 # Colors for output
 BLUE := \033[0;34m
@@ -67,6 +67,12 @@ dev-seed: ## Create initial admin user in dev environment
 
 dev-seed-config: ## Create initial admin user in dev environment
 	docker compose --profile dev exec codex-dev cargo run -- seed --config config/config.docker.yaml --seed-config config/seed-config.yaml
+
+# One-off container rather than `exec`: the check is for validating a config
+# before bringing the stack up, so it must not require codex-dev to be running.
+# --no-deps keeps postgres out of it; the check opens no database connection.
+dev-config-check: ## Validate config and CODEX_ env vars in the dev container (ARGS="--strict")
+	docker compose --profile dev run --rm --no-deps -T codex-dev cargo run --quiet -- config check --config config/config.docker.yaml $(ARGS)
 
 dev-watch: ## Start with watch mode (auto-sync code changes)
 	docker compose -f docker-compose.yml -f compose.watch.yml --profile dev watch
@@ -202,6 +208,9 @@ build-release: ## Build with release optimizations
 
 run: ## Run the application locally
 	RUST_LOG=info cargo run
+
+config-check: ## Validate config and CODEX_ env vars (ARGS="--strict --quiet")
+	cargo run --quiet -- config check $(ARGS)
 
 watch: ## Run with hot reload (requires cargo-watch)
 	RUST_LOG=info cargo watch -x run
