@@ -1,6 +1,6 @@
 {
   "name": "@ashdev/codex-plugin-recommendations-mangabaka",
-  "version": "1.43.6",
+  "version": "1.44.0",
   "description": "MangaBaka recommendation provider plugin for Codex - generates manga recommendations from your library with no account required",
   "main": "dist/index.js",
   "bin": "dist/index.js",

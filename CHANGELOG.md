@@ -2,6 +2,35 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.44.0] - 2026-08-15
+
+### 🚀 Features
+
+- *(db)* Derive reading progress from an append-only session log
+- *(api)* Add a batched endpoint for recording reading sessions
+- *(web)* Measure reading time and pages read in all three readers
+- *(api)* Attribute reading from Komga, OPDS and KOReader clients
+- *(api)* Collapse a reading sitting into a single session row
+- *(api)* Add reading statistics and a dashboard to view them
+- *(api)* Let a native client request an allowlisted OIDC redirect target
+- *(api)* Return the OIDC callback to the client that started the flow
+- *(config)* Report environment variables that are wrong or change in 2.0
+- *(api)* Remove a single entry from a book's read history
+
+### 🐛 Bug Fixes
+
+- *(api)* Make the OpenAPI document usable by strict client generators
+- *(config)* Accept --config after the check subcommand
+
+### ⚡ Performance
+
+- *(db)* Fold reading progress from the current pass only
+- *(db)* Mark a whole series in one transaction
+
+### ⚙️ Miscellaneous Tasks
+
+- *(license)* Permit linking with UnRAR under AGPL section 7
+
 ## [1.43.6] - 2026-08-12
 
 ### 🐛 Bug Fixes
