@@ -4,13 +4,25 @@
 
 #![allow(dead_code)]
 
+use crate::entities::reading_sessions::SessionKind;
 use crate::entities::{read_progress, read_progress::Entity as ReadProgress};
 use crate::repositories::ReadCompletionRepository;
-use anyhow::Result;
+use crate::repositories::reading_sessions::{NewSession, ReadingSessionRepository, fold};
+use anyhow::{Result, anyhow};
 use chrono::Utc;
 use sea_orm::*;
 use std::collections::HashMap;
 use uuid::Uuid;
+
+/// Device identity for writes that arrive through a surface with no device
+/// concept of its own.
+///
+/// The native v1 routes, the Komga compatibility layer, and OPDS page streaming
+/// all report a position without saying which device produced it. They share one
+/// identity here so their page-by-page writes coalesce into single sessions
+/// instead of one row per page turn. Real per-device attribution, derived from
+/// the API key or user agent, replaces this for those surfaces later.
+const LEGACY_DEVICE_ID: &str = "legacy";
 
 pub struct ReadProgressRepository;
 
@@ -109,12 +121,13 @@ impl ReadProgressRepository {
         }
     }
 
-    /// One attempt at the upsert, wrapped in a transaction together with the
-    /// completion it may record.
+    /// One attempt at the upsert: append the event, then rebuild the projection
+    /// from the log.
     ///
-    /// The two writes belong together: a completion that is not banked because
-    /// the process died between them would be lost permanently, and the log is
-    /// meant to be the authoritative record of what has been read.
+    /// Everything in one transaction. The session, the progress row it implies,
+    /// and any completion it banks are one fact about what the reader did, and a
+    /// process dying between them would leave the log and its projections
+    /// disagreeing.
     async fn upsert_txn(
         db: &DatabaseConnection,
         user_id: Uuid,
@@ -127,53 +140,124 @@ impl ReadProgressRepository {
         let txn = db.begin().await?;
         let now = Utc::now();
 
-        // `started_at` of the pass this write belongs to. For an existing row
-        // that is when the current pass began; for a new row it is now.
-        let (result, pass_started_at) = match Self::get_in(&txn, user_id, book_id).await? {
-            Some(existing_model) => {
-                let pass_started_at = existing_model.started_at;
-                let updated = Self::update_existing(
-                    &txn,
-                    existing_model,
-                    current_page,
-                    progress_percentage,
-                    completed,
-                    now,
-                    r2_progression,
-                )
-                .await?;
-                (updated, pass_started_at)
-            }
-            None => {
-                let new_progress = read_progress::ActiveModel {
-                    id: Set(Uuid::new_v4()),
-                    user_id: Set(user_id),
-                    book_id: Set(book_id),
-                    current_page: Set(current_page),
-                    progress_percentage: Set(progress_percentage),
-                    completed: Set(completed),
-                    started_at: Set(now),
-                    updated_at: Set(now),
-                    completed_at: Set(if completed { Some(now) } else { None }),
-                    r2_progression: Set(r2_progression),
-                };
-                (new_progress.insert(&txn).await?, now)
-            }
+        let kind = if completed {
+            SessionKind::Completed
+        } else {
+            SessionKind::Progress
+        };
+        let session = NewSession::from_legacy_write(user_id, book_id, LEGACY_DEVICE_ID, kind, now)
+            .with_page(current_page)
+            .with_percentage(progress_percentage)
+            .with_progression(r2_progression);
+
+        ReadingSessionRepository::append(&txn, session, now).await?;
+        let result = Self::refold(&txn, user_id, book_id).await?;
+
+        txn.commit().await?;
+
+        // A write that reports a position always leaves a row behind, so the
+        // fold cannot legitimately come back empty here.
+        result.ok_or_else(|| {
+            anyhow!("reading progress vanished after recording a session for book {book_id}")
+        })
+    }
+
+    /// Rebuild `read_progress` and `read_completions` for one user and book from
+    /// the session log.
+    ///
+    /// Returns the projected row, or `None` when the log says there should not
+    /// be one. That happens after a reset with no reading since: marking a book
+    /// unread has always removed the row outright rather than zeroing it, and
+    /// callers check for its absence.
+    async fn refold<C: ConnectionTrait>(
+        db: &C,
+        user_id: Uuid,
+        book_id: Uuid,
+    ) -> Result<Option<read_progress::Model>> {
+        let sessions = ReadingSessionRepository::load_for_book(db, user_id, book_id).await?;
+        let folded = fold(&sessions);
+
+        let Some(projected) = folded.progress else {
+            Self::delete_row_in(db, user_id, book_id).await?;
+            return Ok(None);
         };
 
-        if completed {
+        let existing = Self::get_in(db, user_id, book_id).await?;
+        // Reuse the existing row's identity. Callers compare progress IDs across
+        // writes to prove an update did not create a duplicate.
+        let id = existing
+            .as_ref()
+            .map(|row| row.id)
+            .unwrap_or_else(Uuid::new_v4);
+
+        let model = read_progress::ActiveModel {
+            id: Set(id),
+            user_id: Set(user_id),
+            book_id: Set(book_id),
+            current_page: Set(projected.current_page),
+            progress_percentage: Set(projected.progress_percentage),
+            completed: Set(projected.completed),
+            started_at: Set(projected.started_at),
+            updated_at: Set(projected.updated_at),
+            completed_at: Set(projected.completed_at),
+            r2_progression: Set(projected.r2_progression),
+        };
+
+        let saved = if existing.is_some() {
+            model.update(db).await?
+        } else {
+            model.insert(db).await?
+        };
+
+        if let Some(completion) = folded.completion {
             Self::record_completion_if_new(
-                &txn,
+                db,
                 user_id,
                 book_id,
-                pass_started_at,
-                result.completed_at.unwrap_or(now),
+                completion.started_at,
+                completion.completed_at,
             )
             .await?;
         }
 
+        Ok(Some(saved))
+    }
+
+    /// Append a reset, which opens a new pass and so drops the progress row.
+    ///
+    /// Recording this as an event rather than deleting the row is what makes the
+    /// ordering between "I finished this" and "I am starting over" recorded
+    /// data. Two offline clients replaying those in either order then reach the
+    /// same completion count.
+    async fn reset_txn(db: &DatabaseConnection, user_id: Uuid, book_id: Uuid) -> Result<bool> {
+        let txn = db.begin().await?;
+        let now = Utc::now();
+
+        let existed = Self::get_in(&txn, user_id, book_id).await?.is_some();
+
+        let session = NewSession::from_legacy_write(
+            user_id,
+            book_id,
+            LEGACY_DEVICE_ID,
+            SessionKind::Reset,
+            now,
+        );
+        ReadingSessionRepository::append(&txn, session, now).await?;
+        Self::refold(&txn, user_id, book_id).await?;
+
         txn.commit().await?;
-        Ok(result)
+        Ok(existed)
+    }
+
+    /// Remove the projection row itself, without touching the log.
+    async fn delete_row_in<C: ConnectionTrait>(db: &C, user_id: Uuid, book_id: Uuid) -> Result<()> {
+        ReadProgress::delete_many()
+            .filter(read_progress::Column::UserId.eq(user_id))
+            .filter(read_progress::Column::BookId.eq(book_id))
+            .exec(db)
+            .await?;
+
+        Ok(())
     }
 
     /// Bank a completion unless this read-through already has one.
@@ -214,48 +298,13 @@ impl ReadProgressRepository {
             .is_some_and(Self::is_unique_constraint_error)
     }
 
-    /// Helper to update an existing progress record
-    async fn update_existing<C: ConnectionTrait>(
-        db: &C,
-        existing_model: read_progress::Model,
-        current_page: i32,
-        progress_percentage: Option<f64>,
-        completed: bool,
-        now: chrono::DateTime<Utc>,
-        r2_progression: Option<String>,
-    ) -> Result<read_progress::Model> {
-        let mut active_model: read_progress::ActiveModel = existing_model.clone().into();
-        active_model.current_page = Set(current_page);
-        active_model.progress_percentage = Set(progress_percentage);
-        active_model.completed = Set(completed);
-        active_model.updated_at = Set(now);
-        // Only update r2_progression if a new value is provided;
-        // passing None means "don't change", not "clear it"
-        if r2_progression.is_some() {
-            active_model.r2_progression = Set(r2_progression);
-        }
-
-        // Keep completed_at consistent with the completed flag: set it on the
-        // transition to completed, and clear it when a book is un-completed so
-        // a downgraded record never keeps a stale completion timestamp.
-        if completed && existing_model.completed_at.is_none() {
-            active_model.completed_at = Set(Some(now));
-        } else if !completed && existing_model.completed_at.is_some() {
-            active_model.completed_at = Set(None);
-        }
-
-        let result = active_model.update(db).await?;
-        Ok(result)
-    }
-
-    /// Delete reading progress
+    /// Delete reading progress, starting a new pass.
+    ///
+    /// This is the same operation as marking a book unread: it clears where the
+    /// reader is without erasing that the book was read. The completion log
+    /// survives, and the next completion counts as a fresh read-through.
     pub async fn delete(db: &DatabaseConnection, user_id: Uuid, book_id: Uuid) -> Result<()> {
-        ReadProgress::delete_many()
-            .filter(read_progress::Column::UserId.eq(user_id))
-            .filter(read_progress::Column::BookId.eq(book_id))
-            .exec(db)
-            .await?;
-
+        Self::reset_txn(db, user_id, book_id).await?;
         Ok(())
     }
 
@@ -394,20 +443,26 @@ impl ReadProgressRepository {
     }
 
     /// Mark all books in a series as unread for a user
-    /// Deletes all reading progress records for the books
-    /// Returns the number of books marked as unread
+    /// Returns the number of books that had progress to clear
+    ///
+    /// Each book resets individually rather than in one bulk delete, because
+    /// each needs its own reset event in the log so that a later completion is
+    /// recognised as a genuine re-read. Books with no progress are still
+    /// visited, but only those that had a row count toward the result.
     pub async fn mark_series_as_unread(
         db: &DatabaseConnection,
         user_id: Uuid,
         book_ids: Vec<Uuid>,
     ) -> Result<u64> {
-        let result = ReadProgress::delete_many()
-            .filter(read_progress::Column::UserId.eq(user_id))
-            .filter(read_progress::Column::BookId.is_in(book_ids))
-            .exec(db)
-            .await?;
+        let mut cleared = 0;
 
-        Ok(result.rows_affected)
+        for book_id in book_ids {
+            if Self::reset_txn(db, user_id, book_id).await? {
+                cleared += 1;
+            }
+        }
+
+        Ok(cleared)
     }
 }
 
@@ -1127,6 +1182,172 @@ mod tests {
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].started_at, started);
         assert_eq!(entries[0].completed_at, finished.completed_at.unwrap());
+    }
+
+    // ========================================================================
+    // The session log behind the projection
+    //
+    // `read_progress` is now derived, so these assert on the log itself: that
+    // writes land in it, that page-by-page writes do not inflate it, and that
+    // resets are recorded rather than erasing history.
+    // ========================================================================
+
+    async fn sessions_for(
+        db: &DatabaseConnection,
+        user_id: Uuid,
+        book_id: Uuid,
+    ) -> Vec<crate::entities::reading_sessions::Model> {
+        ReadingSessionRepository::load_for_book(db, user_id, book_id)
+            .await
+            .unwrap()
+    }
+
+    /// A write appends a session carrying the position it reported.
+    #[tokio::test]
+    async fn a_progress_write_appends_a_session() {
+        let db = setup_test_db().await;
+        let user = create_test_user(&db).await;
+        let book = create_test_book(&db).await;
+
+        ReadProgressRepository::upsert(&db, user.id, book.id, 10, false)
+            .await
+            .unwrap();
+
+        let sessions = sessions_for(&db, user.id, book.id).await;
+        assert_eq!(sessions.len(), 1);
+        assert_eq!(sessions[0].to_page, Some(10));
+        assert_eq!(sessions[0].pass, 1);
+        assert_eq!(sessions[0].device_id, LEGACY_DEVICE_ID);
+    }
+
+    /// Page-by-page writes from one device merge instead of accumulating a row
+    /// per page. OPDS page streaming writes on every turn, so without this the
+    /// log would grow without bound during a single sitting.
+    #[tokio::test]
+    async fn consecutive_page_writes_coalesce_into_one_session() {
+        let db = setup_test_db().await;
+        let user = create_test_user(&db).await;
+        let book = create_test_book(&db).await;
+
+        for page in 1..=25 {
+            ReadProgressRepository::upsert(&db, user.id, book.id, page, false)
+                .await
+                .unwrap();
+        }
+
+        let sessions = sessions_for(&db, user.id, book.id).await;
+        assert_eq!(
+            sessions.len(),
+            1,
+            "25 page turns in one sitting must be one session, not 25"
+        );
+        assert_eq!(sessions[0].to_page, Some(25));
+
+        let progress = ReadProgressRepository::get_by_user_and_book(&db, user.id, book.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(progress.current_page, 25);
+    }
+
+    /// A completion is its own row. Folding it into neighbouring reading would
+    /// erase the transition the fold needs to see.
+    #[tokio::test]
+    async fn a_completion_is_not_merged_into_reading() {
+        let db = setup_test_db().await;
+        let user = create_test_user(&db).await;
+        let book = create_test_book(&db).await;
+
+        ReadProgressRepository::upsert(&db, user.id, book.id, 10, false)
+            .await
+            .unwrap();
+        ReadProgressRepository::upsert(&db, user.id, book.id, 50, true)
+            .await
+            .unwrap();
+
+        let sessions = sessions_for(&db, user.id, book.id).await;
+        assert_eq!(sessions.len(), 2);
+        assert_eq!(sessions[1].session_kind(), SessionKind::Completed);
+    }
+
+    /// Marking unread records a reset and opens a new pass. The earlier
+    /// sessions stay, so the history of what was read survives.
+    #[tokio::test]
+    async fn marking_unread_records_a_reset_and_keeps_history() {
+        let db = setup_test_db().await;
+        let user = create_test_user(&db).await;
+        let book = create_test_book(&db).await;
+
+        ReadProgressRepository::upsert(&db, user.id, book.id, 50, true)
+            .await
+            .unwrap();
+        ReadProgressRepository::mark_as_unread(&db, user.id, book.id)
+            .await
+            .unwrap();
+
+        let sessions = sessions_for(&db, user.id, book.id).await;
+        assert_eq!(sessions.len(), 2, "the reset is appended, not substituted");
+        assert_eq!(sessions[1].session_kind(), SessionKind::Reset);
+        assert_eq!(sessions[1].pass, 2, "a reset opens the next pass");
+
+        // And the projection is gone, which is what callers check for.
+        assert!(
+            ReadProgressRepository::get_by_user_and_book(&db, user.id, book.id)
+                .await
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    /// Reading after a reset belongs to the new pass, so its eventual
+    /// completion is recognised as a separate read-through.
+    #[tokio::test]
+    async fn reading_after_a_reset_joins_the_new_pass() {
+        let db = setup_test_db().await;
+        let user = create_test_user(&db).await;
+        let book = create_test_book(&db).await;
+
+        ReadProgressRepository::upsert(&db, user.id, book.id, 50, true)
+            .await
+            .unwrap();
+        ReadProgressRepository::mark_as_unread(&db, user.id, book.id)
+            .await
+            .unwrap();
+        ReadProgressRepository::upsert(&db, user.id, book.id, 5, false)
+            .await
+            .unwrap();
+
+        let sessions = sessions_for(&db, user.id, book.id).await;
+        let last = sessions.last().unwrap();
+        assert_eq!(last.pass, 2);
+        assert_eq!(last.to_page, Some(5));
+
+        let progress = ReadProgressRepository::get_by_user_and_book(&db, user.id, book.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(progress.current_page, 5);
+        assert!(!progress.completed);
+    }
+
+    /// Nothing measured reading time on these paths, so the log says so rather
+    /// than recording a zero that statistics would later treat as real.
+    #[tokio::test]
+    async fn legacy_writes_report_no_measured_duration() {
+        let db = setup_test_db().await;
+        let user = create_test_user(&db).await;
+        let book = create_test_book(&db).await;
+
+        ReadProgressRepository::upsert(&db, user.id, book.id, 10, false)
+            .await
+            .unwrap();
+
+        let sessions = sessions_for(&db, user.id, book.id).await;
+        assert_eq!(sessions[0].active_duration_ms, None);
+        assert_eq!(
+            sessions[0].duration_source(),
+            crate::entities::reading_sessions::DurationSource::Unknown
+        );
     }
 
     /// Two users completing the same book each get their own entry.

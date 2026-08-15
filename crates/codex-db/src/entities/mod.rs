@@ -27,6 +27,7 @@ pub mod plugin_failures;
 pub mod plugins;
 pub mod read_completions;
 pub mod read_progress;
+pub mod reading_sessions;
 pub mod refresh_tokens;
 pub mod scheduled_firing_claims;
 pub mod series;

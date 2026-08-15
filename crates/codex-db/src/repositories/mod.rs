@@ -21,6 +21,7 @@ pub mod plugins;
 pub mod read_completions;
 pub mod read_list;
 pub mod read_progress;
+pub mod reading_sessions;
 pub mod refresh_token;
 pub mod release_ledger;
 pub mod release_sources;
@@ -88,6 +89,8 @@ pub use plugins::PluginsRepository;
 pub use read_completions::ReadCompletionRepository;
 pub use read_list::ReadListRepository;
 pub use read_progress::ReadProgressRepository;
+#[allow(unused_imports)]
+pub use reading_sessions::{NewSession, ReadingSessionRepository};
 #[allow(unused_imports)]
 pub use refresh_token::{NewRefreshToken, RefreshTokenRepository};
 #[allow(unused_imports)]

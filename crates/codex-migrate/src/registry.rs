@@ -90,6 +90,10 @@ macro_rules! for_each_entity {
         $op!(read_lists);
         $op!(want_to_read);
         $op!(read_completions);
+        // After read_progress and read_completions: the log they are folded
+        // from transfers alongside the projections, so an imported instance can
+        // keep folding rather than starting from a one-event history.
+        $op!(reading_sessions);
     };
 }
 

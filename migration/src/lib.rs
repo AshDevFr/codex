@@ -206,6 +206,8 @@ pub mod m20260714_000101_add_collection_summary;
 pub mod m20260729_000102_add_collection_condition;
 pub mod m20260729_000103_create_read_completions;
 pub mod m20260729_000104_backfill_read_completions;
+pub mod m20260814_000105_create_reading_sessions;
+pub mod m20260814_000106_backfill_reading_sessions;
 
 pub struct Migrator;
 
@@ -384,6 +386,12 @@ impl MigratorTrait for Migrator {
             Box::new(m20260729_000102_add_collection_condition::Migration),
             Box::new(m20260729_000103_create_read_completions::Migration),
             Box::new(m20260729_000104_backfill_read_completions::Migration),
+            // Append-only reading activity log. `read_progress` and
+            // `read_completions` become projections folded from it.
+            Box::new(m20260814_000105_create_reading_sessions::Migration),
+            // Seed the log from existing progress rows, so the first write to an
+            // already-read book folds over its history rather than over one event.
+            Box::new(m20260814_000106_backfill_reading_sessions::Migration),
         ]
     }
 }
