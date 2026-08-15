@@ -142,6 +142,7 @@ fn create_test_oidc_config() -> OidcConfig {
         auto_create_users: true,
         default_role: OidcDefaultRole::Reader,
         redirect_uri_base: None,
+        allowed_redirect_uris: vec![],
         providers,
     }
 }
@@ -245,6 +246,138 @@ async fn test_login_unknown_provider() {
             .unwrap()
             .contains("Unknown OIDC provider")
     );
+}
+
+#[tokio::test]
+async fn test_login_rejects_non_allowlisted_redirect_uri() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let mut oidc_config = create_test_oidc_config();
+    oidc_config.allowed_redirect_uris = vec!["codexreader://auth".to_string()];
+    let state = create_test_state_with_oidc(db, oidc_config.clone()).await;
+    let mut config = create_test_config_with_oidc();
+    config.auth.oidc = oidc_config;
+    let app = create_router(state, &config);
+
+    let request = post_json_request(
+        "/api/v1/auth/oidc/test-provider/login",
+        &serde_json::json!({ "redirectUri": "https://evil.example/steal" }),
+    );
+    let (status, response): (_, Option<serde_json::Value>) = make_json_request(app, request).await;
+
+    // 400 rather than the 500 a discovery attempt would produce: the request is
+    // refused before any pending state is created.
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let message = response.expect("Expected JSON response")["message"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert!(
+        message.contains("allowed_redirect_uris"),
+        "error should name the setting an operator has to change, got: {message}"
+    );
+}
+
+#[tokio::test]
+async fn test_login_rejects_prefix_of_allowlisted_redirect_uri() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let mut oidc_config = create_test_oidc_config();
+    oidc_config.allowed_redirect_uris = vec!["codexreader://auth".to_string()];
+    let state = create_test_state_with_oidc(db, oidc_config.clone()).await;
+    let mut config = create_test_config_with_oidc();
+    config.auth.oidc = oidc_config;
+    let app = create_router(state, &config);
+
+    // A prefix match would admit this look-alike host
+    let request = post_json_request(
+        "/api/v1/auth/oidc/test-provider/login",
+        &serde_json::json!({ "redirectUri": "codexreader://auth.evil.example" }),
+    );
+    let (status, _response): (_, Option<serde_json::Value>) = make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn test_login_rejects_redirect_uri_when_allowlist_empty() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let oidc_config = create_test_oidc_config();
+    assert!(
+        oidc_config.allowed_redirect_uris.is_empty(),
+        "default deployment configures no allowlist"
+    );
+    let state = create_test_state_with_oidc(db, oidc_config).await;
+    let config = create_test_config_with_oidc();
+    let app = create_router(state, &config);
+
+    let request = post_json_request(
+        "/api/v1/auth/oidc/test-provider/login",
+        &serde_json::json!({ "redirectUri": "codexreader://auth" }),
+    );
+    let (status, _response): (_, Option<serde_json::Value>) = make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn test_login_accepts_allowlisted_redirect_uri() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let mut oidc_config = create_test_oidc_config();
+    oidc_config.allowed_redirect_uris = vec!["codexreader://auth".to_string()];
+    let state = create_test_state_with_oidc(db, oidc_config.clone()).await;
+    let mut config = create_test_config_with_oidc();
+    config.auth.oidc = oidc_config;
+    let app = create_router(state, &config);
+
+    let request = post_json_request(
+        "/api/v1/auth/oidc/test-provider/login",
+        &serde_json::json!({ "redirectUri": "codexreader://auth" }),
+    );
+    let (status, _response): (_, Option<serde_json::Value>) = make_json_request(app, request).await;
+
+    // The target passes validation, so the request proceeds to IdP discovery,
+    // which fails against the fake issuer. Anything but 400 proves it was accepted.
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+}
+
+#[tokio::test]
+async fn test_login_accepts_empty_body_with_form_content_type() {
+    // The web app posts this endpoint with no payload; axios still sends
+    // Content-Type: application/x-www-form-urlencoded. That must not be rejected.
+    let (db, _temp_dir) = setup_test_db().await;
+    let oidc_config = create_test_oidc_config();
+    let state = create_test_state_with_oidc(db, oidc_config).await;
+    let config = create_test_config_with_oidc();
+    let app = create_router(state, &config);
+
+    let request = hyper::Request::builder()
+        .method("POST")
+        .uri("/api/v1/auth/oidc/test-provider/login")
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .body(String::new())
+        .unwrap();
+    let (status, _response): (_, Option<serde_json::Value>) = make_json_request(app, request).await;
+
+    // Reaches discovery like a bodyless request always has
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+}
+
+#[tokio::test]
+async fn test_login_rejects_malformed_body() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let oidc_config = create_test_oidc_config();
+    let state = create_test_state_with_oidc(db, oidc_config).await;
+    let config = create_test_config_with_oidc();
+    let app = create_router(state, &config);
+
+    let request = hyper::Request::builder()
+        .method("POST")
+        .uri("/api/v1/auth/oidc/test-provider/login")
+        .header("Content-Type", "application/json")
+        .body("{not json".to_string())
+        .unwrap();
+    let (status, _response): (_, Option<serde_json::Value>) = make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
 }
 
 // Note: Testing successful login initiation requires a real/mocked IdP for discovery
@@ -385,6 +518,7 @@ async fn test_list_multiple_providers() {
         auto_create_users: true,
         default_role: OidcDefaultRole::Reader,
         redirect_uri_base: None,
+        allowed_redirect_uris: vec![],
         providers,
     };
 
@@ -579,6 +713,7 @@ fn test_oidc_service_no_providers_configured() {
         auto_create_users: true,
         default_role: OidcDefaultRole::Reader,
         redirect_uri_base: None,
+        allowed_redirect_uris: vec![],
         providers: HashMap::new(),
     };
     let service = OidcService::new(oidc_config, "http://localhost:8080".to_string());

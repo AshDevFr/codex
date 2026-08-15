@@ -169,6 +169,9 @@ impl EnvOverride for OidcConfig {
         if let Ok(redirect_uri_base) = env::var(format!("{}_REDIRECT_URI_BASE", prefix)) {
             self.redirect_uri_base = Some(redirect_uri_base);
         }
+        if let Ok(allowed) = env::var(format!("{}_ALLOWED_REDIRECT_URIS", prefix)) {
+            self.allowed_redirect_uris = parse_csv_list(&allowed);
+        }
 
         // Apply overrides to existing providers
         for (provider_name, provider_config) in self.providers.iter_mut() {
@@ -574,6 +577,15 @@ pub fn env_bool_or(key: &str, default: bool) -> bool {
 /// Helper function to get optional string environment variable
 pub fn env_string_opt(key: &str) -> Option<String> {
     env::var(key).ok().filter(|s| !s.is_empty())
+}
+
+/// Split a comma-separated environment value into trimmed, non-empty entries
+pub fn parse_csv_list(value: &str) -> Vec<String> {
+    value
+        .split(',')
+        .map(|entry| entry.trim().to_string())
+        .filter(|entry| !entry.is_empty())
+        .collect()
 }
 
 #[cfg(test)]
@@ -1162,6 +1174,7 @@ mod tests {
             auto_create_users: true,
             default_role: OidcDefaultRole::Reader,
             redirect_uri_base: None,
+            allowed_redirect_uris: vec![],
             providers: std::collections::HashMap::new(),
         };
 
@@ -1182,6 +1195,44 @@ mod tests {
 
     #[test]
     #[serial]
+    fn test_oidc_config_env_override_allowed_redirect_uris() {
+        use crate::{OidcConfig, OidcDefaultRole};
+
+        remove_var("CODEX_AUTH_OIDC_ALLOWED_REDIRECT_URIS");
+
+        let mut config = OidcConfig {
+            enabled: true,
+            auto_create_users: true,
+            default_role: OidcDefaultRole::Reader,
+            redirect_uri_base: None,
+            allowed_redirect_uris: vec![],
+            providers: std::collections::HashMap::new(),
+        };
+
+        // No env var set leaves the allowlist empty, which permits no redirect target
+        config.apply_env_overrides("CODEX_AUTH_OIDC");
+        assert!(config.allowed_redirect_uris.is_empty());
+
+        set_var(
+            "CODEX_AUTH_OIDC_ALLOWED_REDIRECT_URIS",
+            "codexreader://auth, https://app.example.com/callback ,",
+        );
+        config.apply_env_overrides("CODEX_AUTH_OIDC");
+
+        assert_eq!(
+            config.allowed_redirect_uris,
+            vec![
+                "codexreader://auth".to_string(),
+                "https://app.example.com/callback".to_string(),
+            ],
+            "entries should be trimmed and empty ones dropped"
+        );
+
+        remove_var("CODEX_AUTH_OIDC_ALLOWED_REDIRECT_URIS");
+    }
+
+    #[test]
+    #[serial]
     fn test_oidc_config_env_override_enabled_with_1() {
         remove_var("CODEX_AUTH_OIDC_ENABLED");
 
@@ -1192,6 +1243,7 @@ mod tests {
             auto_create_users: true,
             default_role: OidcDefaultRole::Reader,
             redirect_uri_base: None,
+            allowed_redirect_uris: vec![],
             providers: std::collections::HashMap::new(),
         };
 
@@ -1216,6 +1268,7 @@ mod tests {
             auto_create_users: true,
             default_role: OidcDefaultRole::Reader,
             redirect_uri_base: None,
+            allowed_redirect_uris: vec![],
             providers: std::collections::HashMap::new(),
         };
 
@@ -1350,6 +1403,7 @@ mod tests {
             auto_create_users: true,
             default_role: OidcDefaultRole::Reader,
             redirect_uri_base: None,
+            allowed_redirect_uris: vec![],
             providers,
         };
 
@@ -1392,6 +1446,7 @@ mod tests {
             auto_create_users: true,
             default_role: OidcDefaultRole::Reader,
             redirect_uri_base: None,
+            allowed_redirect_uris: vec![],
             providers: std::collections::HashMap::new(),
         };
 
@@ -1451,6 +1506,7 @@ mod tests {
                 auto_create_users: true,
                 default_role: OidcDefaultRole::Reader,
                 redirect_uri_base: None,
+                allowed_redirect_uris: vec![],
                 providers: std::collections::HashMap::new(),
             },
         };

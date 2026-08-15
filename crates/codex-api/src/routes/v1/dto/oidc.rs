@@ -34,6 +34,21 @@ pub struct OidcProvidersResponse {
     pub providers: Vec<OidcProviderInfo>,
 }
 
+/// Request body for initiating OIDC login.
+///
+/// The body is optional: the web app posts nothing and gets the built-in
+/// completion page. Native clients pass a redirect target so the callback can
+/// hand control back to the app.
+#[derive(Debug, Default, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct OidcLoginRequest {
+    /// Where to send the browser after a successful callback. Must be listed in
+    /// `auth.oidc.allowed_redirect_uris`. Omit for the default web flow.
+    #[schema(example = "codexreader://auth")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub redirect_uri: Option<String>,
+}
+
 /// Response from initiating OIDC login
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]

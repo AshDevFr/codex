@@ -1,4 +1,4 @@
-use super::env_override::{env_bool_or, env_or, env_string_opt};
+use super::env_override::{env_bool_or, env_or, env_string_opt, parse_csv_list};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -188,6 +188,19 @@ pub struct OidcConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub redirect_uri_base: Option<String>,
 
+    /// Redirect targets a client may request at the end of an OIDC flow.
+    ///
+    /// Empty by default, which permits none: the callback then always lands on the
+    /// built-in web completion page. Entries are matched as whole strings, never by
+    /// prefix. A native client registers its custom scheme here, e.g.
+    /// "codexreader://auth".
+    ///
+    /// Security: the callback puts a freshly minted access token in the fragment of
+    /// whatever target is used, so every entry here is a party trusted with the
+    /// tokens of anyone who completes a sign-in.
+    #[serde(default)]
+    pub allowed_redirect_uris: Vec<String>,
+
     /// Provider configurations keyed by provider name (e.g., "authentik", "keycloak")
     #[serde(default)]
     pub providers: HashMap<String, OidcProviderConfig>,
@@ -200,6 +213,9 @@ impl Default for OidcConfig {
             auto_create_users: env_bool_or("CODEX_AUTH_OIDC_AUTO_CREATE_USERS", true),
             default_role: OidcDefaultRole::Reader,
             redirect_uri_base: std::env::var("CODEX_AUTH_OIDC_REDIRECT_URI_BASE").ok(),
+            allowed_redirect_uris: env_string_opt("CODEX_AUTH_OIDC_ALLOWED_REDIRECT_URIS")
+                .map(|s| parse_csv_list(&s))
+                .unwrap_or_default(),
             providers: HashMap::new(),
         }
     }
@@ -2324,6 +2340,7 @@ accepted_audiences:
             auto_create_users: true,
             default_role: OidcDefaultRole::Reader,
             redirect_uri_base: None,
+            allowed_redirect_uris: vec![],
             providers,
         };
 
@@ -2336,6 +2353,36 @@ accepted_audiences:
         assert!(deserialized.enabled);
         assert!(deserialized.auto_create_users);
         assert!(deserialized.providers.contains_key("authentik"));
+    }
+
+    #[test]
+    fn test_oidc_allowed_redirect_uris_defaults_to_empty() {
+        // Config files written before this setting existed must keep parsing, and
+        // must not silently gain a permitted redirect target.
+        let yaml = r#"
+enabled: true
+auto_create_users: true
+default_role: reader
+providers: {}
+"#;
+        let config: OidcConfig = serde_yaml::from_str(yaml).unwrap();
+        assert!(config.allowed_redirect_uris.is_empty());
+    }
+
+    #[test]
+    fn test_oidc_allowed_redirect_uris_roundtrip() {
+        let yaml = r#"
+enabled: true
+allowed_redirect_uris:
+  - "codexreader://auth"
+providers: {}
+"#;
+        let config: OidcConfig = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(config.allowed_redirect_uris, vec!["codexreader://auth"]);
+
+        let serialized = serde_yaml::to_string(&config).unwrap();
+        let reparsed: OidcConfig = serde_yaml::from_str(&serialized).unwrap();
+        assert_eq!(reparsed.allowed_redirect_uris, config.allowed_redirect_uris);
     }
 
     #[test]

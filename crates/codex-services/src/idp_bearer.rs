@@ -463,6 +463,7 @@ mod tests {
             auto_create_users: false,
             default_role: OidcDefaultRole::Reader,
             redirect_uri_base: None,
+            allowed_redirect_uris: vec![],
             providers: providers
                 .into_iter()
                 .map(|(name, p)| (name.to_string(), p))

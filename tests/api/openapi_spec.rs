@@ -163,6 +163,28 @@ fn multipart_request_bodies_are_required() {
     );
 }
 
+/// The OIDC login body carries an optional native redirect target. It must stay
+/// optional, because the web app posts the endpoint with no payload at all, and
+/// it must still be a plain `$ref` so strict generators can see the schema.
+#[test]
+fn oidc_login_body_is_optional_and_a_plain_ref() {
+    let spec = spec();
+    let body = &spec["paths"]["/api/v1/auth/oidc/{provider}/login"]["post"]["requestBody"];
+
+    assert_ne!(
+        body.get("required"),
+        Some(&Value::Bool(true)),
+        "a required body would force clients to send one; the web app sends none"
+    );
+
+    let schema = &body["content"]["application/json"]["schema"];
+    assert_eq!(
+        schema.get("$ref").and_then(Value::as_str),
+        Some("#/components/schemas/OidcLoginRequest"),
+        "body schema should be a plain $ref, got {schema}"
+    );
+}
+
 /// The endpoints that used to answer `200` with a JSON `null` body now answer
 /// `204 No Content`, so their `200` body is a plain schema reference.
 #[test]

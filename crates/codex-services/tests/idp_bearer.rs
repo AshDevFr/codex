@@ -124,6 +124,7 @@ fn validator(provider_name: &str, provider: OidcProviderConfig) -> IdpBearerVali
         auto_create_users: false,
         default_role: OidcDefaultRole::Reader,
         redirect_uri_base: None,
+        allowed_redirect_uris: vec![],
         providers: HashMap::from([(provider_name.to_string(), provider)]),
     };
     IdpBearerValidator::new(&config)

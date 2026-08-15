@@ -839,6 +839,12 @@ export interface paths {
          * Initiate OIDC login flow
          * @description Generates an authorization URL and returns it to the client.
          *     The client should redirect the user to this URL to authenticate.
+         *
+         *     The body is optional. A native client may supply `redirectUri` to have the
+         *     callback hand control back to it (e.g. a custom scheme an
+         *     `ASWebAuthenticationSession` can match); the value must be allowlisted in
+         *     `auth.oidc.allowed_redirect_uris`. Omitting the body keeps the web flow,
+         *     which finishes on the built-in completion page.
          */
         post: operations["oidc_login"];
         delete?: never;
@@ -14303,6 +14309,21 @@ export interface components {
              */
             errorDescription: string;
         };
+        /**
+         * @description Request body for initiating OIDC login.
+         *
+         *     The body is optional: the web app posts nothing and gets the built-in
+         *     completion page. Native clients pass a redirect target so the callback can
+         *     hand control back to the app.
+         */
+        OidcLoginRequest: {
+            /**
+             * @description Where to send the browser after a successful callback. Must be listed in
+             *     `auth.oidc.allowed_redirect_uris`. Omit for the default web flow.
+             * @example codexreader://auth
+             */
+            redirectUri?: string | null;
+        };
         /** @description Response from initiating OIDC login */
         OidcLoginResponse: {
             /**
@@ -23527,7 +23548,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["OidcLoginRequest"];
+            };
+        };
         responses: {
             /** @description Authorization URL generated */
             200: {
@@ -23538,7 +23563,7 @@ export interface operations {
                     "application/json": components["schemas"]["OidcLoginResponse"];
                 };
             };
-            /** @description OIDC not enabled or unknown provider */
+            /** @description OIDC not enabled, unknown provider, or redirect target not allowlisted */
             400: {
                 headers: {
                     [name: string]: unknown;

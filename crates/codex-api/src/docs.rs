@@ -703,6 +703,7 @@ The following paths are exempt from rate limiting:
             // OIDC DTOs
             v1::dto::OidcProviderInfo,
             v1::dto::OidcProvidersResponse,
+            v1::dto::OidcLoginRequest,
             v1::dto::OidcLoginResponse,
             v1::dto::OidcCallbackResponse,
             v1::dto::OidcErrorResponse,
@@ -1345,10 +1346,11 @@ impl utoipa::Modify for SecurityAddon {
 ///
 /// The collapse is applied only where absence is expressible without it, i.e.
 /// object properties that are not `required`, parameter schemas that are not
-/// required, array items, and map values. A request or response body has no
-/// such fallback, so a union there is left in place: that is an API design
-/// problem (the endpoint should answer `204 No Content`) and hiding it here
-/// would make the document claim a body that the server may not send.
+/// required, array items, map values, and the schema of a request body that is
+/// itself not required. A response body has no such fallback, so a union there
+/// is left in place: that is an API design problem (the endpoint should answer
+/// `204 No Content`) and hiding it here would make the document claim a body
+/// that the server may not send.
 struct NullableRefFlattener;
 
 impl utoipa::Modify for NullableRefFlattener {
@@ -1388,9 +1390,17 @@ impl utoipa::Modify for NullableRefFlattener {
                     flatten_parameter(parameter);
                 }
                 if let Some(body) = operation.request_body.as_mut() {
+                    // An optional body already says "may be absent" through
+                    // `required`, so the union adds nothing there. A required
+                    // one has no such fallback and keeps it.
+                    let body_required = body.required == Some(utoipa::openapi::Required::True);
                     for content in body.content.values_mut() {
                         if let Some(schema) = content.schema.as_mut() {
-                            flatten_children(schema);
+                            if body_required {
+                                flatten_children(schema);
+                            } else {
+                                flatten_schema(schema);
+                            }
                         }
                     }
                 }

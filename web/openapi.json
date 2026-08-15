@@ -2540,7 +2540,7 @@
           "Auth"
         ],
         "summary": "Initiate OIDC login flow",
-        "description": "Generates an authorization URL and returns it to the client.\nThe client should redirect the user to this URL to authenticate.",
+        "description": "Generates an authorization URL and returns it to the client.\nThe client should redirect the user to this URL to authenticate.\n\nThe body is optional. A native client may supply `redirectUri` to have the\ncallback hand control back to it (e.g. a custom scheme an\n`ASWebAuthenticationSession` can match); the value must be allowlisted in\n`auth.oidc.allowed_redirect_uris`. Omitting the body keeps the web flow,\nwhich finishes on the built-in completion page.",
         "operationId": "oidc_login",
         "parameters": [
           {
@@ -2553,6 +2553,15 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OidcLoginRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Authorization URL generated",
@@ -2565,7 +2574,7 @@
             }
           },
           "400": {
-            "description": "OIDC not enabled or unknown provider"
+            "description": "OIDC not enabled, unknown provider, or redirect target not allowlisted"
           },
           "500": {
             "description": "Failed to generate authorization URL"
@@ -33808,6 +33817,20 @@
             "type": "string",
             "description": "Human-readable error description",
             "example": "The authentication request has expired. Please try again."
+          }
+        }
+      },
+      "OidcLoginRequest": {
+        "type": "object",
+        "description": "Request body for initiating OIDC login.\n\nThe body is optional: the web app posts nothing and gets the built-in\ncompletion page. Native clients pass a redirect target so the callback can\nhand control back to the app.",
+        "properties": {
+          "redirectUri": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Where to send the browser after a successful callback. Must be listed in\n`auth.oidc.allowed_redirect_uris`. Omit for the default web flow.",
+            "example": "codexreader://auth"
           }
         }
       },

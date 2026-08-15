@@ -92,6 +92,7 @@ fn oidc_config_for(idp_url: &str) -> OidcConfig {
         auto_create_users: false,
         default_role: OidcDefaultRole::Reader,
         redirect_uri_base: None,
+        allowed_redirect_uris: vec![],
         providers: HashMap::from([(
             "authentik".to_string(),
             OidcProviderConfig {

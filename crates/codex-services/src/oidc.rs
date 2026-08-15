@@ -77,6 +77,13 @@ pub struct PendingAuth {
     pub created_at: chrono::DateTime<Utc>,
     /// Provider name this state is for
     pub provider_name: String,
+    /// Where the callback should send the browser once the flow completes.
+    ///
+    /// `None` means the built-in web completion page. Validated against the
+    /// allowlist before it is stored here, and deliberately kept server-side
+    /// rather than round-tripped through the IdP in the `state` parameter,
+    /// where it would come back attacker-controlled.
+    pub redirect_uri: Option<String>,
 }
 
 /// Cached provider metadata (instead of caching the client directly,
@@ -166,6 +173,23 @@ impl OidcService {
     /// Get provider configuration by name
     pub fn get_provider_config(&self, provider_name: &str) -> Option<&OidcProviderConfig> {
         self.config.providers.get(provider_name)
+    }
+
+    /// Check whether a client-requested redirect target is allowlisted.
+    ///
+    /// The callback ends by putting a freshly minted access token in the fragment of
+    /// this target, so an unrestricted value would let any site harvest a token for
+    /// whoever completes the flow. Entries are compared as whole strings: prefix
+    /// matching on `codexreader://auth` would also admit
+    /// `codexreader://auth.evil.example`.
+    ///
+    /// An empty allowlist permits nothing, so a deployment that never configures one
+    /// behaves exactly as it did before this existed.
+    pub fn is_redirect_uri_allowed(&self, redirect_uri: &str) -> bool {
+        self.config
+            .allowed_redirect_uris
+            .iter()
+            .any(|allowed| allowed == redirect_uri)
     }
 
     /// Resolve the client secret for a provider
@@ -291,11 +315,19 @@ impl OidcService {
     /// # Arguments
     ///
     /// * `provider_name` - Name of the configured OIDC provider
+    /// * `redirect_uri` - Where the callback should send the browser afterwards.
+    ///   `None` uses the built-in web completion page. Callers must have validated
+    ///   any `Some` value against [`is_redirect_uri_allowed`](Self::is_redirect_uri_allowed)
+    ///   first.
     ///
     /// # Returns
     ///
     /// * `(url, state)` - The authorization URL to redirect to and the CSRF state token
-    pub async fn generate_auth_url(&self, provider_name: &str) -> Result<(String, String)> {
+    pub async fn generate_auth_url(
+        &self,
+        provider_name: &str,
+        redirect_uri: Option<String>,
+    ) -> Result<(String, String)> {
         let provider_config = self
             .config
             .providers
@@ -331,6 +363,7 @@ impl OidcService {
             nonce: nonce.secret().clone(),
             created_at: Utc::now(),
             provider_name: provider_name.to_string(),
+            redirect_uri,
         };
         self.pending_states
             .insert(csrf_token.secret().clone(), pending);
@@ -720,6 +753,96 @@ pub struct UserInfoResult {
 mod tests {
     use super::*;
 
+    /// Serve a minimal OIDC discovery document on an ephemeral port so
+    /// `generate_auth_url` can build a client without reaching the network.
+    /// Returns the issuer URL.
+    async fn start_stub_idp() -> String {
+        use axum::{Json, Router, extract::State, routing::get};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind ephemeral port");
+        let issuer = format!("http://{}", listener.local_addr().unwrap());
+
+        let app = Router::new()
+            .route(
+                "/.well-known/openid-configuration",
+                get(|State(issuer): State<String>| async move {
+                    Json(serde_json::json!({
+                        "issuer": issuer,
+                        "authorization_endpoint": format!("{issuer}/authorize"),
+                        "token_endpoint": format!("{issuer}/token"),
+                        "jwks_uri": format!("{issuer}/jwks"),
+                        "response_types_supported": ["code"],
+                        "subject_types_supported": ["public"],
+                        "id_token_signing_alg_values_supported": ["RS256"],
+                    }))
+                }),
+            )
+            // Discovery also fetches the key set before it returns
+            .route(
+                "/jwks",
+                get(|| async { Json(serde_json::json!({ "keys": [] })) }),
+            )
+            .with_state(issuer.clone());
+
+        tokio::spawn(async move {
+            axum::serve(listener, app).await.expect("stub IdP serves");
+        });
+
+        issuer
+    }
+
+    async fn service_against_stub_idp(allowed_redirect_uris: Vec<String>) -> OidcService {
+        let issuer = start_stub_idp().await;
+        let mut config = create_test_config();
+        config.allowed_redirect_uris = allowed_redirect_uris;
+        config
+            .providers
+            .get_mut("test-provider")
+            .expect("test provider exists")
+            .issuer_url = issuer;
+
+        OidcService::new(config, "http://localhost:8080".to_string())
+    }
+
+    #[tokio::test]
+    async fn test_generate_auth_url_stores_redirect_uri_in_pending_state() {
+        let service = service_against_stub_idp(vec!["codexreader://auth".to_string()]).await;
+
+        let (_url, state_token) = service
+            .generate_auth_url("test-provider", Some("codexreader://auth".to_string()))
+            .await
+            .expect("auth URL generated");
+
+        let pending = service
+            .pending_states
+            .get(&state_token)
+            .expect("pending state stored under the CSRF token");
+        assert_eq!(pending.redirect_uri.as_deref(), Some("codexreader://auth"));
+        assert!(!pending.pkce_verifier.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_generate_auth_url_without_redirect_uri_stores_none() {
+        let service = service_against_stub_idp(vec![]).await;
+
+        let (url, state_token) = service
+            .generate_auth_url("test-provider", None)
+            .await
+            .expect("auth URL generated");
+
+        // The target never travels through the IdP: it stays in the pending map,
+        // where it cannot come back attacker-controlled.
+        assert!(!url.contains("codexreader"));
+
+        let pending = service
+            .pending_states
+            .get(&state_token)
+            .expect("pending state stored under the CSRF token");
+        assert_eq!(pending.redirect_uri, None);
+    }
+
     fn create_test_config() -> OidcConfig {
         let mut providers = HashMap::new();
 
@@ -756,8 +879,69 @@ mod tests {
             auto_create_users: true,
             default_role: OidcDefaultRole::Reader,
             redirect_uri_base: None,
+            allowed_redirect_uris: vec![],
             providers,
         }
+    }
+
+    #[test]
+    fn test_is_redirect_uri_allowed_table() {
+        let mut config = create_test_config();
+        config.allowed_redirect_uris = vec![
+            "codexreader://auth".to_string(),
+            "https://app.example.com/callback/".to_string(),
+        ];
+        let service = OidcService::new(config, "http://localhost:8080".to_string());
+
+        // (candidate, expected, why)
+        let cases = [
+            ("codexreader://auth", true, "exact allowlisted entry"),
+            (
+                "https://app.example.com/callback/",
+                true,
+                "exact match including the trailing slash",
+            ),
+            (
+                "https://app.example.com/callback",
+                false,
+                "trailing slash is significant, entries are whole strings",
+            ),
+            (
+                "codexreader://auth.evil.example",
+                false,
+                "prefix of an allowlisted entry must not be admitted",
+            ),
+            (
+                "codexreader://auth/../elsewhere",
+                false,
+                "suffix appended to an allowlisted entry must not be admitted",
+            ),
+            ("CODEXREADER://AUTH", false, "matching is case-sensitive"),
+            ("https://evil.example", false, "unrelated target"),
+            ("", false, "empty target is not an allowlist entry"),
+        ];
+
+        for (candidate, expected, why) in cases {
+            assert_eq!(
+                service.is_redirect_uri_allowed(candidate),
+                expected,
+                "{candidate:?}: {why}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_is_redirect_uri_allowed_empty_allowlist_permits_none() {
+        let config = create_test_config();
+        assert!(
+            config.allowed_redirect_uris.is_empty(),
+            "test config should start with no allowlist"
+        );
+        let service = OidcService::new(config, "http://localhost:8080".to_string());
+
+        assert!(!service.is_redirect_uri_allowed("codexreader://auth"));
+        assert!(!service.is_redirect_uri_allowed("/login/oidc/complete"));
+        assert!(!service.is_redirect_uri_allowed(""));
     }
 
     #[test]
@@ -990,6 +1174,7 @@ mod tests {
             nonce: "nonce".to_string(),
             created_at: Utc::now() - Duration::seconds(AUTH_STATE_TTL_SECS + 100),
             provider_name: "test".to_string(),
+            redirect_uri: None,
         };
         service
             .pending_states
@@ -1001,6 +1186,7 @@ mod tests {
             nonce: "nonce2".to_string(),
             created_at: Utc::now(),
             provider_name: "test".to_string(),
+            redirect_uri: None,
         };
         service
             .pending_states
@@ -1242,6 +1428,7 @@ mod tests {
             auto_create_users: true,
             default_role: OidcDefaultRole::Reader,
             redirect_uri_base: None,
+            allowed_redirect_uris: vec![],
             providers,
         };
 
@@ -1266,6 +1453,7 @@ mod tests {
                 nonce: format!("nonce_{}", i),
                 created_at: Utc::now() - Duration::seconds(AUTH_STATE_TTL_SECS + (i * 10) as i64),
                 provider_name: "test".to_string(),
+                redirect_uri: None,
             };
             service
                 .pending_states
@@ -1278,6 +1466,7 @@ mod tests {
                 nonce: format!("nonce_valid_{}", i),
                 created_at: Utc::now(),
                 provider_name: "test".to_string(),
+                redirect_uri: None,
             };
             service.pending_states.insert(format!("valid_{}", i), state);
         }

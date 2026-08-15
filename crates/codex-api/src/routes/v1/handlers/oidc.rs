@@ -4,7 +4,7 @@
 //! These endpoints enable authentication via external identity providers.
 
 use super::super::dto::{
-    OidcCallbackQuery, OidcCallbackResponse, OidcLoginResponse, OidcProviderInfo,
+    OidcCallbackQuery, OidcCallbackResponse, OidcLoginRequest, OidcLoginResponse, OidcProviderInfo,
     OidcProvidersResponse, UserInfo,
 };
 use super::auth::{build_auth_cookie, issue_refresh_token_if_enabled};
@@ -76,6 +76,12 @@ pub async fn list_providers(State(state): State<Arc<AppState>>) -> Json<OidcProv
 ///
 /// Generates an authorization URL and returns it to the client.
 /// The client should redirect the user to this URL to authenticate.
+///
+/// The body is optional. A native client may supply `redirectUri` to have the
+/// callback hand control back to it (e.g. a custom scheme an
+/// `ASWebAuthenticationSession` can match); the value must be allowlisted in
+/// `auth.oidc.allowed_redirect_uris`. Omitting the body keeps the web flow,
+/// which finishes on the built-in completion page.
 #[utoipa::path(
     post,
     path = "/api/v1/auth/oidc/{provider}/login",
@@ -83,9 +89,11 @@ pub async fn list_providers(State(state): State<Arc<AppState>>) -> Json<OidcProv
     params(
         ("provider" = String, Path, description = "OIDC provider name (e.g., 'authentik', 'keycloak')")
     ),
+    // Optional: a generated client must not be forced to send a body
+    request_body = Option<OidcLoginRequest>,
     responses(
         (status = 200, description = "Authorization URL generated", body = OidcLoginResponse),
-        (status = 400, description = "OIDC not enabled or unknown provider"),
+        (status = 400, description = "OIDC not enabled, unknown provider, or redirect target not allowlisted"),
         (status = 500, description = "Failed to generate authorization URL"),
     ),
     tag = "Auth"
@@ -93,7 +101,18 @@ pub async fn list_providers(State(state): State<Arc<AppState>>) -> Json<OidcProv
 pub async fn login(
     State(state): State<Arc<AppState>>,
     Path(provider): Path<String>,
+    body: axum::body::Bytes,
 ) -> Result<Json<OidcLoginResponse>, ApiError> {
+    // The body is read as raw bytes rather than `Json<_>` so that a bodyless POST
+    // succeeds whatever content type the client happens to send. The web app posts
+    // with no payload and must keep working untouched.
+    let request: OidcLoginRequest = if body.is_empty() {
+        OidcLoginRequest::default()
+    } else {
+        serde_json::from_slice(&body)
+            .map_err(|e| ApiError::BadRequest(format!("Invalid OIDC login body: {}", e)))?
+    };
+
     // Check if OIDC is enabled
     let oidc_service = state
         .oidc_service
@@ -114,15 +133,31 @@ pub async fn login(
         )));
     }
 
+    // Validate the requested redirect target before any state is stored. A fresh
+    // access token ends up in the fragment of whatever target the callback uses, so
+    // only exactly-allowlisted values may get that far.
+    if let Some(requested) = request.redirect_uri.as_deref()
+        && !oidc_service.is_redirect_uri_allowed(requested)
+    {
+        warn!(
+            provider = %provider,
+            redirect_uri = %requested,
+            "Refused OIDC login with a redirect target that is not allowlisted"
+        );
+        return Err(ApiError::BadRequest(format!(
+            "Redirect URI '{}' is not allowed. Add it to auth.oidc.allowed_redirect_uris to permit it.",
+            requested
+        )));
+    }
+
     // Generate authorization URL
-    let (redirect_url, state_token) =
-        oidc_service
-            .generate_auth_url(&provider)
-            .await
-            .map_err(|e| {
-                warn!(error = %e, provider = %provider, "Failed to generate OIDC auth URL");
-                ApiError::Internal(format!("Failed to initiate OIDC login: {}", e))
-            })?;
+    let (redirect_url, state_token) = oidc_service
+        .generate_auth_url(&provider, request.redirect_uri)
+        .await
+        .map_err(|e| {
+            warn!(error = %e, provider = %provider, "Failed to generate OIDC auth URL");
+            ApiError::Internal(format!("Failed to initiate OIDC login: {}", e))
+        })?;
 
     debug!(
         provider = %provider,
