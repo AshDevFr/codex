@@ -1,4 +1,3 @@
-use super::env_override::{env_bool_or, env_or, env_string_opt, parse_csv_list};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -32,20 +31,12 @@ fn default_komga_prefix() -> String {
 
 /// Configuration for the KOReader sync API
 /// Enables KOReader e-readers to sync reading progress with Codex
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(default)]
 pub struct KoreaderApiConfig {
     /// Enable KOReader sync API endpoints
     /// When enabled, routes are mounted at /koreader/*
     pub enabled: bool,
-}
-
-impl Default for KoreaderApiConfig {
-    fn default() -> Self {
-        Self {
-            enabled: env_bool_or("CODEX_KOREADER_API_ENABLED", false),
-        }
-    }
 }
 
 /// Configuration for API rate limiting
@@ -209,13 +200,11 @@ pub struct OidcConfig {
 impl Default for OidcConfig {
     fn default() -> Self {
         Self {
-            enabled: env_bool_or("CODEX_AUTH_OIDC_ENABLED", false),
-            auto_create_users: env_bool_or("CODEX_AUTH_OIDC_AUTO_CREATE_USERS", true),
+            enabled: false,
+            auto_create_users: true,
             default_role: OidcDefaultRole::Reader,
-            redirect_uri_base: std::env::var("CODEX_AUTH_OIDC_REDIRECT_URI_BASE").ok(),
-            allowed_redirect_uris: env_string_opt("CODEX_AUTH_OIDC_ALLOWED_REDIRECT_URIS")
-                .map(|s| parse_csv_list(&s))
-                .unwrap_or_default(),
+            redirect_uri_base: None,
+            allowed_redirect_uris: Vec::new(),
             providers: HashMap::new(),
         }
     }
@@ -224,16 +213,14 @@ impl Default for OidcConfig {
 impl Default for RateLimitConfig {
     fn default() -> Self {
         Self {
-            enabled: env_bool_or("CODEX_RATE_LIMIT_ENABLED", true),
-            anonymous_rps: env_or("CODEX_RATE_LIMIT_ANONYMOUS_RPS", 10),
-            anonymous_burst: env_or("CODEX_RATE_LIMIT_ANONYMOUS_BURST", 50),
-            authenticated_rps: env_or("CODEX_RATE_LIMIT_AUTHENTICATED_RPS", 50),
-            authenticated_burst: env_or("CODEX_RATE_LIMIT_AUTHENTICATED_BURST", 200),
-            exempt_paths: env_string_opt("CODEX_RATE_LIMIT_EXEMPT_PATHS")
-                .map(|s| s.split(',').map(|p| p.trim().to_string()).collect())
-                .unwrap_or_else(default_exempt_paths),
-            cleanup_interval_secs: env_or("CODEX_RATE_LIMIT_CLEANUP_INTERVAL_SECS", 60),
-            bucket_ttl_secs: env_or("CODEX_RATE_LIMIT_BUCKET_TTL_SECS", 300),
+            enabled: true,
+            anonymous_rps: 10,
+            anonymous_burst: 50,
+            authenticated_rps: 50,
+            authenticated_burst: 200,
+            exempt_paths: default_exempt_paths(),
+            cleanup_interval_secs: 60,
+            bucket_ttl_secs: 300,
         }
     }
 }
@@ -241,17 +228,15 @@ impl Default for RateLimitConfig {
 impl Default for KomgaApiConfig {
     fn default() -> Self {
         Self {
-            enabled: env_bool_or("CODEX_KOMGA_API_ENABLED", false),
-            prefix: env_string_opt("CODEX_KOMGA_API_PREFIX").unwrap_or_else(default_komga_prefix),
+            enabled: false,
+            prefix: default_komga_prefix(),
         }
     }
 }
 
 impl Default for TaskConfig {
     fn default() -> Self {
-        Self {
-            worker_count: env_or("CODEX_TASK_WORKER_COUNT", 2),
-        }
+        Self { worker_count: 2 }
     }
 }
 
@@ -298,7 +283,7 @@ pub struct Config {
 }
 
 fn default_data_dir() -> String {
-    env_string_opt("CODEX_DATA_DIR").unwrap_or_else(|| "data".to_string())
+    "data".to_string()
 }
 
 /// Default sub-directory names under data_dir
@@ -309,100 +294,75 @@ const DEFAULT_CACHE_SUBDIR: &str = "cache";
 const DEFAULT_SQLITE_FILENAME: &str = "codex.db";
 
 impl Config {
-    /// Resolve sub-directory paths relative to `data_dir`.
+    /// Root the per-kind data directories under `data_dir`.
     ///
-    /// For each sub-path (thumbnail_dir, uploads_dir, plugins_dir, cache_dir, sqlite path),
-    /// if the value matches the old hardcoded default (e.g., "data/thumbnails") AND no
-    /// explicit env var override is set for that field, replace it with `{data_dir}/{subdir}`.
+    /// Every sub-path (`files.*_dir`, `pdf.cache_dir`, the SQLite file) defaults
+    /// to a subdirectory of `data_dir`, so setting `data_dir: /var/lib/codex`
+    /// moves all of them at once. A path the operator set explicitly is left
+    /// exactly as written.
     ///
-    /// This ensures backward compatibility: users who never set `data_dir` get the same
-    /// paths as before ("data/thumbnails"), while users who set `data_dir: /var/lib/codex`
-    /// get "/var/lib/codex/thumbnails" automatically.
+    /// `was_set` answers "did the config file, the local overlay, or the
+    /// environment provide this key?" for a dotted path. It has to come from
+    /// the loader, because by the time the config is deserialized an explicit
+    /// value and a default are indistinguishable.
     ///
-    /// Explicit overrides (env vars or non-default config values) always take precedence.
-    pub fn resolve_data_dir(&mut self) {
-        let data_dir = &self.data_dir;
-
-        // Helper: build the derived path from data_dir
-        let derive = |subdir: &str| -> String { format!("{}/{}", data_dir, subdir) };
-
-        // Helper: check if a field uses the old hardcoded default ("data/{subdir}")
-        let is_old_default =
-            |value: &str, subdir: &str| -> bool { value == format!("data/{}", subdir) };
-
-        // Resolve files.thumbnail_dir
-        if is_old_default(&self.files.thumbnail_dir, DEFAULT_THUMBNAILS_SUBDIR)
-            && env_string_opt("CODEX_FILES_THUMBNAIL_DIR").is_none()
-        {
-            self.files.thumbnail_dir = derive(DEFAULT_THUMBNAILS_SUBDIR);
-        }
-
-        // Resolve files.uploads_dir
-        if is_old_default(&self.files.uploads_dir, DEFAULT_UPLOADS_SUBDIR)
-            && env_string_opt("CODEX_FILES_UPLOADS_DIR").is_none()
-        {
-            self.files.uploads_dir = derive(DEFAULT_UPLOADS_SUBDIR);
-        }
-
-        // Resolve files.plugins_dir
-        if is_old_default(&self.files.plugins_dir, DEFAULT_PLUGINS_SUBDIR)
-            && env_string_opt("CODEX_FILES_PLUGINS_DIR").is_none()
-        {
-            self.files.plugins_dir = derive(DEFAULT_PLUGINS_SUBDIR);
-        }
-
-        // Resolve pdf.cache_dir
-        if is_old_default(&self.pdf.cache_dir, DEFAULT_CACHE_SUBDIR)
-            && env_string_opt("CODEX_PDF_CACHE_DIR").is_none()
-        {
-            self.pdf.cache_dir = derive(DEFAULT_CACHE_SUBDIR);
-        }
-
-        // Resolve database.sqlite.path
-        if let Some(ref mut sqlite_config) = self.database.sqlite {
-            let old_default = format!("data/{}", DEFAULT_SQLITE_FILENAME);
-            if sqlite_config.path == old_default
-                && env_string_opt("CODEX_DATABASE_SQLITE_PATH").is_none()
-            {
-                sqlite_config.path = derive(DEFAULT_SQLITE_FILENAME);
+    /// The previous implementation guessed instead: it compared each field
+    /// against the literal string `data/<subdir>` and treated a match as
+    /// "unset". That silently rewrote the path of anyone who wrote
+    /// `thumbnail_dir: data/thumbnails` on purpose.
+    pub(crate) fn root_paths_at_data_dir(&mut self, was_set: &dyn Fn(&str) -> bool) {
+        let data_dir = self.data_dir.clone();
+        let derive_unless_set = |key: &str, subdir: &str, slot: &mut String| {
+            if !was_set(key) {
+                *slot = format!("{data_dir}/{subdir}");
             }
+        };
+
+        derive_unless_set(
+            "files.thumbnail_dir",
+            DEFAULT_THUMBNAILS_SUBDIR,
+            &mut self.files.thumbnail_dir,
+        );
+        derive_unless_set(
+            "files.uploads_dir",
+            DEFAULT_UPLOADS_SUBDIR,
+            &mut self.files.uploads_dir,
+        );
+        derive_unless_set(
+            "files.plugins_dir",
+            DEFAULT_PLUGINS_SUBDIR,
+            &mut self.files.plugins_dir,
+        );
+        derive_unless_set(
+            "pdf.cache_dir",
+            DEFAULT_CACHE_SUBDIR,
+            &mut self.pdf.cache_dir,
+        );
+
+        if let Some(sqlite) = self.database.sqlite.as_mut() {
+            derive_unless_set(
+                "database.sqlite.path",
+                DEFAULT_SQLITE_FILENAME,
+                &mut sqlite.path,
+            );
         }
     }
 }
 
 impl Default for Config {
     fn default() -> Self {
-        use std::env;
-
         let mut pragmas = HashMap::new();
         pragmas.insert("foreign_keys".to_string(), "ON".to_string());
         pragmas.insert("journal_mode".to_string(), "WAL".to_string());
 
-        // Determine database type from environment or use SQLite as default
-        let db_type = env::var("CODEX_DATABASE_DB_TYPE")
-            .ok()
-            .and_then(|t| {
-                if t.eq_ignore_ascii_case("postgres") || t.eq_ignore_ascii_case("postgresql") {
-                    Some(DatabaseType::Postgres)
-                } else if t.eq_ignore_ascii_case("sqlite") {
-                    Some(DatabaseType::SQLite)
-                } else {
-                    None
-                }
-            })
-            .unwrap_or(DatabaseType::SQLite);
-
-        // Build database config based on type
-        let (postgres_config, sqlite_config) = match db_type {
-            DatabaseType::Postgres => (Some(PostgresConfig::default()), None),
-            DatabaseType::SQLite => (
-                None,
-                Some(SQLiteConfig {
-                    pragmas: Some(pragmas),
-                    ..SQLiteConfig::default()
-                }),
-            ),
-        };
+        let db_type = DatabaseType::SQLite;
+        let (postgres_config, sqlite_config) = (
+            None,
+            Some(SQLiteConfig {
+                pragmas: Some(pragmas),
+                ..SQLiteConfig::default()
+            }),
+        );
 
         Self {
             data_dir: default_data_dir(),
@@ -453,10 +413,7 @@ impl Default for AuthConfig {
             jwt_expiry_hours: 24,
             refresh_token_enabled: true,
             refresh_token_expiry_days: 30,
-            email_confirmation_required: env_bool_or(
-                "CODEX_AUTH_EMAIL_CONFIRMATION_REQUIRED",
-                false,
-            ),
+            email_confirmation_required: false,
             argon2_memory_cost: 19456,
             argon2_time_cost: 2,
             argon2_parallelism: 1,
@@ -479,16 +436,12 @@ pub struct ApiConfig {
 impl Default for ApiConfig {
     fn default() -> Self {
         Self {
-            base_path: env_string_opt("CODEX_API_BASE_PATH")
-                .unwrap_or_else(|| "/api/v1".to_string()),
-            enable_api_docs: env_bool_or("CODEX_API_ENABLE_API_DOCS", false),
-            api_docs_path: env_string_opt("CODEX_API_DOCS_PATH")
-                .unwrap_or_else(|| "/docs".to_string()),
-            cors_enabled: env_bool_or("CODEX_API_CORS_ENABLED", true),
-            cors_origins: env_string_opt("CODEX_API_CORS_ORIGINS")
-                .map(|s| s.split(',').map(|s| s.trim().to_string()).collect())
-                .unwrap_or_else(|| vec!["*".to_string()]),
-            max_page_size: env_or("CODEX_API_MAX_PAGE_SIZE", 100),
+            base_path: "/api/v1".to_string(),
+            enable_api_docs: false,
+            api_docs_path: "/docs".to_string(),
+            cors_enabled: true,
+            cors_origins: vec!["*".to_string()],
+            max_page_size: 100,
         }
     }
 }
@@ -573,27 +526,10 @@ impl DatabaseConfig {
 
 impl Default for DatabaseConfig {
     fn default() -> Self {
-        use std::env;
-
-        // Determine database type from environment or use SQLite as default
-        let db_type = env::var("CODEX_DATABASE_DB_TYPE")
-            .ok()
-            .and_then(|t| {
-                if t.eq_ignore_ascii_case("postgres") || t.eq_ignore_ascii_case("postgresql") {
-                    Some(DatabaseType::Postgres)
-                } else if t.eq_ignore_ascii_case("sqlite") {
-                    Some(DatabaseType::SQLite)
-                } else {
-                    None
-                }
-            })
-            .unwrap_or(DatabaseType::SQLite);
-
-        // Build database config based on type
-        let (postgres_config, sqlite_config) = match db_type {
-            DatabaseType::Postgres => (Some(PostgresConfig::default()), None),
-            DatabaseType::SQLite => (None, Some(SQLiteConfig::default())),
-        };
+        // SQLite is the default engine; a `postgres` config selects the other
+        // branch through deserialization, not through the environment.
+        let db_type = DatabaseType::SQLite;
+        let (postgres_config, sqlite_config) = (None, Some(SQLiteConfig::default()));
 
         Self {
             db_type,
@@ -607,6 +543,9 @@ impl Default for DatabaseConfig {
 #[serde(rename_all = "lowercase")]
 #[derive(Default)]
 pub enum DatabaseType {
+    /// `postgresql` is accepted too: the v1 environment override matched both
+    /// spellings, and connection strings commonly use the longer one.
+    #[serde(alias = "postgresql")]
     Postgres,
     #[default]
     SQLite,
@@ -677,27 +616,20 @@ pub struct PostgresConfig {
 impl Default for PostgresConfig {
     fn default() -> Self {
         Self {
-            host: env_string_opt("CODEX_DATABASE_POSTGRES_HOST")
-                .unwrap_or_else(|| "localhost".to_string()),
-            port: env_or("CODEX_DATABASE_POSTGRES_PORT", 5432),
-            username: env_string_opt("CODEX_DATABASE_POSTGRES_USERNAME")
-                .unwrap_or_else(|| "codex".to_string()),
-            password: env_string_opt("CODEX_DATABASE_POSTGRES_PASSWORD")
-                .unwrap_or_else(|| "codex".to_string()),
-            database_name: env_string_opt("CODEX_DATABASE_POSTGRES_DATABASE_NAME")
-                .unwrap_or_else(|| "codex".to_string()),
+            host: "localhost".to_string(),
+            port: 5432,
+            username: "codex".to_string(),
+            password: "codex".to_string(),
+            database_name: "codex".to_string(),
             // Pool settings - PostgreSQL can handle more concurrent connections
-            max_connections: env_or("CODEX_DATABASE_POSTGRES_MAX_CONNECTIONS", 25),
-            min_connections: env_or("CODEX_DATABASE_POSTGRES_MIN_CONNECTIONS", 2),
-            acquire_timeout_seconds: env_or("CODEX_DATABASE_POSTGRES_ACQUIRE_TIMEOUT", 30),
-            idle_timeout_seconds: env_or("CODEX_DATABASE_POSTGRES_IDLE_TIMEOUT", 600),
-            max_lifetime_seconds: env_or("CODEX_DATABASE_POSTGRES_MAX_LIFETIME", 3600),
-            operation_deadline_seconds: env_or("CODEX_DATABASE_POSTGRES_OPERATION_DEADLINE", 30),
-            batch_fan_out: env_or("CODEX_DATABASE_POSTGRES_BATCH_FAN_OUT", 8),
-            background_max_connections: env_or(
-                "CODEX_DATABASE_POSTGRES_BACKGROUND_MAX_CONNECTIONS",
-                16,
-            ),
+            max_connections: 25,
+            min_connections: 2,
+            acquire_timeout_seconds: 30,
+            idle_timeout_seconds: 600,
+            max_lifetime_seconds: 3600,
+            operation_deadline_seconds: 30,
+            batch_fan_out: 8,
+            background_max_connections: 16,
         }
     }
 }
@@ -760,21 +692,17 @@ impl Default for SQLiteConfig {
         pragmas.insert("journal_mode".to_string(), "WAL".to_string());
 
         Self {
-            path: env_string_opt("CODEX_DATABASE_SQLITE_PATH")
-                .unwrap_or_else(|| "data/codex.db".to_string()),
+            path: "data/codex.db".to_string(),
             pragmas: Some(pragmas),
             // Pool settings - SQLite is more conservative due to single-writer lock
-            max_connections: env_or("CODEX_DATABASE_SQLITE_MAX_CONNECTIONS", 64),
-            min_connections: env_or("CODEX_DATABASE_SQLITE_MIN_CONNECTIONS", 2),
-            acquire_timeout_seconds: env_or("CODEX_DATABASE_SQLITE_ACQUIRE_TIMEOUT", 30),
-            idle_timeout_seconds: env_or("CODEX_DATABASE_SQLITE_IDLE_TIMEOUT", 300),
-            max_lifetime_seconds: env_or("CODEX_DATABASE_SQLITE_MAX_LIFETIME", 1800),
-            operation_deadline_seconds: env_or("CODEX_DATABASE_SQLITE_OPERATION_DEADLINE", 30),
-            batch_fan_out: env_or("CODEX_DATABASE_SQLITE_BATCH_FAN_OUT", 4),
-            background_max_connections: env_or(
-                "CODEX_DATABASE_SQLITE_BACKGROUND_MAX_CONNECTIONS",
-                4,
-            ),
+            max_connections: 64,
+            min_connections: 2,
+            acquire_timeout_seconds: 30,
+            idle_timeout_seconds: 300,
+            max_lifetime_seconds: 1800,
+            operation_deadline_seconds: 30,
+            batch_fan_out: 4,
+            background_max_connections: 4,
         }
     }
 }
@@ -805,9 +733,9 @@ impl ApplicationConfig {
 impl Default for ApplicationConfig {
     fn default() -> Self {
         Self {
-            host: env_string_opt("CODEX_APPLICATION_HOST").unwrap_or_else(|| "0.0.0.0".to_string()),
-            port: env_or("CODEX_APPLICATION_PORT", 8080),
-            base_url: env_string_opt("CODEX_APPLICATION_BASE_URL"),
+            host: "0.0.0.0".to_string(),
+            port: 8080,
+            base_url: None,
         }
     }
 }
@@ -823,18 +751,9 @@ pub struct LoggingConfig {
 impl Default for LoggingConfig {
     fn default() -> Self {
         Self {
-            level: env_string_opt("CODEX_LOGGING_LEVEL")
-                .and_then(|s| match s.to_lowercase().as_str() {
-                    "error" => Some(LogLevel::Error),
-                    "warn" => Some(LogLevel::Warn),
-                    "info" => Some(LogLevel::Info),
-                    "debug" => Some(LogLevel::Debug),
-                    "trace" => Some(LogLevel::Trace),
-                    _ => None,
-                })
-                .unwrap_or(LogLevel::Info),
-            console: env_bool_or("CODEX_LOGGING_CONSOLE", true),
-            file: env_string_opt("CODEX_LOGGING_FILE"),
+            level: LogLevel::Info,
+            console: true,
+            file: None,
         }
     }
 }
@@ -886,7 +805,7 @@ pub struct ScannerConfig {
 impl Default for ScannerConfig {
     fn default() -> Self {
         Self {
-            max_concurrent_scans: env_or("CODEX_SCANNER_MAX_CONCURRENT_SCANS", 2),
+            max_concurrent_scans: 2,
         }
     }
 }
@@ -905,8 +824,7 @@ pub struct SchedulerConfig {
 impl Default for SchedulerConfig {
     fn default() -> Self {
         Self {
-            timezone: env_string_opt("CODEX_SCHEDULER_TIMEZONE")
-                .unwrap_or_else(|| "UTC".to_string()),
+            timezone: "UTC".to_string(),
         }
     }
 }
@@ -931,12 +849,9 @@ pub struct FilesConfig {
 impl Default for FilesConfig {
     fn default() -> Self {
         Self {
-            thumbnail_dir: env_string_opt("CODEX_FILES_THUMBNAIL_DIR")
-                .unwrap_or_else(|| "data/thumbnails".to_string()),
-            uploads_dir: env_string_opt("CODEX_FILES_UPLOADS_DIR")
-                .unwrap_or_else(|| "data/uploads".to_string()),
-            plugins_dir: env_string_opt("CODEX_FILES_PLUGINS_DIR")
-                .unwrap_or_else(|| "data/plugins".to_string()),
+            thumbnail_dir: "data/thumbnails".to_string(),
+            uploads_dir: "data/uploads".to_string(),
+            plugins_dir: "data/plugins".to_string(),
         }
     }
 }
@@ -982,12 +897,11 @@ pub struct PdfConfig {
 impl Default for PdfConfig {
     fn default() -> Self {
         Self {
-            pdfium_library_path: env_string_opt("CODEX_PDF_PDFIUM_LIBRARY_PATH"),
-            render_dpi: env_or("CODEX_PDF_RENDER_DPI", 150),
-            jpeg_quality: env_or("CODEX_PDF_JPEG_QUALITY", 85),
-            cache_rendered_pages: env_bool_or("CODEX_PDF_CACHE_RENDERED_PAGES", true),
-            cache_dir: env_string_opt("CODEX_PDF_CACHE_DIR")
-                .unwrap_or_else(|| "data/cache".to_string()),
+            pdfium_library_path: None,
+            render_dpi: 150,
+            jpeg_quality: 85,
+            cache_rendered_pages: true,
+            cache_dir: "data/cache".to_string(),
         }
     }
 }
@@ -1019,10 +933,10 @@ pub struct PdfHandleCacheConfig {
 impl Default for PdfHandleCacheConfig {
     fn default() -> Self {
         Self {
-            enabled: env_bool_or("CODEX_PDF_HANDLE_CACHE_ENABLED", true),
-            capacity: env_or("CODEX_PDF_HANDLE_CACHE_CAPACITY", 256),
-            idle_ttl_minutes: env_or("CODEX_PDF_HANDLE_CACHE_IDLE_TTL_MINUTES", 15),
-            sweep_interval_seconds: env_or("CODEX_PDF_HANDLE_CACHE_SWEEP_INTERVAL_SECONDS", 60),
+            enabled: true,
+            capacity: 256,
+            idle_ttl_minutes: 15,
+            sweep_interval_seconds: 60,
         }
     }
 }
@@ -1030,20 +944,14 @@ impl Default for PdfHandleCacheConfig {
 impl Default for EmailConfig {
     fn default() -> Self {
         Self {
-            smtp_host: env_string_opt("CODEX_EMAIL_SMTP_HOST")
-                .unwrap_or_else(|| "localhost".to_string()),
-            smtp_port: env_or("CODEX_EMAIL_SMTP_PORT", 587),
-            smtp_username: env_string_opt("CODEX_EMAIL_SMTP_USERNAME").unwrap_or_default(),
-            smtp_password: env_string_opt("CODEX_EMAIL_SMTP_PASSWORD").unwrap_or_default(),
-            smtp_from_email: env_string_opt("CODEX_EMAIL_SMTP_FROM_EMAIL")
-                .unwrap_or_else(|| "noreply@example.com".to_string()),
-            smtp_from_name: env_string_opt("CODEX_EMAIL_SMTP_FROM_NAME")
-                .unwrap_or_else(|| "Codex".to_string()),
-            verification_token_expiry_hours: env_or(
-                "CODEX_EMAIL_VERIFICATION_TOKEN_EXPIRY_HOURS",
-                24,
-            ),
-            verification_url_base: env_string_opt("CODEX_EMAIL_VERIFICATION_URL_BASE"),
+            smtp_host: "localhost".to_string(),
+            smtp_port: 587,
+            smtp_username: String::new(),
+            smtp_password: String::new(),
+            smtp_from_email: "noreply@example.com".to_string(),
+            smtp_from_name: "Codex".to_string(),
+            verification_token_expiry_hours: 24,
+            verification_url_base: None,
         }
     }
 }
@@ -1059,9 +967,14 @@ impl Default for EmailConfig {
 pub enum OtlpProtocol {
     #[default]
     Grpc,
-    #[serde(alias = "http-protobuf", alias = "http_protobuf", alias = "httpproto")]
+    #[serde(
+        alias = "http/protobuf",
+        alias = "http-protobuf",
+        alias = "http_protobuf",
+        alias = "httpproto"
+    )]
     HttpProtobuf,
-    #[serde(alias = "http-json", alias = "http_json")]
+    #[serde(alias = "http/json", alias = "http-json", alias = "http_json")]
     HttpJson,
 }
 
@@ -1124,20 +1037,11 @@ impl OtlpConfig {
 impl Default for OtlpConfig {
     fn default() -> Self {
         Self {
-            endpoint: env_string_opt("CODEX_OBSERVABILITY_OTLP_ENDPOINT").unwrap_or_default(),
-            protocol: env_string_opt("CODEX_OBSERVABILITY_OTLP_PROTOCOL")
-                .and_then(|s| match s.to_lowercase().as_str() {
-                    "grpc" => Some(OtlpProtocol::Grpc),
-                    "http/protobuf" | "http-protobuf" | "http_protobuf" | "httpproto" => {
-                        Some(OtlpProtocol::HttpProtobuf)
-                    }
-                    "http/json" | "http-json" | "http_json" => Some(OtlpProtocol::HttpJson),
-                    _ => None,
-                })
-                .unwrap_or_default(),
+            endpoint: String::new(),
+            protocol: OtlpProtocol::default(),
             headers: HashMap::new(),
-            timeout_ms: env_or("CODEX_OBSERVABILITY_OTLP_TIMEOUT_MS", 5000),
-            proxy_endpoint: env_string_opt("CODEX_OBSERVABILITY_OTLP_PROXY_ENDPOINT"),
+            timeout_ms: 5000,
+            proxy_endpoint: None,
         }
     }
 }
@@ -1158,8 +1062,8 @@ pub struct ObservabilityTracesConfig {
 impl Default for ObservabilityTracesConfig {
     fn default() -> Self {
         Self {
-            enabled: env_bool_or("CODEX_OBSERVABILITY_TRACES_ENABLED", true),
-            sample_ratio: env_or("CODEX_OBSERVABILITY_TRACES_SAMPLE_RATIO", 1.0_f64),
+            enabled: true,
+            sample_ratio: 1.0_f64,
         }
     }
 }
@@ -1179,8 +1083,8 @@ pub struct ObservabilityMetricsConfig {
 impl Default for ObservabilityMetricsConfig {
     fn default() -> Self {
         Self {
-            enabled: env_bool_or("CODEX_OBSERVABILITY_METRICS_ENABLED", true),
-            export_interval_ms: env_or("CODEX_OBSERVABILITY_METRICS_EXPORT_INTERVAL_MS", 30000),
+            enabled: true,
+            export_interval_ms: 30000,
         }
     }
 }
@@ -1208,10 +1112,9 @@ pub struct ObservabilityBrowserConfig {
 impl Default for ObservabilityBrowserConfig {
     fn default() -> Self {
         Self {
-            enabled: env_bool_or("CODEX_OBSERVABILITY_BROWSER_ENABLED", false),
-            proxy_path: env_string_opt("CODEX_OBSERVABILITY_BROWSER_PROXY_PATH")
-                .unwrap_or_else(|| "/api/v1/observability/otlp".to_string()),
-            sample_ratio: env_or("CODEX_OBSERVABILITY_BROWSER_SAMPLE_RATIO", 0.1_f64),
+            enabled: false,
+            proxy_path: "/api/v1/observability/otlp".to_string(),
+            sample_ratio: 0.1_f64,
         }
     }
 }
@@ -1247,9 +1150,8 @@ pub struct ObservabilityConfig {
 impl Default for ObservabilityConfig {
     fn default() -> Self {
         Self {
-            enabled: env_bool_or("CODEX_OBSERVABILITY_ENABLED", false),
-            service_name: env_string_opt("CODEX_OBSERVABILITY_SERVICE_NAME")
-                .unwrap_or_else(|| "codex".to_string()),
+            enabled: false,
+            service_name: "codex".to_string(),
             otlp: OtlpConfig::default(),
             traces: ObservabilityTracesConfig::default(),
             metrics: ObservabilityMetricsConfig::default(),
@@ -1261,6 +1163,12 @@ impl Default for ObservabilityConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // The `resolve_data_dir` unit tests that lived here are gone with the
+    // method. Rooting paths under `data_dir` now depends on which layer
+    // supplied each key, so it can only be exercised through the real loader:
+    // see the path-rooting tests in `loader.rs`.
+
     use serial_test::serial;
 
     #[test]
@@ -2500,97 +2408,6 @@ database:
     }
 
     #[test]
-    fn test_resolve_data_dir_replaces_defaults() {
-        let mut config = Config {
-            data_dir: "/var/lib/codex".to_string(),
-            ..Config::default()
-        };
-        // Set old defaults
-        config.files.thumbnail_dir = "data/thumbnails".to_string();
-        config.files.uploads_dir = "data/uploads".to_string();
-        config.files.plugins_dir = "data/plugins".to_string();
-        config.pdf.cache_dir = "data/cache".to_string();
-        config.database.sqlite = Some(SQLiteConfig {
-            path: "data/codex.db".to_string(),
-            pragmas: None,
-            ..SQLiteConfig::default()
-        });
-
-        config.resolve_data_dir();
-
-        assert_eq!(config.files.thumbnail_dir, "/var/lib/codex/thumbnails");
-        assert_eq!(config.files.uploads_dir, "/var/lib/codex/uploads");
-        assert_eq!(config.files.plugins_dir, "/var/lib/codex/plugins");
-        assert_eq!(config.pdf.cache_dir, "/var/lib/codex/cache");
-        assert_eq!(
-            config.database.sqlite.as_ref().unwrap().path,
-            "/var/lib/codex/codex.db"
-        );
-    }
-
-    #[test]
-    fn test_resolve_data_dir_preserves_explicit_overrides() {
-        let mut config = Config {
-            data_dir: "/var/lib/codex".to_string(),
-            ..Config::default()
-        };
-        // Set custom (non-default) paths that should be preserved
-        config.files.thumbnail_dir = "/custom/thumbs".to_string();
-        config.files.uploads_dir = "/custom/uploads".to_string();
-        config.files.plugins_dir = "/custom/plugins".to_string();
-        config.pdf.cache_dir = "/custom/cache".to_string();
-        config.database.sqlite = Some(SQLiteConfig {
-            path: "/custom/db.sqlite".to_string(),
-            pragmas: None,
-            ..SQLiteConfig::default()
-        });
-
-        config.resolve_data_dir();
-
-        // Non-default paths should NOT be replaced
-        assert_eq!(config.files.thumbnail_dir, "/custom/thumbs");
-        assert_eq!(config.files.uploads_dir, "/custom/uploads");
-        assert_eq!(config.files.plugins_dir, "/custom/plugins");
-        assert_eq!(config.pdf.cache_dir, "/custom/cache");
-        assert_eq!(
-            config.database.sqlite.as_ref().unwrap().path,
-            "/custom/db.sqlite"
-        );
-    }
-
-    #[test]
-    fn test_resolve_data_dir_noop_with_default_data_dir() {
-        let mut config = Config::default();
-        // data_dir is "data" by default, so old defaults like "data/thumbnails"
-        // should remain "data/thumbnails"
-        let original_thumb = config.files.thumbnail_dir.clone();
-        let original_uploads = config.files.uploads_dir.clone();
-        let original_plugins = config.files.plugins_dir.clone();
-        let original_cache = config.pdf.cache_dir.clone();
-
-        config.resolve_data_dir();
-
-        assert_eq!(config.files.thumbnail_dir, original_thumb);
-        assert_eq!(config.files.uploads_dir, original_uploads);
-        assert_eq!(config.files.plugins_dir, original_plugins);
-        assert_eq!(config.pdf.cache_dir, original_cache);
-    }
-
-    #[test]
-    fn test_resolve_data_dir_no_sqlite_config() {
-        let mut config = Config {
-            data_dir: "/var/lib/codex".to_string(),
-            ..Config::default()
-        };
-        config.database.sqlite = None;
-
-        // Should not panic when sqlite is None
-        config.resolve_data_dir();
-
-        assert_eq!(config.files.thumbnail_dir, "/var/lib/codex/thumbnails");
-    }
-
-    #[test]
     fn test_plugins_dir_in_files_config() {
         let yaml_content = r#"
 files:
@@ -2739,5 +2556,58 @@ observability:
         // Whitespace around the override is trimmed.
         cfg.proxy_endpoint = Some("  http://collector:4318  ".into());
         assert_eq!(cfg.effective_proxy_endpoint(), "http://collector:4318");
+    }
+}
+
+#[cfg(test)]
+mod default_snapshot {
+    use super::*;
+
+    /// Byte-for-byte record of `Config::default()`, captured before the
+    /// environment reads were lifted out of the `Default` impls.
+    ///
+    /// Those impls used to call `env_or` / `env_bool_or` / `env_string_opt`,
+    /// which meant the "defaults" layer silently depended on the environment.
+    /// Moving to a single figment precedence chain required turning ~40 of
+    /// those into literals, and a mistyped literal there is invisible: the
+    /// config still loads, just with a different number in it. This snapshot
+    /// is what makes that class of slip loud.
+    ///
+    /// To regenerate deliberately, print `serde_json::to_string_pretty` of
+    /// `Config::default()` and overwrite the file.
+    const GOLDEN: &str = include_str!("testdata/default_config.json");
+
+    #[test]
+    fn defaults_match_the_recorded_snapshot() {
+        let expected: serde_json::Value =
+            serde_json::from_str(GOLDEN).expect("golden snapshot should be valid JSON");
+        let actual = serde_json::to_value(Config::default()).unwrap();
+
+        assert_eq!(
+            actual, expected,
+            "Config::default() drifted from the recorded snapshot. If the change \
+             is intentional, regenerate src/testdata/default_config.json; if not, \
+             a default was changed by accident."
+        );
+    }
+
+    /// The defaults layer must not read the environment. Anything that does
+    /// belongs in the figment env provider, which sits above the file layer;
+    /// a `Default` impl that reads env would sit *below* it and would win or
+    /// lose depending on whether the key also appears in the config file.
+    #[test]
+    fn defaults_do_not_read_the_environment() {
+        let source = include_str!("types.rs");
+        let body = source
+            .split_once("mod default_snapshot")
+            .map(|(before, _)| before)
+            .unwrap_or(source);
+
+        for needle in ["env_or(", "env_bool_or(", "env::var("] {
+            assert!(
+                !body.contains(needle),
+                "`{needle}` reappeared in types.rs; defaults must stay environment-independent"
+            );
+        }
     }
 }

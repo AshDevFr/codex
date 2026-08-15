@@ -10,10 +10,12 @@ path = "src/lib.rs"
 
 [dependencies]
 serde = { workspace = true }
+figment = { version = "0.10", features = ["yaml", "toml", "env"] }
 serde_json = "1.0"
 serde_yaml = { workspace = true }
 anyhow = { workspace = true }
 
 [dev-dependencies]
+figment = { version = "0.10", features = ["test"] }
 tempfile = { workspace = true }
 serial_test = { workspace = true }

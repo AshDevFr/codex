@@ -17,12 +17,10 @@
 //! this stays useful long after the v2 rename is behind us.
 
 use crate::keys::{KeyRegistry, registry};
+use crate::loader::ENV_PREFIX;
 use crate::types::Config;
 use std::collections::{BTreeSet, HashMap};
 use std::sync::OnceLock;
-
-/// The prefix every Codex environment variable carries.
-pub const ENV_PREFIX: &str = "CODEX_";
 
 /// `CODEX_`-prefixed variables that are deliberately not config keys.
 ///

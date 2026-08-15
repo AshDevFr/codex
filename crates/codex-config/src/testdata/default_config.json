@@ -1,0 +1,138 @@
+{
+  "data_dir": "data",
+  "database": {
+    "db_type": "sqlite",
+    "sqlite": {
+      "path": "data/codex.db",
+      "pragmas": {
+        "journal_mode": "WAL",
+        "foreign_keys": "ON"
+      },
+      "max_connections": 64,
+      "min_connections": 2,
+      "batch_fan_out": 4,
+      "background_max_connections": 4,
+      "acquire_timeout_seconds": 30,
+      "idle_timeout_seconds": 300,
+      "max_lifetime_seconds": 1800,
+      "operation_deadline_seconds": 30
+    }
+  },
+  "application": {
+    "host": "0.0.0.0",
+    "port": 8080
+  },
+  "logging": {
+    "level": "info",
+    "console": true,
+    "file": null
+  },
+  "auth": {
+    "jwt_secret": "INSECURE_DEFAULT_SECRET_CHANGE_IN_PRODUCTION",
+    "jwt_expiry_hours": 24,
+    "refresh_token_enabled": true,
+    "refresh_token_expiry_days": 30,
+    "email_confirmation_required": false,
+    "argon2_memory_cost": 19456,
+    "argon2_time_cost": 2,
+    "argon2_parallelism": 1,
+    "oidc": {
+      "enabled": false,
+      "auto_create_users": true,
+      "default_role": "reader",
+      "allowed_redirect_uris": [],
+      "providers": {}
+    }
+  },
+  "api": {
+    "base_path": "/api/v1",
+    "enable_api_docs": false,
+    "api_docs_path": "/docs",
+    "cors_enabled": true,
+    "cors_origins": [
+      "*"
+    ],
+    "max_page_size": 100
+  },
+  "email": {
+    "smtp_host": "localhost",
+    "smtp_port": 587,
+    "smtp_username": "",
+    "smtp_password": "",
+    "smtp_from_email": "noreply@example.com",
+    "smtp_from_name": "Codex",
+    "verification_token_expiry_hours": 24
+  },
+  "task": {
+    "worker_count": 2
+  },
+  "scanner": {
+    "max_concurrent_scans": 2
+  },
+  "scheduler": {
+    "timezone": "UTC"
+  },
+  "files": {
+    "thumbnail_dir": "data/thumbnails",
+    "uploads_dir": "data/uploads",
+    "plugins_dir": "data/plugins"
+  },
+  "pdf": {
+    "pdfium_library_path": null,
+    "render_dpi": 150,
+    "jpeg_quality": 85,
+    "cache_rendered_pages": true,
+    "cache_dir": "data/cache"
+  },
+  "pdf_handle_cache": {
+    "enabled": true,
+    "capacity": 256,
+    "idle_ttl_minutes": 15,
+    "sweep_interval_seconds": 60
+  },
+  "komga_api": {
+    "enabled": false,
+    "prefix": "komga"
+  },
+  "koreader_api": {
+    "enabled": false
+  },
+  "rate_limit": {
+    "enabled": true,
+    "anonymous_rps": 10,
+    "anonymous_burst": 50,
+    "authenticated_rps": 50,
+    "authenticated_burst": 200,
+    "exempt_paths": [
+      "/health",
+      "/api/v1/events",
+      "/api/v1/events/**"
+    ],
+    "cleanup_interval_secs": 60,
+    "bucket_ttl_secs": 300
+  },
+  "observability": {
+    "enabled": false,
+    "service_name": "codex",
+    "otlp": {
+      "endpoint": "",
+      "protocol": "grpc",
+      "headers": {},
+      "timeout_ms": 5000,
+      "proxy_endpoint": null
+    },
+    "traces": {
+      "enabled": true,
+      "sample_ratio": 1.0
+    },
+    "metrics": {
+      "enabled": true,
+      "export_interval_ms": 30000
+    },
+    "browser": {
+      "enabled": false,
+      "proxy_path": "/api/v1/observability/otlp",
+      "sample_ratio": 0.1
+    }
+  }
+}
