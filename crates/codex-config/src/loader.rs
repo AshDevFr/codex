@@ -487,6 +487,155 @@ auth:
         );
     }
 
+    // ---- input shapes the v1 override layer accepted ----
+
+    #[test]
+    fn bools_accept_one_and_zero_from_the_environment() {
+        Jail::expect_with(|jail| {
+            jail.set_env("CODEX_KOMGA_API__ENABLED", "1");
+            jail.set_env("CODEX_API__CORS_ENABLED", "0");
+
+            let config = Config::load(jail.directory().join("absent.yaml")).unwrap();
+
+            assert!(config.komga_api.enabled);
+            assert!(!config.api.cors_enabled);
+            Ok(())
+        });
+    }
+
+    /// v1 read `eq_ignore_ascii_case("true") || == "1"`, so a typo meant
+    /// `false` and the operator never found out. It is now an error.
+    #[test]
+    fn a_misspelled_bool_stops_startup() {
+        Jail::expect_with(|jail| {
+            jail.set_env("CODEX_KOMGA_API__ENABLED", "ture");
+            let error = Config::load(jail.directory().join("absent.yaml")).unwrap_err();
+            assert!(
+                format!("{error:#}").contains("ture"),
+                "error should quote the bad value: {error:#}"
+            );
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn comma_separated_lists_come_through_the_environment() {
+        Jail::expect_with(|jail| {
+            jail.set_env(
+                "CODEX_API__CORS_ORIGINS",
+                "https://a.example, https://b.example",
+            );
+            jail.set_env("CODEX_RATE_LIMIT__EXEMPT_PATHS", "/health,/metrics");
+
+            let config = Config::load(jail.directory().join("absent.yaml")).unwrap();
+
+            assert_eq!(
+                config.api.cors_origins,
+                vec!["https://a.example", "https://b.example"]
+            );
+            assert_eq!(config.rate_limit.exempt_paths, vec!["/health", "/metrics"]);
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn a_yaml_sequence_still_works_for_the_same_field() {
+        Jail::expect_with(|jail| {
+            jail.create_file(
+                "codex.yaml",
+                "api:\n  cors_origins:\n    - https://a.example\n    - https://b.example\n",
+            )?;
+            let config = Config::load(jail.directory().join("codex.yaml")).unwrap();
+            assert_eq!(
+                config.api.cors_origins,
+                vec!["https://a.example", "https://b.example"]
+            );
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn otlp_headers_accept_key_value_pairs() {
+        Jail::expect_with(|jail| {
+            jail.set_env(
+                "CODEX_OBSERVABILITY__OTLP__HEADERS",
+                "authorization=Bearer tok,x-tenant=acme",
+            );
+
+            let config = Config::load(jail.directory().join("absent.yaml")).unwrap();
+
+            assert_eq!(
+                config
+                    .observability
+                    .otlp
+                    .headers
+                    .get("authorization")
+                    .map(String::as_str),
+                Some("Bearer tok")
+            );
+            assert_eq!(
+                config
+                    .observability
+                    .otlp
+                    .headers
+                    .get("x-tenant")
+                    .map(String::as_str),
+                Some("acme")
+            );
+            Ok(())
+        });
+    }
+
+    /// Blanking a variable and unsetting it are the same gesture in most
+    /// deployment tooling, and v1's `env_string_opt` filtered empties.
+    #[test]
+    fn an_empty_optional_string_means_unset() {
+        Jail::expect_with(|jail| {
+            jail.create_file("codex.yaml", "logging:\n  file: /var/log/codex.log\n")?;
+            jail.set_env("CODEX_LOGGING__FILE", "");
+
+            let config = Config::load(jail.directory().join("codex.yaml")).unwrap();
+
+            assert_eq!(config.logging.file, None);
+            Ok(())
+        });
+    }
+
+    /// v1 set role mappings one role at a time; each value is a group list.
+    #[test]
+    fn oidc_role_mapping_is_set_per_role() {
+        Jail::expect_with(|jail| {
+            jail.set_env(
+                "CODEX_AUTH__OIDC__PROVIDERS__AUTHENTIK__ISSUER_URL",
+                "https://idp.example.com",
+            );
+            jail.set_env(
+                "CODEX_AUTH__OIDC__PROVIDERS__AUTHENTIK__ROLE_MAPPING__ADMIN",
+                "codex-admins, platform",
+            );
+
+            let config = Config::load(jail.directory().join("absent.yaml")).unwrap();
+
+            let provider = &config.auth.oidc.providers["authentik"];
+            assert_eq!(provider.issuer_url, "https://idp.example.com");
+            assert_eq!(
+                provider.role_mapping.get("admin"),
+                Some(&vec!["codex-admins".to_string(), "platform".to_string()])
+            );
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn database_type_accepts_the_longer_spelling() {
+        Jail::expect_with(|jail| {
+            jail.set_env("CODEX_DATABASE__DB_TYPE", "postgresql");
+            let config = Config::load(jail.directory().join("absent.yaml")).unwrap();
+            assert_eq!(config.database.db_type, DatabaseType::Postgres);
+            Ok(())
+        });
+    }
+
     #[test]
     fn overlay_path_gets_a_local_infix() {
         assert_eq!(
