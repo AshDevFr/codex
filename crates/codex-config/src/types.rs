@@ -328,10 +328,68 @@ fn default_data_dir() -> String {
 const DEFAULT_THUMBNAILS_SUBDIR: &str = "thumbnails";
 const DEFAULT_UPLOADS_SUBDIR: &str = "uploads";
 const DEFAULT_PLUGINS_SUBDIR: &str = "plugins";
+/// A configuration that parsed but does not describe a usable system.
+#[derive(Debug)]
+pub struct ConfigError(String);
+
+impl std::fmt::Display for ConfigError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for ConfigError {}
+
 const DEFAULT_CACHE_SUBDIR: &str = "cache";
 const DEFAULT_SQLITE_FILENAME: &str = "codex.db";
 
 impl Config {
+    /// Cross-field checks that per-field deserialization cannot express.
+    ///
+    /// Called at the end of [`Config::load`], so a structurally valid but
+    /// semantically broken configuration fails at startup with a message about
+    /// the actual problem, rather than at the first request or the first cron
+    /// tick.
+    pub fn validate(&self) -> Result<(), ConfigError> {
+        match self.database.db_type {
+            DatabaseType::Postgres if self.database.postgres.is_none() => {
+                return Err(ConfigError(
+                    "database.db_type is `postgres` but there is no \
+                     `database.postgres` section. Add one, or set at least \
+                     CODEX_DATABASE__POSTGRES__HOST."
+                        .to_string(),
+                ));
+            }
+            DatabaseType::SQLite if self.database.sqlite.is_none() => {
+                return Err(ConfigError(
+                    "database.db_type is `sqlite` but there is no \
+                     `database.sqlite` section."
+                        .to_string(),
+                ));
+            }
+            _ => {}
+        }
+
+        // Only checked when OIDC is on: a half-written provider left behind in
+        // a disabled block should not stop the server.
+        if self.auth.oidc.enabled {
+            for (name, provider) in &self.auth.oidc.providers {
+                if provider.issuer_url.trim().is_empty() {
+                    return Err(ConfigError(format!(
+                        "OIDC provider `{name}` has no issuer_url"
+                    )));
+                }
+                if provider.client_id.trim().is_empty() {
+                    return Err(ConfigError(format!(
+                        "OIDC provider `{name}` has no client_id"
+                    )));
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     /// Root the per-kind data directories under `data_dir`.
     ///
     /// Every sub-path (`files.*_dir`, `pdf.cache_dir`, the SQLite file) defaults
