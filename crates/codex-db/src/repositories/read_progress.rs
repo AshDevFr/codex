@@ -184,8 +184,39 @@ impl ReadProgressRepository {
         device: &DeviceContext,
     ) -> Result<read_progress::Model> {
         let txn = db.begin().await?;
-        let now = Utc::now();
+        let result = Self::upsert_in(
+            &txn,
+            user_id,
+            book_id,
+            current_page,
+            progress_percentage,
+            completed,
+            r2_progression,
+            device,
+            Utc::now(),
+        )
+        .await?;
+        txn.commit().await?;
+        Ok(result)
+    }
 
+    /// The upsert itself, over a caller-supplied connection.
+    ///
+    /// Separate from [`Self::upsert_txn`] so a series-wide operation can run
+    /// hundreds of these in one transaction rather than paying a commit per
+    /// book. A single book still gets its own transaction through the wrapper.
+    #[allow(clippy::too_many_arguments)]
+    async fn upsert_in<C: ConnectionTrait>(
+        db: &C,
+        user_id: Uuid,
+        book_id: Uuid,
+        current_page: i32,
+        progress_percentage: Option<f64>,
+        completed: bool,
+        r2_progression: Option<String>,
+        device: &DeviceContext,
+        now: chrono::DateTime<Utc>,
+    ) -> Result<read_progress::Model> {
         let kind = if completed {
             SessionKind::Completed
         } else {
@@ -196,10 +227,8 @@ impl ReadProgressRepository {
             .with_percentage(progress_percentage)
             .with_progression(r2_progression);
 
-        ReadingSessionRepository::append(&txn, session, now).await?;
-        let result = Self::refold(&txn, user_id, book_id).await?;
-
-        txn.commit().await?;
+        ReadingSessionRepository::append(db, session, now).await?;
+        let result = Self::refold(db, user_id, book_id).await?;
 
         // A write that reports a position always leaves a row behind, so the
         // fold cannot legitimately come back empty here.
@@ -312,16 +341,30 @@ impl ReadProgressRepository {
         device: &DeviceContext,
     ) -> Result<bool> {
         let txn = db.begin().await?;
-        let now = Utc::now();
+        let existed = Self::reset_in(&txn, user_id, book_id, device, Utc::now()).await?;
+        txn.commit().await?;
+        Ok(existed)
+    }
 
-        let existed = Self::get_in(&txn, user_id, book_id).await?.is_some();
+    /// The reset itself, over a caller-supplied connection.
+    ///
+    /// Separate from [`Self::reset_txn`] for the same reason as the upsert: a
+    /// series of several hundred volumes should cost one commit, not one per
+    /// book.
+    async fn reset_in<C: ConnectionTrait>(
+        db: &C,
+        user_id: Uuid,
+        book_id: Uuid,
+        device: &DeviceContext,
+        now: chrono::DateTime<Utc>,
+    ) -> Result<bool> {
+        let existed = Self::get_in(db, user_id, book_id).await?.is_some();
 
         let session =
             NewSession::from_legacy_write(user_id, book_id, device, SessionKind::Reset, now);
-        ReadingSessionRepository::append(&txn, session, now).await?;
-        Self::refold(&txn, user_id, book_id).await?;
+        ReadingSessionRepository::append(db, session, now).await?;
+        Self::refold(db, user_id, book_id).await?;
 
-        txn.commit().await?;
         Ok(existed)
     }
 
@@ -526,14 +569,45 @@ impl ReadProgressRepository {
         book_ids: Vec<(Uuid, i32)>,
         device: &DeviceContext,
     ) -> Result<usize> {
+        match Self::mark_series_as_read_txn(db, user_id, &book_ids, device).await {
+            Err(e) if Self::is_unique_violation(&e) => {
+                // A concurrent writer poisoned the batch. The whole series rolled
+                // back, so retrying is a clean re-run rather than a partial redo.
+                Self::mark_series_as_read_txn(db, user_id, &book_ids, device).await
+            }
+            other => other,
+        }
+    }
+
+    /// One transaction for the whole series.
+    ///
+    /// Each book still gets its own event in the log, because a later
+    /// completion has to be recognisable as a genuine re-read per book. What is
+    /// shared is the commit: a series can run to several hundred volumes, and a
+    /// commit each turns one click into hundreds of round trips and fsyncs.
+    ///
+    /// All of them carry the same timestamp, which is also the more honest
+    /// description of what happened: the reader marked the series in one go.
+    async fn mark_series_as_read_txn(
+        db: &DatabaseConnection,
+        user_id: Uuid,
+        book_ids: &[(Uuid, i32)],
+        device: &DeviceContext,
+    ) -> Result<usize> {
+        let txn = db.begin().await?;
+        let now = Utc::now();
         let mut count = 0;
 
-        // Process each book - page_count is 1-indexed (last page = page_count)
-        for (book_id, page_count) in book_ids {
-            Self::upsert_with_device(db, user_id, book_id, page_count, true, device).await?;
+        // page_count is 1-indexed, so the last page is the page count itself.
+        for &(book_id, page_count) in book_ids {
+            Self::upsert_in(
+                &txn, user_id, book_id, page_count, None, true, None, device, now,
+            )
+            .await?;
             count += 1;
         }
 
+        txn.commit().await?;
         Ok(count)
     }
 
@@ -560,14 +634,34 @@ impl ReadProgressRepository {
         book_ids: Vec<Uuid>,
         device: &DeviceContext,
     ) -> Result<u64> {
+        match Self::mark_series_as_unread_txn(db, user_id, &book_ids, device).await {
+            Err(e) if Self::is_unique_violation(&e) => {
+                Self::mark_series_as_unread_txn(db, user_id, &book_ids, device).await
+            }
+            other => other,
+        }
+    }
+
+    /// One transaction for the whole series. See
+    /// [`Self::mark_series_as_read_txn`] for why the commit is shared while the
+    /// events are not.
+    async fn mark_series_as_unread_txn(
+        db: &DatabaseConnection,
+        user_id: Uuid,
+        book_ids: &[Uuid],
+        device: &DeviceContext,
+    ) -> Result<u64> {
+        let txn = db.begin().await?;
+        let now = Utc::now();
         let mut cleared = 0;
 
-        for book_id in book_ids {
-            if Self::reset_txn(db, user_id, book_id, device).await? {
+        for &book_id in book_ids {
+            if Self::reset_in(&txn, user_id, book_id, device, now).await? {
                 cleared += 1;
             }
         }
 
+        txn.commit().await?;
         Ok(cleared)
     }
 }
@@ -1922,6 +2016,78 @@ mod tests {
             Some(r#"{"locator":"chapter-3"}"#),
             "the reading position in an EPUB must survive the sweep"
         );
+    }
+
+    /// What marking a very long series costs.
+    ///
+    /// Sized from a real library whose longest series runs to 800 volumes.
+    /// Both operations became per-book when progress moved onto the session
+    /// log, so this is the check that the convenience of one click has not
+    /// turned into a request that times out.
+    ///
+    /// Run with
+    /// `cargo test -p codex-db --lib marking_a_long_series -- --ignored --nocapture`.
+    #[tokio::test]
+    #[ignore = "benchmark, not a correctness check"]
+    async fn marking_a_long_series_stays_responsive() {
+        let db = setup_test_db().await;
+        let user = create_test_user(&db).await;
+
+        let library =
+            LibraryRepository::create(&db, "Bench Library", "/bench", ScanningStrategy::Default)
+                .await
+                .unwrap();
+        let series = SeriesRepository::create(&db, library.id, "Long Series", None)
+            .await
+            .unwrap();
+
+        let mut books = Vec::new();
+        for _ in 0..800 {
+            let book = books::Model {
+                id: Uuid::new_v4(),
+                series_id: series.id,
+                library_id: library.id,
+                path: format!("/bench/{}.cbz", Uuid::new_v4()),
+                file_name: "v.cbz".to_string(),
+                file_size: 1024,
+                file_hash: format!("hash_{}", Uuid::new_v4()),
+                partial_hash: String::new(),
+                format: "cbz".to_string(),
+                page_count: 20,
+                deleted: false,
+                analyzed: false,
+                analysis_error: None,
+                analysis_errors: None,
+                modified_at: Utc::now(),
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
+                thumbnail_path: None,
+                thumbnail_generated_at: None,
+                koreader_hash: None,
+                epub_positions: None,
+                epub_spine_items: None,
+            };
+            books.push(BookRepository::create(&db, &book, None).await.unwrap());
+        }
+
+        let as_read: Vec<(Uuid, i32)> = books.iter().map(|b| (b.id, b.page_count)).collect();
+        let ids: Vec<Uuid> = books.iter().map(|b| b.id).collect();
+
+        let started = std::time::Instant::now();
+        ReadProgressRepository::mark_series_as_read(&db, user.id, as_read)
+            .await
+            .unwrap();
+        let read_elapsed = started.elapsed();
+
+        let started = std::time::Instant::now();
+        ReadProgressRepository::mark_series_as_unread(&db, user.id, ids)
+            .await
+            .unwrap();
+        let unread_elapsed = started.elapsed();
+
+        println!("books in series:      {}", books.len());
+        println!("mark series read:     {read_elapsed:?}");
+        println!("mark series unread:   {unread_elapsed:?}");
     }
 
     /// Two users completing the same book each get their own entry.
