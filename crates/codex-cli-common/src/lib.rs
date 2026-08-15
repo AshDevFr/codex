@@ -314,9 +314,15 @@ fn build_file_appender(
 /// Display database configuration
 pub fn display_database_config(config: &Config) {
     info!("Database Configuration:");
+    // No unwrapping: a `db_type` whose section is missing is rejected by
+    // `Config::validate` during load, so reaching here without one would mean
+    // a caller bypassed the loader. Logging is not the place to abort.
     match config.database.db_type {
         DatabaseType::Postgres => {
-            let pg_config = config.database.postgres.as_ref().unwrap();
+            let Some(pg_config) = config.database.postgres.as_ref() else {
+                warn!("  Type: PostgreSQL, but no `database.postgres` section is configured");
+                return;
+            };
             info!("  Type: PostgreSQL");
             info!("  Host: {}", pg_config.host);
             info!("  Port: {}", pg_config.port);
@@ -324,7 +330,10 @@ pub fn display_database_config(config: &Config) {
             info!("  Username: {}", pg_config.username);
         }
         DatabaseType::SQLite => {
-            let sqlite_config = config.database.sqlite.as_ref().unwrap();
+            let Some(sqlite_config) = config.database.sqlite.as_ref() else {
+                warn!("  Type: SQLite, but no `database.sqlite` section is configured");
+                return;
+            };
             info!("  Type: SQLite");
             info!("  Path: {}", sqlite_config.path);
             if let Some(pragmas) = &sqlite_config.pragmas {

@@ -50,6 +50,7 @@ impl Config {
             .with_context(|| format!("failed to parse configuration from {}", path.display()))?;
 
         config.root_paths_at_data_dir(&|key| overrides.find_value(key).is_ok());
+        config.validate()?;
 
         Ok(config)
     }
@@ -467,6 +468,10 @@ auth:
 
             let var = crate::v2_name_for(key);
             Jail::expect_with(|jail| {
+                // Keeps `db_type: postgres` valid when that is the key under
+                // test; harmless for every other key, since validation only
+                // inspects the section the active engine names.
+                jail.set_env("CODEX_DATABASE__POSTGRES__HOST", "probe.internal");
                 jail.set_env(&var, &raw);
                 let config = Config::load(jail.directory().join("absent.yaml"))
                     .unwrap_or_else(|e| panic!("{var}={raw} should load: {e:#}"));
@@ -630,8 +635,75 @@ auth:
     fn database_type_accepts_the_longer_spelling() {
         Jail::expect_with(|jail| {
             jail.set_env("CODEX_DATABASE__DB_TYPE", "postgresql");
+            jail.set_env("CODEX_DATABASE__POSTGRES__HOST", "db.internal");
             let config = Config::load(jail.directory().join("absent.yaml")).unwrap();
             assert_eq!(config.database.db_type, DatabaseType::Postgres);
+            Ok(())
+        });
+    }
+
+    // ---- cross-field validation ----
+
+    /// Previously this parsed fine and then panicked in
+    /// `display_database_config`, which unwrapped the missing section.
+    #[test]
+    fn postgres_without_a_postgres_section_is_rejected_at_load() {
+        Jail::expect_with(|jail| {
+            jail.create_file("codex.yaml", "database:\n  db_type: postgres\n")?;
+
+            let error = Config::load(jail.directory().join("codex.yaml")).unwrap_err();
+            let message = format!("{error:#}");
+
+            assert!(
+                message.contains("database.postgres"),
+                "error should name the missing section: {message}"
+            );
+            Ok(())
+        });
+    }
+
+    /// The same config becomes valid once the environment supplies the
+    /// section, which is the deployment shape this unblocks.
+    #[test]
+    fn postgres_from_the_environment_satisfies_validation() {
+        Jail::expect_with(|jail| {
+            jail.create_file("codex.yaml", "database:\n  db_type: postgres\n")?;
+            jail.set_env("CODEX_DATABASE__POSTGRES__HOST", "db.internal");
+
+            let config = Config::load(jail.directory().join("codex.yaml")).unwrap();
+
+            assert_eq!(config.database.postgres.unwrap().host, "db.internal");
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn an_oidc_provider_without_an_issuer_is_rejected_when_oidc_is_on() {
+        Jail::expect_with(|jail| {
+            jail.set_env("CODEX_AUTH__OIDC__ENABLED", "true");
+            jail.set_env("CODEX_AUTH__OIDC__PROVIDERS__AUTHENTIK__CLIENT_ID", "codex");
+
+            let error = Config::load(jail.directory().join("absent.yaml")).unwrap_err();
+            let message = format!("{error:#}");
+
+            assert!(
+                message.contains("authentik") && message.contains("issuer_url"),
+                "error should name the provider and the field: {message}"
+            );
+            Ok(())
+        });
+    }
+
+    /// A half-written provider in a disabled block must not stop the server.
+    #[test]
+    fn an_incomplete_provider_is_tolerated_while_oidc_is_off() {
+        Jail::expect_with(|jail| {
+            jail.set_env("CODEX_AUTH__OIDC__PROVIDERS__AUTHENTIK__CLIENT_ID", "codex");
+
+            let config = Config::load(jail.directory().join("absent.yaml")).unwrap();
+
+            assert!(!config.auth.oidc.enabled);
+            assert!(config.auth.oidc.providers.contains_key("authentik"));
             Ok(())
         });
     }

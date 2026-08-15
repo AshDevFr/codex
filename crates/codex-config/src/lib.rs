@@ -12,11 +12,12 @@ mod types;
 
 #[allow(unused_imports)]
 pub use types::{
-    ApiConfig, ApplicationConfig, AuthConfig, Config, DatabaseConfig, DatabaseType, EmailConfig,
-    FilesConfig, KomgaApiConfig, KoreaderApiConfig, LoggingConfig, ObservabilityBrowserConfig,
-    ObservabilityConfig, ObservabilityMetricsConfig, ObservabilityTracesConfig, OidcConfig,
-    OidcDefaultRole, OidcProviderConfig, OtlpConfig, OtlpProtocol, PdfConfig, PdfHandleCacheConfig,
-    PostgresConfig, RateLimitConfig, SQLiteConfig, ScannerConfig, SchedulerConfig, TaskConfig,
+    ApiConfig, ApplicationConfig, AuthConfig, Config, ConfigError, DatabaseConfig, DatabaseType,
+    EmailConfig, FilesConfig, KomgaApiConfig, KoreaderApiConfig, LoggingConfig,
+    ObservabilityBrowserConfig, ObservabilityConfig, ObservabilityMetricsConfig,
+    ObservabilityTracesConfig, OidcConfig, OidcDefaultRole, OidcProviderConfig, OtlpConfig,
+    OtlpProtocol, PdfConfig, PdfHandleCacheConfig, PostgresConfig, RateLimitConfig, SQLiteConfig,
+    ScannerConfig, SchedulerConfig, TaskConfig,
 };
 
 pub use env_audit::{
