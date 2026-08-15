@@ -9,6 +9,7 @@ vi.mock("@/api/readProgress", () => ({
     getSeriesHistory: vi.fn(),
     clearBookHistory: vi.fn(),
     clearSeriesHistory: vi.fn(),
+    deleteBookHistoryEntry: vi.fn(),
   },
 }));
 
@@ -31,6 +32,9 @@ describe("ReadHistorySection", () => {
     vi.clearAllMocks();
     vi.mocked(readProgressApi.clearBookHistory).mockResolvedValue(undefined);
     vi.mocked(readProgressApi.clearSeriesHistory).mockResolvedValue(undefined);
+    vi.mocked(readProgressApi.deleteBookHistoryEntry).mockResolvedValue(
+      undefined,
+    );
   });
 
   // A reader who has never finished the book has no history to reason about, so
@@ -216,5 +220,81 @@ describe("ReadHistorySection", () => {
     await screen.findByText(/you've finished this book/i);
 
     expect(screen.queryByText(/2025-03-05T00:00:00Z/)).not.toBeInTheDocument();
+  });
+
+  // ==========================================================================
+  // Removing a single entry
+  // ==========================================================================
+
+  /** History whose entries carry ids, as a book's do. */
+  function bookHistory() {
+    return {
+      readCount: 2,
+      lastCompletedAt: "2026-08-08T10:00:00Z",
+      entries: [
+        {
+          id: "11111111-1111-1111-1111-111111111111",
+          startedAt: "2026-08-07T10:00:00Z",
+          completedAt: "2026-08-08T10:00:00Z",
+        },
+        {
+          id: "22222222-2222-2222-2222-222222222222",
+          startedAt: "2026-06-23T10:00:00Z",
+          completedAt: "2026-06-24T10:00:00Z",
+        },
+      ],
+    };
+  }
+
+  it("offers a way to remove each entry of a book's history", async () => {
+    const user = userEvent.setup();
+    vi.mocked(readProgressApi.getBookHistory).mockResolvedValue(bookHistory());
+
+    renderWithProviders(<ReadHistorySection scope="book" id={BOOK_ID} />);
+
+    await user.click(await screen.findByLabelText("Show read history"));
+
+    const remove = await screen.findAllByLabelText(/^Remove the read-through/);
+    expect(remove).toHaveLength(2);
+  });
+
+  it("removes the entry that was clicked", async () => {
+    const user = userEvent.setup();
+    vi.mocked(readProgressApi.getBookHistory).mockResolvedValue(bookHistory());
+
+    renderWithProviders(<ReadHistorySection scope="book" id={BOOK_ID} />);
+
+    await user.click(await screen.findByLabelText("Show read history"));
+    const remove = await screen.findAllByLabelText(/^Remove the read-through/);
+    await user.click(remove[1]);
+
+    await waitFor(() =>
+      expect(readProgressApi.deleteBookHistoryEntry).toHaveBeenCalledWith(
+        BOOK_ID,
+        "22222222-2222-2222-2222-222222222222",
+      ),
+    );
+  });
+
+  /// A series read-through is an aggregate over several books rather than a
+  /// stored row, so the API sends no id and there is nothing single to delete.
+  it("offers no per-entry removal on a series", async () => {
+    const user = userEvent.setup();
+    vi.mocked(readProgressApi.getSeriesHistory).mockResolvedValue(
+      history(2, [
+        ["2026-08-07T10:00:00Z", "2026-08-08T10:00:00Z"],
+        ["2026-06-23T10:00:00Z", "2026-06-24T10:00:00Z"],
+      ]),
+    );
+
+    renderWithProviders(<ReadHistorySection scope="series" id={SERIES_ID} />);
+
+    await user.click(await screen.findByLabelText("Show read history"));
+    // The date is split across elements; "(started …)" is one text node.
+    await screen.findAllByText(/started/);
+
+    expect(
+      screen.queryByLabelText(/^Remove the read-through/),
+    ).not.toBeInTheDocument();
   });
 });

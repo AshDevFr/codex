@@ -77,9 +77,14 @@ Each series entry spans from the earliest volume start of that pass to the last
 volume finish, so it describes when you were reading the series as a whole.
 
 Adding a **new volume** to a series you had finished drops the series count to
-zero, because the series is no longer fully read. That is intended, and the
-earlier full-series completions stay listed on the page so the history does not
-appear to have vanished.
+zero, and the history section disappears from the series page. That is intended:
+with an unread volume in it, the series is no longer one you have read from end
+to end, so there is no completed pass to report.
+
+Nothing is deleted. Every volume keeps its own read-throughs on its own page,
+and the series count returns as soon as you finish the new volume. Only the
+series-level view goes quiet in the meantime, which for an ongoing series is
+most of the time.
 
 ## Clearing history
 
@@ -94,6 +99,20 @@ progress**: books stay read or unread exactly as they are.
 
 Each asks for confirmation first. Clearing is per-user: it never affects anyone
 else's history, and no user can see or clear another's.
+
+### Removing a single read-through
+
+Clearing is the blunt instrument. If one entry is simply wrong (a re-read
+recorded that never happened, or a duplicate from an app re-asserting a
+completion), expand the history on the **book** page and remove that entry
+alone. The rest of the book's history stays.
+
+Series history has no per-entry removal, because a series read-through is not a
+stored record: it is worked out from its books, and counts as one pass only once
+every volume has been finished that many times. Removing the entry from
+whichever book is holding the count up updates the series straight away. Since
+the series number is the *lowest* count across its books, it only moves if that
+book was the one setting it.
 
 ## What is not recorded
 

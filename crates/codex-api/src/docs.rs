@@ -363,6 +363,7 @@ The following paths are exempt from rate limiting:
         // Read completion history endpoints
         v1::handlers::get_book_read_history,
         v1::handlers::clear_book_read_history,
+        v1::handlers::delete_book_read_history_entry,
         v1::handlers::get_series_read_history,
         v1::handlers::clear_series_read_history,
         v1::handlers::clear_my_read_history,

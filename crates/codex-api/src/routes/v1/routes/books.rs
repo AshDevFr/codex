@@ -168,6 +168,11 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/books/{book_id}/read-history",
             get(handlers::get_book_read_history).delete(handlers::clear_book_read_history),
         )
+        // One entry, for correcting a single wrong read-through.
+        .route(
+            "/books/{book_id}/read-history/{completion_id}",
+            delete(handlers::delete_book_read_history_entry),
+        )
         .route("/progress", get(handlers::get_user_progress))
         // The append-only log the progress routes above are projections of.
         // Not book-scoped: a client replays sessions for many books at once.

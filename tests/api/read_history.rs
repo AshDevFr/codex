@@ -649,3 +649,253 @@ async fn test_koreader_completion_is_recorded() {
         "a KOReader-synced completion must be banked"
     );
 }
+
+// ============================================================================
+// Removing a single entry
+//
+// The wholesale clear is the blunt instrument. These cover the precise one,
+// which exists so a wrong read-through can be corrected without discarding a
+// book's whole history.
+// ============================================================================
+
+/// Record `passes` complete read-throughs of a book.
+async fn read_through(
+    db: &sea_orm::DatabaseConnection,
+    user_id: Uuid,
+    book_id: Uuid,
+    passes: usize,
+) {
+    for pass in 0..passes {
+        if pass > 0 {
+            ReadProgressRepository::mark_as_unread(db, user_id, book_id)
+                .await
+                .unwrap();
+        }
+        ReadProgressRepository::mark_as_read(db, user_id, book_id, 50)
+            .await
+            .unwrap();
+    }
+}
+
+async fn delete_entry(
+    app: axum::Router,
+    token: &str,
+    book_id: Uuid,
+    completion_id: Uuid,
+) -> StatusCode {
+    let request = delete_request_with_auth(
+        &format!("/api/v1/books/{book_id}/read-history/{completion_id}"),
+        token,
+    );
+    make_request(app, request).await.0
+}
+
+#[tokio::test]
+async fn removing_one_entry_leaves_the_rest_of_the_history() {
+    let (db, _tmp) = setup_test_db().await;
+    let (_series_id, books) = library_with_books(&db, 1).await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (uid, token) = user_and_token(&db, &state, "reader").await;
+
+    read_through(&db, uid, books[0].id, 3).await;
+
+    let (_, history) =
+        get_book_history(create_test_router(state.clone()).await, &token, books[0].id).await;
+    let history = history.unwrap();
+    assert_eq!(history.read_count, 3);
+    let victim = history.entries[1].id.expect("a book entry is addressable");
+
+    let status = delete_entry(
+        create_test_router(state.clone()).await,
+        &token,
+        books[0].id,
+        victim,
+    )
+    .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+
+    let (_, after) = get_book_history(create_test_router(state).await, &token, books[0].id).await;
+    let after = after.unwrap();
+    assert_eq!(after.read_count, 2);
+    assert!(
+        !after.entries.iter().any(|e| e.id == Some(victim)),
+        "the removed entry must be gone"
+    );
+}
+
+/// Fixing a count must never cost the reader their place.
+#[tokio::test]
+async fn removing_an_entry_leaves_reading_progress_alone() {
+    let (db, _tmp) = setup_test_db().await;
+    let (_series_id, books) = library_with_books(&db, 1).await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (uid, token) = user_and_token(&db, &state, "reader").await;
+
+    read_through(&db, uid, books[0].id, 2).await;
+
+    let (_, history) =
+        get_book_history(create_test_router(state.clone()).await, &token, books[0].id).await;
+    let victim = history.unwrap().entries[0].id.unwrap();
+
+    delete_entry(create_test_router(state).await, &token, books[0].id, victim).await;
+
+    let progress = ReadProgressRepository::get_by_user_and_book(&db, uid, books[0].id)
+        .await
+        .unwrap()
+        .expect("progress survives a history edit");
+    assert!(progress.completed);
+    assert_eq!(progress.current_page, 50);
+}
+
+/// Series history recomputes from its books, so removing an entry from the
+/// book that was holding the count up moves the series count too.
+#[tokio::test]
+async fn removing_an_entry_updates_the_series_count() {
+    let (db, _tmp) = setup_test_db().await;
+    let (series_id, books) = library_with_books(&db, 2).await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (uid, token) = user_and_token(&db, &state, "reader").await;
+
+    read_through(&db, uid, books[0].id, 2).await;
+    read_through(&db, uid, books[1].id, 2).await;
+
+    let (_, series) =
+        get_series_history(create_test_router(state.clone()).await, &token, series_id).await;
+    assert_eq!(series.unwrap().read_count, 2);
+
+    let (_, history) =
+        get_book_history(create_test_router(state.clone()).await, &token, books[0].id).await;
+    let victim = history.unwrap().entries[0].id.unwrap();
+    delete_entry(
+        create_test_router(state.clone()).await,
+        &token,
+        books[0].id,
+        victim,
+    )
+    .await;
+
+    let (_, series) = get_series_history(create_test_router(state).await, &token, series_id).await;
+    assert_eq!(
+        series.unwrap().read_count,
+        1,
+        "the series count follows its least-read book"
+    );
+}
+
+/// A series entry is an aggregate over several books, not a stored row, so it
+/// carries no id and cannot be addressed for deletion.
+#[tokio::test]
+async fn series_entries_are_not_individually_addressable() {
+    let (db, _tmp) = setup_test_db().await;
+    let (series_id, books) = library_with_books(&db, 2).await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (uid, token) = user_and_token(&db, &state, "reader").await;
+
+    read_through(&db, uid, books[0].id, 1).await;
+    read_through(&db, uid, books[1].id, 1).await;
+
+    let (_, series) = get_series_history(create_test_router(state).await, &token, series_id).await;
+    let series = series.unwrap();
+
+    assert_eq!(series.read_count, 1);
+    assert!(
+        series.entries.iter().all(|e| e.id.is_none()),
+        "a derived series pass has no row to delete"
+    );
+}
+
+/// An id belonging to another user's history reads as absent rather than
+/// being deleted.
+#[tokio::test]
+async fn one_user_cannot_remove_anothers_history_entry() {
+    let (db, _tmp) = setup_test_db().await;
+    let (_series_id, books) = library_with_books(&db, 1).await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (alice, alice_token) = user_and_token(&db, &state, "alice").await;
+    let (_bob, bob_token) = user_and_token(&db, &state, "bob").await;
+
+    read_through(&db, alice, books[0].id, 1).await;
+
+    let (_, history) = get_book_history(
+        create_test_router(state.clone()).await,
+        &alice_token,
+        books[0].id,
+    )
+    .await;
+    let alices_entry = history.unwrap().entries[0].id.unwrap();
+
+    let status = delete_entry(
+        create_test_router(state.clone()).await,
+        &bob_token,
+        books[0].id,
+        alices_entry,
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    let (_, after) =
+        get_book_history(create_test_router(state).await, &alice_token, books[0].id).await;
+    assert_eq!(after.unwrap().read_count, 1, "alice's history is untouched");
+}
+
+/// An id from a different book does not delete across books, even for the
+/// same user.
+#[tokio::test]
+async fn an_entry_cannot_be_removed_through_the_wrong_book() {
+    let (db, _tmp) = setup_test_db().await;
+    let (_series_id, books) = library_with_books(&db, 2).await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (uid, token) = user_and_token(&db, &state, "reader").await;
+
+    read_through(&db, uid, books[0].id, 1).await;
+
+    let (_, history) =
+        get_book_history(create_test_router(state.clone()).await, &token, books[0].id).await;
+    let entry = history.unwrap().entries[0].id.unwrap();
+
+    let status = delete_entry(
+        create_test_router(state.clone()).await,
+        &token,
+        books[1].id,
+        entry,
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    let (_, after) = get_book_history(create_test_router(state).await, &token, books[0].id).await;
+    assert_eq!(after.unwrap().read_count, 1);
+}
+
+#[tokio::test]
+async fn removing_a_missing_entry_reports_not_found() {
+    let (db, _tmp) = setup_test_db().await;
+    let (_series_id, books) = library_with_books(&db, 1).await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_uid, token) = user_and_token(&db, &state, "reader").await;
+
+    let status = delete_entry(
+        create_test_router(state).await,
+        &token,
+        books[0].id,
+        Uuid::new_v4(),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn removing_an_entry_requires_authentication() {
+    let (db, _tmp) = setup_test_db().await;
+    let (_series_id, books) = library_with_books(&db, 1).await;
+    let state = create_test_auth_state(db.clone()).await;
+
+    let request = delete_request(&format!(
+        "/api/v1/books/{}/read-history/{}",
+        books[0].id,
+        Uuid::new_v4()
+    ));
+    let (status, _) = make_request(create_test_router(state).await, request).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}

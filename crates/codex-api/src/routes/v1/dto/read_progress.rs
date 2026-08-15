@@ -87,6 +87,18 @@ impl From<codex_db::entities::read_progress::Model> for ReadProgressResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ReadCompletionDto {
+    /// Identifier for this entry, so a single one can be removed without
+    /// discarding the rest of the book's history.
+    ///
+    /// Null for a series entry. Series history is derived rather than stored:
+    /// an entry there is one read-through *across* the series, aggregated from
+    /// one completion per book, so there is no single row to address. Removing
+    /// it means removing an entry from each book, which is done from the books
+    /// themselves.
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<Uuid>,
+
     /// When this pass started.
     #[schema(example = "2024-01-10T14:30:00Z")]
     pub started_at: DateTime<Utc>,
@@ -99,6 +111,7 @@ pub struct ReadCompletionDto {
 impl From<codex_db::entities::read_completions::Model> for ReadCompletionDto {
     fn from(model: codex_db::entities::read_completions::Model) -> Self {
         Self {
+            id: Some(model.id),
             started_at: model.started_at,
             completed_at: model.completed_at,
         }

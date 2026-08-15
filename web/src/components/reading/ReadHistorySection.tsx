@@ -15,6 +15,7 @@ import {
   IconChevronRight,
   IconHistory,
   IconTrash,
+  IconX,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -81,6 +82,28 @@ export function ReadHistorySection({ scope, id }: ReadHistorySectionProps) {
     enabled: Boolean(id),
   });
 
+  /**
+   * Remove one entry.
+   *
+   * Only offered where an entry is a real row, which is the book scope. A
+   * series entry is an aggregate over several books, so there is nothing
+   * single to delete and the API sends no id for it.
+   */
+  const deleteEntryMutation = useMutation({
+    mutationFn: (completionId: string) =>
+      readProgressApi.deleteBookHistoryEntry(id, completionId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: readHistoryQueryKey(scope, id),
+      });
+      queryClient.invalidateQueries({ queryKey: ["book", id] });
+      // A series' count is recomputed from its books, so any series view of
+      // this book is stale too.
+      queryClient.invalidateQueries({ queryKey: ["read-history", "series"] });
+      queryClient.invalidateQueries({ queryKey: ["series"] });
+    },
+  });
+
   const clearMutation = useMutation({
     mutationFn: () =>
       scope === "book"
@@ -143,15 +166,38 @@ export function ReadHistorySection({ scope, id }: ReadHistorySectionProps) {
           <List size="sm" spacing={2} pl={30} withPadding>
             {history.entries.map((entry, index) => (
               <List.Item
-                key={`${entry.completedAt}-${entry.startedAt}-${index}`}
+                key={
+                  entry.id ?? `${entry.completedAt}-${entry.startedAt}-${index}`
+                }
               >
-                <Text size="sm">
-                  {formatDate(entry.completedAt)}
-                  <Text span size="xs" c="dimmed">
-                    {" "}
-                    (started {formatDate(entry.startedAt)})
+                <Group gap={6} wrap="nowrap">
+                  <Text size="sm">
+                    {formatDate(entry.completedAt)}
+                    <Text span size="xs" c="dimmed">
+                      {" "}
+                      (started {formatDate(entry.startedAt)})
+                    </Text>
                   </Text>
-                </Text>
+                  {entry.id && (
+                    <Tooltip label="Remove this read-through">
+                      <ActionIcon
+                        variant="subtle"
+                        color="red"
+                        size="xs"
+                        aria-label={`Remove the read-through finished on ${formatDate(entry.completedAt)}`}
+                        loading={
+                          deleteEntryMutation.isPending &&
+                          deleteEntryMutation.variables === entry.id
+                        }
+                        onClick={() =>
+                          deleteEntryMutation.mutate(entry.id as string)
+                        }
+                      >
+                        <IconX size={12} />
+                      </ActionIcon>
+                    </Tooltip>
+                  )}
+                </Group>
               </List.Item>
             ))}
           </List>

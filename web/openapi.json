@@ -5400,6 +5400,60 @@
         ]
       }
     },
+    "/api/v1/books/{book_id}/read-history/{completion_id}": {
+      "delete": {
+        "tags": [
+          "Reading Progress"
+        ],
+        "summary": "Remove one entry from a book's completion history",
+        "description": "For correcting a single wrong read-through without discarding the rest. The\nwholesale clear is the blunt instrument; this is the precise one.\n\nReading progress is untouched, exactly as with the wholesale clear: fixing a\ncount should never cost the reader their place.\n\nA series' history recomputes from its books on every read, so removing an\nentry here is reflected there immediately. The series count is the minimum\nacross its books, so it only moves if this book was the one holding it up.",
+        "operationId": "delete_book_read_history_entry",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "description": "Book ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "completion_id",
+            "in": "path",
+            "description": "The history entry to remove",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Entry removed"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Book or entry not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/books/{book_id}/readlists": {
       "get": {
         "tags": [
@@ -37974,6 +38028,15 @@
             "format": "date-time",
             "description": "When this pass finished.",
             "example": "2024-01-14T20:05:00Z"
+          },
+          "id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Identifier for this entry, so a single one can be removed without\ndiscarding the rest of the book's history.\n\nNull for a series entry. Series history is derived rather than stored:\nan entry there is one read-through *across* the series, aggregated from\none completion per book, so there is no single row to address. Removing\nit means removing an entry from each book, which is done from the books\nthemselves.",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
           },
           "startedAt": {
             "type": "string",

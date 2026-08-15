@@ -291,6 +291,34 @@ impl ReadCompletionRepository {
         Ok(result.rows_affected)
     }
 
+    /// Remove one recorded read-through.
+    ///
+    /// For correcting a single wrong entry without discarding the rest of a
+    /// book's history, which the wholesale clear cannot do.
+    ///
+    /// Scoped to the user and the book as well as the id: the id alone would be
+    /// enough to find the row, but matching all three means a caller cannot
+    /// reach another user's history even by guessing, and cannot delete from a
+    /// book other than the one the request addressed.
+    ///
+    /// Returns whether a row was removed, so a caller can answer 404 for an id
+    /// that does not exist rather than reporting a silent success.
+    pub async fn delete_entry<C: ConnectionTrait>(
+        db: &C,
+        user_id: Uuid,
+        book_id: Uuid,
+        completion_id: Uuid,
+    ) -> Result<bool> {
+        let result = ReadCompletions::delete_many()
+            .filter(read_completions::Column::Id.eq(completion_id))
+            .filter(read_completions::Column::UserId.eq(user_id))
+            .filter(read_completions::Column::BookId.eq(book_id))
+            .exec(db)
+            .await?;
+
+        Ok(result.rows_affected > 0)
+    }
+
     /// Clear the history of every book in a series for one user.
     ///
     /// The book ids are resolved first rather than joined: `DELETE ... JOIN` is

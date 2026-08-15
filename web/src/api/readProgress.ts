@@ -140,6 +140,20 @@ export const readProgressApi = {
   },
 
   /**
+   * Remove one entry from a book's completion history.
+   *
+   * Series entries carry no id: a series read-through is an aggregate over
+   * several books rather than a stored row, so it is corrected from the books
+   * themselves.
+   */
+  deleteBookHistoryEntry: async (
+    bookId: string,
+    completionId: string,
+  ): Promise<void> => {
+    await api.delete(`/books/${bookId}/read-history/${completionId}`);
+  },
+
+  /**
    * A series' completion history for the current user.
    *
    * `readCount` is the minimum across the series' books, so it only advances

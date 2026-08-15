@@ -29,6 +29,7 @@ use uuid::Uuid;
         put_progression,
         get_book_read_history,
         clear_book_read_history,
+        delete_book_read_history_entry,
         get_series_read_history,
         clear_series_read_history,
         clear_my_read_history,
@@ -579,6 +580,66 @@ pub async fn clear_book_read_history(
     Ok(StatusCode::NO_CONTENT)
 }
 
+/// Remove one entry from a book's completion history
+///
+/// For correcting a single wrong read-through without discarding the rest. The
+/// wholesale clear is the blunt instrument; this is the precise one.
+///
+/// Reading progress is untouched, exactly as with the wholesale clear: fixing a
+/// count should never cost the reader their place.
+///
+/// A series' history recomputes from its books on every read, so removing an
+/// entry here is reflected there immediately. The series count is the minimum
+/// across its books, so it only moves if this book was the one holding it up.
+#[utoipa::path(
+    delete,
+    path = "/api/v1/books/{book_id}/read-history/{completion_id}",
+    params(
+        ("book_id" = Uuid, Path, description = "Book ID"),
+        ("completion_id" = Uuid, Path, description = "The history entry to remove"),
+    ),
+    responses(
+        (status = 204, description = "Entry removed"),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Book or entry not found"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Reading Progress"
+)]
+pub async fn delete_book_read_history_entry(
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+    Path((book_id, completion_id)): Path<(Uuid, Uuid)>,
+) -> Result<StatusCode, ApiError> {
+    auth.require_permission(&Permission::BooksRead)?;
+
+    BookRepository::get_by_id(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get book: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
+
+    // Scoped to this user and this book, so an id belonging to someone else or
+    // to another book reads as absent rather than being deleted.
+    let removed =
+        ReadCompletionRepository::delete_entry(&state.db, auth.user_id, book_id, completion_id)
+            .await
+            .map_err(|e| {
+                ApiError::Internal(format!("Failed to remove read history entry: {}", e))
+            })?;
+
+    if !removed {
+        return Err(ApiError::NotFound(
+            "Read history entry not found".to_string(),
+        ));
+    }
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
 /// Get a series' completion history for the current user
 ///
 /// The series counts as read once every one of its books has been read, so
@@ -621,7 +682,10 @@ pub async fn get_series_read_history(
         entries: history
             .passes
             .into_iter()
+            // No id: a series pass is an aggregate over several books, not a
+            // stored row, so it cannot be addressed for deletion.
             .map(|(started_at, completed_at)| ReadCompletionDto {
+                id: None,
                 started_at,
                 completed_at,
             })

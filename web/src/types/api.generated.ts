@@ -1739,6 +1739,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/books/{book_id}/read-history/{completion_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove one entry from a book's completion history
+         * @description For correcting a single wrong read-through without discarding the rest. The
+         *     wholesale clear is the blunt instrument; this is the precise one.
+         *
+         *     Reading progress is untouched, exactly as with the wholesale clear: fixing a
+         *     count should never cost the reader their place.
+         *
+         *     A series' history recomputes from its books on every read, so removing an
+         *     entry here is reflected there immediately. The series count is the minimum
+         *     across its books, so it only moves if this book was the one holding it up.
+         */
+        delete: operations["delete_book_read_history_entry"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/books/{book_id}/readlists": {
         parameters: {
             query?: never;
@@ -16879,6 +16907,19 @@ export interface components {
              */
             completedAt: string;
             /**
+             * Format: uuid
+             * @description Identifier for this entry, so a single one can be removed without
+             *     discarding the rest of the book's history.
+             *
+             *     Null for a series entry. Series history is derived rather than stored:
+             *     an entry there is one read-through *across* the series, aggregated from
+             *     one completion per book, so there is no single row to address. Removing
+             *     it means removing an entry from each book, which is done from the books
+             *     themselves.
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
+            id?: string | null;
+            /**
              * Format: date-time
              * @description When this pass started.
              * @example 2024-01-10T14:30:00Z
@@ -25613,6 +25654,50 @@ export interface operations {
                 content?: never;
             };
             /** @description Book not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_book_read_history_entry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Book ID */
+                book_id: string;
+                /** @description The history entry to remove */
+                completion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Entry removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Book or entry not found */
             404: {
                 headers: {
                     [name: string]: unknown;
