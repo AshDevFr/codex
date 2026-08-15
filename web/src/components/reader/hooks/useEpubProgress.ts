@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef } from "react";
 import { type R2Progression, readProgressApi } from "@/api/readProgress";
 import { isOfflineQueuedError } from "@/lib/offline/outbox";
+import { useReadingSession } from "./useReadingSession";
 
 const STORAGE_KEY_PREFIX = "epub-cfi-";
 const STORAGE_TIMESTAMP_PREFIX = "epub-cfi-ts-";
@@ -68,6 +69,16 @@ export function useEpubProgress({
   const pendingCfiRef = useRef<string | null>(null);
   const pendingPercentageRef = useRef<number>(0);
   const pendingHrefRef = useRef<string>("");
+  // Latch so passing the completion threshold emits one completed session
+  // rather than one per location change from there to the end of the book.
+  const completionReportedRef = useRef(false);
+
+  // Reading time and progress measured alongside position. Disabled with
+  // progress tracking, so incognito reading records neither.
+  const { recordActivity, markCompleted } = useReadingSession({
+    bookId,
+    enabled,
+  });
 
   // Fetch initial progress from API for cross-device sync
   const { data: apiProgress, isLoading: isLoadingProgress } = useQuery({
@@ -229,6 +240,16 @@ export function useEpubProgress({
     (cfi: string, percentage: number, href: string) => {
       if (!enabled) return;
 
+      // A location change is the activity signal for reflowable content:
+      // there are no page turns to observe, only movement through the book.
+      recordActivity({ percentage });
+      if (percentage >= 0.98 && !completionReportedRef.current) {
+        // Matches the completion threshold saveToBackend applies. Latched so
+        // reading on past 98% does not emit a completed session per location.
+        completionReportedRef.current = true;
+        markCompleted({ percentage });
+      }
+
       // Store pending values for flush on unmount
       pendingCfiRef.current = cfi;
       pendingPercentageRef.current = percentage;
@@ -257,7 +278,14 @@ export function useEpubProgress({
         pendingHrefRef.current = "";
       }, debounceMs);
     },
-    [enabled, debounceMs, saveToStorage, saveToBackend],
+    [
+      enabled,
+      debounceMs,
+      saveToStorage,
+      saveToBackend,
+      recordActivity,
+      markCompleted,
+    ],
   );
 
   // Clear progress

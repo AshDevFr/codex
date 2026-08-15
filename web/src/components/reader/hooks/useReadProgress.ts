@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { readProgressApi } from "@/api/readProgress";
 import { isOfflineQueuedError } from "@/lib/offline/outbox";
 import { useReaderStore } from "@/store/readerStore";
+import { useReadingSession } from "./useReadingSession";
 
 interface UseReadProgressOptions {
   /** Book ID to track progress for */
@@ -45,6 +46,12 @@ export function useReadProgress({
 }: UseReadProgressOptions): UseReadProgressReturn {
   const queryClient = useQueryClient();
   const currentPage = useReaderStore((state) => state.currentPage);
+  // Reading time and pages read, measured alongside position. Disabled with
+  // progress tracking, so incognito reading records neither.
+  const { recordActivity, markCompleted } = useReadingSession({
+    bookId,
+    enabled,
+  });
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastSavedPageRef = useRef<number>(0);
   // Store refs to avoid dependency issues with callbacks
@@ -87,11 +94,18 @@ export function useReadProgress({
       // Completion is sticky for the session: once complete, a later position
       // save cannot downgrade it. A completed book is pinned to its last page
       // so progress displays read 100%, not 99% (double-page final spread).
+      const wasCompleted = completedRef.current;
       const completed = completedRef.current || page >= currentTotalPages;
       if (completed) {
         completedRef.current = true;
       }
       const savedPage = completed ? Math.max(page, currentTotalPages) : page;
+
+      // Only on the transition. Completion is sticky, so re-asserting it on
+      // every subsequent save would emit a completed session per page turn.
+      if (completed && !wasCompleted) {
+        markCompleted({ page: savedPage });
+      }
 
       readProgressApi
         .update(currentBookId, {
@@ -120,7 +134,7 @@ export function useReadProgress({
           console.error("Failed to save reading progress:", error);
         });
     },
-    [queryClient],
+    [queryClient, markCompleted],
   );
 
   // Debounced progress save - stable callback
@@ -176,8 +190,13 @@ export function useReadProgress({
   useEffect(() => {
     if (!enabled || currentPage === 0) return;
 
+    // A page change is the activity signal. Zoom and pan are deliberately not
+    // counted: they do not move the position, so treating them as reading
+    // would be guessing. The result under-counts slightly, which is the
+    // honest direction to be wrong.
+    recordActivity({ page: currentPage });
     debouncedSave(currentPage);
-  }, [currentPage, enabled, debouncedSave]);
+  }, [currentPage, enabled, debouncedSave, recordActivity]);
 
   // Store enabled ref for cleanup
   const enabledRef = useRef(enabled);

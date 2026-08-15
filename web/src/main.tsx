@@ -9,6 +9,7 @@ import { ThemeSync } from "./components/ThemeSync.tsx";
 import { MotionProvider } from "./lib/motion/MotionProvider";
 import { initObservability } from "./lib/observability";
 import { installOutboxDrainListeners } from "./lib/offline/outbox";
+import { recoverAndFlushSessions } from "./lib/reading/recoverSessions";
 import { cssVariablesResolver, theme } from "./theme";
 
 // Import Mantine styles
@@ -63,6 +64,11 @@ async function enableMocking() {
 // or the tab regains focus. Safe to install before render: the listeners
 // no-op if there is nothing queued, and double-install is guarded.
 installOutboxDrainListeners();
+
+// Sweep up reading sessions from a tab that died without a teardown event
+// (crash, out-of-memory kill, force quit). Fire-and-forget: recovery is
+// best-effort statistics and must never delay or block startup.
+void recoverAndFlushSessions();
 
 // Kick off the OTel web SDK bootstrap. The call returns immediately;
 // the network round-trip + SDK code-split happen in the background and
