@@ -346,6 +346,9 @@ The following paths are exempt from rate limiting:
         v1::handlers::list_book_pages,
         v1::handlers::get_page_image,
 
+        // Reading sessions: the log behind the progress endpoints below
+        v1::handlers::record_reading_sessions,
+
         // Reading progress endpoints
         v1::handlers::update_reading_progress,
         v1::handlers::get_reading_progress,
@@ -970,6 +973,14 @@ The following paths are exempt from rate limiting:
             v1::dto::TriggerScanQuery,
             v1::dto::ScanningConfigDto,
             v1::dto::AnalysisResult,
+
+            // Reading session DTOs
+            v1::dto::RecordReadingSessionsRequest,
+            v1::dto::RecordReadingSessionsResponse,
+            v1::dto::ReadingSessionDto,
+            v1::dto::ReadingSessionKindDto,
+            v1::dto::RejectedReadingSessionDto,
+            v1::dto::ReadingSessionRejectionReason,
 
             // Reading progress DTOs
             v1::dto::UpdateProgressRequest,

@@ -2943,6 +2943,37 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reading-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record a batch of reading sessions
+         * @description Sessions are the source of truth behind reading progress and reading time.
+         *     A client measures them locally, queues them while offline, and replays the
+         *     queue here.
+         *
+         *     Two properties make replay safe. Submitting an id that is already present
+         *     changes nothing and still reports as accepted, so a batch whose response was
+         *     lost can be sent again. And sessions are ordered by `clientEndedAt` rather
+         *     than by arrival, so a session read earlier but synced later does not
+         *     overwrite one that was read more recently.
+         *
+         *     Sessions are always recorded against the authenticated user; there is no way
+         *     to write another user's reading.
+         */
+        post: operations["record_reading_sessions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/readlists": {
         parameters: {
             query?: never;
@@ -16852,6 +16883,93 @@ export interface components {
              */
             totalPages: number;
         };
+        /** @description One reading session measured by a client. */
+        ReadingSessionDto: {
+            /**
+             * Format: int64
+             * @description Active reading time in milliseconds, measured by the reader.
+             *
+             *     Must be time the reader actually spent reading, with the timer paused
+             *     while the app is backgrounded, the screen is locked, or the reader has
+             *     been idle past the timeout. Wall-clock elapsed is not this value, and
+             *     anything larger than the session's own span is clamped to it.
+             * @example 934000
+             */
+            activeDurationMs?: number | null;
+            /**
+             * Format: uuid
+             * @description The book this session belongs to.
+             * @example 550e8400-e29b-41d4-a716-446655440002
+             */
+            bookId: string;
+            /**
+             * Format: date-time
+             * @description When this session ended, by the client's clock.
+             *
+             *     This is what orders sessions against each other, so it must reflect when
+             *     the reading happened rather than when it is being submitted. A session
+             *     read offline and synced hours later still sorts by when it was read.
+             * @example 2026-08-14T19:20:45Z
+             */
+            clientEndedAt: string;
+            /**
+             * Format: date-time
+             * @description When this session began, by the client's clock.
+             * @example 2026-08-14T19:02:11Z
+             */
+            clientStartedAt: string;
+            /**
+             * @description Stable identifier for the device that produced this session.
+             * @example 8f3d1c7a-2b44-4e51-9c2a-1f7d3e5b9a01
+             */
+            deviceId: string;
+            /**
+             * @description Human-readable device name, for the reading statistics UI.
+             * @example Ash's iPhone
+             */
+            deviceName?: string | null;
+            /**
+             * Format: uuid
+             * @description Client-generated identifier for this session.
+             *
+             *     Submitting the same id twice is a no-op, so a batch whose response was
+             *     lost can be replayed without double-counting the reading.
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
+            id: string;
+            /** @description What this session asserts. */
+            kind: components["schemas"]["ReadingSessionKindDto"];
+            /**
+             * Format: int32
+             * @description Distinct pages advanced through during this session.
+             * @example 31
+             */
+            pagesRead?: number | null;
+            /** @description R2Progression JSON (Readium standard) for EPUB position sync. */
+            r2Progression?: string | null;
+            /**
+             * Format: int32
+             * @description Page reached, for comics and PDF (1-indexed).
+             * @example 42
+             */
+            toPage?: number | null;
+            /**
+             * Format: double
+             * @description Fraction read, for EPUB (0.0 to 1.0).
+             * @example 0.45
+             */
+            toPercentage?: number | null;
+        };
+        /**
+         * @description What a submitted session asserts about a book.
+         * @enum {string}
+         */
+        ReadingSessionKindDto: "progress" | "completed" | "reset";
+        /**
+         * @description Why a session could not be recorded.
+         * @enum {string}
+         */
+        ReadingSessionRejectionReason: "book_not_found" | "invalid_time_range" | "invalid_percentage" | "invalid_measurement" | "duplicate_in_batch";
         /** @description A single recommendation for the user */
         RecommendationDto: {
             /** @description Titles that influenced this recommendation */
@@ -16983,6 +17101,32 @@ export interface components {
             /** @description The provider instances that contributed (status, provenance) */
             sources?: components["schemas"]["RecommendationSourceDto"][];
         };
+        /** @description A batch of sessions to record. */
+        RecordReadingSessionsRequest: {
+            /** @description The sessions to record. Order within the batch does not matter. */
+            sessions: components["schemas"]["ReadingSessionDto"][];
+        };
+        /**
+         * @description The outcome of recording a batch.
+         *
+         *     Never fails wholesale for a bad entry: an unknown book is an ordinary
+         *     consequence of syncing after a deletion, and it must not block the rest of a
+         *     client's queued reading from being accepted.
+         */
+        RecordReadingSessionsResponse: {
+            /**
+             * @description Ids that are now in the log. Includes ids that were already present, so
+             *     a client can clear its outbox on either outcome.
+             */
+            accepted: string[];
+            /**
+             * @description Current progress for every book touched by an accepted session, so the
+             *     client can reconcile immediately without a second round trip.
+             */
+            progress: components["schemas"]["ReadProgressResponse"][];
+            /** @description Entries that were not recorded. */
+            rejected: components["schemas"]["RejectedReadingSessionDto"][];
+        };
         /** @description Refresh-token exchange request body. */
         RefreshRequest: {
             /**
@@ -17042,6 +17186,17 @@ export interface components {
             tokenType?: string | null;
             /** @description User information */
             user: components["schemas"]["UserInfo"];
+        };
+        /** @description One entry that was not recorded, and why. */
+        RejectedReadingSessionDto: {
+            /**
+             * Format: uuid
+             * @description The submitted session's id.
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
+            id: string;
+            /** @description Why it was rejected. */
+            reason: components["schemas"]["ReadingSessionRejectionReason"];
         };
         /**
          * @description Response shape for `GET /api/v1/releases/facets`.
@@ -27752,6 +27907,51 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ReadProgressListResponse"];
                 };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    record_reading_sessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordReadingSessionsRequest"];
+            };
+        };
+        responses: {
+            /** @description Batch processed; check `rejected` for entries that were not recorded */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecordReadingSessionsResponse"];
+                };
+            };
+            /** @description Batch exceeds the maximum size */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Unauthorized */
             401: {

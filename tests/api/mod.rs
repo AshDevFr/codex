@@ -44,6 +44,7 @@ mod pool_contention;
 mod rate_limit;
 mod read_history;
 mod read_progress;
+mod reading_sessions;
 mod readlists;
 mod recommendations;
 mod refresh_token;

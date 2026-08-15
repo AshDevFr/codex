@@ -28,6 +28,18 @@ use uuid::Uuid;
 /// differently depending on which client reported it.
 pub const COALESCE_WINDOW_MINUTES: i64 = 5;
 
+/// What happened to an appended event.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum AppendOutcome {
+    /// A new row was written.
+    Inserted,
+    /// Merged into the preceding session from the same device.
+    Merged,
+    /// This id was already in the log, so nothing changed. Replaying a batch
+    /// whose response was lost lands here.
+    Duplicate,
+}
+
 /// An event to append to the log.
 ///
 /// `pass` is deliberately absent: it is derived on append from the log's
@@ -48,6 +60,16 @@ pub struct NewSession {
     pub pages_read: Option<i32>,
     pub client_started_at: DateTime<Utc>,
     pub client_ended_at: DateTime<Utc>,
+    /// Whether this event may merge into the preceding session from the same
+    /// device.
+    ///
+    /// True only for events synthesized from a legacy write, where the id is
+    /// generated here and nothing will ever refer to it again. A merge discards
+    /// the incoming id, so allowing it for a client-submitted session would
+    /// break idempotent replay: the id would be absent from the log, the replay
+    /// would look new, and its duration would be added a second time. Clients
+    /// measure their own sessions as units and have already done this merging.
+    pub coalesce: bool,
 }
 
 impl NewSession {
@@ -80,6 +102,59 @@ impl NewSession {
             pages_read: None,
             client_started_at: now,
             client_ended_at: now,
+            coalesce: true,
+        }
+    }
+
+    /// A session measured and reported by a client.
+    ///
+    /// The id comes from the client so a replayed batch is recognised rather
+    /// than counted twice, which is also why these never merge.
+    ///
+    /// The reported duration is clamped to the wall-clock span: a client cannot
+    /// have been actively reading for longer than the session lasted, so a
+    /// larger figure is a bug in the client and is truncated rather than
+    /// trusted. A backwards span clamps to zero.
+    #[allow(clippy::too_many_arguments)]
+    pub fn from_client(
+        id: Uuid,
+        user_id: Uuid,
+        book_id: Uuid,
+        device_id: impl Into<String>,
+        device_name: Option<String>,
+        kind: SessionKind,
+        active_duration_ms: Option<i64>,
+        pages_read: Option<i32>,
+        client_started_at: DateTime<Utc>,
+        client_ended_at: DateTime<Utc>,
+    ) -> Self {
+        let clamped = active_duration_ms.map(|reported| {
+            let span = (client_ended_at - client_started_at).num_milliseconds();
+            reported.clamp(0, span.max(0))
+        });
+
+        Self {
+            id,
+            user_id,
+            book_id,
+            device_id: device_id.into(),
+            device_name,
+            kind,
+            to_page: None,
+            to_percentage: None,
+            r2_progression: None,
+            active_duration_ms: clamped,
+            // A client that reported nothing leaves the provenance unknown
+            // rather than claiming a measurement it did not make.
+            duration_source: if clamped.is_some() {
+                DurationSource::Measured
+            } else {
+                DurationSource::Unknown
+            },
+            pages_read,
+            client_started_at,
+            client_ended_at,
+            coalesce: false,
         }
     }
 
@@ -158,12 +233,24 @@ impl ReadingSessionRepository {
         db: &C,
         session: NewSession,
         now: DateTime<Utc>,
-    ) -> Result<()> {
+    ) -> Result<AppendOutcome> {
+        // Before anything else: an id already in the log is a replay, and a
+        // replay must change nothing. This has to precede the merge check,
+        // because merging would consume the incoming id without storing it and
+        // the next replay would look new.
+        if ReadingSessions::find_by_id(session.id)
+            .one(db)
+            .await?
+            .is_some()
+        {
+            return Ok(AppendOutcome::Duplicate);
+        }
+
         let pass = Self::next_pass(db, session.user_id, session.book_id, session.kind).await?;
 
         if let Some(existing) = Self::coalesce_candidate(db, &session, pass).await? {
             Self::extend(db, existing, &session, now).await?;
-            return Ok(());
+            return Ok(AppendOutcome::Merged);
         }
 
         let model = reading_sessions::ActiveModel {
@@ -186,7 +273,7 @@ impl ReadingSessionRepository {
         };
         model.insert(db).await?;
 
-        Ok(())
+        Ok(AppendOutcome::Inserted)
     }
 
     /// The session this event should merge into, if any.
@@ -199,7 +286,7 @@ impl ReadingSessionRepository {
         session: &NewSession,
         pass: i32,
     ) -> Result<Option<reading_sessions::Model>> {
-        if session.kind != SessionKind::Progress {
+        if !session.coalesce || session.kind != SessionKind::Progress {
             return Ok(None);
         }
 
@@ -300,6 +387,26 @@ fn sum_options<T: std::ops::Add<Output = T> + Copy>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::TimeZone;
+
+    fn at(minutes: i64) -> DateTime<Utc> {
+        Utc.with_ymd_and_hms(2026, 8, 14, 10, 0, 0).unwrap() + Duration::minutes(minutes)
+    }
+
+    fn client_session(duration_ms: Option<i64>, from: i64, to: i64) -> NewSession {
+        NewSession::from_client(
+            Uuid::new_v4(),
+            Uuid::nil(),
+            Uuid::nil(),
+            "device-a",
+            None,
+            SessionKind::Progress,
+            duration_ms,
+            None,
+            at(from),
+            at(to),
+        )
+    }
 
     #[test]
     fn summing_optional_counters_preserves_absence() {
@@ -307,5 +414,68 @@ mod tests {
         assert_eq!(sum_options(Some(3), None), Some(3));
         assert_eq!(sum_options(None, Some(4)), Some(4));
         assert_eq!(sum_options::<i64>(None, None), None);
+    }
+
+    /// A duration inside the session's own span is taken as reported.
+    #[test]
+    fn a_plausible_duration_is_kept() {
+        let ten_minutes = 10 * 60 * 1000;
+        let session = client_session(Some(ten_minutes), 0, 20);
+
+        assert_eq!(session.active_duration_ms, Some(ten_minutes));
+        assert_eq!(session.duration_source, DurationSource::Measured);
+    }
+
+    /// A client cannot have read for longer than the session lasted. Claiming
+    /// otherwise is a bug, and the value is truncated rather than trusted into
+    /// the reading statistics.
+    #[test]
+    fn a_duration_longer_than_the_span_is_clamped_to_it() {
+        let ten_hours = 10 * 60 * 60 * 1000;
+        let session = client_session(Some(ten_hours), 0, 5);
+
+        assert_eq!(session.active_duration_ms, Some(5 * 60 * 1000));
+    }
+
+    /// A backwards span cannot yield negative reading time. The handler
+    /// rejects these before they reach here; this is the second line.
+    #[test]
+    fn a_backwards_span_clamps_to_zero() {
+        let session = client_session(Some(60_000), 20, 0);
+
+        assert_eq!(session.active_duration_ms, Some(0));
+    }
+
+    /// Reporting no duration leaves provenance unknown rather than claiming a
+    /// measurement that was never taken.
+    #[test]
+    fn an_absent_duration_is_not_recorded_as_measured() {
+        let session = client_session(None, 0, 20);
+
+        assert_eq!(session.active_duration_ms, None);
+        assert_eq!(session.duration_source, DurationSource::Unknown);
+    }
+
+    /// Client sessions never merge. A merge discards the incoming id, and an
+    /// id absent from the log would make the next replay look new and add its
+    /// duration a second time.
+    #[test]
+    fn client_sessions_are_not_coalescable() {
+        assert!(!client_session(None, 0, 20).coalesce);
+    }
+
+    /// Legacy writes do merge: they arrive one per page turn and their ids are
+    /// generated here, so nothing ever refers to them again.
+    #[test]
+    fn legacy_writes_are_coalescable() {
+        let session = NewSession::from_legacy_write(
+            Uuid::nil(),
+            Uuid::nil(),
+            "legacy",
+            SessionKind::Progress,
+            at(0),
+        );
+
+        assert!(session.coalesce);
     }
 }

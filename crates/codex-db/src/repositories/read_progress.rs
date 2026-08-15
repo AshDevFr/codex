@@ -7,7 +7,9 @@
 use crate::entities::reading_sessions::SessionKind;
 use crate::entities::{read_progress, read_progress::Entity as ReadProgress};
 use crate::repositories::ReadCompletionRepository;
-use crate::repositories::reading_sessions::{NewSession, ReadingSessionRepository, fold};
+use crate::repositories::reading_sessions::{
+    AppendOutcome, NewSession, ReadingSessionRepository, fold,
+};
 use anyhow::{Result, anyhow};
 use chrono::Utc;
 use sea_orm::*;
@@ -160,6 +162,34 @@ impl ReadProgressRepository {
         result.ok_or_else(|| {
             anyhow!("reading progress vanished after recording a session for book {book_id}")
         })
+    }
+
+    /// Record a client-measured session and rebuild the projections from it.
+    ///
+    /// The entry point for the sessions API. Everything runs in one transaction
+    /// so the log and its projections cannot disagree, and a replayed id is
+    /// reported rather than applied twice.
+    pub async fn record_session(
+        db: &DatabaseConnection,
+        session: NewSession,
+    ) -> Result<(AppendOutcome, Option<read_progress::Model>)> {
+        let txn = db.begin().await?;
+        let now = Utc::now();
+        let user_id = session.user_id;
+        let book_id = session.book_id;
+
+        let outcome = ReadingSessionRepository::append(&txn, session, now).await?;
+
+        // A duplicate changed nothing, but the caller still wants the current
+        // state so it can reconcile without a second request.
+        let progress = if outcome == AppendOutcome::Duplicate {
+            Self::get_in(&txn, user_id, book_id).await?
+        } else {
+            Self::refold(&txn, user_id, book_id).await?
+        };
+
+        txn.commit().await?;
+        Ok((outcome, progress))
     }
 
     /// Rebuild `read_progress` and `read_completions` for one user and book from

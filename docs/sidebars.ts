@@ -53,6 +53,7 @@ const sidebars: SidebarsConfig = {
       items: [
         "reader-settings",
         "reading-progress",
+        "reading-sessions",
         "offline-reading",
         "filtering",
         "collections-readlists",

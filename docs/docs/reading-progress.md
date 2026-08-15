@@ -29,6 +29,12 @@ Your position is saved as you read, and syncs across devices and clients:
 Progress arriving from a Komga-compatible app, a KOReader device or an external
 tracker sync is treated exactly the same as progress from the built-in reader.
 
+Underneath, your position is worked out from a log of reading sessions rather
+than stored as a single number. That is what stops a device syncing late after
+being offline from dragging you backwards: sessions are ordered by when the
+reading happened, not by when they reached the server. If you are building a
+client, see [Reading Sessions](./reading-sessions.md) for the contract.
+
 ## Read history
 
 Every time you finish a book, Codex records the completion: when that pass

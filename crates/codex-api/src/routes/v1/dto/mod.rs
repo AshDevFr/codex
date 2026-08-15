@@ -25,6 +25,7 @@ pub mod pdf_cache;
 pub mod plugin_storage;
 pub mod plugins;
 pub mod read_progress;
+pub mod reading_sessions;
 pub mod readlist;
 pub mod recommendations;
 pub mod release;
@@ -65,6 +66,7 @@ pub use pdf_cache::*;
 pub use plugin_storage::*;
 pub use plugins::*;
 pub use read_progress::*;
+pub use reading_sessions::*;
 pub use readlist::*;
 #[allow(unused_imports)]
 pub use recommendations::*;

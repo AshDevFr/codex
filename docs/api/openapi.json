@@ -8906,6 +8906,55 @@
         ]
       }
     },
+    "/api/v1/reading-sessions": {
+      "post": {
+        "tags": [
+          "Reading Sessions"
+        ],
+        "summary": "Record a batch of reading sessions",
+        "description": "Sessions are the source of truth behind reading progress and reading time.\nA client measures them locally, queues them while offline, and replays the\nqueue here.\n\nTwo properties make replay safe. Submitting an id that is already present\nchanges nothing and still reports as accepted, so a batch whose response was\nlost can be sent again. And sessions are ordered by `clientEndedAt` rather\nthan by arrival, so a session read earlier but synced later does not\noverwrite one that was read more recently.\n\nSessions are always recorded against the authenticated user; there is no way\nto write another user's reading.",
+        "operationId": "record_reading_sessions",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordReadingSessionsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Batch processed; check `rejected` for entries that were not recorded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordReadingSessionsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Batch exceeds the maximum size"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/readlists": {
       "get": {
         "tags": [
@@ -38296,6 +38345,124 @@
           }
         }
       },
+      "ReadingSessionDto": {
+        "type": "object",
+        "description": "One reading session measured by a client.",
+        "required": [
+          "id",
+          "bookId",
+          "deviceId",
+          "kind",
+          "clientStartedAt",
+          "clientEndedAt"
+        ],
+        "properties": {
+          "activeDurationMs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Active reading time in milliseconds, measured by the reader.\n\nMust be time the reader actually spent reading, with the timer paused\nwhile the app is backgrounded, the screen is locked, or the reader has\nbeen idle past the timeout. Wall-clock elapsed is not this value, and\nanything larger than the session's own span is clamped to it.",
+            "example": 934000
+          },
+          "bookId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The book this session belongs to.",
+            "example": "550e8400-e29b-41d4-a716-446655440002"
+          },
+          "clientEndedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When this session ended, by the client's clock.\n\nThis is what orders sessions against each other, so it must reflect when\nthe reading happened rather than when it is being submitted. A session\nread offline and synced hours later still sorts by when it was read.",
+            "example": "2026-08-14T19:20:45Z"
+          },
+          "clientStartedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When this session began, by the client's clock.",
+            "example": "2026-08-14T19:02:11Z"
+          },
+          "deviceId": {
+            "type": "string",
+            "description": "Stable identifier for the device that produced this session.",
+            "example": "8f3d1c7a-2b44-4e51-9c2a-1f7d3e5b9a01"
+          },
+          "deviceName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Human-readable device name, for the reading statistics UI.",
+            "example": "Ash's iPhone"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Client-generated identifier for this session.\n\nSubmitting the same id twice is a no-op, so a batch whose response was\nlost can be replayed without double-counting the reading.",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ReadingSessionKindDto",
+            "description": "What this session asserts."
+          },
+          "pagesRead": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Distinct pages advanced through during this session.",
+            "example": 31
+          },
+          "r2Progression": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "R2Progression JSON (Readium standard) for EPUB position sync."
+          },
+          "toPage": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Page reached, for comics and PDF (1-indexed).",
+            "example": 42
+          },
+          "toPercentage": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Fraction read, for EPUB (0.0 to 1.0).",
+            "example": 0.45
+          }
+        }
+      },
+      "ReadingSessionKindDto": {
+        "type": "string",
+        "description": "What a submitted session asserts about a book.",
+        "enum": [
+          "progress",
+          "completed",
+          "reset"
+        ]
+      },
+      "ReadingSessionRejectionReason": {
+        "type": "string",
+        "description": "Why a session could not be recorded.",
+        "enum": [
+          "book_not_found",
+          "invalid_time_range",
+          "invalid_percentage",
+          "invalid_measurement",
+          "duplicate_in_batch"
+        ]
+      },
       "RecommendationDto": {
         "type": "object",
         "description": "A single recommendation for the user",
@@ -38571,6 +38738,55 @@
           }
         }
       },
+      "RecordReadingSessionsRequest": {
+        "type": "object",
+        "description": "A batch of sessions to record.",
+        "required": [
+          "sessions"
+        ],
+        "properties": {
+          "sessions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadingSessionDto"
+            },
+            "description": "The sessions to record. Order within the batch does not matter."
+          }
+        }
+      },
+      "RecordReadingSessionsResponse": {
+        "type": "object",
+        "description": "The outcome of recording a batch.\n\nNever fails wholesale for a bad entry: an unknown book is an ordinary\nconsequence of syncing after a deletion, and it must not block the rest of a\nclient's queued reading from being accepted.",
+        "required": [
+          "accepted",
+          "rejected",
+          "progress"
+        ],
+        "properties": {
+          "accepted": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Ids that are now in the log. Includes ids that were already present, so\na client can clear its outbox on either outcome."
+          },
+          "progress": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadProgressResponse"
+            },
+            "description": "Current progress for every book touched by an accepted session, so the\nclient can reconcile immediately without a second round trip."
+          },
+          "rejected": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RejectedReadingSessionDto"
+            },
+            "description": "Entries that were not recorded."
+          }
+        }
+      },
       "RefreshRequest": {
         "type": "object",
         "description": "Refresh-token exchange request body.",
@@ -38664,6 +38880,26 @@
           "user": {
             "$ref": "#/components/schemas/UserInfo",
             "description": "User information"
+          }
+        }
+      },
+      "RejectedReadingSessionDto": {
+        "type": "object",
+        "description": "One entry that was not recorded, and why.",
+        "required": [
+          "id",
+          "reason"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The submitted session's id.",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/ReadingSessionRejectionReason",
+            "description": "Why it was rejected."
           }
         }
       },
