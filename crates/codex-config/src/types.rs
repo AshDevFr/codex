@@ -17,6 +17,7 @@ pub struct TaskConfig {
 pub struct KomgaApiConfig {
     /// Enable Komga-compatible API endpoints
     /// When enabled, routes are mounted at /{prefix}/api/v1/*
+    #[serde(deserialize_with = "crate::de::truthy_bool")]
     pub enabled: bool,
 
     /// URL prefix for Komga API (default: "komga")
@@ -36,6 +37,7 @@ fn default_komga_prefix() -> String {
 pub struct KoreaderApiConfig {
     /// Enable KOReader sync API endpoints
     /// When enabled, routes are mounted at /koreader/*
+    #[serde(deserialize_with = "crate::de::truthy_bool")]
     pub enabled: bool,
 }
 
@@ -45,6 +47,7 @@ pub struct KoreaderApiConfig {
 #[serde(default)]
 pub struct RateLimitConfig {
     /// Enable rate limiting (default: true)
+    #[serde(deserialize_with = "crate::de::truthy_bool")]
     pub enabled: bool,
 
     /// Requests per second for anonymous users (default: 10)
@@ -60,6 +63,7 @@ pub struct RateLimitConfig {
     pub authenticated_burst: u32,
 
     /// Glob patterns for paths exempt from rate limiting (e.g. `/api/v1/books/*/thumbnail`)
+    #[serde(deserialize_with = "crate::de::string_list")]
     pub exempt_paths: Vec<String>,
 
     /// Cleanup interval in seconds for stale buckets (default: 60)
@@ -99,6 +103,13 @@ impl OidcDefaultRole {
 
 /// Configuration for a single OIDC provider
 #[derive(Debug, Serialize, Deserialize, Clone)]
+// Every field defaults, so a provider can be introduced entirely from the
+// environment: setting `CODEX_AUTH__OIDC__PROVIDERS__<NAME>__ISSUER_URL` is
+// enough to create the entry, matching what the v1 override layer allowed.
+// A provider that is present but unusable (no issuer, no client id) is caught
+// by config validation rather than by a missing-field parse error, so the
+// message names the actual problem.
+#[serde(default)]
 pub struct OidcProviderConfig {
     /// Display name shown on login button
     pub display_name: String,
@@ -112,19 +123,23 @@ pub struct OidcProviderConfig {
 
     /// OAuth2 client secret (optional if using client_secret_env)
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::de::optional_string")]
     pub client_secret: Option<String>,
 
     /// Environment variable name containing client secret
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::de::optional_string")]
     pub client_secret_env: Option<String>,
 
     /// Scopes to request (openid is always included)
     #[serde(default)]
+    #[serde(deserialize_with = "crate::de::string_list")]
     pub scopes: Vec<String>,
 
     /// Group-to-role mapping: role -> [group names]
     /// e.g., {"admin": ["codex-admins"], "reader": ["codex-users"]}
     #[serde(default)]
+    #[serde(deserialize_with = "crate::de::string_list_map")]
     pub role_mapping: HashMap<String, Vec<String>>,
 
     /// Claim containing groups (default: "groups")
@@ -145,7 +160,26 @@ pub struct OidcProviderConfig {
     /// client). Resolution of the empty default happens at validator
     /// construction.
     #[serde(default)]
+    #[serde(deserialize_with = "crate::de::string_list")]
     pub accepted_audiences: Vec<String>,
+}
+
+impl Default for OidcProviderConfig {
+    fn default() -> Self {
+        Self {
+            display_name: String::new(),
+            issuer_url: String::new(),
+            client_id: String::new(),
+            client_secret: None,
+            client_secret_env: None,
+            scopes: Vec::new(),
+            role_mapping: HashMap::new(),
+            groups_claim: default_groups_claim(),
+            username_claim: default_username_claim(),
+            email_claim: default_email_claim(),
+            accepted_audiences: Vec::new(),
+        }
+    }
 }
 
 fn default_groups_claim() -> String {
@@ -165,9 +199,11 @@ fn default_email_claim() -> String {
 #[serde(default)]
 pub struct OidcConfig {
     /// Enable OIDC authentication
+    #[serde(deserialize_with = "crate::de::truthy_bool")]
     pub enabled: bool,
 
     /// Auto-create users on first OIDC login
+    #[serde(deserialize_with = "crate::de::truthy_bool")]
     pub auto_create_users: bool,
 
     /// Default role for new OIDC users (if no group mapping matches)
@@ -177,6 +213,7 @@ pub struct OidcConfig {
     /// e.g., "https://codex.example.com" or "http://localhost:8080"
     /// If not set, falls back to http://{application.host}:{application.port}
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::de::optional_string")]
     pub redirect_uri_base: Option<String>,
 
     /// Redirect targets a client may request at the end of an OIDC flow.
@@ -190,6 +227,7 @@ pub struct OidcConfig {
     /// whatever target is used, so every entry here is a party trusted with the
     /// tokens of anyone who completes a sign-in.
     #[serde(default)]
+    #[serde(deserialize_with = "crate::de::string_list")]
     pub allowed_redirect_uris: Vec<String>,
 
     /// Provider configurations keyed by provider name (e.g., "authentik", "keycloak")
@@ -395,8 +433,10 @@ impl Default for Config {
 pub struct AuthConfig {
     pub jwt_secret: String,
     pub jwt_expiry_hours: u32,
+    #[serde(deserialize_with = "crate::de::truthy_bool")]
     pub refresh_token_enabled: bool,
     pub refresh_token_expiry_days: u32,
+    #[serde(deserialize_with = "crate::de::truthy_bool")]
     pub email_confirmation_required: bool,
     pub argon2_memory_cost: u32,
     pub argon2_time_cost: u32,
@@ -426,9 +466,12 @@ impl Default for AuthConfig {
 #[serde(default)]
 pub struct ApiConfig {
     pub base_path: String,
+    #[serde(deserialize_with = "crate::de::truthy_bool")]
     pub enable_api_docs: bool,
     pub api_docs_path: String,
+    #[serde(deserialize_with = "crate::de::truthy_bool")]
     pub cors_enabled: bool,
+    #[serde(deserialize_with = "crate::de::string_list")]
     pub cors_origins: Vec<String>,
     pub max_page_size: usize,
 }
@@ -716,6 +759,7 @@ pub struct ApplicationConfig {
     /// Used as a fallback for OIDC redirect URIs and email verification links.
     /// If not set, falls back to http://{host}:{port}
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::de::optional_string")]
     pub base_url: Option<String>,
 }
 
@@ -744,7 +788,9 @@ impl Default for ApplicationConfig {
 #[serde(default)]
 pub struct LoggingConfig {
     pub level: LogLevel,
+    #[serde(deserialize_with = "crate::de::truthy_bool")]
     pub console: bool,
+    #[serde(deserialize_with = "crate::de::optional_string")]
     pub file: Option<String>,
 }
 
@@ -869,6 +915,7 @@ pub struct EmailConfig {
     /// Base URL for email verification links (e.g., "https://codex.example.com")
     /// If not set, falls back to application.base_url, then http://{host}:{port}
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::de::optional_string")]
     pub verification_url_base: Option<String>,
 }
 
@@ -878,6 +925,7 @@ pub struct EmailConfig {
 pub struct PdfConfig {
     /// Path to PDFium library (optional)
     /// If not set, will search current directory and system paths
+    #[serde(deserialize_with = "crate::de::optional_string")]
     pub pdfium_library_path: Option<String>,
 
     /// Default render DPI (72-300, default 150)
@@ -888,6 +936,7 @@ pub struct PdfConfig {
     pub jpeg_quality: u8,
 
     /// Enable rendered page caching (default: true)
+    #[serde(deserialize_with = "crate::de::truthy_bool")]
     pub cache_rendered_pages: bool,
 
     /// Directory for caching rendered PDF pages (default: data/cache)
@@ -914,6 +963,7 @@ impl Default for PdfConfig {
 #[serde(default)]
 pub struct PdfHandleCacheConfig {
     /// Master switch. When false, every page render re-opens the PDF.
+    #[serde(deserialize_with = "crate::de::truthy_bool")]
     pub enabled: bool,
 
     /// Maximum number of open `PdfDocument` handles to keep resident.
@@ -1007,6 +1057,7 @@ pub struct OtlpConfig {
     pub protocol: OtlpProtocol,
 
     /// Arbitrary headers attached to every export request (auth, tenancy).
+    #[serde(deserialize_with = "crate::de::string_map")]
     pub headers: HashMap<String, String>,
 
     /// Per-export request timeout in milliseconds.
@@ -1018,6 +1069,7 @@ pub struct OtlpConfig {
     /// the matching HTTP port (e.g. `:4318`) without changing the SDK
     /// transport. When unset or empty, the proxy falls back to `endpoint`.
     #[serde(default)]
+    #[serde(deserialize_with = "crate::de::optional_string")]
     pub proxy_endpoint: Option<String>,
 }
 
@@ -1052,6 +1104,7 @@ impl Default for OtlpConfig {
 pub struct ObservabilityTracesConfig {
     /// Enable trace export. Honored only when the parent `observability.enabled`
     /// is also true.
+    #[serde(deserialize_with = "crate::de::truthy_bool")]
     pub enabled: bool,
 
     /// Parent-based sampling ratio in `[0.0, 1.0]`. Values outside this range
@@ -1074,6 +1127,7 @@ impl Default for ObservabilityTracesConfig {
 pub struct ObservabilityMetricsConfig {
     /// Enable metrics export. Honored only when the parent `observability.enabled`
     /// is also true.
+    #[serde(deserialize_with = "crate::de::truthy_bool")]
     pub enabled: bool,
 
     /// Periodic reader export interval in milliseconds.
@@ -1099,6 +1153,7 @@ pub struct ObservabilityBrowserConfig {
     /// Independent of the backend `observability.enabled` flag because some
     /// operators want server-side observability without shipping spans from
     /// every browser tab.
+    #[serde(deserialize_with = "crate::de::truthy_bool")]
     pub enabled: bool,
 
     /// Path on the Codex server where the browser SDK POSTs OTLP batches.
@@ -1128,6 +1183,7 @@ impl Default for ObservabilityBrowserConfig {
 #[serde(default)]
 pub struct ObservabilityConfig {
     /// Master switch. Must be `true` for any OTel work to happen.
+    #[serde(deserialize_with = "crate::de::truthy_bool")]
     pub enabled: bool,
 
     /// `service.name` resource attribute. Identifies this process in the

@@ -3,6 +3,7 @@
 //! Extracted from the monolithic `codex` crate as the first workspace leaf in
 //! the workspace-split plan. Has no dependencies on other Codex crates.
 
+mod de;
 mod env_audit;
 mod keys;
 mod loader;
