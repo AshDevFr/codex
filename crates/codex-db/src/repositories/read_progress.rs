@@ -248,7 +248,9 @@ impl ReadProgressRepository {
         user_id: Uuid,
         book_id: Uuid,
     ) -> Result<Option<read_progress::Model>> {
-        let sessions = ReadingSessionRepository::load_for_book(db, user_id, book_id).await?;
+        // Only the current pass: the fold discards earlier ones, and loading
+        // them would make every write cost more as a book is re-read.
+        let sessions = ReadingSessionRepository::load_current_pass(db, user_id, book_id).await?;
         let folded = fold(&sessions);
 
         let Some(projected) = folded.progress else {
@@ -1570,6 +1572,81 @@ mod tests {
         assert_eq!(
             progress.current_page, 20,
             "position still folds to one value"
+        );
+    }
+
+    /// How long a write takes once a book has accumulated history.
+    ///
+    /// Every write refolds from the log, so the cost of writing grows with the
+    /// size of the log unless something bounds what is loaded. Run with
+    /// `cargo test -p codex-db --lib refold_cost -- --ignored --nocapture`.
+    #[tokio::test]
+    #[ignore = "benchmark, not a correctness check"]
+    async fn refold_cost_against_a_large_log() {
+        use crate::entities::reading_sessions;
+        use chrono::Duration as ChronoDuration;
+
+        let db = setup_test_db().await;
+        let user = create_test_user(&db).await;
+        let book = create_test_book(&db).await;
+        let base = Utc::now() - ChronoDuration::days(400);
+
+        // A pathological but reachable shape: a book re-read many times, each
+        // pass leaving sessions behind. Passes accumulate for the life of the
+        // book, so this is what the log looks like years in.
+        for pass in 1..=50i32 {
+            let mut rows = Vec::new();
+            for i in 0..40i32 {
+                let at = base + ChronoDuration::minutes((pass * 100 + i) as i64);
+                rows.push(reading_sessions::ActiveModel {
+                    id: Set(Uuid::new_v4()),
+                    user_id: Set(user.id),
+                    book_id: Set(book.id),
+                    device_id: Set(format!("bench-device-{}", i % 3)),
+                    device_name: Set(None),
+                    pass: Set(pass),
+                    kind: Set("progress".to_string()),
+                    to_page: Set(Some(i)),
+                    to_percentage: Set(None),
+                    r2_progression: Set(None),
+                    active_duration_ms: Set(Some(60_000)),
+                    duration_source: Set("measured".to_string()),
+                    pages_read: Set(Some(1)),
+                    client_started_at: Set(at),
+                    client_ended_at: Set(at),
+                    server_recorded_at: Set(at),
+                });
+            }
+            reading_sessions::Entity::insert_many(rows)
+                .exec(&db)
+                .await
+                .unwrap();
+        }
+
+        let total = ReadingSessionRepository::load_for_book(&db, user.id, book.id)
+            .await
+            .unwrap()
+            .len();
+
+        let started = std::time::Instant::now();
+        for page in 1..=20 {
+            ReadProgressRepository::upsert(&db, user.id, book.id, page, false)
+                .await
+                .unwrap();
+        }
+        let per_write = started.elapsed() / 20;
+
+        println!("sessions in log: {total}");
+        println!("mean write (append + refold + persist): {per_write:?}");
+
+        // Measured at ~28ms when the refold loaded every pass, and ~1.8ms once
+        // it loaded only the current one, on a debug build. The ceiling is set
+        // well above the latter so the test reports a regression in the loading
+        // strategy rather than noise on a slow machine.
+        assert!(
+            per_write < std::time::Duration::from_millis(10),
+            "a write took {per_write:?} against {total} sessions; \
+             the refold is loading more than the current pass again"
         );
     }
 

@@ -329,6 +329,56 @@ impl ReadingSessionRepository {
         Ok(sessions)
     }
 
+    /// The sessions of the current pass only, which is all the fold reads.
+    ///
+    /// Earlier passes are history: their completions were banked while they
+    /// were current and the fold discards them. Loading them anyway makes the
+    /// cost of every write grow with how many times a book has been re-read,
+    /// which is a strange thing for a page turn to depend on.
+    ///
+    /// Two queries rather than a subquery, because the first is answered
+    /// entirely from the fold index and the second is the same lookup the
+    /// unfiltered load does, only narrower.
+    pub async fn load_current_pass<C: ConnectionTrait>(
+        db: &C,
+        user_id: Uuid,
+        book_id: Uuid,
+    ) -> Result<Vec<reading_sessions::Model>> {
+        let Some(current_pass) = Self::max_pass(db, user_id, book_id).await? else {
+            return Ok(Vec::new());
+        };
+
+        let sessions = ReadingSessions::find()
+            .filter(reading_sessions::Column::UserId.eq(user_id))
+            .filter(reading_sessions::Column::BookId.eq(book_id))
+            .filter(reading_sessions::Column::Pass.eq(current_pass))
+            .order_by_asc(reading_sessions::Column::ClientEndedAt)
+            .order_by_asc(reading_sessions::Column::ServerRecordedAt)
+            .all(db)
+            .await?;
+
+        Ok(sessions)
+    }
+
+    /// The highest pass recorded for a book, or `None` when the log is empty.
+    async fn max_pass<C: ConnectionTrait>(
+        db: &C,
+        user_id: Uuid,
+        book_id: Uuid,
+    ) -> Result<Option<i32>> {
+        let max = ReadingSessions::find()
+            .filter(reading_sessions::Column::UserId.eq(user_id))
+            .filter(reading_sessions::Column::BookId.eq(book_id))
+            .select_only()
+            .column_as(reading_sessions::Column::Pass.max(), "max_pass")
+            .into_tuple::<Option<i32>>()
+            .one(db)
+            .await?
+            .flatten();
+
+        Ok(max)
+    }
+
     /// The pass a new event of `kind` belongs to.
     ///
     /// A reset opens the next pass rather than closing the current one, so the
@@ -341,17 +391,7 @@ impl ReadingSessionRepository {
         book_id: Uuid,
         kind: SessionKind,
     ) -> Result<i32> {
-        let current: Option<i32> = ReadingSessions::find()
-            .filter(reading_sessions::Column::UserId.eq(user_id))
-            .filter(reading_sessions::Column::BookId.eq(book_id))
-            .select_only()
-            .column_as(reading_sessions::Column::Pass.max(), "max_pass")
-            .into_tuple::<Option<i32>>()
-            .one(db)
-            .await?
-            .flatten();
-
-        let current = current.unwrap_or(1);
+        let current = Self::max_pass(db, user_id, book_id).await?.unwrap_or(1);
         Ok(match kind {
             SessionKind::Reset => current + 1,
             _ => current,
