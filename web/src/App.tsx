@@ -22,6 +22,7 @@ import { LibraryJobsPage } from "@/pages/LibraryJobs";
 import { Login } from "@/pages/Login";
 import { OidcComplete } from "@/pages/OidcComplete";
 import { Reader } from "@/pages/Reader";
+import { ReadingStats } from "@/pages/ReadingStats";
 import { ReadListDetail } from "@/pages/ReadListDetail";
 import { ReadLists } from "@/pages/ReadLists";
 import { Recommendations } from "@/pages/Recommendations";
@@ -180,6 +181,17 @@ function App() {
             <ProtectedRoute>
               <AppLayout>
                 <Home />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/reading-stats"
+          element={
+            <ProtectedRoute>
+              <AppLayout>
+                <ReadingStats />
               </AppLayout>
             </ProtectedRoute>
           }

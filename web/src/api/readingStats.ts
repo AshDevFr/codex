@@ -1,0 +1,45 @@
+import type { components } from "@/types/api.generated";
+import { api } from "./client";
+
+export type ReadingStatsResponse =
+  components["schemas"]["ReadingStatsResponse"];
+export type ReadingSummaryDto = components["schemas"]["ReadingSummaryDto"];
+export type ReadingPeriodDto = components["schemas"]["ReadingPeriodDto"];
+export type ReadingByDeviceDto = components["schemas"]["ReadingByDeviceDto"];
+export type ReadingBySeriesDto = components["schemas"]["ReadingBySeriesDto"];
+export type ReadingByFormatDto = components["schemas"]["ReadingByFormatDto"];
+export type DurationBreakdownDto =
+  components["schemas"]["DurationBreakdownDto"];
+export type ReadingStatsGranularity =
+  components["schemas"]["ReadingStatsGranularity"];
+
+export interface ReadingStatsParams {
+  from?: Date;
+  to?: Date;
+  granularity?: ReadingStatsGranularity;
+  seriesLimit?: number;
+}
+
+export const readingStatsApi = {
+  /**
+   * Reading statistics for the signed-in user.
+   *
+   * Timestamps are sent with a `Z` suffix rather than a numeric offset: a bare
+   * `+` in a query string decodes as a space, so `+00:00` never survives the
+   * round trip.
+   */
+  get: async (
+    params: ReadingStatsParams = {},
+  ): Promise<ReadingStatsResponse> => {
+    const query: Record<string, string> = {};
+    if (params.from) query.from = params.from.toISOString();
+    if (params.to) query.to = params.to.toISOString();
+    if (params.granularity) query.granularity = params.granularity;
+    if (params.seriesLimit) query.seriesLimit = String(params.seriesLimit);
+
+    const response = await api.get<ReadingStatsResponse>("/reading-stats", {
+      params: query,
+    });
+    return response.data;
+  },
+};

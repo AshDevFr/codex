@@ -437,6 +437,14 @@ export function Sidebar({
                 active={currentPath.startsWith("/readlists")}
                 onClick={onNavigate}
               />
+              <NavLink
+                component={Link}
+                to="/reading-stats"
+                label="Reading"
+                leftSection={<IconChartBar size={20} stroke={2} />}
+                active={currentPath === "/reading-stats"}
+                onClick={onNavigate}
+              />
               {hasRecommendationPlugin && (
                 <NavLink
                   component={Link}

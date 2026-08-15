@@ -2974,6 +2974,36 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reading-stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Reading statistics for the authenticated user
+         * @description Totals, a time series, and breakdowns by device, series and format, all over
+         *     one window so no two panels can disagree about which dates they cover.
+         *
+         *     Reading time is reported as two figures rather than one. Clients that measure
+         *     their own sessions report time directly; the Komga-compatible, OPDS and
+         *     KOReader surfaces cannot, so theirs is reconstructed from the gaps between
+         *     their writes. That reconstruction undercounts and is blind to reading done
+         *     from an already-downloaded book, so it is kept separable rather than blended
+         *     into a total that would quietly overstate its own accuracy.
+         *
+         *     Always scoped to the caller. There is no way to read another user's history.
+         */
+        get: operations["get_reading_stats"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/readlists": {
         parameters: {
             query?: never;
@@ -11240,6 +11270,34 @@ export interface components {
              */
             updatedAt: string;
         };
+        /**
+         * @description Reading time split by how it was arrived at.
+         *
+         *     Deliberately two numbers rather than one. Time from the compatibility
+         *     surfaces is reconstructed from the gaps between their writes: it undercounts
+         *     and cannot see reading done from a downloaded book at all. Presenting a
+         *     combined figure is fine; hiding that part of it is an estimate is not.
+         */
+        DurationBreakdownDto: {
+            /**
+             * Format: int64
+             * @description Milliseconds reconstructed server-side. An underestimate.
+             * @example 900000
+             */
+            inferredMs: number;
+            /**
+             * Format: int64
+             * @description Milliseconds reported by a client that measured its own reading.
+             * @example 5400000
+             */
+            measuredMs: number;
+            /**
+             * Format: int64
+             * @description Convenience sum of the two, so clients do not each reimplement it.
+             * @example 6300000
+             */
+            totalMs: number;
+        };
         /** @description A single effective grant with source attribution */
         EffectiveGrantDto: {
             /** @description Access mode: allow or deny */
@@ -16933,6 +16991,74 @@ export interface components {
              */
             userId: string;
         };
+        /** @description Totals for one device, most-read first. */
+        ReadingByDeviceDto: {
+            deviceId: string;
+            /**
+             * @description Friendly name where the client sent one, or the API key's label.
+             * @example Ash's iPhone
+             */
+            deviceName?: string | null;
+            duration: components["schemas"]["DurationBreakdownDto"];
+            /** Format: date-time */
+            lastReadAt: string;
+            /** Format: int64 */
+            pagesRead: number;
+            /** Format: int64 */
+            sessions: number;
+        };
+        /** @description Totals for one file format. */
+        ReadingByFormatDto: {
+            duration: components["schemas"]["DurationBreakdownDto"];
+            /** @example cbz */
+            format: string;
+            /** Format: int64 */
+            pagesRead: number;
+            /** Format: int64 */
+            sessions: number;
+        };
+        /** @description Totals for one series, most-read first. */
+        ReadingBySeriesDto: {
+            /**
+             * Format: int64
+             * @description Distinct books of the series read in the window.
+             */
+            books: number;
+            duration: components["schemas"]["DurationBreakdownDto"];
+            /** Format: int64 */
+            pagesRead: number;
+            /** Format: uuid */
+            seriesId: string;
+            /** @example Berserk */
+            seriesName: string;
+            /** Format: int64 */
+            sessions: number;
+        };
+        /**
+         * @description One bucket of the time series.
+         *
+         *     Buckets with no reading are absent rather than zero: a client knows the
+         *     window it asked for and can fill the gaps, and a quiet year would otherwise
+         *     be mostly padding.
+         */
+        ReadingPeriodDto: {
+            /**
+             * @description ISO date of the bucket's start. Weeks start on Monday.
+             * @example 2026-06-01
+             */
+            bucket: string;
+            duration: components["schemas"]["DurationBreakdownDto"];
+            /**
+             * Format: int64
+             * @example 120
+             */
+            pagesRead: number;
+            /**
+             * Format: int64
+             * @example 4
+             */
+            sessions: number;
+        };
         /**
          * @description Reading progress information for a publication
          *
@@ -17050,6 +17176,54 @@ export interface components {
          * @enum {string}
          */
         ReadingSessionRejectionReason: "book_not_found" | "invalid_time_range" | "invalid_percentage" | "invalid_measurement" | "duplicate_in_batch";
+        /**
+         * @description How finely to bucket the time series.
+         * @enum {string}
+         */
+        ReadingStatsGranularity: "day" | "week" | "month";
+        /** @description Everything the reading dashboard shows, over one window. */
+        ReadingStatsResponse: {
+            devices: components["schemas"]["ReadingByDeviceDto"][];
+            formats: components["schemas"]["ReadingByFormatDto"][];
+            /**
+             * Format: date-time
+             * @description The window actually used, after defaults were applied.
+             */
+            from: string;
+            granularity: components["schemas"]["ReadingStatsGranularity"];
+            periods: components["schemas"]["ReadingPeriodDto"][];
+            series: components["schemas"]["ReadingBySeriesDto"][];
+            summary: components["schemas"]["ReadingSummaryDto"];
+            /** Format: date-time */
+            to: string;
+        };
+        /** @description Headline totals for the window. */
+        ReadingSummaryDto: {
+            /**
+             * Format: int64
+             * @example 12
+             */
+            books: number;
+            duration: components["schemas"]["DurationBreakdownDto"];
+            /**
+             * Format: int64
+             * @example 1240
+             */
+            pagesRead: number;
+            /**
+             * Format: int64
+             * @description Distinct sittings, after adjacent writes were merged.
+             * @example 48
+             */
+            sessions: number;
+            /**
+             * Format: int64
+             * @description Sittings whose client could report no time at all. A large number here
+             *     explains a total that looks lower than the reading felt.
+             * @example 3
+             */
+            sessionsWithoutDuration: number;
+        };
         /** @description A single recommendation for the user */
         RecommendationDto: {
             /** @description Titles that influenced this recommendation */
@@ -28049,6 +28223,56 @@ export interface operations {
                 };
             };
             /** @description Batch exceeds the maximum size */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_reading_stats: {
+        parameters: {
+            query?: {
+                /** @description Start of the window. Defaults to 90 days ago. */
+                from?: string | null;
+                /** @description End of the window, exclusive. Defaults to now. */
+                to?: string | null;
+                /** @description Bucket size for the time series. Defaults to `day`. */
+                granularity?: components["schemas"]["ReadingStatsGranularity"];
+                /** @description How many series to return. Defaults to 10, capped at 50. */
+                seriesLimit?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reading statistics for the window */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingStatsResponse"];
+                };
+            };
+            /** @description The window ends before it starts */
             400: {
                 headers: {
                     [name: string]: unknown;

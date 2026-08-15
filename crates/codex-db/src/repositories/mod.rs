@@ -22,6 +22,7 @@ pub mod read_completions;
 pub mod read_list;
 pub mod read_progress;
 pub mod reading_sessions;
+pub mod reading_stats;
 pub mod refresh_token;
 pub mod release_ledger;
 pub mod release_sources;
@@ -91,6 +92,11 @@ pub use read_list::ReadListRepository;
 pub use read_progress::ReadProgressRepository;
 #[allow(unused_imports)]
 pub use reading_sessions::{AppendOutcome, DeviceContext, NewSession, ReadingSessionRepository};
+#[allow(unused_imports)]
+pub use reading_stats::{
+    DurationBreakdown, ReadingByDevice, ReadingByFormat, ReadingBySeries, ReadingPeriod,
+    ReadingStatsRepository, ReadingSummary, StatsGranularity, StatsWindow,
+};
 #[allow(unused_imports)]
 pub use refresh_token::{NewRefreshToken, RefreshTokenRepository};
 #[allow(unused_imports)]

@@ -46,6 +46,7 @@ mod rate_limit;
 mod read_history;
 mod read_progress;
 mod reading_sessions;
+mod reading_stats;
 mod readlists;
 mod recommendations;
 mod refresh_token;

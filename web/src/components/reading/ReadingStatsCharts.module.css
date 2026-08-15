@@ -1,0 +1,104 @@
+/*
+ * Chart colours for the reading dashboard.
+ *
+ * Measured and reconstructed time are two steps of ONE hue, not two hues.
+ * That is deliberate: they are the same measure at different confidence, and
+ * two categorical hues would say they were different things. Both pairs are
+ * validated as a two-step ordinal ramp in their own mode (monotone lightness,
+ * visible step gap, light end clearing the surface).
+ *
+ * Dark values are stepped for the dark surface rather than flipped, and are
+ * declared under both the OS media query and the explicit theme attribute so
+ * the in-app toggle wins in either direction.
+ */
+
+.viz {
+  --measured: #2a78d6;
+  --inferred: #86b6ef;
+  /* Sequential ramp for the calendar, lightest = no reading. */
+  --heat-0: var(--mantine-color-default-border);
+  --heat-1: #cde2fb;
+  --heat-2: #9ec5f4;
+  --heat-3: #5598e7;
+  --heat-4: #2a78d6;
+  --heat-5: #184f95;
+  --grid: var(--mantine-color-default-border);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) .viz {
+    --measured: #3987e5;
+    --inferred: #1c5cab;
+    --heat-1: #104281;
+    --heat-2: #184f95;
+    --heat-3: #256abf;
+    --heat-4: #3987e5;
+    --heat-5: #6da7ec;
+  }
+}
+
+:root[data-theme="dark"] .viz {
+  --measured: #3987e5;
+  --inferred: #1c5cab;
+  --heat-1: #104281;
+  --heat-2: #184f95;
+  --heat-3: #256abf;
+  --heat-4: #3987e5;
+  --heat-5: #6da7ec;
+}
+
+.measuredSwatch {
+  background: var(--measured);
+}
+
+.inferredSwatch {
+  background: var(--inferred);
+}
+
+.swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  display: inline-block;
+  flex: none;
+}
+
+/* Wide charts scroll inside their own box; the page never scrolls sideways. */
+.scroller {
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.bar {
+  transition: opacity 120ms ease;
+}
+
+.bar:hover {
+  opacity: 0.75;
+}
+
+.cell {
+  transition: opacity 120ms ease;
+}
+
+.cell:hover {
+  opacity: 0.7;
+}
+
+.track {
+  background: var(--mantine-color-default-border);
+  border-radius: 4px;
+  height: 8px;
+  overflow: hidden;
+  display: flex;
+  /* A 2px surface gap keeps the two segments from reading as one block. */
+  gap: 2px;
+}
+
+.trackMeasured {
+  background: var(--measured);
+}
+
+.trackInferred {
+  background: var(--inferred);
+}

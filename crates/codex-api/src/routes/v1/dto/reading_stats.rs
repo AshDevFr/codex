@@ -1,0 +1,227 @@
+//! DTOs for reading statistics.
+//!
+//! One response carries the whole dashboard, because every panel of it answers
+//! the same question over the same window and splitting them into five requests
+//! would only mean five chances for the window to drift between panels.
+
+use chrono::{DateTime, Utc};
+use codex_db::repositories::{
+    DurationBreakdown, ReadingByDevice, ReadingByFormat, ReadingBySeries, ReadingPeriod,
+    ReadingSummary, StatsGranularity,
+};
+use serde::{Deserialize, Serialize};
+use utoipa::{IntoParams, ToSchema};
+use uuid::Uuid;
+
+/// How finely to bucket the time series.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum ReadingStatsGranularity {
+    Day,
+    Week,
+    Month,
+}
+
+impl From<ReadingStatsGranularity> for StatsGranularity {
+    fn from(value: ReadingStatsGranularity) -> Self {
+        match value {
+            ReadingStatsGranularity::Day => Self::Day,
+            ReadingStatsGranularity::Week => Self::Week,
+            ReadingStatsGranularity::Month => Self::Month,
+        }
+    }
+}
+
+/// Query parameters for the statistics endpoint.
+#[derive(Debug, Clone, Deserialize, IntoParams)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadingStatsQuery {
+    /// Start of the window. Defaults to 90 days ago.
+    pub from: Option<DateTime<Utc>>,
+    /// End of the window, exclusive. Defaults to now.
+    pub to: Option<DateTime<Utc>>,
+    /// Bucket size for the time series. Defaults to `day`.
+    pub granularity: Option<ReadingStatsGranularity>,
+    /// How many series to return. Defaults to 10, capped at 50.
+    pub series_limit: Option<u64>,
+}
+
+/// Reading time split by how it was arrived at.
+///
+/// Deliberately two numbers rather than one. Time from the compatibility
+/// surfaces is reconstructed from the gaps between their writes: it undercounts
+/// and cannot see reading done from a downloaded book at all. Presenting a
+/// combined figure is fine; hiding that part of it is an estimate is not.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DurationBreakdownDto {
+    /// Milliseconds reported by a client that measured its own reading.
+    #[schema(example = 5_400_000_i64)]
+    pub measured_ms: i64,
+    /// Milliseconds reconstructed server-side. An underestimate.
+    #[schema(example = 900_000_i64)]
+    pub inferred_ms: i64,
+    /// Convenience sum of the two, so clients do not each reimplement it.
+    #[schema(example = 6_300_000_i64)]
+    pub total_ms: i64,
+}
+
+impl From<DurationBreakdown> for DurationBreakdownDto {
+    fn from(value: DurationBreakdown) -> Self {
+        Self {
+            total_ms: value.total_ms(),
+            measured_ms: value.measured_ms,
+            inferred_ms: value.inferred_ms,
+        }
+    }
+}
+
+/// Headline totals for the window.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadingSummaryDto {
+    pub duration: DurationBreakdownDto,
+    #[schema(example = 1240)]
+    pub pages_read: i64,
+    /// Distinct sittings, after adjacent writes were merged.
+    #[schema(example = 48)]
+    pub sessions: i64,
+    #[schema(example = 12)]
+    pub books: i64,
+    /// Sittings whose client could report no time at all. A large number here
+    /// explains a total that looks lower than the reading felt.
+    #[schema(example = 3)]
+    pub sessions_without_duration: i64,
+}
+
+impl From<ReadingSummary> for ReadingSummaryDto {
+    fn from(value: ReadingSummary) -> Self {
+        Self {
+            duration: value.duration.into(),
+            pages_read: value.pages_read,
+            sessions: value.sessions,
+            books: value.books,
+            sessions_without_duration: value.sessions_without_duration,
+        }
+    }
+}
+
+/// One bucket of the time series.
+///
+/// Buckets with no reading are absent rather than zero: a client knows the
+/// window it asked for and can fill the gaps, and a quiet year would otherwise
+/// be mostly padding.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadingPeriodDto {
+    /// ISO date of the bucket's start. Weeks start on Monday.
+    #[schema(example = "2026-06-01")]
+    pub bucket: String,
+    pub duration: DurationBreakdownDto,
+    #[schema(example = 120)]
+    pub pages_read: i64,
+    #[schema(example = 4)]
+    pub sessions: i64,
+}
+
+impl From<ReadingPeriod> for ReadingPeriodDto {
+    fn from(value: ReadingPeriod) -> Self {
+        Self {
+            bucket: value.bucket,
+            duration: value.duration.into(),
+            pages_read: value.pages_read,
+            sessions: value.sessions,
+        }
+    }
+}
+
+/// Totals for one device, most-read first.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadingByDeviceDto {
+    pub device_id: String,
+    /// Friendly name where the client sent one, or the API key's label.
+    #[schema(example = "Ash's iPhone")]
+    pub device_name: Option<String>,
+    pub duration: DurationBreakdownDto,
+    pub pages_read: i64,
+    pub sessions: i64,
+    pub last_read_at: DateTime<Utc>,
+}
+
+impl From<ReadingByDevice> for ReadingByDeviceDto {
+    fn from(value: ReadingByDevice) -> Self {
+        Self {
+            device_id: value.device_id,
+            device_name: value.device_name,
+            duration: value.duration.into(),
+            pages_read: value.pages_read,
+            sessions: value.sessions,
+            last_read_at: value.last_read_at,
+        }
+    }
+}
+
+/// Totals for one series, most-read first.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadingBySeriesDto {
+    pub series_id: Uuid,
+    #[schema(example = "Berserk")]
+    pub series_name: String,
+    pub duration: DurationBreakdownDto,
+    pub pages_read: i64,
+    pub sessions: i64,
+    /// Distinct books of the series read in the window.
+    pub books: i64,
+}
+
+impl From<ReadingBySeries> for ReadingBySeriesDto {
+    fn from(value: ReadingBySeries) -> Self {
+        Self {
+            series_id: value.series_id,
+            series_name: value.series_name,
+            duration: value.duration.into(),
+            pages_read: value.pages_read,
+            sessions: value.sessions,
+            books: value.books,
+        }
+    }
+}
+
+/// Totals for one file format.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadingByFormatDto {
+    #[schema(example = "cbz")]
+    pub format: String,
+    pub duration: DurationBreakdownDto,
+    pub pages_read: i64,
+    pub sessions: i64,
+}
+
+impl From<ReadingByFormat> for ReadingByFormatDto {
+    fn from(value: ReadingByFormat) -> Self {
+        Self {
+            format: value.format,
+            duration: value.duration.into(),
+            pages_read: value.pages_read,
+            sessions: value.sessions,
+        }
+    }
+}
+
+/// Everything the reading dashboard shows, over one window.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadingStatsResponse {
+    /// The window actually used, after defaults were applied.
+    pub from: DateTime<Utc>,
+    pub to: DateTime<Utc>,
+    pub granularity: ReadingStatsGranularity,
+    pub summary: ReadingSummaryDto,
+    pub periods: Vec<ReadingPeriodDto>,
+    pub devices: Vec<ReadingByDeviceDto>,
+    pub series: Vec<ReadingBySeriesDto>,
+    pub formats: Vec<ReadingByFormatDto>,
+}

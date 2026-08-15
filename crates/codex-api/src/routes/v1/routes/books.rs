@@ -172,6 +172,8 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
         // The append-only log the progress routes above are projections of.
         // Not book-scoped: a client replays sessions for many books at once.
         .route("/reading-sessions", post(handlers::record_reading_sessions))
+        // Aggregations over that log.
+        .route("/reading-stats", get(handlers::get_reading_stats))
         // Mark as read/unread routes
         .route("/books/{book_id}/read", post(handlers::mark_book_as_read))
         .route(
