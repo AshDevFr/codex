@@ -84,7 +84,7 @@ async fn reload_sync_scheduler(state: &AppState) {
         (status = 403, description = "PluginsManage permission required"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Plugins"
@@ -141,7 +141,7 @@ pub async fn list_plugins(
         (status = 409, description = "Plugin with this name already exists"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Plugins"
@@ -392,7 +392,7 @@ pub async fn create_plugin(
         (status = 404, description = "Plugin not found"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Plugins"
@@ -430,7 +430,7 @@ pub async fn get_plugin(
         (status = 404, description = "Plugin not found"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Plugins"
@@ -713,7 +713,7 @@ pub async fn update_plugin(
         (status = 404, description = "Plugin not found"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Plugins"
@@ -797,7 +797,7 @@ pub async fn delete_plugin(
         (status = 404, description = "Plugin not found"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Plugins"
@@ -885,7 +885,7 @@ pub async fn enable_plugin(
         (status = 404, description = "Plugin not found"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Plugins"
@@ -962,7 +962,7 @@ pub async fn disable_plugin(
         (status = 404, description = "Plugin not found"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Plugins"
@@ -1047,7 +1047,7 @@ pub async fn test_plugin(
         (status = 404, description = "Plugin not found"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Plugins"
@@ -1085,7 +1085,7 @@ pub async fn get_plugin_health(
         (status = 404, description = "Plugin not found"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Plugins"
@@ -1150,7 +1150,7 @@ fn default_failures_limit() -> u64 {
         (status = 404, description = "Plugin not found"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Plugins"

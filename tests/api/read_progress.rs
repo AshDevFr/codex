@@ -400,7 +400,7 @@ async fn test_mark_series_as_read_unauthorized() {
 // ============================================================================
 
 #[tokio::test]
-async fn test_get_progress_returns_null_when_no_progress_exists() {
+async fn test_get_progress_returns_no_content_when_no_progress_exists() {
     let (db, _temp_dir) = setup_test_db().await;
 
     // Create library and series
@@ -428,15 +428,15 @@ async fn test_get_progress_returns_null_when_no_progress_exists() {
     let (_user_id, token) = create_admin_and_token(&db, &state).await;
     let app = create_test_router(state).await;
 
-    // Get progress for a book with no progress — should return 200 with null
+    // Get progress for a book with no progress — should return 204 with no body
     let request = get_request_with_auth(&format!("/api/v1/books/{}/progress", book.id), &token);
     let (status, response): (StatusCode, Option<ReadProgressResponse>) =
         make_json_request(app, request).await;
 
-    assert_eq!(status, StatusCode::OK);
+    assert_eq!(status, StatusCode::NO_CONTENT);
     assert!(
         response.is_none(),
-        "Expected null response when no progress exists"
+        "Expected an empty body when no progress exists"
     );
 }
 

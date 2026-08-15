@@ -411,7 +411,7 @@ export const booksApi = {
     libraryId?: string;
   }): Promise<RetryErrorsResponse> => {
     const body: RetryAllErrorsRequest = {
-      errorType: options?.errorType ?? null,
+      errorType: options?.errorType,
       libraryId: options?.libraryId ?? null,
     };
 

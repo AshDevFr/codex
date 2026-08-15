@@ -28,7 +28,7 @@ use codex_db::repositories::TaskRepository;
         (status = 503, description = "Task metrics service not available"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Metrics"
@@ -122,7 +122,7 @@ pub async fn get_task_metrics(
         (status = 503, description = "Task metrics service not available"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Metrics"
@@ -191,7 +191,7 @@ pub async fn get_task_metrics_history(
         (status = 503, description = "Task metrics service not available"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Metrics"
@@ -241,7 +241,7 @@ pub async fn trigger_metrics_cleanup(
         (status = 503, description = "Task metrics service not available"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Metrics"

@@ -106,7 +106,7 @@ async fn get_readlist_or_404(
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden"),
     ),
-    security(("bearer_auth" = []), ("api_key" = [])),
+    security(("jwt_bearer" = []), ("api_key" = [])),
     tag = "Read Lists"
 )]
 pub async fn list_readlists(
@@ -139,7 +139,7 @@ pub async fn list_readlists(
         (status = 403, description = "Forbidden"),
         (status = 409, description = "A read list with that name already exists"),
     ),
-    security(("bearer_auth" = []), ("api_key" = [])),
+    security(("jwt_bearer" = []), ("api_key" = [])),
     tag = "Read Lists"
 )]
 pub async fn create_readlist(
@@ -181,7 +181,7 @@ pub async fn create_readlist(
         (status = 403, description = "Forbidden"),
         (status = 404, description = "Not found"),
     ),
-    security(("bearer_auth" = []), ("api_key" = [])),
+    security(("jwt_bearer" = []), ("api_key" = [])),
     tag = "Read Lists"
 )]
 pub async fn get_readlist(
@@ -210,7 +210,7 @@ pub async fn get_readlist(
         (status = 404, description = "Not found"),
         (status = 409, description = "Name already in use"),
     ),
-    security(("bearer_auth" = []), ("api_key" = [])),
+    security(("jwt_bearer" = []), ("api_key" = [])),
     tag = "Read Lists"
 )]
 pub async fn update_readlist(
@@ -264,7 +264,7 @@ pub async fn update_readlist(
         (status = 403, description = "Forbidden"),
         (status = 404, description = "Not found"),
     ),
-    security(("bearer_auth" = []), ("api_key" = [])),
+    security(("jwt_bearer" = []), ("api_key" = [])),
     tag = "Read Lists"
 )]
 pub async fn delete_readlist(
@@ -295,7 +295,7 @@ pub async fn delete_readlist(
         (status = 403, description = "Forbidden"),
         (status = 404, description = "Not found"),
     ),
-    security(("bearer_auth" = []), ("api_key" = [])),
+    security(("jwt_bearer" = []), ("api_key" = [])),
     tag = "Read Lists"
 )]
 pub async fn get_readlist_books(
@@ -332,7 +332,7 @@ pub async fn get_readlist_books(
         (status = 403, description = "Forbidden"),
         (status = 404, description = "Read list or book not found"),
     ),
-    security(("bearer_auth" = []), ("api_key" = [])),
+    security(("jwt_bearer" = []), ("api_key" = [])),
     tag = "Read Lists"
 )]
 pub async fn add_readlist_books(
@@ -372,7 +372,7 @@ pub async fn add_readlist_books(
         (status = 204, description = "Removed (or was not a member)"),
         (status = 403, description = "Forbidden"),
     ),
-    security(("bearer_auth" = []), ("api_key" = [])),
+    security(("jwt_bearer" = []), ("api_key" = [])),
     tag = "Read Lists"
 )]
 pub async fn remove_readlist_book(
@@ -397,7 +397,7 @@ pub async fn remove_readlist_book(
         (status = 403, description = "Forbidden"),
         (status = 404, description = "Not found"),
     ),
-    security(("bearer_auth" = []), ("api_key" = [])),
+    security(("jwt_bearer" = []), ("api_key" = [])),
     tag = "Read Lists"
 )]
 pub async fn reorder_readlist_books(
@@ -422,7 +422,7 @@ pub async fn reorder_readlist_books(
         (status = 307, description = "Redirect to the first member book thumbnail"),
         (status = 404, description = "No visible member books"),
     ),
-    security(("bearer_auth" = []), ("api_key" = [])),
+    security(("jwt_bearer" = []), ("api_key" = [])),
     tag = "Read Lists"
 )]
 pub async fn get_readlist_thumbnail(
@@ -463,7 +463,7 @@ pub async fn get_readlist_thumbnail(
         (status = 200, description = "Read lists containing the book", body = ReadListListResponse),
         (status = 403, description = "Forbidden"),
     ),
-    security(("bearer_auth" = []), ("api_key" = [])),
+    security(("jwt_bearer" = []), ("api_key" = [])),
     tag = "Read Lists"
 )]
 pub async fn get_book_readlists(

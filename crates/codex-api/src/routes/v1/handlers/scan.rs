@@ -37,7 +37,7 @@ use codex_tasks::types::TaskType;
         (status = 409, description = "Scan already in progress"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Scans"
@@ -123,7 +123,7 @@ pub async fn trigger_scan(
         (status = 404, description = "No scan found for this library"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Scans"
@@ -183,7 +183,7 @@ pub async fn get_scan_status(
         (status = 404, description = "No active scan found"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Scans"
@@ -229,7 +229,7 @@ pub async fn cancel_scan(
         (status = 403, description = "Permission denied"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Scans"
@@ -291,7 +291,7 @@ pub async fn list_active_scans(
         (status = 403, description = "Permission denied"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Scans"
@@ -407,7 +407,7 @@ pub async fn scan_progress_stream(
         (status = 404, description = "Series not found"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Scans"
@@ -456,7 +456,7 @@ pub async fn trigger_series_analysis(
         (status = 404, description = "Book not found"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Scans"
@@ -509,7 +509,7 @@ pub async fn trigger_book_analysis(
         (status = 404, description = "Library not found"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Scans"
@@ -610,7 +610,7 @@ pub async fn trigger_library_analysis(
         (status = 404, description = "Library not found"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Scans"
@@ -706,7 +706,7 @@ pub async fn trigger_library_unanalyzed_analysis(
         (status = 404, description = "Series not found"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Scans"
@@ -802,7 +802,7 @@ pub async fn trigger_series_unanalyzed_analysis(
         (status = 404, description = "Book not found"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Scans"
@@ -866,7 +866,7 @@ pub async fn trigger_book_unanalyzed_analysis(
         (status = 404, description = "Series not found"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Scans"

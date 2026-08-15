@@ -27,6 +27,24 @@ fn default_page() -> u64 {
 }
 
 // =============================================================================
+// Multipart Uploads
+// =============================================================================
+
+/// Multipart form body for cover image uploads.
+///
+/// Only used to describe the request body in the OpenAPI document; the handlers
+/// read the multipart stream directly and also accept the legacy `cover` and
+/// `image` part names for backwards compatibility. A multipart body must be
+/// described with a concrete schema and marked required, otherwise strict
+/// generators skip it and the generated operation cannot upload anything.
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct CoverUploadForm {
+    /// The image file to use as the cover
+    #[schema(value_type = String, format = Binary)]
+    pub file: Vec<u8>,
+}
+
+// =============================================================================
 // Pagination Parameters
 // =============================================================================
 

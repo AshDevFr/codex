@@ -223,7 +223,7 @@ pub struct MessageResponse {
         (status = 403, description = "Permission denied"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Task Queue"
@@ -264,7 +264,7 @@ pub async fn list_tasks(
         (status = 404, description = "Task not found"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Task Queue"
@@ -299,7 +299,7 @@ pub async fn get_task(
         (status = 403, description = "Permission denied"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Task Queue"
@@ -345,7 +345,7 @@ pub async fn create_task(
         (status = 404, description = "Task not found"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Task Queue"
@@ -391,7 +391,7 @@ pub async fn cancel_task(
         (status = 404, description = "Task not found"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Task Queue"
@@ -436,7 +436,7 @@ pub async fn unlock_task(
         (status = 404, description = "Task not found"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Task Queue"
@@ -483,7 +483,7 @@ pub async fn retry_task(
         (status = 403, description = "Permission denied"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Task Queue"
@@ -517,7 +517,7 @@ pub async fn get_task_stats(
         (status = 403, description = "Permission denied"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Task Queue"
@@ -549,7 +549,7 @@ pub async fn purge_old_tasks(
         (status = 403, description = "Permission denied (admin only)"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Task Queue"
@@ -639,7 +639,7 @@ pub struct GenerateSeriesThumbnailsRequest {
         (status = 403, description = "Permission denied"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Thumbnails"
@@ -713,7 +713,7 @@ pub struct ForceRequest {
         (status = 404, description = "Library not found"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Thumbnails"
@@ -769,7 +769,7 @@ pub async fn generate_library_book_thumbnails(
         (status = 404, description = "Book not found"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Thumbnails"
@@ -823,7 +823,7 @@ pub async fn generate_book_thumbnail(
         (status = 404, description = "Series not found"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Thumbnails"
@@ -887,7 +887,7 @@ pub async fn generate_series_thumbnail(
         (status = 403, description = "Permission denied"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Thumbnails"
@@ -948,7 +948,7 @@ pub async fn generate_series_thumbnails(
         (status = 404, description = "Library not found"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Thumbnails"
@@ -1021,7 +1021,7 @@ pub async fn generate_library_series_thumbnails(
         (status = 403, description = "Forbidden"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Tasks"
@@ -1146,7 +1146,7 @@ pub async fn reprocess_series_title(
         (status = 403, description = "Forbidden"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Tasks"
@@ -1280,7 +1280,7 @@ pub async fn reprocess_library_series_titles(
         (status = 403, description = "Forbidden"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Tasks"

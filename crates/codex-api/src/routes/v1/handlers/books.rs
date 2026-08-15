@@ -3521,6 +3521,7 @@ pub async fn update_book_metadata_locks(
 // Book Cover Upload Endpoint
 // ============================================================================
 
+use crate::routes::v1::dto::common::CoverUploadForm;
 use axum::extract::Multipart;
 use codex_events::EntityType;
 use tokio::fs;
@@ -3536,7 +3537,7 @@ use tokio::io::AsyncWriteExt;
     params(
         ("book_id" = Uuid, Path, description = "Book ID")
     ),
-    request_body(content_type = "multipart/form-data"),
+    request_body(content = CoverUploadForm, description = "Multipart form with image file", content_type = "multipart/form-data"),
     responses(
         (status = 200, description = "Cover uploaded successfully"),
         (status = 400, description = "Bad request - no image file provided or invalid image"),

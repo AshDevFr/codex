@@ -2,8 +2,8 @@ use super::super::dto::{
     BookAuthorDto, BookDto, MarkReadResponse, SearchSeriesRequest, SeriesDto, SeriesListRequest,
     SeriesListResponse,
     common::{
-        DEFAULT_PAGE, DEFAULT_PAGE_SIZE, ListPaginationParams, MAX_PAGE_SIZE, PaginatedResponse,
-        PaginationLinkBuilder,
+        CoverUploadForm, DEFAULT_PAGE, DEFAULT_PAGE_SIZE, ListPaginationParams, MAX_PAGE_SIZE,
+        PaginatedResponse, PaginationLinkBuilder,
     },
     series::{
         AddSeriesGenreRequest, AddSeriesTagRequest, AlphabeticalGroupDto, AlternateTitleDto,
@@ -1830,7 +1830,7 @@ pub async fn purge_series_deleted_books(
     params(
         ("series_id" = Uuid, Path, description = "Series ID")
     ),
-    request_body(content = inline(Object), description = "Multipart form with image file", content_type = "multipart/form-data"),
+    request_body(content = CoverUploadForm, description = "Multipart form with image file", content_type = "multipart/form-data"),
     responses(
         (status = 200, description = "Cover uploaded successfully"),
         (status = 400, description = "Invalid image or request"),
@@ -4649,7 +4649,8 @@ pub async fn cleanup_tags(
 
 /// Get the current user's rating for a series
 ///
-/// Returns null if no rating exists (not a 404, since the series exists but has no rating)
+/// Returns `204 No Content` if the user has not rated the series (not a 404,
+/// since the series itself exists).
 #[utoipa::path(
     get,
     path = "/api/v1/series/{series_id}/rating",
@@ -4657,7 +4658,8 @@ pub async fn cleanup_tags(
         ("series_id" = Uuid, Path, description = "Series ID")
     ),
     responses(
-        (status = 200, description = "User's rating for the series (null if not rated)", body = Option<UserSeriesRatingDto>),
+        (status = 200, description = "User's rating for the series", body = UserSeriesRatingDto),
+        (status = 204, description = "Series is not rated by this user"),
         (status = 404, description = "Series not found"),
         (status = 403, description = "Forbidden"),
     ),
@@ -4671,7 +4673,7 @@ pub async fn get_series_rating(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
     Path(series_id): Path<Uuid>,
-) -> Result<Json<Option<UserSeriesRatingDto>>, ApiError> {
+) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
 
     // Verify series exists
@@ -4685,14 +4687,20 @@ pub async fn get_series_rating(
             .await
             .map_err(|e| ApiError::Internal(format!("Failed to fetch rating: {}", e)))?;
 
-    Ok(Json(rating.map(|r| UserSeriesRatingDto {
-        id: r.id,
-        series_id: r.series_id,
-        rating: r.rating,
-        notes: r.notes,
-        created_at: r.created_at,
-        updated_at: r.updated_at,
-    })))
+    // 204 rather than a 200 with a `null` body: a nullable success body has to
+    // be described as a union with `null`, which strict client generators skip.
+    Ok(match rating {
+        Some(r) => Json(UserSeriesRatingDto {
+            id: r.id,
+            series_id: r.series_id,
+            rating: r.rating,
+            notes: r.notes,
+            created_at: r.created_at,
+            updated_at: r.updated_at,
+        })
+        .into_response(),
+        None => StatusCode::NO_CONTENT.into_response(),
+    })
 }
 
 /// Set (create or update) the current user's rating for a series

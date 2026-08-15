@@ -679,6 +679,9 @@ The following paths are exempt from rate limiting:
             // App info
             v1::dto::AppInfoDto,
 
+            // Shared multipart bodies
+            v1::dto::common::CoverUploadForm,
+
             // Observability DTOs
             v1::dto::BrowserObservabilityConfigDto,
 
@@ -1282,7 +1285,7 @@ The following paths are exempt from rate limiting:
         // Third-Party Compatibility
         (name = "Komga", description = "Komga-compatible API for third-party apps (Komic, etc.)"),
     ),
-    modifiers(&SecurityAddon, &OperationIdPrefixer, &TagGroupsModifier),
+    modifiers(&SecurityAddon, &OperationIdPrefixer, &TagGroupsModifier, &NullableRefFlattener),
 )]
 pub struct ApiDoc;
 
@@ -1313,6 +1316,224 @@ impl utoipa::Modify for SecurityAddon {
             );
         }
     }
+}
+
+/// Modifier that rewrites `oneOf: [{"type": "null"}, {"$ref": ...}]` into a
+/// plain `$ref`.
+///
+/// utoipa renders `Option<T>` as that union whenever `T` is a referenced
+/// schema. The union is valid OpenAPI 3.1, but the `null` type is not supported
+/// by strict generators (swift-openapi-generator among them): they skip the
+/// enclosing property and emit a warning rather than an error, so the generated
+/// client compiles, passes its tests, and silently cannot see the field.
+///
+/// Optionality is already carried by the property's absence from `required`,
+/// and generated clients decode an absent key and an explicit `null` to the
+/// same "no value". Collapsing the union therefore changes nothing on the wire,
+/// only how the possibility of absence is described.
+///
+/// The collapse is applied only where absence is expressible without it, i.e.
+/// object properties that are not `required`, parameter schemas that are not
+/// required, array items, and map values. A request or response body has no
+/// such fallback, so a union there is left in place: that is an API design
+/// problem (the endpoint should answer `204 No Content`) and hiding it here
+/// would make the document claim a body that the server may not send.
+struct NullableRefFlattener;
+
+impl utoipa::Modify for NullableRefFlattener {
+    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        use utoipa::openapi::RefOr;
+
+        if let Some(components) = openapi.components.as_mut() {
+            for schema in components.schemas.values_mut() {
+                flatten_schema(schema);
+            }
+            for response in components.responses.values_mut() {
+                if let RefOr::T(response) = response {
+                    flatten_response(response);
+                }
+            }
+        }
+
+        for item in openapi.paths.paths.values_mut() {
+            for parameter in item.parameters.iter_mut().flatten() {
+                flatten_parameter(parameter);
+            }
+
+            for operation in [
+                &mut item.get,
+                &mut item.put,
+                &mut item.post,
+                &mut item.delete,
+                &mut item.options,
+                &mut item.head,
+                &mut item.patch,
+                &mut item.trace,
+            ]
+            .into_iter()
+            .flatten()
+            {
+                for parameter in operation.parameters.iter_mut().flatten() {
+                    flatten_parameter(parameter);
+                }
+                if let Some(body) = operation.request_body.as_mut() {
+                    for content in body.content.values_mut() {
+                        if let Some(schema) = content.schema.as_mut() {
+                            flatten_children(schema);
+                        }
+                    }
+                }
+                for response in operation.responses.responses.values_mut() {
+                    if let RefOr::T(response) = response {
+                        flatten_response(response);
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn flatten_response(response: &mut utoipa::openapi::Response) {
+    for content in response.content.values_mut() {
+        if let Some(schema) = content.schema.as_mut() {
+            // Body position: recurse, but never collapse the body itself.
+            flatten_children(schema);
+        }
+    }
+}
+
+fn flatten_parameter(parameter: &mut utoipa::openapi::path::Parameter) {
+    use utoipa::openapi::Required;
+
+    let Some(schema) = parameter.schema.as_mut() else {
+        return;
+    };
+    if parameter.required == Required::True {
+        flatten_children(schema);
+    } else {
+        flatten_schema(schema);
+    }
+}
+
+/// Collapse `schema` if it is a nullable ref union, then recurse into it.
+fn flatten_schema(schema: &mut utoipa::openapi::RefOr<utoipa::openapi::Schema>) {
+    use utoipa::openapi::RefOr;
+
+    if let Some(reference) = as_nullable_ref(schema) {
+        *schema = RefOr::Ref(reference);
+        return;
+    }
+    flatten_children(schema);
+}
+
+/// Recurse into `schema` without collapsing the node itself.
+fn flatten_children(schema: &mut utoipa::openapi::RefOr<utoipa::openapi::Schema>) {
+    use utoipa::openapi::{RefOr, Schema, schema::AdditionalProperties};
+
+    let RefOr::T(schema) = schema else {
+        return;
+    };
+
+    match schema {
+        Schema::Object(object) => {
+            let required = object.required.clone();
+            for (name, property) in object.properties.iter_mut() {
+                // A required property that is also nullable genuinely admits
+                // `null` as a value; collapsing it would drop that.
+                if required.contains(name) {
+                    flatten_children(property);
+                } else {
+                    flatten_schema(property);
+                }
+            }
+            if let Some(additional) = object.additional_properties.as_deref_mut()
+                && let AdditionalProperties::RefOr(value) = additional
+            {
+                flatten_schema(value);
+            }
+            if let Some(property_names) = object.property_names.as_deref_mut() {
+                let mut wrapped = RefOr::T(std::mem::replace(
+                    property_names,
+                    Schema::Object(Default::default()),
+                ));
+                flatten_children(&mut wrapped);
+                if let RefOr::T(inner) = wrapped {
+                    *property_names = inner;
+                }
+            }
+        }
+        Schema::Array(array) => {
+            if let utoipa::openapi::schema::ArrayItems::RefOrSchema(items) = &mut array.items {
+                flatten_schema(items);
+            }
+        }
+        Schema::OneOf(one_of) => {
+            for item in one_of.items.iter_mut() {
+                flatten_schema(item);
+            }
+        }
+        Schema::AllOf(all_of) => {
+            for item in all_of.items.iter_mut() {
+                flatten_schema(item);
+            }
+        }
+        Schema::AnyOf(any_of) => {
+            for item in any_of.items.iter_mut() {
+                flatten_schema(item);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Return the referenced branch if `schema` is exactly a two-branch `oneOf`
+/// pairing `{"type": "null"}` with a `$ref`, and carries no keyword of its own
+/// that collapsing would discard.
+fn as_nullable_ref(
+    schema: &utoipa::openapi::RefOr<utoipa::openapi::Schema>,
+) -> Option<utoipa::openapi::Ref> {
+    use utoipa::openapi::{RefOr, Schema, schema::SchemaType, schema::Type};
+
+    let RefOr::T(Schema::OneOf(one_of)) = schema else {
+        return None;
+    };
+    if one_of.items.len() != 2
+        || one_of.title.is_some()
+        || one_of.default.is_some()
+        || one_of.example.is_some()
+        || !one_of.examples.is_empty()
+        || one_of.discriminator.is_some()
+    {
+        return None;
+    }
+
+    let mut reference: Option<utoipa::openapi::Ref> = None;
+    let mut saw_null = false;
+    for item in &one_of.items {
+        match item {
+            RefOr::Ref(value) => {
+                if reference.replace(value.clone()).is_some() {
+                    return None;
+                }
+            }
+            RefOr::T(Schema::Object(object))
+                if object.schema_type == SchemaType::Type(Type::Null) =>
+            {
+                saw_null = true;
+            }
+            _ => return None,
+        }
+    }
+
+    let mut reference = reference.filter(|_| saw_null)?;
+    // A description on the union documents the property, not the referenced
+    // component; carry it over so it is not lost.
+    if let Some(description) = one_of.description.as_ref()
+        && reference.description.is_empty()
+    {
+        reference.description = description.clone();
+    }
+    Some(reference)
 }
 
 /// Modifier that prefixes operation IDs for non-v1 APIs to avoid duplicates.
@@ -1422,5 +1643,147 @@ impl utoipa::Modify for TagGroupsModifier {
         if let Some(extensions) = openapi.extensions.as_mut() {
             extensions.insert("x-tagGroups".to_string(), tag_groups);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{as_nullable_ref, flatten_children, flatten_schema};
+    use utoipa::openapi::{
+        Ref, RefOr, Schema,
+        schema::{ArrayBuilder, ObjectBuilder, OneOfBuilder, SchemaType, Type},
+    };
+
+    fn null_branch() -> RefOr<Schema> {
+        RefOr::T(Schema::Object(
+            ObjectBuilder::new()
+                .schema_type(SchemaType::Type(Type::Null))
+                .build(),
+        ))
+    }
+
+    fn nullable_ref(name: &str) -> RefOr<Schema> {
+        RefOr::T(Schema::OneOf(
+            OneOfBuilder::new()
+                .item(null_branch())
+                .item(RefOr::Ref(Ref::from_schema_name(name)))
+                .build(),
+        ))
+    }
+
+    fn ref_location(schema: &RefOr<Schema>) -> Option<&str> {
+        match schema {
+            RefOr::Ref(reference) => Some(reference.ref_location.as_str()),
+            RefOr::T(_) => None,
+        }
+    }
+
+    #[test]
+    fn collapses_a_nullable_ref_union_to_a_plain_ref() {
+        let mut schema = nullable_ref("ReadProgress");
+        flatten_schema(&mut schema);
+
+        assert_eq!(
+            ref_location(&schema),
+            Some("#/components/schemas/ReadProgress")
+        );
+    }
+
+    #[test]
+    fn carries_the_union_description_onto_the_ref() {
+        let mut schema = RefOr::T(Schema::OneOf(
+            OneOfBuilder::new()
+                .item(null_branch())
+                .item(RefOr::Ref(Ref::from_schema_name("ReadProgress")))
+                .description(Some("User's read progress"))
+                .build(),
+        ));
+        flatten_schema(&mut schema);
+
+        let RefOr::Ref(reference) = &schema else {
+            panic!("expected the union to collapse");
+        };
+        assert_eq!(reference.description, "User's read progress");
+    }
+
+    #[test]
+    fn collapses_optional_properties_but_not_required_ones() {
+        let mut schema = RefOr::T(Schema::Object(
+            ObjectBuilder::new()
+                .property("optional", nullable_ref("ReadProgress"))
+                .property("mandatory", nullable_ref("ReadProgress"))
+                .required("mandatory")
+                .build(),
+        ));
+        flatten_schema(&mut schema);
+
+        let RefOr::T(Schema::Object(object)) = &schema else {
+            panic!("expected an object");
+        };
+        assert_eq!(
+            ref_location(&object.properties["optional"]),
+            Some("#/components/schemas/ReadProgress")
+        );
+        // A required nullable property genuinely admits `null` as a value, so
+        // collapsing it would change what the document says.
+        assert_eq!(ref_location(&object.properties["mandatory"]), None);
+    }
+
+    #[test]
+    fn collapses_nested_array_items() {
+        let mut schema = RefOr::T(Schema::Array(
+            ArrayBuilder::new().items(nullable_ref("BookDto")).build(),
+        ));
+        flatten_schema(&mut schema);
+
+        let RefOr::T(Schema::Array(array)) = &schema else {
+            panic!("expected an array");
+        };
+        let utoipa::openapi::schema::ArrayItems::RefOrSchema(items) = &array.items else {
+            panic!("expected array items");
+        };
+        assert_eq!(ref_location(items), Some("#/components/schemas/BookDto"));
+    }
+
+    #[test]
+    fn leaves_a_body_position_union_in_place() {
+        // Response and request bodies have no "absent" to fall back on, so a
+        // union there is a real API design problem and must stay visible.
+        let mut schema = nullable_ref("ReadProgress");
+        flatten_children(&mut schema);
+
+        assert_eq!(ref_location(&schema), None);
+    }
+
+    #[test]
+    fn ignores_unions_that_are_not_a_plain_nullable_ref() {
+        // Three branches: a genuine polymorphic union.
+        let three = RefOr::T(Schema::OneOf(
+            OneOfBuilder::new()
+                .item(null_branch())
+                .item(RefOr::Ref(Ref::from_schema_name("A")))
+                .item(RefOr::Ref(Ref::from_schema_name("B")))
+                .build(),
+        ));
+        assert!(as_nullable_ref(&three).is_none());
+
+        // No null branch at all.
+        let no_null = RefOr::T(Schema::OneOf(
+            OneOfBuilder::new()
+                .item(RefOr::Ref(Ref::from_schema_name("A")))
+                .item(RefOr::Ref(Ref::from_schema_name("B")))
+                .build(),
+        ));
+        assert!(as_nullable_ref(&no_null).is_none());
+
+        // A title on the union would be discarded by collapsing it.
+        let titled = RefOr::T(Schema::OneOf(
+            OneOfBuilder::new()
+                .item(null_branch())
+                .item(RefOr::Ref(Ref::from_schema_name("A")))
+                .title(Some("Titled"))
+                .build(),
+        ));
+        assert!(as_nullable_ref(&titled).is_none());
     }
 }

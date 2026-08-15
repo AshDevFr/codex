@@ -878,8 +878,9 @@ export const seriesHandlers = [
       });
     }
 
-    // Return 404 to indicate no rating exists (user hasn't rated yet)
-    return HttpResponse.json({ error: "Rating not found" }, { status: 404 });
+    // Unrated — 204 with no body, matching the server (a 404 would mean the
+    // series itself does not exist)
+    return new HttpResponse(null, { status: 204 });
   }),
 
   // Set user rating for series

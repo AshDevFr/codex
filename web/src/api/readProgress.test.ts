@@ -41,8 +41,18 @@ describe("readProgressApi", () => {
       expect(result).toEqual(mockProgress);
     });
 
-    it("should return null when no progress exists", async () => {
-      vi.mocked(api.get).mockResolvedValueOnce({ data: null });
+    it("should return null when the book is unstarted (204)", async () => {
+      // Axios surfaces a body-less 204 as the empty string.
+      vi.mocked(api.get).mockResolvedValueOnce({ data: "", status: 204 });
+
+      const result = await readProgressApi.get("book-123");
+
+      expect(api.get).toHaveBeenCalledWith("/books/book-123/progress");
+      expect(result).toBeNull();
+    });
+
+    it("should return null when an older server answers 200 with null", async () => {
+      vi.mocked(api.get).mockResolvedValueOnce({ data: null, status: 200 });
 
       const result = await readProgressApi.get("book-123");
 

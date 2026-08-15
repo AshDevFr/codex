@@ -42,7 +42,7 @@ use uuid::Uuid;
         (status = 403, description = "Forbidden"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Bulk Operations"
@@ -101,7 +101,7 @@ pub async fn bulk_mark_books_as_read(
         (status = 403, description = "Forbidden"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Bulk Operations"
@@ -146,7 +146,7 @@ pub async fn bulk_mark_books_as_unread(
         (status = 403, description = "Forbidden"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Bulk Operations"
@@ -215,7 +215,7 @@ pub async fn bulk_analyze_books(
         (status = 403, description = "Forbidden"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Bulk Operations"
@@ -293,7 +293,7 @@ pub async fn bulk_mark_series_as_read(
         (status = 403, description = "Forbidden"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Bulk Operations"
@@ -367,7 +367,7 @@ pub async fn bulk_mark_series_as_unread(
         (status = 403, description = "Forbidden"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Bulk Operations"
@@ -454,7 +454,7 @@ pub async fn bulk_analyze_series(
         (status = 403, description = "Forbidden"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Bulk Operations"
@@ -486,7 +486,7 @@ pub async fn bulk_track_series_for_releases(
         (status = 403, description = "Forbidden"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Bulk Operations"
@@ -562,7 +562,7 @@ async fn enqueue_bulk_tracking_task(
         (status = 403, description = "Forbidden"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Bulk Operations"
@@ -625,7 +625,7 @@ pub async fn bulk_generate_series_book_thumbnails(
         (status = 403, description = "Forbidden"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Bulk Operations"
@@ -687,7 +687,7 @@ pub async fn bulk_generate_book_thumbnails(
         (status = 403, description = "Forbidden"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Bulk Operations"
@@ -757,7 +757,7 @@ pub async fn bulk_generate_series_thumbnails(
         (status = 403, description = "Forbidden"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Bulk Operations"
@@ -820,7 +820,7 @@ pub async fn bulk_reprocess_series_titles(
         (status = 403, description = "Forbidden"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Bulk Operations"
@@ -977,7 +977,7 @@ pub async fn bulk_reset_series_metadata(
         (status = 403, description = "Forbidden"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Bulk Operations"

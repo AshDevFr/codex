@@ -1,5 +1,6 @@
 import type { components } from "@/types/api.generated";
 import { api } from "./client";
+import { noContentAsNull } from "./noContent";
 
 export type UserSeriesRating = components["schemas"]["UserSeriesRatingDto"];
 export type UserRatingsListResponse =
@@ -11,14 +12,15 @@ export type SeriesAverageRatingResponse =
 
 export const ratingsApi = {
   /**
-   * Get the current user's rating for a series
-   * Returns null if no rating exists
+   * Get the current user's rating for a series.
+   * Resolves to null when the series is unrated (the server answers 204 No
+   * Content).
    */
   getUserRating: async (seriesId: string): Promise<UserSeriesRating | null> => {
     const response = await api.get<UserSeriesRating | null>(
       `/series/${seriesId}/rating`,
     );
-    return response.data;
+    return noContentAsNull(response);
   },
 
   /**

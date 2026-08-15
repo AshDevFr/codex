@@ -35,6 +35,7 @@ mod observability_proxy;
 mod oidc;
 mod opds;
 mod opds2;
+mod openapi_spec;
 mod pages;
 mod pdf_cache;
 mod plugin_metrics;

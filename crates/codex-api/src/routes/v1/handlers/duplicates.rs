@@ -35,7 +35,7 @@ use codex_tasks::types::TaskType;
         (status = 403, description = "Permission denied"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Duplicates"
@@ -86,7 +86,7 @@ pub async fn list_duplicates(
         (status = 409, description = "Scan already in progress"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Duplicates"
@@ -143,7 +143,7 @@ pub async fn trigger_duplicate_scan(
         (status = 404, description = "Duplicate group not found"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Duplicates"
@@ -195,7 +195,7 @@ pub async fn delete_duplicate_group(
         (status = 403, description = "Permission denied"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Duplicates"
@@ -381,7 +381,7 @@ async fn load_series_duplicate_members(
         (status = 404, description = "Duplicate group not found"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Duplicates"

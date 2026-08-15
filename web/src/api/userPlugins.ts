@@ -1,5 +1,6 @@
 import type { components } from "@/types/api.generated";
 import { api } from "./client";
+import { noContentAsNull } from "./noContent";
 
 // =============================================================================
 // Types (from generated OpenAPI types)
@@ -155,7 +156,8 @@ export const userPluginsApi = {
   /**
    * Get the latest task for a plugin (user-scoped, no TasksRead permission needed)
    * Pass taskType to filter by type (e.g., "user_plugin_sync").
-   * Returns null when the plugin has no matching task yet (a normal state).
+   * Resolves to null when the plugin has no matching task yet (a normal state;
+   * the server answers 204 No Content).
    */
   getPluginTask: async (
     pluginId: string,
@@ -165,6 +167,6 @@ export const userPluginsApi = {
       `/user/plugins/${pluginId}/tasks`,
       { params: taskType ? { type: taskType } : undefined },
     );
-    return response.data ?? null;
+    return noContentAsNull(response);
   },
 };

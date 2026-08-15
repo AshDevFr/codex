@@ -5,6 +5,7 @@ import {
 } from "@/lib/offline/outbox";
 import type { components } from "@/types";
 import { api } from "./client";
+import { noContentAsNull } from "./noContent";
 
 export type ReadProgressResponse =
   components["schemas"]["ReadProgressResponse"];
@@ -52,14 +53,15 @@ export interface R2Progression {
 
 export const readProgressApi = {
   /**
-   * Get reading progress for a book
-   * Returns null if no progress exists for the book
+   * Get reading progress for a book.
+   * Resolves to null when the book has not been started (the server answers
+   * 204 No Content).
    */
   get: async (bookId: string): Promise<ReadProgressResponse | null> => {
     const response = await api.get<ReadProgressResponse | null>(
       `/books/${bookId}/progress`,
     );
-    return response.data;
+    return noContentAsNull(response);
   },
 
   /**

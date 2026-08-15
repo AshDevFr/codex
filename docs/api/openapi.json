@@ -1042,7 +1042,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -1092,7 +1092,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -1142,7 +1142,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -1183,7 +1183,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -1244,7 +1244,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -1294,7 +1294,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -1345,7 +1345,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -1418,7 +1418,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -1468,7 +1468,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -1519,7 +1519,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -1570,7 +1570,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -2857,7 +2857,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -2905,7 +2905,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -2954,7 +2954,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -3002,7 +3002,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -3048,7 +3048,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -3096,7 +3096,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -3142,7 +3142,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -3188,7 +3188,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -3237,14 +3237,7 @@
             "description": "Filter by specific error type",
             "required": false,
             "schema": {
-              "oneOf": [
-                {
-                  "type": "null"
-                },
-                {
-                  "$ref": "#/components/schemas/BookErrorTypeDto"
-                }
-              ]
+              "$ref": "#/components/schemas/BookErrorTypeDto"
             }
           },
           {
@@ -3860,7 +3853,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -4062,7 +4055,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -4113,7 +4106,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -4142,9 +4135,15 @@
           }
         ],
         "requestBody": {
+          "description": "Multipart form with image file",
           "content": {
-            "multipart/form-data": {}
-          }
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/CoverUploadForm"
+              }
+            }
+          },
+          "required": true
         },
         "responses": {
           "200": {
@@ -5112,7 +5111,7 @@
           "Reading Progress"
         ],
         "summary": "Get reading progress for a book",
-        "description": "Returns the user's reading progress for a specific book.\nIf no progress exists, returns `null` with a 200 status.",
+        "description": "Returns the user's reading progress for a specific book, or `204 No Content`\nif the user has not started it.",
         "operationId": "get_reading_progress",
         "parameters": [
           {
@@ -5127,21 +5126,17 @@
         ],
         "responses": {
           "200": {
-            "description": "Reading progress retrieved (null if no progress exists)",
+            "description": "Reading progress retrieved",
             "content": {
               "application/json": {
                 "schema": {
-                  "oneOf": [
-                    {
-                      "type": "null"
-                    },
-                    {
-                      "$ref": "#/components/schemas/ReadProgressResponse"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/ReadProgressResponse"
                 }
               }
             }
+          },
+          "204": {
+            "description": "No reading progress recorded for this book"
           },
           "401": {
             "description": "Unauthorized"
@@ -5155,7 +5150,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -5212,7 +5207,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -5249,7 +5244,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -5298,7 +5293,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -5347,7 +5342,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -5388,7 +5383,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -5431,7 +5426,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -5607,7 +5602,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -5646,7 +5641,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -5681,7 +5676,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -5727,7 +5722,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -5773,7 +5768,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -5810,7 +5805,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -5870,7 +5865,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -5950,7 +5945,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -5997,7 +5992,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -6051,7 +6046,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -6096,7 +6091,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -6132,7 +6127,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -6165,7 +6160,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -6201,7 +6196,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -6251,7 +6246,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -6292,7 +6287,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -6333,7 +6328,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -7070,7 +7065,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -7255,7 +7250,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -7303,7 +7298,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -7683,7 +7678,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -7795,7 +7790,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -7843,7 +7838,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -7884,7 +7879,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -8282,7 +8277,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -8340,7 +8335,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -8373,7 +8368,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -8406,7 +8401,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -8442,7 +8437,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -8476,7 +8471,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -8512,7 +8507,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -8590,7 +8585,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -8763,7 +8758,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -8863,7 +8858,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -8898,7 +8893,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -8947,7 +8942,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -8982,7 +8977,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -9028,7 +9023,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -9074,7 +9069,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -9111,7 +9106,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -9171,7 +9166,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -9251,7 +9246,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -9298,7 +9293,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -9352,7 +9347,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -9397,7 +9392,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -9433,7 +9428,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -10244,7 +10239,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -10270,7 +10265,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -10430,7 +10425,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -10478,7 +10473,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -10527,7 +10522,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -10575,7 +10570,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -10621,7 +10616,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -10667,7 +10662,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -10713,7 +10708,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -10761,7 +10756,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -10807,7 +10802,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -10853,7 +10848,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -10899,7 +10894,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -10948,7 +10943,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -10994,7 +10989,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -11043,7 +11038,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -11372,7 +11367,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -11600,7 +11595,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -11646,7 +11641,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -11710,7 +11705,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -11774,7 +11769,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -11838,7 +11833,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -11902,7 +11897,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -11960,7 +11955,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -12500,7 +12495,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -12548,7 +12543,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -12659,7 +12654,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -12691,7 +12686,7 @@
           "content": {
             "multipart/form-data": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/CoverUploadForm"
               }
             }
           },
@@ -14096,7 +14091,7 @@
           "Ratings"
         ],
         "summary": "Get the current user's rating for a series",
-        "description": "Returns null if no rating exists (not a 404, since the series exists but has no rating)",
+        "description": "Returns `204 No Content` if the user has not rated the series (not a 404,\nsince the series itself exists).",
         "operationId": "get_series_rating",
         "parameters": [
           {
@@ -14112,21 +14107,17 @@
         ],
         "responses": {
           "200": {
-            "description": "User's rating for the series (null if not rated)",
+            "description": "User's rating for the series",
             "content": {
               "application/json": {
                 "schema": {
-                  "oneOf": [
-                    {
-                      "type": "null"
-                    },
-                    {
-                      "$ref": "#/components/schemas/UserSeriesRatingDto"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/UserSeriesRatingDto"
                 }
               }
             }
+          },
+          "204": {
+            "description": "Series is not rated by this user"
           },
           "403": {
             "description": "Forbidden"
@@ -14382,7 +14373,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -14423,7 +14414,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -14552,7 +14543,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -15063,7 +15054,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -15121,7 +15112,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -15640,7 +15631,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -15684,7 +15675,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -15717,7 +15708,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -15762,7 +15753,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -15795,7 +15786,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -15875,7 +15866,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -15926,7 +15917,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -15977,7 +15968,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -16025,7 +16016,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -16826,21 +16817,17 @@
         ],
         "responses": {
           "200": {
-            "description": "Latest task, or null if the plugin has no task yet",
+            "description": "Latest task",
             "content": {
               "application/json": {
                 "schema": {
-                  "oneOf": [
-                    {
-                      "type": "null"
-                    },
-                    {
-                      "$ref": "#/components/schemas/UserPluginTaskDto"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/UserPluginTaskDto"
                 }
               }
             }
+          },
+          "204": {
+            "description": "The plugin has no task yet"
           },
           "401": {
             "description": "Not authenticated"
@@ -16883,7 +16870,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -16926,7 +16913,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -16972,7 +16959,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -17026,7 +17013,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -17067,7 +17054,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -17125,7 +17112,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -17284,14 +17271,7 @@
             "description": "Filter by role",
             "required": false,
             "schema": {
-              "oneOf": [
-                {
-                  "type": "null"
-                },
-                {
-                  "$ref": "#/components/schemas/UserRole"
-                }
-              ]
+              "$ref": "#/components/schemas/UserRole"
             }
           },
           {
@@ -17826,7 +17806,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -17873,7 +17853,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -17909,7 +17889,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -17952,7 +17932,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -17988,7 +17968,7 @@
         },
         "security": [
           {
-            "bearer_auth": []
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -21872,26 +21852,12 @@
         "description": "Response containing adjacent books in the same series\n\nReturns the previous and next books relative to the requested book,\nordered by book number within the series.",
         "properties": {
           "next": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/BookDto",
-                "description": "The next book in the series (higher number), if any"
-              }
-            ]
+            "$ref": "#/components/schemas/BookDto",
+            "description": "The next book in the series (higher number), if any"
           },
           "prev": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/BookDto",
-                "description": "The previous book in the series (lower number), if any"
-              }
-            ]
+            "$ref": "#/components/schemas/BookDto",
+            "description": "The previous book in the series (lower number), if any"
           }
         }
       },
@@ -22260,15 +22226,8 @@
         "description": "Series membership information",
         "properties": {
           "series": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/SeriesInfo",
-                "description": "Series information"
-              }
-            ]
+            "$ref": "#/components/schemas/SeriesInfo",
+            "description": "Series information"
           }
         }
       },
@@ -22795,15 +22754,8 @@
             "description": "The book data"
           },
           "metadata": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/BookMetadataDto",
-                "description": "Optional metadata from ComicInfo.xml or similar"
-              }
-            ]
+            "$ref": "#/components/schemas/BookMetadataDto",
+            "description": "Optional metadata from ComicInfo.xml or similar"
           }
         }
       },
@@ -22922,15 +22874,8 @@
             "example": "/media/comics/Batman/Batman - Year One 001.cbz"
           },
           "readProgress": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/ReadProgressResponse",
-                "description": "User's read progress for this book"
-              }
-            ]
+            "$ref": "#/components/schemas/ReadProgressResponse",
+            "description": "User's read progress for this book"
           },
           "readingDirection": {
             "type": [
@@ -23260,15 +23205,8 @@
             "example": false
           },
           "bookType": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/BookTypeDto",
-                "description": "Book type classification (comic, manga, novel, etc.)"
-              }
-            ]
+            "$ref": "#/components/schemas/BookTypeDto",
+            "description": "Book type classification (comic, manga, novel, etc.)"
           },
           "chapter": {
             "type": [
@@ -24117,15 +24055,8 @@
             "example": "550e8400-e29b-41d4-a716-446655440001"
           },
           "bookType": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/BookTypeDto",
-                "description": "Book type classification (comic, manga, novel, etc.)"
-              }
-            ]
+            "$ref": "#/components/schemas/BookTypeDto",
+            "description": "Book type classification (comic, manga, novel, etc.)"
           },
           "chapter": {
             "type": [
@@ -24726,15 +24657,8 @@
             "example": "550e8400-e29b-41d4-a716-446655440001"
           },
           "bookType": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/BookTypeDto",
-                "description": "Book type classification (comic, manga, novel, etc.)"
-              }
-            ]
+            "$ref": "#/components/schemas/BookTypeDto",
+            "description": "Book type classification (comic, manga, novel, etc.)"
           },
           "chapter": {
             "type": [
@@ -26475,6 +26399,20 @@
           }
         }
       },
+      "CoverUploadForm": {
+        "type": "object",
+        "description": "Multipart form body for cover image uploads.\n\nOnly used to describe the request body in the OpenAPI document; the handlers\nread the multipart stream directly and also accept the legacy `cover` and\n`image` part names for backwards compatibility. A multipart body must be\ndescribed with a concrete schema and marked required, otherwise strict\ngenerators skip it and the generated operation cannot upload anything.",
+        "required": [
+          "file"
+        ],
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "description": "The image file to use as the cover"
+          }
+        }
+      },
       "CreateAccessGroupRequest": {
         "type": "object",
         "description": "Create access group request",
@@ -26828,15 +26766,8 @@
             "description": "Book strategy-specific configuration (JSON, mutable after creation)"
           },
           "bookStrategy": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/BookStrategy",
-                "description": "Book naming strategy (mutable after creation)\nOptions: filename, metadata_first, smart, series_name"
-              }
-            ]
+            "$ref": "#/components/schemas/BookStrategy",
+            "description": "Book naming strategy (mutable after creation)\nOptions: filename, metadata_first, smart, series_name"
           },
           "defaultReadingDirection": {
             "type": [
@@ -26871,15 +26802,8 @@
             "description": "Number strategy-specific configuration (JSON, mutable after creation)"
           },
           "numberStrategy": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/NumberStrategy",
-                "description": "Book number strategy (mutable after creation)\nOptions: file_order, metadata, filename, smart"
-              }
-            ]
+            "$ref": "#/components/schemas/NumberStrategy",
+            "description": "Book number strategy (mutable after creation)\nOptions: file_order, metadata, filename, smart"
           },
           "path": {
             "type": "string",
@@ -26892,29 +26816,15 @@
             "example": true
           },
           "scanningConfig": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/ScanningConfigDto",
-                "description": "Scanning configuration"
-              }
-            ]
+            "$ref": "#/components/schemas/ScanningConfigDto",
+            "description": "Scanning configuration"
           },
           "seriesConfig": {
             "description": "Strategy-specific configuration (JSON, immutable after creation)"
           },
           "seriesStrategy": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/SeriesStrategy",
-                "description": "Series detection strategy (immutable after creation)\nOptions: series_volume, series_volume_chapter, flat, publisher_hierarchy, calibre, custom"
-              }
-            ]
+            "$ref": "#/components/schemas/SeriesStrategy",
+            "description": "Series detection strategy (immutable after creation)\nOptions: series_volume, series_volume_chapter, flat, publisher_hierarchy, calibre, custom"
           },
           "titlePreprocessingRules": {
             "description": "Title preprocessing rules (JSON array of regex rules)\nApplied during scan to clean series titles before metadata search"
@@ -27290,15 +27200,8 @@
             "example": "securePassword123!"
           },
           "role": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/UserRole",
-                "description": "User role (reader, maintainer, admin). Defaults to reader if not specified."
-              }
-            ]
+            "$ref": "#/components/schemas/UserRole",
+            "description": "User role (reader, maintainer, admin). Defaults to reader if not specified."
           },
           "username": {
             "type": "string",
@@ -27554,15 +27457,8 @@
             "minimum": 0
           },
           "metadata": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/DetectedSeriesMetadataDto",
-                "description": "Metadata extracted during detection"
-              }
-            ]
+            "$ref": "#/components/schemas/DetectedSeriesMetadataDto",
+            "description": "Metadata extracted during detection"
           },
           "name": {
             "type": "string",
@@ -27661,15 +27557,8 @@
         "description": "Request body for `POST .../dry-run`.",
         "properties": {
           "configOverride": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/LibraryJobConfigDto",
-                "description": "Override the saved config for this preview only. Must match the\nrow's `type`."
-              }
-            ]
+            "$ref": "#/components/schemas/LibraryJobConfigDto",
+            "description": "Override the saved config for this preview only. Must match the\nrow's `type`."
           },
           "sampleSize": {
             "type": [
@@ -29527,15 +29416,8 @@
             "example": 2
           },
           "readProgress": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/ReadProgressResponse",
-                "description": "User's read progress for this book"
-              }
-            ]
+            "$ref": "#/components/schemas/ReadProgressResponse",
+            "description": "User's read progress for this book"
           },
           "readingDirection": {
             "type": [
@@ -30430,15 +30312,8 @@
             "description": "Whether this is a oneshot"
           },
           "readProgress": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/KomgaReadProgressDto",
-                "description": "User's read progress (null if not started)"
-              }
-            ]
+            "$ref": "#/components/schemas/KomgaReadProgressDto",
+            "description": "User's read progress (null if not started)"
           },
           "seriesId": {
             "type": "string",
@@ -30775,15 +30650,8 @@
         "description": "Komga content restrictions DTO",
         "properties": {
           "ageRestriction": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/KomgaAgeRestrictionDto",
-                "description": "Age restriction (null means no restriction)"
-              }
-            ]
+            "$ref": "#/components/schemas/KomgaAgeRestrictionDto",
+            "description": "Age restriction (null means no restriction)"
           },
           "labelsAllow": {
             "type": "array",
@@ -31115,15 +30983,8 @@
                   "description": "Whether this is a oneshot"
                 },
                 "readProgress": {
-                  "oneOf": [
-                    {
-                      "type": "null"
-                    },
-                    {
-                      "$ref": "#/components/schemas/KomgaReadProgressDto",
-                      "description": "User's read progress (null if not started)"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/KomgaReadProgressDto",
+                  "description": "User's read progress (null if not started)"
                 },
                 "seriesId": {
                   "type": "string",
@@ -32309,15 +32170,8 @@
             "example": "/media/comics"
           },
           "scanningConfig": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/ScanningConfigDto",
-                "description": "Scanning configuration for scheduled scans"
-              }
-            ]
+            "$ref": "#/components/schemas/ScanningConfigDto",
+            "description": "Scanning configuration for scheduled scans"
           },
           "seriesConfig": {
             "description": "Strategy-specific configuration (JSON)"
@@ -32804,15 +32658,8 @@
             "description": "Fields that were applied"
           },
           "dryRunReport": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/DryRunReportDto",
-                "description": "Populated only when the request set `dryRun = true`. Each entry is a\nfield that *would* have been written."
-              }
-            ]
+            "$ref": "#/components/schemas/DryRunReportDto",
+            "description": "Populated only when the request set `dryRun = true`. Each entry is a\nfield that *would* have been written."
           },
           "message": {
             "type": "string",
@@ -32877,15 +32724,8 @@
             "description": "External URL (link to matched item on provider)"
           },
           "matchedResult": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/PluginSearchResultDto",
-                "description": "The search result that was matched"
-              }
-            ]
+            "$ref": "#/components/schemas/PluginSearchResultDto",
+            "description": "The search result that was matched"
           },
           "message": {
             "type": "string",
@@ -33977,15 +33817,8 @@
             "description": "The URI or URI template for the link"
           },
           "properties": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/LinkProperties",
-                "description": "Additional properties for the link"
-              }
-            ]
+            "$ref": "#/components/schemas/LinkProperties",
+            "description": "Additional properties for the link"
           },
           "rel": {
             "type": [
@@ -34480,15 +34313,8 @@
                   "example": "/media/comics/Batman/Batman - Year One 001.cbz"
                 },
                 "readProgress": {
-                  "oneOf": [
-                    {
-                      "type": "null"
-                    },
-                    {
-                      "$ref": "#/components/schemas/ReadProgressResponse",
-                      "description": "User's read progress for this book"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/ReadProgressResponse",
+                  "description": "User's read progress for this book"
                 },
                 "readingDirection": {
                   "type": [
@@ -34808,15 +34634,8 @@
                   "example": "/media/comics"
                 },
                 "scanningConfig": {
-                  "oneOf": [
-                    {
-                      "type": "null"
-                    },
-                    {
-                      "$ref": "#/components/schemas/ScanningConfigDto",
-                      "description": "Scanning configuration for scheduled scans"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/ScanningConfigDto",
+                  "description": "Scanning configuration for scheduled scans"
                 },
                 "seriesConfig": {
                   "description": "Strategy-specific configuration (JSON)"
@@ -35687,15 +35506,8 @@
             "example": false
           },
           "bookType": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/BookTypeDto",
-                "description": "Book type classification (comic, manga, novel, etc.)"
-              }
-            ]
+            "$ref": "#/components/schemas/BookTypeDto",
+            "description": "Book type classification (comic, manga, novel, etc.)"
           },
           "chapter": {
             "type": [
@@ -35977,15 +35789,8 @@
         "description": "Request body for `PATCH /api/v1/libraries/{id}/jobs/{job_id}`.\n\nAll fields are optional. Top-level fields use [`PatchValue`] when their\nunderlying type is `Option<...>` so an explicit `null` clears the value\ndistinct from \"not present\".",
         "properties": {
           "config": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/LibraryJobConfigDto",
-                "description": "Replaces the type-specific config wholesale; the type discriminator\nmust match the existing row's type."
-              }
-            ]
+            "$ref": "#/components/schemas/LibraryJobConfigDto",
+            "description": "Replaces the type-specific config wholesale; the type discriminator\nmust match the existing row's type."
           },
           "cronSchedule": {
             "type": [
@@ -36421,15 +36226,8 @@
             "description": "Action type (e.g., \"metadata_search\", \"metadata_get\")"
           },
           "capabilities": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/PluginCapabilitiesDto",
-                "description": "Capabilities the plugin advertises in its manifest. The library-jobs\neditor uses this to decide which scope options are available for the\nchosen provider. The `metadata_provider` array contains `\"series\"`\nand/or `\"book\"` entries."
-              }
-            ]
+            "$ref": "#/components/schemas/PluginCapabilitiesDto",
+            "description": "Capabilities the plugin advertises in its manifest. The library-jobs\neditor uses this to decide which scope options are available for the\nchosen provider. The `metadata_provider` array contains `\"series\"`\nand/or `\"book\"` entries."
           },
           "description": {
             "type": [
@@ -36736,15 +36534,8 @@
             "example": "550e8400-e29b-41d4-a716-446655440000"
           },
           "internalConfig": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/InternalPluginConfig",
-                "description": "Internal server-side configuration (not sent to plugin)"
-              }
-            ]
+            "$ref": "#/components/schemas/InternalPluginConfig",
+            "description": "Internal server-side configuration (not sent to plugin)"
           },
           "lastFailureAt": {
             "type": [
@@ -36780,15 +36571,8 @@
             "example": "debug"
           },
           "manifest": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/PluginManifestDto",
-                "description": "Cached manifest from plugin (if available)"
-              }
-            ]
+            "$ref": "#/components/schemas/PluginManifestDto",
+            "description": "Cached manifest from plugin (if available)"
           },
           "metadataTargets": {
             "type": [
@@ -37101,15 +36885,8 @@
             "description": "Plugin capabilities"
           },
           "configSchema": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/ConfigSchemaDto",
-                "description": "Configuration schema documenting available config options"
-              }
-            ]
+            "$ref": "#/components/schemas/ConfigSchemaDto",
+            "description": "Configuration schema documenting available config options"
           },
           "contentTypes": {
             "type": "array",
@@ -37141,15 +36918,8 @@
             "description": "Unique identifier"
           },
           "oauth": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/OAuthConfigDto",
-                "description": "OAuth 2.0 configuration (if plugin supports OAuth)"
-              }
-            ]
+            "$ref": "#/components/schemas/OAuthConfigDto",
+            "description": "OAuth 2.0 configuration (if plugin supports OAuth)"
           },
           "protocolVersion": {
             "type": "string",
@@ -37512,15 +37282,8 @@
             "description": "External ID from the provider"
           },
           "preview": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/SearchResultPreviewDto",
-                "description": "Preview data for search results"
-              }
-            ]
+            "$ref": "#/components/schemas/SearchResultPreviewDto",
+            "description": "Preview data for search results"
           },
           "relevanceScore": {
             "type": [
@@ -37642,15 +37405,8 @@
             "minimum": 0
           },
           "manifest": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/PluginManifestDto",
-                "description": "Plugin manifest (if connection succeeded)"
-              }
-            ]
+            "$ref": "#/components/schemas/PluginManifestDto",
+            "description": "Plugin manifest (if connection succeeded)"
           },
           "message": {
             "type": "string",
@@ -37768,15 +37524,8 @@
             "description": "Strategy-specific configuration (JSON)"
           },
           "seriesStrategy": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/SeriesStrategy",
-                "description": "Series detection strategy to use"
-              }
-            ]
+            "$ref": "#/components/schemas/SeriesStrategy",
+            "description": "Series detection strategy to use"
           }
         }
       },
@@ -37887,15 +37636,8 @@
             "description": "Publication metadata (title, author, etc.)"
           },
           "readingProgress": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/ReadingProgress",
-                "description": "Reading progress extension (Codex-specific)\nThis follows a similar pattern to other reading apps that extend OPDS 2.0"
-              }
-            ]
+            "$ref": "#/components/schemas/ReadingProgress",
+            "description": "Reading progress extension (Codex-specific)\nThis follows a similar pattern to other reading apps that extend OPDS 2.0"
           }
         }
       },
@@ -37934,15 +37676,8 @@
             "description": "Authors"
           },
           "belongsTo": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/BelongsTo",
-                "description": "Series membership information"
-              }
-            ]
+            "$ref": "#/components/schemas/BelongsTo",
+            "description": "Series membership information"
           },
           "description": {
             "type": [
@@ -39372,15 +39107,8 @@
             "example": false
           },
           "bookType": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/BookTypeDto",
-                "description": "Book type classification (comic, manga, novel, etc.)"
-              }
-            ]
+            "$ref": "#/components/schemas/BookTypeDto",
+            "description": "Book type classification (comic, manga, novel, etc.)"
           },
           "chapter": {
             "type": [
@@ -39990,15 +39718,8 @@
         "description": "Request body for bulk retrying all book errors",
         "properties": {
           "errorType": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/BookErrorTypeDto",
-                "description": "Filter to only retry specific error type. If not provided, retry all error types."
-              }
-            ]
+            "$ref": "#/components/schemas/BookErrorTypeDto",
+            "description": "Filter to only retry specific error type. If not provided, retry all error types."
           },
           "libraryId": {
             "type": [
@@ -42856,15 +42577,8 @@
             "description": "Library ID if this task is related to a library"
           },
           "progress": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/TaskProgress",
-                "description": "Progress information (for running tasks)"
-              }
-            ]
+            "$ref": "#/components/schemas/TaskProgress",
+            "description": "Progress information (for running tasks)"
           },
           "seriesId": {
             "type": [
@@ -44650,15 +44364,8 @@
             "description": "Book strategy-specific configuration (JSON, mutable)"
           },
           "bookStrategy": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/BookStrategy",
-                "description": "Book naming strategy (mutable)\nOptions: filename, metadata_first, smart, series_name"
-              }
-            ]
+            "$ref": "#/components/schemas/BookStrategy",
+            "description": "Book naming strategy (mutable)\nOptions: filename, metadata_first, smart, series_name"
           },
           "defaultReadingDirection": {
             "type": [
@@ -44704,15 +44411,8 @@
             "description": "Number strategy-specific configuration (JSON, mutable)"
           },
           "numberStrategy": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/NumberStrategy",
-                "description": "Book number strategy (mutable)\nOptions: file_order, metadata, filename, smart"
-              }
-            ]
+            "$ref": "#/components/schemas/NumberStrategy",
+            "description": "Book number strategy (mutable)\nOptions: file_order, metadata, filename, smart"
           },
           "path": {
             "type": [
@@ -44723,15 +44423,8 @@
             "example": "/media/comics"
           },
           "scanningConfig": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/ScanningConfigDto",
-                "description": "Scanning configuration"
-              }
-            ]
+            "$ref": "#/components/schemas/ScanningConfigDto",
+            "description": "Scanning configuration"
           },
           "titlePreprocessingRules": {
             "type": [
@@ -45296,15 +44989,8 @@
             "description": "Custom permissions that extend the role's base permissions (admin only)\nThese permissions are unioned with the role's permissions"
           },
           "role": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/UserRole",
-                "description": "Update user role (reader, maintainer, admin)"
-              }
-            ]
+            "$ref": "#/components/schemas/UserRole",
+            "description": "Update user role (reader, maintainer, admin)"
           },
           "username": {
             "type": [
@@ -45672,15 +45358,8 @@
             "description": "The admin-configured cron schedule that drives automatic syncs for this\nplugin (the normalized 6-field form), or `None` when the admin has not\nset one. Surfaced read-only so the UI can show the cadence to users and\nindicate when auto sync isn't set up yet. The cadence is plugin-wide, not\nper-user."
           },
           "userConfigSchema": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/ConfigSchemaDto",
-                "description": "User-facing configuration schema (from plugin manifest)"
-              }
-            ]
+            "$ref": "#/components/schemas/ConfigSchemaDto",
+            "description": "User-facing configuration schema (from plugin manifest)"
           },
           "userSetupInstructions": {
             "type": [

@@ -56,7 +56,7 @@ pub struct WantToReadApi;
         (status = 401, description = "Unauthorized"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Want to Read"
@@ -90,7 +90,7 @@ pub async fn list_want_to_read(
         (status = 404, description = "Series or book not found"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Want to Read"
@@ -145,7 +145,7 @@ pub async fn add_want_to_read(
         (status = 401, description = "Unauthorized"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Want to Read"
@@ -217,7 +217,7 @@ pub async fn bulk_add_want_to_read(
         (status = 401, description = "Unauthorized"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Want to Read"
@@ -242,7 +242,7 @@ pub async fn reorder_want_to_read(
         (status = 401, description = "Unauthorized"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Want to Read"
@@ -267,7 +267,7 @@ pub async fn remove_want_to_read_series(
         (status = 401, description = "Unauthorized"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Want to Read"

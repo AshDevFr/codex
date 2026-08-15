@@ -1681,8 +1681,8 @@ export interface paths {
         };
         /**
          * Get reading progress for a book
-         * @description Returns the user's reading progress for a specific book.
-         *     If no progress exists, returns `null` with a 200 status.
+         * @description Returns the user's reading progress for a specific book, or `204 No Content`
+         *     if the user has not started it.
          */
         get: operations["get_reading_progress"];
         /** Update reading progress for a book */
@@ -4628,7 +4628,8 @@ export interface paths {
         };
         /**
          * Get the current user's rating for a series
-         * @description Returns null if no rating exists (not a 404, since the series exists but has no rating)
+         * @description Returns `204 No Content` if the user has not rated the series (not a 404,
+         *     since the series itself exists).
          */
         get: operations["get_series_rating"];
         /** Set (create or update) the current user's rating for a series */
@@ -7841,8 +7842,10 @@ export interface components {
          *     ordered by book number within the series.
          */
         AdjacentBooksResponse: {
-            next?: null | components["schemas"]["BookDto"];
-            prev?: null | components["schemas"]["BookDto"];
+            /** @description The next book in the series (higher number), if any */
+            next?: components["schemas"]["BookDto"];
+            /** @description The previous book in the series (lower number), if any */
+            prev?: components["schemas"]["BookDto"];
         };
         /** @description Overall storage statistics for all plugins */
         AllPluginStorageStatsDto: {
@@ -8074,7 +8077,8 @@ export interface components {
         };
         /** @description Series membership information */
         BelongsTo: {
-            series?: null | components["schemas"]["SeriesInfo"];
+            /** @description Series information */
+            series?: components["schemas"]["SeriesInfo"];
         };
         /** @description Structured author information */
         BookAuthorDto: {
@@ -8322,7 +8326,8 @@ export interface components {
         BookDetailResponse: {
             /** @description The book data */
             book: components["schemas"]["BookDto"];
-            metadata?: null | components["schemas"]["BookMetadataDto"];
+            /** @description Optional metadata from ComicInfo.xml or similar */
+            metadata?: components["schemas"]["BookMetadataDto"];
         };
         /** @description Book data transfer object */
         BookDto: {
@@ -8405,7 +8410,8 @@ export interface components {
              * @example /media/comics/Batman/Batman - Year One 001.cbz
              */
             path: string;
-            readProgress?: null | components["schemas"]["ReadProgressResponse"];
+            /** @description User's read progress for this book */
+            readProgress?: components["schemas"]["ReadProgressResponse"];
             /**
              * @description Effective reading direction (from series metadata, or library default if not set)
              *     Values: ltr, rtl, ttb or webtoon
@@ -8616,7 +8622,8 @@ export interface components {
              * @example false
              */
             blackAndWhite?: boolean | null;
-            bookType?: null | components["schemas"]["BookTypeDto"];
+            /** @description Book type classification (comic, manga, novel, etc.) */
+            bookType?: components["schemas"]["BookTypeDto"];
             /**
              * Format: float
              * @description Chapter number (may be fractional, e.g. 42.5 for side chapters)
@@ -9118,7 +9125,8 @@ export interface components {
              * @example 550e8400-e29b-41d4-a716-446655440001
              */
             bookId: string;
-            bookType?: null | components["schemas"]["BookTypeDto"];
+            /** @description Book type classification (comic, manga, novel, etc.) */
+            bookType?: components["schemas"]["BookTypeDto"];
             /**
              * Format: float
              * @description Chapter number (may be fractional, e.g. 42.5 for side chapters)
@@ -9542,7 +9550,8 @@ export interface components {
              * @example 550e8400-e29b-41d4-a716-446655440001
              */
             bookId: string;
-            bookType?: null | components["schemas"]["BookTypeDto"];
+            /** @description Book type classification (comic, manga, novel, etc.) */
+            bookType?: components["schemas"]["BookTypeDto"];
             /**
              * Format: float
              * @description Chapter number (may be fractional, e.g. 42.5 for side chapters)
@@ -10495,6 +10504,22 @@ export interface components {
             /** @description Sort-friendly version of the name */
             sortAs?: string | null;
         };
+        /**
+         * @description Multipart form body for cover image uploads.
+         *
+         *     Only used to describe the request body in the OpenAPI document; the handlers
+         *     read the multipart stream directly and also accept the legacy `cover` and
+         *     `image` part names for backwards compatibility. A multipart body must be
+         *     described with a concrete schema and marked required, otherwise strict
+         *     generators skip it and the generated operation cannot upload anything.
+         */
+        CoverUploadForm: {
+            /**
+             * Format: binary
+             * @description The image file to use as the cover
+             */
+            file: string;
+        };
         /** @description Create access group request */
         CreateAccessGroupRequest: {
             /**
@@ -10704,7 +10729,11 @@ export interface components {
             autoMatchConditions?: unknown;
             /** @description Book strategy-specific configuration (JSON, mutable after creation) */
             bookConfig?: unknown;
-            bookStrategy?: null | components["schemas"]["BookStrategy"];
+            /**
+             * @description Book naming strategy (mutable after creation)
+             *     Options: filename, metadata_first, smart, series_name
+             */
+            bookStrategy?: components["schemas"]["BookStrategy"];
             /**
              * @description Default reading direction for books in this library (ltr, rtl, ttb or webtoon)
              * @example ltr
@@ -10728,7 +10757,11 @@ export interface components {
             name: string;
             /** @description Number strategy-specific configuration (JSON, mutable after creation) */
             numberConfig?: unknown;
-            numberStrategy?: null | components["schemas"]["NumberStrategy"];
+            /**
+             * @description Book number strategy (mutable after creation)
+             *     Options: file_order, metadata, filename, smart
+             */
+            numberStrategy?: components["schemas"]["NumberStrategy"];
             /**
              * @description Filesystem path to the library
              * @example /media/comics
@@ -10739,10 +10772,15 @@ export interface components {
              * @example true
              */
             scanImmediately?: boolean;
-            scanningConfig?: null | components["schemas"]["ScanningConfigDto"];
+            /** @description Scanning configuration */
+            scanningConfig?: components["schemas"]["ScanningConfigDto"];
             /** @description Strategy-specific configuration (JSON, immutable after creation) */
             seriesConfig?: unknown;
-            seriesStrategy?: null | components["schemas"]["SeriesStrategy"];
+            /**
+             * @description Series detection strategy (immutable after creation)
+             *     Options: series_volume, series_volume_chapter, flat, publisher_hierarchy, calibre, custom
+             */
+            seriesStrategy?: components["schemas"]["SeriesStrategy"];
             /**
              * @description Title preprocessing rules (JSON array of regex rules)
              *     Applied during scan to clean series titles before metadata search
@@ -10969,7 +11007,8 @@ export interface components {
              * @example securePassword123!
              */
             password: string;
-            role?: null | components["schemas"]["UserRole"];
+            /** @description User role (reader, maintainer, admin). Defaults to reader if not specified. */
+            role?: components["schemas"]["UserRole"];
             /**
              * @description Username for the new account
              * @example newuser
@@ -11079,7 +11118,8 @@ export interface components {
         DetectedSeriesDto: {
             /** @description Number of books detected */
             bookCount: number;
-            metadata?: null | components["schemas"]["DetectedSeriesMetadataDto"];
+            /** @description Metadata extracted during detection */
+            metadata?: components["schemas"]["DetectedSeriesMetadataDto"];
             /** @description Series name as detected */
             name: string;
             /** @description Path relative to library root */
@@ -11117,7 +11157,11 @@ export interface components {
         };
         /** @description Request body for `POST .../dry-run`. */
         DryRunRequest: {
-            configOverride?: null | components["schemas"]["LibraryJobConfigDto"];
+            /**
+             * @description Override the saved config for this preview only. Must match the
+             *     row's `type`.
+             */
+            configOverride?: components["schemas"]["LibraryJobConfigDto"];
             /**
              * Format: int32
              * @description Sample size, capped at 20 server-side.
@@ -11959,7 +12003,8 @@ export interface components {
              * @example 2
              */
             readCount: number;
-            readProgress?: null | components["schemas"]["ReadProgressResponse"];
+            /** @description User's read progress for this book */
+            readProgress?: components["schemas"]["ReadProgressResponse"];
             /**
              * @description Effective reading direction (from series metadata, or library default)
              * @example ltr
@@ -12463,7 +12508,8 @@ export interface components {
             number: number;
             /** @description Whether this is a oneshot */
             oneshot?: boolean;
-            readProgress?: null | components["schemas"]["KomgaReadProgressDto"];
+            /** @description User's read progress (null if not started) */
+            readProgress?: components["schemas"]["KomgaReadProgressDto"];
             /** @description Series ID */
             seriesId: string;
             /** @description Series title (required by Komic for display) */
@@ -12599,7 +12645,8 @@ export interface components {
         };
         /** @description Komga content restrictions DTO */
         KomgaContentRestrictionsDto: {
-            ageRestriction?: null | components["schemas"]["KomgaAgeRestrictionDto"];
+            /** @description Age restriction (null means no restriction) */
+            ageRestriction?: components["schemas"]["KomgaAgeRestrictionDto"];
             /** @description Labels restriction */
             labelsAllow?: string[];
             /** @description Labels to exclude */
@@ -12765,7 +12812,8 @@ export interface components {
                 number: number;
                 /** @description Whether this is a oneshot */
                 oneshot?: boolean;
-                readProgress?: null | components["schemas"]["KomgaReadProgressDto"];
+                /** @description User's read progress (null if not started) */
+                readProgress?: components["schemas"]["KomgaReadProgressDto"];
                 /** @description Series ID */
                 seriesId: string;
                 /** @description Series title (required by Komic for display) */
@@ -13383,7 +13431,8 @@ export interface components {
              * @example /media/comics
              */
             path: string;
-            scanningConfig?: null | components["schemas"]["ScanningConfigDto"];
+            /** @description Scanning configuration for scheduled scans */
+            scanningConfig?: components["schemas"]["ScanningConfigDto"];
             /** @description Strategy-specific configuration (JSON) */
             seriesConfig?: unknown;
             /**
@@ -13643,7 +13692,11 @@ export interface components {
         MetadataApplyResponse: {
             /** @description Fields that were applied */
             appliedFields: string[];
-            dryRunReport?: null | components["schemas"]["DryRunReportDto"];
+            /**
+             * @description Populated only when the request set `dryRun = true`. Each entry is a
+             *     field that *would* have been written.
+             */
+            dryRunReport?: components["schemas"]["DryRunReportDto"];
             /** @description Message */
             message: string;
             /** @description Fields that were skipped (with reasons) */
@@ -13667,7 +13720,8 @@ export interface components {
             appliedFields: string[];
             /** @description External URL (link to matched item on provider) */
             externalUrl?: string | null;
-            matchedResult?: null | components["schemas"]["PluginSearchResultDto"];
+            /** @description The search result that was matched */
+            matchedResult?: components["schemas"]["PluginSearchResultDto"];
             /** @description Message */
             message: string;
             /** @description Fields that were skipped (with reasons) */
@@ -14254,7 +14308,8 @@ export interface components {
         Opds2Link: {
             /** @description The URI or URI template for the link */
             href: string;
-            properties?: null | components["schemas"]["LinkProperties"];
+            /** @description Additional properties for the link */
+            properties?: components["schemas"]["LinkProperties"];
             /** @description Relation type (e.g., "self", "search", "http://opds-spec.org/acquisition") */
             rel?: string | null;
             /** @description Whether the href is a URI template */
@@ -14565,7 +14620,8 @@ export interface components {
                  * @example /media/comics/Batman/Batman - Year One 001.cbz
                  */
                 path: string;
-                readProgress?: null | components["schemas"]["ReadProgressResponse"];
+                /** @description User's read progress for this book */
+                readProgress?: components["schemas"]["ReadProgressResponse"];
                 /**
                  * @description Effective reading direction (from series metadata, or library default if not set)
                  *     Values: ltr, rtl, ttb or webtoon
@@ -14784,7 +14840,8 @@ export interface components {
                  * @example /media/comics
                  */
                 path: string;
-                scanningConfig?: null | components["schemas"]["ScanningConfigDto"];
+                /** @description Scanning configuration for scheduled scans */
+                scanningConfig?: components["schemas"]["ScanningConfigDto"];
                 /** @description Strategy-specific configuration (JSON) */
                 seriesConfig?: unknown;
                 /**
@@ -15372,7 +15429,8 @@ export interface components {
              * @example false
              */
             blackAndWhite?: boolean | null;
-            bookType?: null | components["schemas"]["BookTypeDto"];
+            /** @description Book type classification (comic, manga, novel, etc.) */
+            bookType?: components["schemas"]["BookTypeDto"];
             /**
              * Format: float
              * @description Chapter number (may be fractional, e.g. 42.5 for side chapters)
@@ -15554,7 +15612,11 @@ export interface components {
          *     distinct from "not present".
          */
         PatchLibraryJobRequest: {
-            config?: null | components["schemas"]["LibraryJobConfigDto"];
+            /**
+             * @description Replaces the type-specific config wholesale; the type discriminator
+             *     must match the existing row's type.
+             */
+            config?: components["schemas"]["LibraryJobConfigDto"];
             cronSchedule?: string | null;
             enabled?: boolean | null;
             name?: string | null;
@@ -15836,7 +15898,13 @@ export interface components {
         PluginActionDto: {
             /** @description Action type (e.g., "metadata_search", "metadata_get") */
             actionType: string;
-            capabilities?: null | components["schemas"]["PluginCapabilitiesDto"];
+            /**
+             * @description Capabilities the plugin advertises in its manifest. The library-jobs
+             *     editor uses this to decide which scope options are available for the
+             *     chosen provider. The `metadata_provider` array contains `"series"`
+             *     and/or `"book"` entries.
+             */
+            capabilities?: components["schemas"]["PluginCapabilitiesDto"];
             /** @description Description of the action */
             description?: string | null;
             /** @description Icon hint for UI (optional) */
@@ -16009,7 +16077,8 @@ export interface components {
              * @example 550e8400-e29b-41d4-a716-446655440000
              */
             id: string;
-            internalConfig?: null | components["schemas"]["InternalPluginConfig"];
+            /** @description Internal server-side configuration (not sent to plugin) */
+            internalConfig?: components["schemas"]["InternalPluginConfig"];
             /**
              * Format: date-time
              * @description When the last failure occurred
@@ -16031,7 +16100,8 @@ export interface components {
              * @example debug
              */
             logLevel?: string | null;
-            manifest?: null | components["schemas"]["PluginManifestDto"];
+            /** @description Cached manifest from plugin (if available) */
+            manifest?: components["schemas"]["PluginManifestDto"];
             /**
              * @description Metadata targets: which resource types this plugin auto-matches against
              *     null = auto-detect from plugin capabilities
@@ -16215,7 +16285,8 @@ export interface components {
             author?: string | null;
             /** @description Plugin capabilities */
             capabilities: components["schemas"]["PluginCapabilitiesDto"];
-            configSchema?: null | components["schemas"]["ConfigSchemaDto"];
+            /** @description Configuration schema documenting available config options */
+            configSchema?: components["schemas"]["ConfigSchemaDto"];
             /** @description Supported content types */
             contentTypes: string[];
             /** @description Description */
@@ -16226,7 +16297,8 @@ export interface components {
             homepage?: string | null;
             /** @description Unique identifier */
             name: string;
-            oauth?: null | components["schemas"]["OAuthConfigDto"];
+            /** @description OAuth 2.0 configuration (if plugin supports OAuth) */
+            oauth?: components["schemas"]["OAuthConfigDto"];
             /** @description Protocol version */
             protocolVersion: string;
             /** @description Required credentials */
@@ -16431,7 +16503,8 @@ export interface components {
             coverUrl?: string | null;
             /** @description External ID from the provider */
             externalId: string;
-            preview?: null | components["schemas"]["SearchResultPreviewDto"];
+            /** @description Preview data for search results */
+            preview?: components["schemas"]["SearchResultPreviewDto"];
             /**
              * Format: double
              * @description Relevance score (0.0-1.0). Optional - if not provided, result order indicates relevance.
@@ -16501,7 +16574,8 @@ export interface components {
              * @example 150
              */
             latencyMs?: number | null;
-            manifest?: null | components["schemas"]["PluginManifestDto"];
+            /** @description Plugin manifest (if connection succeeded) */
+            manifest?: components["schemas"]["PluginManifestDto"];
             /**
              * @description Test result message
              * @example Successfully connected to plugin
@@ -16570,7 +16644,8 @@ export interface components {
             path: string;
             /** @description Strategy-specific configuration (JSON) */
             seriesConfig?: unknown;
-            seriesStrategy?: null | components["schemas"]["SeriesStrategy"];
+            /** @description Series detection strategy to use */
+            seriesStrategy?: components["schemas"]["SeriesStrategy"];
         };
         /** @description Preview scan response showing detected series */
         PreviewScanResponse: {
@@ -16624,7 +16699,11 @@ export interface components {
             links: components["schemas"]["Opds2Link"][];
             /** @description Publication metadata (title, author, etc.) */
             metadata: components["schemas"]["PublicationMetadata"];
-            readingProgress?: null | components["schemas"]["ReadingProgress"];
+            /**
+             * @description Reading progress extension (Codex-specific)
+             *     This follows a similar pattern to other reading apps that extend OPDS 2.0
+             */
+            readingProgress?: components["schemas"]["ReadingProgress"];
         };
         /**
          * @description OPDS 2.0 Publication Metadata (schema.org based)
@@ -16638,7 +16717,8 @@ export interface components {
             artist?: components["schemas"]["Contributor"][] | null;
             /** @description Authors */
             author?: components["schemas"]["Contributor"][] | null;
-            belongsTo?: null | components["schemas"]["BelongsTo"];
+            /** @description Series membership information */
+            belongsTo?: components["schemas"]["BelongsTo"];
             /** @description Description/summary */
             description?: string | null;
             /** @description Unique identifier (e.g., "urn:uuid:...") */
@@ -17465,7 +17545,8 @@ export interface components {
              * @example false
              */
             blackAndWhite?: boolean | null;
-            bookType?: null | components["schemas"]["BookTypeDto"];
+            /** @description Book type classification (comic, manga, novel, etc.) */
+            bookType?: components["schemas"]["BookTypeDto"];
             /**
              * Format: float
              * @description Chapter number (may be fractional, e.g. 42.5 for side chapters)
@@ -17853,7 +17934,8 @@ export interface components {
         };
         /** @description Request body for bulk retrying all book errors */
         RetryAllErrorsRequest: {
-            errorType?: null | components["schemas"]["BookErrorTypeDto"];
+            /** @description Filter to only retry specific error type. If not provided, retry all error types. */
+            errorType?: components["schemas"]["BookErrorTypeDto"];
             /**
              * Format: uuid
              * @description Filter to only retry errors in a specific library
@@ -19575,7 +19657,8 @@ export interface components {
              * @description Library ID if this task is related to a library
              */
             libraryId?: string | null;
-            progress?: null | components["schemas"]["TaskProgress"];
+            /** @description Progress information (for running tasks) */
+            progress?: components["schemas"]["TaskProgress"];
             /**
              * Format: uuid
              * @description Series ID if this task is related to a series
@@ -20327,7 +20410,11 @@ export interface components {
             autoMatchConditions?: Record<string, never> | null;
             /** @description Book strategy-specific configuration (JSON, mutable) */
             bookConfig?: unknown;
-            bookStrategy?: null | components["schemas"]["BookStrategy"];
+            /**
+             * @description Book naming strategy (mutable)
+             *     Options: filename, metadata_first, smart, series_name
+             */
+            bookStrategy?: components["schemas"]["BookStrategy"];
             /**
              * @description Default reading direction for books in this library (ltr, rtl, ttb or webtoon)
              * @example rtl
@@ -20355,13 +20442,18 @@ export interface components {
             name?: string | null;
             /** @description Number strategy-specific configuration (JSON, mutable) */
             numberConfig?: unknown;
-            numberStrategy?: null | components["schemas"]["NumberStrategy"];
+            /**
+             * @description Book number strategy (mutable)
+             *     Options: file_order, metadata, filename, smart
+             */
+            numberStrategy?: components["schemas"]["NumberStrategy"];
             /**
              * @description Filesystem path to the library
              * @example /media/comics
              */
             path?: string | null;
-            scanningConfig?: null | components["schemas"]["ScanningConfigDto"];
+            /** @description Scanning configuration */
+            scanningConfig?: components["schemas"]["ScanningConfigDto"];
             /**
              * @description Title preprocessing rules (JSON array of regex rules)
              *     Applied during scan to clean series titles before metadata search.
@@ -20676,7 +20768,8 @@ export interface components {
              *     These permissions are unioned with the role's permissions
              */
             permissions?: string[] | null;
-            role?: null | components["schemas"]["UserRole"];
+            /** @description Update user role (reader, maintainer, admin) */
+            role?: components["schemas"]["UserRole"];
             /**
              * @description New username
              * @example updateduser
@@ -20910,7 +21003,8 @@ export interface components {
              *     per-user.
              */
             syncCronSchedule?: string | null;
-            userConfigSchema?: null | components["schemas"]["ConfigSchemaDto"];
+            /** @description User-facing configuration schema (from plugin manifest) */
+            userConfigSchema?: components["schemas"]["ConfigSchemaDto"];
             /** @description User-facing setup instructions for the plugin */
             userSetupInstructions?: string | null;
         };
@@ -23800,7 +23894,7 @@ export interface operations {
                 /** @description Optional series filter */
                 seriesId?: string | null;
                 /** @description Filter by specific error type */
-                errorType?: null | components["schemas"]["BookErrorTypeDto"];
+                errorType?: components["schemas"]["BookErrorTypeDto"];
                 /** @description Page number (1-indexed, default 1) */
                 page?: number;
                 /** @description Number of items per page (max 100, default 50) */
@@ -24326,9 +24420,10 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: {
+        /** @description Multipart form with image file */
+        requestBody: {
             content: {
-                "multipart/form-data": unknown;
+                "multipart/form-data": components["schemas"]["CoverUploadForm"];
             };
         };
         responses: {
@@ -25080,14 +25175,21 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Reading progress retrieved (null if no progress exists) */
+            /** @description Reading progress retrieved */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": null | components["schemas"]["ReadProgressResponse"];
+                    "application/json": components["schemas"]["ReadProgressResponse"];
                 };
+            };
+            /** @description No reading progress recorded for this book */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Unauthorized */
             401: {
@@ -30700,7 +30802,7 @@ export interface operations {
         /** @description Multipart form with image file */
         requestBody: {
             content: {
-                "multipart/form-data": Record<string, never>;
+                "multipart/form-data": components["schemas"]["CoverUploadForm"];
             };
         };
         responses: {
@@ -31795,14 +31897,21 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description User's rating for the series (null if not rated) */
+            /** @description User's rating for the series */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": null | components["schemas"]["UserSeriesRatingDto"];
+                    "application/json": components["schemas"]["UserSeriesRatingDto"];
                 };
+            };
+            /** @description Series is not rated by this user */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Forbidden */
             403: {
@@ -33991,14 +34100,21 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Latest task, or null if the plugin has no task yet */
+            /** @description Latest task */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": null | components["schemas"]["UserPluginTaskDto"];
+                    "application/json": components["schemas"]["UserPluginTaskDto"];
                 };
+            };
+            /** @description The plugin has no task yet */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Not authenticated */
             401: {
@@ -34381,7 +34497,7 @@ export interface operations {
         parameters: {
             query?: {
                 /** @description Filter by role */
-                role?: null | components["schemas"]["UserRole"];
+                role?: components["schemas"]["UserRole"];
                 /** @description Filter by sharing tag name (users who have a grant for this tag) */
                 sharingTag?: string | null;
                 /** @description Filter by sharing tag access mode (allow/deny) - only used with sharing_tag */

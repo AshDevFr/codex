@@ -1037,8 +1037,8 @@ export const bookHandlers = [
     }
 
     if (!book.readProgress) {
-      // No progress exists — return null with 200
-      return HttpResponse.json(null);
+      // Not started — 204 with no body, matching the server
+      return new HttpResponse(null, { status: 204 });
     }
 
     const currentPage = book.readProgress.currentPage;

@@ -1317,7 +1317,7 @@ async fn test_get_plugin_tasks_not_enabled() {
 }
 
 #[tokio::test]
-async fn test_get_plugin_tasks_no_tasks() {
+async fn test_get_plugin_tasks_no_content_when_no_tasks() {
     let (db, _temp_dir) = setup_test_db().await;
     let state = create_test_auth_state(db.clone()).await;
     let (_, token) = create_user_and_token(&db, &state, "testuser").await;
@@ -1333,7 +1333,7 @@ async fn test_get_plugin_tasks_no_tasks() {
     let (status, _): (StatusCode, Option<UserPluginDto>) = make_json_request(app, request).await;
     assert_eq!(status, StatusCode::OK);
 
-    // No sync tasks exist yet — should return 200 with a null body (not 404).
+    // No sync tasks exist yet — should return 204 with an empty body (not 404).
     let app = create_test_router(state.clone()).await;
     let request = get_request_with_auth(
         &format!(
@@ -1345,11 +1345,8 @@ async fn test_get_plugin_tasks_no_tasks() {
     let (status, body): (StatusCode, Option<serde_json::Value>) =
         make_json_request(app, request).await;
 
-    assert_eq!(status, StatusCode::OK);
-    assert!(
-        body.is_none() || body == Some(serde_json::Value::Null),
-        "expected null/absent task body, got {body:?}"
-    );
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    assert!(body.is_none(), "expected an empty task body, got {body:?}");
 }
 
 #[tokio::test]
@@ -1471,7 +1468,7 @@ async fn test_get_plugin_tasks_user_isolation() {
         make_json_request(app, request).await;
     assert_eq!(status, StatusCode::OK);
 
-    // User B enables plugin but has no task — should get 200 with a null body
+    // User B enables plugin but has no task — should get 204 with an empty body
     // (User B must not see User A's task).
     let app = create_test_router(state.clone()).await;
     let request = post_request_with_auth(
@@ -1491,9 +1488,9 @@ async fn test_get_plugin_tasks_user_isolation() {
     );
     let (status, body): (StatusCode, Option<serde_json::Value>) =
         make_json_request(app, request).await;
-    assert_eq!(status, StatusCode::OK);
+    assert_eq!(status, StatusCode::NO_CONTENT);
     assert!(
-        body.is_none() || body == Some(serde_json::Value::Null),
+        body.is_none(),
         "User B must not see User A's task; got {body:?}"
     );
 }

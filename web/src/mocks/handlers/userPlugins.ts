@@ -45,7 +45,7 @@ const anilistPlugin: UserPluginDto = {
     errors: 0,
   },
   config: {},
-  userConfigSchema: null,
+  userConfigSchema: undefined,
   userSetupInstructions: null,
   autoSync: false,
   capabilities: {
@@ -135,7 +135,7 @@ export const userPluginsHandlers = [
       lastSyncAt: null,
       lastSyncResult: null,
       config: {},
-      userConfigSchema: null,
+      userConfigSchema: undefined,
       userSetupInstructions: null,
       autoSync: false,
       capabilities: {

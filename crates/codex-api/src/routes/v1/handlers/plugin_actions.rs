@@ -125,7 +125,7 @@ pub struct PluginActionsQuery {
         (status = 401, description = "Unauthorized"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Plugin Actions"
@@ -257,7 +257,7 @@ pub async fn get_plugin_actions(
         (status = 404, description = "Plugin not found"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Plugin Actions"
@@ -546,7 +546,7 @@ pub struct SearchTitleQuery {
         (status = 404, description = "Series or plugin not found"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Plugin Actions"
@@ -658,7 +658,7 @@ fn apply_preprocessing_rules(
         (status = 404, description = "Series or plugin not found"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Plugin Actions"
@@ -1380,7 +1380,7 @@ pub async fn preview_series_metadata(
         (status = 404, description = "Series or plugin not found"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Plugin Actions"
@@ -1538,7 +1538,7 @@ pub async fn apply_series_metadata(
         (status = 404, description = "Series or plugin not found or no match found"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Plugin Actions"
@@ -1732,7 +1732,7 @@ pub async fn auto_match_series_metadata(
         (status = 404, description = "Book or plugin not found"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Plugin Actions"
@@ -2289,7 +2289,7 @@ pub async fn preview_book_metadata(
         (status = 404, description = "Book or plugin not found"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Plugin Actions"
@@ -2615,7 +2615,7 @@ const MAX_LIBRARY_SERIES_COUNT: usize = 1000;
         (status = 404, description = "Series or plugin not found"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Plugin Actions"
@@ -2688,7 +2688,7 @@ pub async fn enqueue_auto_match_task(
         (status = 404, description = "Plugin not found"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Plugin Actions"
@@ -2822,7 +2822,7 @@ pub async fn enqueue_bulk_auto_match_tasks(
         (status = 404, description = "Library or plugin not found"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Plugin Actions"

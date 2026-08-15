@@ -105,7 +105,20 @@ describe("ratingsApi", () => {
       expect(result).toEqual(mockRating);
     });
 
-    it("should return null when no rating exists", async () => {
+    it("should return null when the series is unrated (204)", async () => {
+      // Axios surfaces a body-less 204 as the empty string.
+      vi.mocked(api.get).mockResolvedValueOnce({
+        data: "",
+        status: 204,
+      });
+
+      const result = await ratingsApi.getUserRating("series-123");
+
+      expect(api.get).toHaveBeenCalledWith("/series/series-123/rating");
+      expect(result).toBeNull();
+    });
+
+    it("should return null when an older server answers 200 with null", async () => {
       vi.mocked(api.get).mockResolvedValueOnce({
         data: null,
         status: 200,

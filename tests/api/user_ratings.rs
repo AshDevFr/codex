@@ -32,7 +32,7 @@ async fn create_admin_and_token(
 // ============================================================================
 
 #[tokio::test]
-async fn test_get_series_rating_returns_null_when_not_rated() {
+async fn test_get_series_rating_returns_no_content_when_not_rated() {
     let (db, _temp_dir) = setup_test_db().await;
 
     let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
@@ -48,12 +48,11 @@ async fn test_get_series_rating_returns_null_when_not_rated() {
     let app = create_test_router(state).await;
 
     let request = get_request_with_auth(&format!("/api/v1/series/{}/rating", series.id), &token);
-    let (status, response): (StatusCode, Option<Option<UserSeriesRatingDto>>) =
+    let (status, response): (StatusCode, Option<UserSeriesRatingDto>) =
         make_json_request(app, request).await;
 
-    assert_eq!(status, StatusCode::OK);
-    // Response body should be null (None)
-    assert!(response.unwrap().is_none());
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    assert!(response.is_none(), "expected an empty body when not rated");
 }
 
 #[tokio::test]
@@ -91,11 +90,11 @@ async fn test_get_series_rating_returns_rating_when_exists() {
     // Now get the rating
     let app = create_test_router(state.clone()).await;
     let request = get_request_with_auth(&format!("/api/v1/series/{}/rating", series.id), &token);
-    let (status, response): (StatusCode, Option<Option<UserSeriesRatingDto>>) =
+    let (status, response): (StatusCode, Option<UserSeriesRatingDto>) =
         make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::OK);
-    let rating = response.unwrap().expect("Rating should exist");
+    let rating = response.expect("Rating should exist");
     assert_eq!(rating.rating, 85);
     assert_eq!(rating.notes, Some("Great series!".to_string()));
     assert_eq!(rating.series_id, series.id);
@@ -318,15 +317,15 @@ async fn test_delete_series_rating() {
         assert_eq!(status, StatusCode::NO_CONTENT);
     }
 
-    // Verify rating is gone (returns null, not 404)
+    // Verify rating is gone (returns 204, not 404)
     {
         let app = create_test_router(state.clone()).await;
         let request =
             get_request_with_auth(&format!("/api/v1/series/{}/rating", series.id), &token);
-        let (status, response): (StatusCode, Option<Option<UserSeriesRatingDto>>) =
+        let (status, response): (StatusCode, Option<UserSeriesRatingDto>) =
             make_json_request(app, request).await;
-        assert_eq!(status, StatusCode::OK);
-        assert!(response.unwrap().is_none());
+        assert_eq!(status, StatusCode::NO_CONTENT);
+        assert!(response.is_none());
     }
 }
 

@@ -47,7 +47,7 @@ const MAX_BULK_BOOKS: usize = 500;
         (status = 403, description = "Forbidden"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Bulk Operations"
@@ -209,7 +209,7 @@ pub async fn bulk_patch_series_metadata(
         (status = 403, description = "Forbidden"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Bulk Operations"
@@ -416,7 +416,7 @@ pub async fn bulk_patch_book_metadata(
         (status = 403, description = "Forbidden"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Bulk Operations"
@@ -520,7 +520,7 @@ pub async fn bulk_modify_series_tags(
         (status = 403, description = "Forbidden"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Bulk Operations"
@@ -620,7 +620,7 @@ pub async fn bulk_modify_series_genres(
         (status = 403, description = "Forbidden"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Bulk Operations"
@@ -721,7 +721,7 @@ pub async fn bulk_modify_book_tags(
         (status = 403, description = "Forbidden"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Bulk Operations"
@@ -826,7 +826,7 @@ pub async fn bulk_modify_book_genres(
         (status = 403, description = "Forbidden"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Bulk Operations"
@@ -982,7 +982,7 @@ pub async fn bulk_update_series_locks(
         (status = 403, description = "Forbidden"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Bulk Operations"

@@ -65,7 +65,7 @@ pub struct ReadingSessionsApi;
         (status = 403, description = "Forbidden"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Reading Sessions"

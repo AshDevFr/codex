@@ -130,7 +130,7 @@ async fn user_visibility(
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden"),
     ),
-    security(("bearer_auth" = []), ("api_key" = [])),
+    security(("jwt_bearer" = []), ("api_key" = [])),
     tag = "Collections"
 )]
 pub async fn list_collections(
@@ -163,7 +163,7 @@ pub async fn list_collections(
         (status = 403, description = "Forbidden"),
         (status = 409, description = "A collection with that name already exists"),
     ),
-    security(("bearer_auth" = []), ("api_key" = [])),
+    security(("jwt_bearer" = []), ("api_key" = [])),
     tag = "Collections"
 )]
 pub async fn create_collection(
@@ -238,7 +238,7 @@ pub async fn create_collection(
         (status = 403, description = "Forbidden"),
         (status = 404, description = "Not found"),
     ),
-    security(("bearer_auth" = []), ("api_key" = [])),
+    security(("jwt_bearer" = []), ("api_key" = [])),
     tag = "Collections"
 )]
 pub async fn get_collection(
@@ -267,7 +267,7 @@ pub async fn get_collection(
         (status = 404, description = "Not found"),
         (status = 409, description = "Name already in use"),
     ),
-    security(("bearer_auth" = []), ("api_key" = [])),
+    security(("jwt_bearer" = []), ("api_key" = [])),
     tag = "Collections"
 )]
 pub async fn update_collection(
@@ -354,7 +354,7 @@ pub async fn update_collection(
         (status = 403, description = "Forbidden"),
         (status = 404, description = "Not found"),
     ),
-    security(("bearer_auth" = []), ("api_key" = [])),
+    security(("jwt_bearer" = []), ("api_key" = [])),
     tag = "Collections"
 )]
 pub async fn delete_collection(
@@ -385,7 +385,7 @@ pub async fn delete_collection(
         (status = 403, description = "Forbidden"),
         (status = 404, description = "Not found"),
     ),
-    security(("bearer_auth" = []), ("api_key" = [])),
+    security(("jwt_bearer" = []), ("api_key" = [])),
     tag = "Collections"
 )]
 pub async fn get_collection_series(
@@ -424,7 +424,7 @@ pub async fn get_collection_series(
         (status = 403, description = "Forbidden"),
         (status = 404, description = "Collection or series not found"),
     ),
-    security(("bearer_auth" = []), ("api_key" = [])),
+    security(("jwt_bearer" = []), ("api_key" = [])),
     tag = "Collections"
 )]
 pub async fn add_collection_series(
@@ -465,7 +465,7 @@ pub async fn add_collection_series(
         (status = 204, description = "Removed (or was not a member)"),
         (status = 403, description = "Forbidden"),
     ),
-    security(("bearer_auth" = []), ("api_key" = [])),
+    security(("jwt_bearer" = []), ("api_key" = [])),
     tag = "Collections"
 )]
 pub async fn remove_collection_series(
@@ -492,7 +492,7 @@ pub async fn remove_collection_series(
         (status = 403, description = "Forbidden"),
         (status = 404, description = "Not found"),
     ),
-    security(("bearer_auth" = []), ("api_key" = [])),
+    security(("jwt_bearer" = []), ("api_key" = [])),
     tag = "Collections"
 )]
 pub async fn reorder_collection_series(
@@ -518,7 +518,7 @@ pub async fn reorder_collection_series(
         (status = 307, description = "Redirect to the first member series thumbnail"),
         (status = 404, description = "No visible member series"),
     ),
-    security(("bearer_auth" = []), ("api_key" = [])),
+    security(("jwt_bearer" = []), ("api_key" = [])),
     tag = "Collections"
 )]
 pub async fn get_collection_thumbnail(
@@ -572,7 +572,7 @@ pub async fn get_collection_thumbnail(
         (status = 200, description = "Collections containing the series", body = CollectionListResponse),
         (status = 403, description = "Forbidden"),
     ),
-    security(("bearer_auth" = []), ("api_key" = [])),
+    security(("jwt_bearer" = []), ("api_key" = [])),
     tag = "Collections"
 )]
 pub async fn get_series_collections(

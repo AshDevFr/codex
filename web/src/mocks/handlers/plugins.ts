@@ -127,7 +127,7 @@ const mockPlugins: PluginDto[] = [
     lastFailureAt: "2024-01-18T15:30:00Z",
     lastSuccessAt: "2024-01-17T10:00:00Z",
     disabledReason: "Disabled after 3 failures in 3600 seconds",
-    manifest: null,
+    manifest: undefined,
     createdAt: "2024-01-10T00:00:00Z",
     updatedAt: "2024-01-18T00:00:00Z",
   },

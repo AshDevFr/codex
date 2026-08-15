@@ -60,7 +60,7 @@ pub struct ReadProgressApi;
         (status = 404, description = "Book not found"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Reading Progress"
@@ -111,19 +111,20 @@ pub async fn update_reading_progress(
 
 /// Get reading progress for a book
 ///
-/// Returns the user's reading progress for a specific book.
-/// If no progress exists, returns `null` with a 200 status.
+/// Returns the user's reading progress for a specific book, or `204 No Content`
+/// if the user has not started it.
 #[utoipa::path(
     get,
     path = "/api/v1/books/{book_id}/progress",
     responses(
-        (status = 200, description = "Reading progress retrieved (null if no progress exists)", body = Option<ReadProgressResponse>),
+        (status = 200, description = "Reading progress retrieved", body = ReadProgressResponse),
+        (status = 204, description = "No reading progress recorded for this book"),
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden"),
         (status = 404, description = "Book not found"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Reading Progress"
@@ -132,7 +133,7 @@ pub async fn get_reading_progress(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
     Path(book_id): Path<Uuid>,
-) -> Result<Json<Option<ReadProgressResponse>>, ApiError> {
+) -> Result<Response, ApiError> {
     // Check permission
     auth.require_permission(&Permission::BooksRead)?;
 
@@ -142,13 +143,19 @@ pub async fn get_reading_progress(
         .map_err(|e| ApiError::Internal(format!("Failed to get book: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
 
-    // Get progress (returns None/null if no progress exists)
     let progress = ReadProgressRepository::get_by_user_and_book(&state.db, auth.user_id, book_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to get reading progress: {}", e)))?
         .map(ReadProgressResponse::from);
 
-    Ok(Json(progress))
+    // "Not started" is a normal state, not an error. A 204 keeps the success
+    // body a single concrete type so generated clients can decode it; a 200
+    // with a `null` body forces the schema into a union with `null`, which
+    // strict generators skip entirely.
+    Ok(match progress {
+        Some(progress) => Json(progress).into_response(),
+        None => StatusCode::NO_CONTENT.into_response(),
+    })
 }
 
 /// Delete reading progress for a book
@@ -161,7 +168,7 @@ pub async fn get_reading_progress(
         (status = 403, description = "Forbidden"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Reading Progress"
@@ -192,7 +199,7 @@ pub async fn delete_reading_progress(
         (status = 403, description = "Forbidden"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Reading Progress"
@@ -226,7 +233,7 @@ pub async fn get_user_progress(
         (status = 404, description = "Book not found"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Reading Progress"
@@ -264,7 +271,7 @@ pub async fn mark_book_as_read(
         (status = 403, description = "Forbidden"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Reading Progress"
@@ -299,7 +306,7 @@ pub async fn mark_book_as_unread(
         (status = 404, description = "Book not found"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Reading Progress"
@@ -344,7 +351,7 @@ pub async fn get_progression(
         (status = 404, description = "Book not found"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Reading Progress"
@@ -482,7 +489,7 @@ pub async fn put_progression(
         (status = 404, description = "Book not found"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Reading Progress"
@@ -525,7 +532,7 @@ pub async fn get_book_read_history(
         (status = 404, description = "Book not found"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Reading Progress"
@@ -564,7 +571,7 @@ pub async fn clear_book_read_history(
         (status = 404, description = "Series not found"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Reading Progress"
@@ -612,7 +619,7 @@ pub async fn get_series_read_history(
         (status = 404, description = "Series not found"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Reading Progress"
@@ -647,7 +654,7 @@ pub async fn clear_series_read_history(
         (status = 401, description = "Unauthorized"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Reading Progress"

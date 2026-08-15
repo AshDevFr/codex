@@ -16,7 +16,8 @@ use crate::{error::ApiError, extractors::AppState};
 use axum::{
     Json,
     extract::{Path, Query, State},
-    http::HeaderMap,
+    http::{HeaderMap, StatusCode},
+    response::{IntoResponse, Response},
 };
 use codex_db::repositories::{
     PluginsRepository, TaskRepository, UserPluginDataRepository, UserPluginsRepository,
@@ -1155,7 +1156,8 @@ pub async fn set_user_credentials(
         UserPluginTasksQuery,
     ),
     responses(
-        (status = 200, description = "Latest task, or null if the plugin has no task yet", body = Option<UserPluginTaskDto>),
+        (status = 200, description = "Latest task", body = UserPluginTaskDto),
+        (status = 204, description = "The plugin has no task yet"),
         (status = 401, description = "Not authenticated"),
         (status = 404, description = "Plugin not enabled for this user"),
     ),
@@ -1170,16 +1172,13 @@ pub async fn get_plugin_tasks(
     auth: AuthContext,
     Path(plugin_id): Path<Uuid>,
     Query(query): Query<UserPluginTasksQuery>,
-) -> Result<Json<Option<UserPluginTaskDto>>, ApiError> {
+) -> Result<Response, ApiError> {
     // Verify user has this plugin enabled
     UserPluginsRepository::get_by_user_and_plugin(&state.db, auth.user_id, plugin_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Plugin not enabled for this user".to_string()))?;
 
-    // "No task yet" is a normal state (e.g. a plugin that has never synced), not
-    // an error — return 200 with a null body so callers don't have to treat a
-    // missing task as a 404.
     let task = TaskRepository::find_latest_user_plugin_task(
         &state.db,
         plugin_id,
@@ -1189,5 +1188,12 @@ pub async fn get_plugin_tasks(
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to query tasks: {}", e)))?;
 
-    Ok(Json(task.map(UserPluginTaskDto::from)))
+    // "No task yet" is a normal state (e.g. a plugin that has never synced), not
+    // an error, so callers don't have to treat a missing task as a 404. It is a
+    // 204 rather than a 200 with a null body so the success body stays a single
+    // concrete type that generated clients can decode.
+    Ok(match task {
+        Some(task) => Json(UserPluginTaskDto::from(task)).into_response(),
+        None => StatusCode::NO_CONTENT.into_response(),
+    })
 }

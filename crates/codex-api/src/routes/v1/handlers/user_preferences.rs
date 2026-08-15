@@ -46,7 +46,7 @@ pub struct UserPreferencesApi;
         (status = 401, description = "Unauthorized"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "User Preferences"
@@ -81,7 +81,7 @@ pub async fn get_all_preferences(
         (status = 404, description = "Preference not found"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "User Preferences"
@@ -116,7 +116,7 @@ pub async fn get_preference(
         (status = 400, description = "Invalid preference value"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "User Preferences"
@@ -156,7 +156,7 @@ pub async fn set_preference(
         (status = 400, description = "Invalid preference key or value"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "User Preferences"
@@ -212,7 +212,7 @@ pub async fn set_bulk_preferences(
         (status = 401, description = "Unauthorized"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "User Preferences"

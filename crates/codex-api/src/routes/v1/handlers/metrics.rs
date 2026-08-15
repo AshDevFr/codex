@@ -24,7 +24,7 @@ use codex_db::repositories::MetricsRepository;
         (status = 403, description = "Permission denied"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Metrics"
@@ -131,7 +131,7 @@ pub async fn get_inventory_metrics(
         (status = 403, description = "Permission denied"),
     ),
     security(
-        ("bearer_auth" = []),
+        ("jwt_bearer" = []),
         ("api_key" = [])
     ),
     tag = "Metrics"
