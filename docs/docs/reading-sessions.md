@@ -139,6 +139,31 @@ lose one checkpoint interval instead of the whole session.
 On the web, flush on `pagehide` via `navigator.sendBeacon`. `beforeunload` is
 unreliable on mobile Safari.
 
+## Keeping progress live while a sitting is open
+
+A measured session only exists once the sitting ends, so if it were your only
+write the stored position would not move until the reader closed the book. Keep
+writing progress as you read:
+
+```
+PUT /api/v1/books/{id}/progress
+X-Codex-Device-Id: <your deviceId>
+```
+
+**Send `X-Codex-Device-Id` on those writes, with the same value you put in
+`deviceId`.** That header is what ties them to the session that will supersede
+them. When your measured session arrives, the server absorbs the position-only
+rows it covers from that device and deletes them, so one sitting leaves one row
+rather than one per page turn.
+
+Omit the header and progress still works exactly as before, but those writes
+land on an anonymous device and stay there. Your reading then appears twice in
+the statistics: once as your device's measured session, once as a scattering of
+anonymous position writes.
+
+The absorb step never moves a reader backwards. If a page turn landed after your
+last measured position, the furthest position wins.
+
 ## Device identity
 
 `deviceId` should be stable for the life of an install. It drives per-device

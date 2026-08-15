@@ -3,6 +3,7 @@ import {
   isOfflineError,
   OfflineQueuedError,
 } from "@/lib/offline/outbox";
+import { getDeviceId } from "@/lib/reading/deviceIdentity";
 import type { components } from "@/types";
 import { api } from "./client";
 import { noContentAsNull } from "./noContent";
@@ -25,6 +26,14 @@ const API_BASE = "/api/v1";
 function captureWriteHeaders(): Record<string, string> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
+    // Declares which device these position writes belong to.
+    //
+    // The reader posts a measured session only when a sitting ends, so until
+    // then these writes are the only thing keeping the stored position live.
+    // Tagging them with the same device lets the measured session recognise
+    // and absorb them when it arrives, instead of leaving one sitting looking
+    // like a page turn's worth of separate sessions on a phantom device.
+    "X-Codex-Device-Id": getDeviceId(),
   };
   const token =
     typeof localStorage !== "undefined"

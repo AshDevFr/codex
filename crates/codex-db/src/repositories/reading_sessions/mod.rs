@@ -64,6 +64,21 @@ impl DeviceContext {
         Self::measured_elsewhere(LEGACY_DEVICE_ID)
     }
 
+    /// A progress write from a client that also reports measured sessions.
+    ///
+    /// These carry a position and nothing else, and exist only to keep the
+    /// projection live *during* a sitting: the client's measured session does
+    /// not arrive until the sitting ends. Attributing them to the client's own
+    /// device is what lets the measured session recognise and absorb them when
+    /// it does arrive, instead of leaving two rows describing one sitting.
+    pub fn session_reporting_client(device_id: impl Into<String>) -> Self {
+        Self {
+            id: device_id.into(),
+            name: None,
+            infer_duration: false,
+        }
+    }
+
     /// A background job acting on the user's behalf, such as a tracker sync
     /// marking books read. Real reading did not happen, so nothing is inferred.
     pub fn internal() -> Self {
@@ -442,9 +457,99 @@ impl ReadingSessionRepository {
             client_ended_at: Set(session.client_ended_at),
             server_recorded_at: Set(now),
         };
-        model.insert(db).await?;
+        let inserted = model.insert(db).await?;
+
+        // A measured session describes a whole sitting, including everything
+        // the position-only writes made during it already said. Fold them in
+        // now that the authoritative row exists.
+        if session.duration_source == DurationSource::Measured {
+            Self::supersede_position_only(db, &inserted).await?;
+        }
 
         Ok(AppendOutcome::Inserted)
+    }
+
+    /// Absorb and remove the position-only rows a measured session covers.
+    ///
+    /// A client that measures its own sessions still has to write progress as
+    /// it reads, because the projection has to stay live and the measured
+    /// session does not arrive until the sitting ends. Those writes are
+    /// synthesized into position-only rows. Once the measured row lands it says
+    /// everything they said and more, so leaving them behind would make one
+    /// sitting look like several and put a second device in the statistics.
+    ///
+    /// Scoped to the same device and pass, and to rows that carry no time of
+    /// their own, so this can only ever remove the client's own redundant
+    /// writes. Anything measured or reconstructed is left alone.
+    async fn supersede_position_only<C: ConnectionTrait>(
+        db: &C,
+        measured: &reading_sessions::Model,
+    ) -> Result<u64> {
+        let covered = ReadingSessions::find()
+            .filter(reading_sessions::Column::UserId.eq(measured.user_id))
+            .filter(reading_sessions::Column::BookId.eq(measured.book_id))
+            .filter(reading_sessions::Column::DeviceId.eq(measured.device_id.clone()))
+            .filter(reading_sessions::Column::Pass.eq(measured.pass))
+            .filter(reading_sessions::Column::Id.ne(measured.id))
+            .filter(reading_sessions::Column::DurationSource.eq(DurationSource::Unknown.as_str()))
+            .filter(reading_sessions::Column::ActiveDurationMs.is_null())
+            .filter(reading_sessions::Column::ClientEndedAt.gte(measured.client_started_at))
+            .filter(reading_sessions::Column::ClientEndedAt.lte(measured.client_ended_at))
+            .all(db)
+            .await?;
+
+        if covered.is_empty() {
+            return Ok(0);
+        }
+
+        // Carry forward the furthest position any of them reached before
+        // dropping them. The measured session should normally already be at or
+        // past it, but a page turn landing between the last position write and
+        // the session close would otherwise be lost, and losing a reader's
+        // place is much worse than keeping a redundant row.
+        let mut active: reading_sessions::ActiveModel = measured.clone().into();
+        let mut changed = false;
+
+        if let Some(furthest) = covered.iter().filter_map(|s| s.to_page).max()
+            && measured.to_page.is_none_or(|current| furthest > current)
+        {
+            active.to_page = Set(Some(furthest));
+            changed = true;
+        }
+        if let Some(furthest) = covered
+            .iter()
+            .filter_map(|s| s.to_percentage)
+            .fold(None, |acc: Option<f64>, p| {
+                Some(acc.map_or(p, |best: f64| best.max(p)))
+            })
+            && measured
+                .to_percentage
+                .is_none_or(|current| furthest > current)
+        {
+            active.to_percentage = Set(Some(furthest));
+            changed = true;
+        }
+        // The position-only writes are the only carrier of an EPUB locator
+        // during a sitting, so a measured session that has none inherits the
+        // most recent one rather than dropping it.
+        if measured.r2_progression.is_none()
+            && let Some(progression) = covered.iter().rev().find_map(|s| s.r2_progression.clone())
+        {
+            active.r2_progression = Set(Some(progression));
+            changed = true;
+        }
+
+        if changed {
+            active.update(db).await?;
+        }
+
+        let ids: Vec<Uuid> = covered.iter().map(|s| s.id).collect();
+        let deleted = ReadingSessions::delete_many()
+            .filter(reading_sessions::Column::Id.is_in(ids))
+            .exec(db)
+            .await?;
+
+        Ok(deleted.rows_affected)
     }
 
     /// The session this event should merge into, if any.

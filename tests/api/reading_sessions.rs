@@ -521,6 +521,113 @@ async fn recording_sessions_requires_authentication() {
     assert_eq!(status, StatusCode::UNAUTHORIZED);
 }
 
+/// The whole round trip a reading client actually performs: position writes
+/// while reading, then one measured session when the sitting ends.
+///
+/// The position writes keep the stored position live before the session
+/// arrives, and the session then absorbs them, so one sitting leaves one row
+/// rather than one per page turn plus a phantom device.
+#[tokio::test]
+async fn a_sitting_of_progress_writes_plus_a_session_leaves_one_row() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let book = create_book(&db, "/test/book.cbz").await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (user_id, token) = create_admin_and_token(&db, &state).await;
+
+    let started = Utc::now() - Duration::minutes(20);
+
+    // Reading: a position write per page turn, each declaring the device.
+    for page in 1..=15 {
+        let app = create_test_router(state.clone()).await;
+        let mut request = put_json_request_with_auth(
+            &format!("/api/v1/books/{}/progress", book.id),
+            &json!({ "currentPage": page }),
+            &token,
+        );
+        request
+            .headers_mut()
+            .insert("x-codex-device-id", "browser-abc".parse().unwrap());
+        let (status, _body) = make_request(app, request).await;
+        assert_eq!(status, StatusCode::OK);
+    }
+
+    // The sitting ends and the reader reports what it measured.
+    let app = create_test_router(state).await;
+    let request = post_json_request_with_auth(
+        "/api/v1/reading-sessions",
+        &json!({"sessions": [{
+            "id": Uuid::new_v4(),
+            "bookId": book.id,
+            "deviceId": "browser-abc",
+            "deviceName": "Codex Web (Mac)",
+            "kind": "progress",
+            "toPage": 15,
+            "activeDurationMs": 900_000,
+            "pagesRead": 15,
+            "clientStartedAt": started,
+            "clientEndedAt": Utc::now(),
+        }]}),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<RecordReadingSessionsResponse>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let sessions =
+        codex::db::repositories::ReadingSessionRepository::load_for_book(&db, user_id, book.id)
+            .await
+            .unwrap();
+
+    assert_eq!(
+        sessions.len(),
+        1,
+        "fifteen page turns and one session close are one sitting"
+    );
+    assert_eq!(sessions[0].device_id, "browser-abc");
+    assert_eq!(sessions[0].active_duration_ms, Some(900_000));
+    assert!(
+        !sessions.iter().any(|s| s.device_id == "legacy"),
+        "a client that declares its device must not also appear as the anonymous one"
+    );
+
+    let progress = ReadProgressRepository::get_by_user_and_book(&db, user_id, book.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(progress.current_page, 15);
+}
+
+/// A client that declares nothing keeps the behaviour it had before, so
+/// third-party callers of the native API are unaffected.
+#[tokio::test]
+async fn a_client_without_a_device_header_still_records_progress() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let book = create_book(&db, "/test/book.cbz").await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (user_id, token) = create_admin_and_token(&db, &state).await;
+
+    let app = create_test_router(state).await;
+    let request = put_json_request_with_auth(
+        &format!("/api/v1/books/{}/progress", book.id),
+        &json!({ "currentPage": 7 }),
+        &token,
+    );
+    let (status, _body) = make_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let sessions =
+        codex::db::repositories::ReadingSessionRepository::load_for_book(&db, user_id, book.id)
+            .await
+            .unwrap();
+    assert_eq!(sessions[0].device_id, "legacy");
+
+    let progress = ReadProgressRepository::get_by_user_and_book(&db, user_id, book.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(progress.current_page, 7);
+}
+
 /// Several books in one batch each get their progress back, so a client can
 /// reconcile a whole sync in one round trip.
 #[tokio::test]

@@ -13,6 +13,15 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use uuid::Uuid;
 
+/// Header by which a client declares which device it is.
+///
+/// Only meaningful for clients that also post measured reading sessions: it is
+/// what ties their position writes to the session that supersedes them.
+pub const CLIENT_DEVICE_ID_HEADER: &str = "x-codex-device-id";
+
+/// Cap on a declared device id, so a hostile header cannot bloat the log.
+const MAX_CLIENT_DEVICE_ID_LEN: usize = 128;
+
 /// Cache TTL for user authentication data (60 seconds)
 /// This reduces DB load for repeated requests from the same user
 const USER_CACHE_TTL_SECS: i64 = 60;
@@ -208,6 +217,25 @@ impl AuthContext {
     /// back to a hash of the user agent, which collapses two devices running the
     /// same app into one identity: that is the honest limit of what the request
     /// carries, and the fix is a key rather than a cleverer hash.
+    /// Which device a native-API write belongs to.
+    ///
+    /// Clients that measure their own reading sessions declare their device id
+    /// on progress writes, so the position-only rows those writes synthesize
+    /// land on the same device as the measured session that will later absorb
+    /// them. A client that declares nothing keeps the anonymous catch-all and
+    /// behaves exactly as before.
+    pub fn client_device_context(&self, headers: &axum::http::HeaderMap) -> DeviceContext {
+        headers
+            .get(CLIENT_DEVICE_ID_HEADER)
+            .and_then(|value| value.to_str().ok())
+            .map(str::trim)
+            .filter(|id| !id.is_empty() && id.len() <= MAX_CLIENT_DEVICE_ID_LEN)
+            .map_or_else(
+                DeviceContext::legacy,
+                DeviceContext::session_reporting_client,
+            )
+    }
+
     pub fn device_context(&self, user_agent: Option<&str>) -> DeviceContext {
         match &self.api_key {
             Some((id, name)) => DeviceContext::api_key(*id, name.clone()),

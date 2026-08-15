@@ -68,6 +68,7 @@ pub struct ReadProgressApi;
 pub async fn update_reading_progress(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
+    headers: axum::http::HeaderMap,
     Path(book_id): Path<Uuid>,
     Json(request): Json<UpdateProgressRequest>,
 ) -> Result<Json<ReadProgressResponse>, ApiError> {
@@ -94,7 +95,7 @@ pub async fn update_reading_progress(
     };
 
     // Update progress with optional percentage (used for EPUB books)
-    let progress = ReadProgressRepository::upsert_with_percentage(
+    let progress = ReadProgressRepository::upsert_with_percentage_and_device(
         &state.db,
         auth.user_id,
         book_id,
@@ -102,6 +103,7 @@ pub async fn update_reading_progress(
         request.progress_percentage,
         completed,
         None,
+        &auth.client_device_context(&headers),
     )
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to update reading progress: {}", e)))?;
@@ -176,15 +178,21 @@ pub async fn get_reading_progress(
 pub async fn delete_reading_progress(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
+    headers: axum::http::HeaderMap,
     Path(book_id): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {
     // Check permission
     auth.require_permission(&Permission::BooksRead)?;
 
     // Delete progress
-    ReadProgressRepository::delete(&state.db, auth.user_id, book_id)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to delete reading progress: {}", e)))?;
+    ReadProgressRepository::delete_with_device(
+        &state.db,
+        auth.user_id,
+        book_id,
+        &auth.client_device_context(&headers),
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to delete reading progress: {}", e)))?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -241,6 +249,7 @@ pub async fn get_user_progress(
 pub async fn mark_book_as_read(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
+    headers: axum::http::HeaderMap,
     Path(book_id): Path<Uuid>,
 ) -> Result<Json<ReadProgressResponse>, ApiError> {
     // Check permission
@@ -253,10 +262,16 @@ pub async fn mark_book_as_read(
         .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
 
     // Mark as read
-    let progress =
-        ReadProgressRepository::mark_as_read(&state.db, auth.user_id, book_id, book.page_count)
-            .await
-            .map_err(|e| ApiError::Internal(format!("Failed to mark book as read: {}", e)))?;
+    let progress = ReadProgressRepository::upsert_with_device(
+        &state.db,
+        auth.user_id,
+        book_id,
+        book.page_count,
+        true,
+        &auth.client_device_context(&headers),
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to mark book as read: {}", e)))?;
 
     Ok(Json(progress.into()))
 }
@@ -279,15 +294,21 @@ pub async fn mark_book_as_read(
 pub async fn mark_book_as_unread(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
+    headers: axum::http::HeaderMap,
     Path(book_id): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {
     // Check permission
     auth.require_permission(&Permission::BooksRead)?;
 
     // Mark as unread (delete progress)
-    ReadProgressRepository::mark_as_unread(&state.db, auth.user_id, book_id)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to mark book as unread: {}", e)))?;
+    ReadProgressRepository::delete_with_device(
+        &state.db,
+        auth.user_id,
+        book_id,
+        &auth.client_device_context(&headers),
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to mark book as unread: {}", e)))?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -359,6 +380,7 @@ pub async fn get_progression(
 pub async fn put_progression(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
+    headers: axum::http::HeaderMap,
     Path(book_id): Path<Uuid>,
     Json(body): Json<serde_json::Value>,
 ) -> Result<StatusCode, ApiError> {
@@ -454,7 +476,7 @@ pub async fn put_progression(
     let json_str = serde_json::to_string(&body)
         .map_err(|e| ApiError::Internal(format!("Failed to serialize R2Progression: {}", e)))?;
 
-    ReadProgressRepository::upsert_with_percentage(
+    ReadProgressRepository::upsert_with_percentage_and_device(
         &state.db,
         auth.user_id,
         book_id,
@@ -462,6 +484,7 @@ pub async fn put_progression(
         Some(total_progression),
         completed,
         Some(json_str),
+        &auth.client_device_context(&headers),
     )
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to update progression: {}", e)))?;

@@ -1650,6 +1650,280 @@ mod tests {
         );
     }
 
+    // ========================================================================
+    // A measured session superseding the position writes it covers
+    //
+    // A client that measures its own sessions still writes progress as it
+    // reads, because the projection has to stay live before the session
+    // closes. These cover the arriving session absorbing those writes.
+    // ========================================================================
+
+    fn measured_session(
+        user_id: Uuid,
+        book_id: Uuid,
+        device: &str,
+        page: i32,
+        started: chrono::DateTime<Utc>,
+        ended: chrono::DateTime<Utc>,
+    ) -> NewSession {
+        NewSession::from_client(
+            Uuid::new_v4(),
+            user_id,
+            book_id,
+            device,
+            Some("Test Browser".to_string()),
+            SessionKind::Progress,
+            Some(60_000),
+            Some(10),
+            started,
+            ended,
+        )
+        .with_page(page)
+    }
+
+    /// The whole point: one sitting leaves one row, not one per page turn plus
+    /// one for the session.
+    #[tokio::test]
+    async fn a_measured_session_absorbs_the_position_writes_it_covers() {
+        let db = setup_test_db().await;
+        let user = create_test_user(&db).await;
+        let book = create_test_book(&db).await;
+
+        let device = DeviceContext::session_reporting_client("browser-1");
+        let started = Utc::now();
+        for page in 1..=20 {
+            ReadProgressRepository::upsert_with_device(&db, user.id, book.id, page, false, &device)
+                .await
+                .unwrap();
+        }
+        assert!(!sessions_for(&db, user.id, book.id).await.is_empty());
+
+        ReadProgressRepository::record_session(
+            &db,
+            measured_session(
+                user.id,
+                book.id,
+                "browser-1",
+                20,
+                started - chrono::Duration::minutes(1),
+                Utc::now() + chrono::Duration::minutes(1),
+            ),
+        )
+        .await
+        .unwrap();
+
+        let sessions = sessions_for(&db, user.id, book.id).await;
+        assert_eq!(sessions.len(), 1, "one sitting must leave one session");
+        assert_eq!(
+            sessions[0].active_duration_ms,
+            Some(60_000),
+            "the surviving row is the measured one"
+        );
+    }
+
+    /// A page turn between the last position write and the session close must
+    /// not be lost. Losing a redundant row is fine; losing the reader's place
+    /// is not.
+    #[tokio::test]
+    async fn absorbing_never_moves_the_position_backwards() {
+        let db = setup_test_db().await;
+        let user = create_test_user(&db).await;
+        let book = create_test_book(&db).await;
+
+        let device = DeviceContext::session_reporting_client("browser-1");
+        let started = Utc::now();
+        ReadProgressRepository::upsert_with_device(&db, user.id, book.id, 42, false, &device)
+            .await
+            .unwrap();
+
+        // The measured session reports an earlier page than the last write.
+        ReadProgressRepository::record_session(
+            &db,
+            measured_session(
+                user.id,
+                book.id,
+                "browser-1",
+                30,
+                started - chrono::Duration::minutes(1),
+                Utc::now() + chrono::Duration::minutes(1),
+            ),
+        )
+        .await
+        .unwrap();
+
+        let progress = ReadProgressRepository::get_by_user_and_book(&db, user.id, book.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(progress.current_page, 42, "the furthest position survives");
+    }
+
+    /// Scoped to one device: another client's writes are not swept up.
+    #[tokio::test]
+    async fn absorbing_leaves_other_devices_alone() {
+        let db = setup_test_db().await;
+        let user = create_test_user(&db).await;
+        let book = create_test_book(&db).await;
+
+        let started = Utc::now();
+        ReadProgressRepository::upsert_with_device(
+            &db,
+            user.id,
+            book.id,
+            5,
+            false,
+            &DeviceContext::session_reporting_client("browser-1"),
+        )
+        .await
+        .unwrap();
+        ReadProgressRepository::upsert_with_device(
+            &db,
+            user.id,
+            book.id,
+            9,
+            false,
+            &DeviceContext::session_reporting_client("browser-2"),
+        )
+        .await
+        .unwrap();
+
+        ReadProgressRepository::record_session(
+            &db,
+            measured_session(
+                user.id,
+                book.id,
+                "browser-1",
+                9,
+                started - chrono::Duration::minutes(1),
+                Utc::now() + chrono::Duration::minutes(1),
+            ),
+        )
+        .await
+        .unwrap();
+
+        let sessions = sessions_for(&db, user.id, book.id).await;
+        assert_eq!(sessions.len(), 2, "browser-2's write must survive");
+        assert!(sessions.iter().any(|s| s.device_id == "browser-2"));
+    }
+
+    /// Reconstructed time is real data, not a redundant position write, so it
+    /// is never swept up even from the same device.
+    #[tokio::test]
+    async fn absorbing_leaves_reconstructed_sessions_alone() {
+        let db = setup_test_db().await;
+        let user = create_test_user(&db).await;
+        let book = create_test_book(&db).await;
+
+        let started = Utc::now();
+        let compat = DeviceContext {
+            id: "browser-1".to_string(),
+            name: None,
+            infer_duration: true,
+        };
+        for page in 1..=3 {
+            ReadProgressRepository::upsert_with_device(&db, user.id, book.id, page, false, &compat)
+                .await
+                .unwrap();
+        }
+
+        ReadProgressRepository::record_session(
+            &db,
+            measured_session(
+                user.id,
+                book.id,
+                "browser-1",
+                3,
+                started - chrono::Duration::minutes(1),
+                Utc::now() + chrono::Duration::minutes(1),
+            ),
+        )
+        .await
+        .unwrap();
+
+        let sessions = sessions_for(&db, user.id, book.id).await;
+        assert_eq!(sessions.len(), 2, "an inferred session is not redundant");
+    }
+
+    /// A write made after the session closed belongs to the next sitting and
+    /// is outside the measured span, so it stays.
+    #[tokio::test]
+    async fn absorbing_ignores_writes_outside_the_session_span() {
+        let db = setup_test_db().await;
+        let user = create_test_user(&db).await;
+        let book = create_test_book(&db).await;
+
+        let device = DeviceContext::session_reporting_client("browser-1");
+        ReadProgressRepository::upsert_with_device(&db, user.id, book.id, 5, false, &device)
+            .await
+            .unwrap();
+
+        // A session that ended before that write ever happened.
+        ReadProgressRepository::record_session(
+            &db,
+            measured_session(
+                user.id,
+                book.id,
+                "browser-1",
+                4,
+                Utc::now() - chrono::Duration::hours(3),
+                Utc::now() - chrono::Duration::hours(2),
+            ),
+        )
+        .await
+        .unwrap();
+
+        let sessions = sessions_for(&db, user.id, book.id).await;
+        assert_eq!(sessions.len(), 2);
+    }
+
+    /// An EPUB locator only ever arrives on a position write, so a measured
+    /// session that has none must inherit it rather than drop it.
+    #[tokio::test]
+    async fn absorbing_carries_forward_an_epub_locator() {
+        let db = setup_test_db().await;
+        let user = create_test_user(&db).await;
+        let book = create_test_book(&db).await;
+
+        let device = DeviceContext::session_reporting_client("browser-1");
+        let started = Utc::now();
+        ReadProgressRepository::upsert_with_percentage_and_device(
+            &db,
+            user.id,
+            book.id,
+            5,
+            Some(0.4),
+            false,
+            Some(r#"{"locator":"chapter-3"}"#.to_string()),
+            &device,
+        )
+        .await
+        .unwrap();
+
+        ReadProgressRepository::record_session(
+            &db,
+            measured_session(
+                user.id,
+                book.id,
+                "browser-1",
+                5,
+                started - chrono::Duration::minutes(1),
+                Utc::now() + chrono::Duration::minutes(1),
+            ),
+        )
+        .await
+        .unwrap();
+
+        let progress = ReadProgressRepository::get_by_user_and_book(&db, user.id, book.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            progress.r2_progression.as_deref(),
+            Some(r#"{"locator":"chapter-3"}"#),
+            "the reading position in an EPUB must survive the sweep"
+        );
+    }
+
     /// Two users completing the same book each get their own entry.
     #[tokio::test]
     async fn completions_are_recorded_per_user() {

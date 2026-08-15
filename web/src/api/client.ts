@@ -3,6 +3,7 @@ import axios, {
   type AxiosInstance,
   type InternalAxiosRequestConfig,
 } from "axios";
+import { getDeviceId } from "@/lib/reading/deviceIdentity";
 import { navigationService } from "@/services/navigation";
 import { useAuthStore } from "@/store/authStore";
 import type { ApiError } from "@/types";
@@ -83,13 +84,19 @@ export const api: AxiosInstance = axios.create({
   withCredentials: true,
 });
 
-// Request interceptor to add auth token
+// Request interceptor to add auth token and declare which device we are
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem("jwt_token");
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    // Position writes made while reading are the only thing keeping the stored
+    // position live until the reader posts a measured session at the end of a
+    // sitting. Declaring the device on every request lets that session absorb
+    // them when it lands, rather than leaving one sitting spread across a
+    // separate anonymous device.
+    config.headers["X-Codex-Device-Id"] = getDeviceId();
     return config;
   },
   (error) => {
