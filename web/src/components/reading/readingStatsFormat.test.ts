@@ -6,6 +6,7 @@ import {
   formatDurationShort,
   groupIntoWeeks,
   heatLevel,
+  rollUpIntoWeeks,
 } from "./readingStatsFormat";
 
 const MINUTE = 60_000;
@@ -135,6 +136,89 @@ describe("heatLevel", () => {
   it("does not divide by a zero maximum", () => {
     expect(heatLevel(0, 0)).toBe(0);
     expect(heatLevel(10, 0)).toBe(0);
+  });
+});
+
+describe("rollUpIntoWeeks", () => {
+  /// 2026-06-01 is a Monday, so the whole of that week keys to it.
+  it("sums days into the week's Monday", () => {
+    const weeks = rollUpIntoWeeks([
+      period("2026-06-01", 30),
+      period("2026-06-03", 45),
+      period("2026-06-07", 15),
+    ]);
+
+    expect(weeks).toHaveLength(1);
+    expect(weeks[0].bucket).toBe("2026-06-01");
+    expect(weeks[0].duration.totalMs).toBe(90 * MINUTE);
+    expect(weeks[0].pagesRead).toBe(30);
+    expect(weeks[0].sessions).toBe(3);
+  });
+
+  /// A Sunday belongs to the week that started six days earlier, not to the
+  /// Monday that follows it.
+  it("puts Sunday at the end of its own week", () => {
+    const weeks = rollUpIntoWeeks([
+      period("2026-06-07", 10),
+      period("2026-06-08", 20),
+    ]);
+
+    expect(weeks.map((w) => w.bucket)).toEqual(["2026-06-01", "2026-06-08"]);
+  });
+
+  it("keeps the provenance split separable", () => {
+    const weeks = rollUpIntoWeeks([
+      {
+        bucket: "2026-06-01",
+        duration: {
+          measuredMs: 10 * MINUTE,
+          inferredMs: 5 * MINUTE,
+          totalMs: 15 * MINUTE,
+        },
+        pagesRead: 3,
+        sessions: 1,
+      },
+      {
+        bucket: "2026-06-02",
+        duration: {
+          measuredMs: 20 * MINUTE,
+          inferredMs: 0,
+          totalMs: 20 * MINUTE,
+        },
+        pagesRead: 4,
+        sessions: 2,
+      },
+    ]);
+
+    expect(weeks[0].duration.measuredMs).toBe(30 * MINUTE);
+    expect(weeks[0].duration.inferredMs).toBe(5 * MINUTE);
+    expect(weeks[0].duration.totalMs).toBe(35 * MINUTE);
+  });
+
+  it("returns weeks in date order whatever order the days arrive in", () => {
+    const weeks = rollUpIntoWeeks([
+      period("2026-06-15", 10),
+      period("2026-06-01", 10),
+      period("2026-06-08", 10),
+    ]);
+
+    expect(weeks.map((w) => w.bucket)).toEqual([
+      "2026-06-01",
+      "2026-06-08",
+      "2026-06-15",
+    ]);
+  });
+
+  it("does not mutate the days it was given", () => {
+    const days = [period("2026-06-01", 30), period("2026-06-02", 30)];
+    rollUpIntoWeeks(days);
+
+    expect(days[0].duration.totalMs).toBe(30 * MINUTE);
+    expect(days[0].pagesRead).toBe(10);
+  });
+
+  it("has nothing to roll up when nothing was read", () => {
+    expect(rollUpIntoWeeks([])).toEqual([]);
   });
 });
 

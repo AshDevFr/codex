@@ -80,6 +80,54 @@ export function buildCalendar(
   return days;
 }
 
+/** The Monday that starts the week containing an ISO date, in UTC. */
+function mondayOf(iso: string): string {
+  const date = new Date(`${iso}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() - ((date.getUTCDay() + 6) % 7));
+  return date.toISOString().slice(0, 10);
+}
+
+/**
+ * Collapse daily buckets into Monday-start weeks.
+ *
+ * The calendar needs daily grain and the period chart wants weeks once the
+ * window is a year long, so the page asks the API for days and aggregates the
+ * chart here. Asking twice at two granularities would leave the two panels able
+ * to disagree about the same window.
+ *
+ * Weeks are keyed by their Monday, which is how the server keys them too, so a
+ * bucket label means the same thing whether it was built here or there.
+ */
+export function rollUpIntoWeeks(
+  periods: ReadingPeriodDto[],
+): ReadingPeriodDto[] {
+  const byWeek = new Map<string, ReadingPeriodDto>();
+
+  for (const period of periods) {
+    const bucket = mondayOf(period.bucket);
+    const week = byWeek.get(bucket);
+
+    if (!week) {
+      // Copied, not aliased: the caller still holds these day objects.
+      byWeek.set(bucket, {
+        bucket,
+        duration: { ...period.duration },
+        pagesRead: period.pagesRead,
+        sessions: period.sessions,
+      });
+      continue;
+    }
+
+    week.duration.measuredMs += period.duration.measuredMs;
+    week.duration.inferredMs += period.duration.inferredMs;
+    week.duration.totalMs += period.duration.totalMs;
+    week.pagesRead += period.pagesRead;
+    week.sessions += period.sessions;
+  }
+
+  return [...byWeek.values()].sort((a, b) => a.bucket.localeCompare(b.bucket));
+}
+
 /**
  * Which of five ramp steps a day belongs in, or 0 for "no reading".
  *

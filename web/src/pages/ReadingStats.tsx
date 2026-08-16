@@ -20,10 +20,7 @@ import {
 import { IconInfoCircle } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import {
-  type ReadingStatsGranularity,
-  readingStatsApi,
-} from "@/api/readingStats";
+import { readingStatsApi } from "@/api/readingStats";
 import classes from "@/components/reading/ReadingStatsCharts.module.css";
 import {
   ActivityCalendar,
@@ -36,7 +33,10 @@ import {
   StatTile,
   TopSeries,
 } from "@/components/reading/ReadingStatsPanels";
-import { buildCalendar } from "@/components/reading/readingStatsFormat";
+import {
+  buildCalendar,
+  rollUpIntoWeeks,
+} from "@/components/reading/readingStatsFormat";
 
 const RANGES = [
   { value: "30", label: "30 days" },
@@ -44,11 +44,15 @@ const RANGES = [
   { value: "365", label: "1 year" },
 ] as const;
 
-/** Days of history a range shows, and the bucket size that suits it. */
-function granularityFor(days: number): ReadingStatsGranularity {
-  if (days <= 30) return "day";
-  if (days <= 90) return "day";
-  return "week";
+/**
+ * Bucket size for the period chart.
+ *
+ * A year of daily bars is unreadable, so the long range is drawn as weeks. This
+ * is a display choice only: the request is always daily, because the calendar
+ * below needs every day and one request has to serve both.
+ */
+function bucketingFor(days: number): "day" | "week" {
+  return days > 90 ? "week" : "day";
 }
 
 export function ReadingStats() {
@@ -66,31 +70,30 @@ export function ReadingStats() {
     return { from: start, to: end };
   }, [days]);
 
-  const granularity = granularityFor(days);
+  const bucketing = bucketingFor(days);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["readingStats", rangeDays, granularity],
+    queryKey: ["readingStats", rangeDays],
     queryFn: () =>
-      readingStatsApi.get({ from, to, granularity, seriesLimit: 8 }),
+      readingStatsApi.get({ from, to, granularity: "day", seriesLimit: 8 }),
     staleTime: 60_000,
   });
 
   const calendar = useMemo(() => {
     if (!data) return [];
-    // The calendar always wants daily grain, whatever the chart above shows.
-    return buildCalendar(granularity === "day" ? data.periods : [], from, to);
-  }, [data, granularity, from, to]);
+    return buildCalendar(data.periods, from, to);
+  }, [data, from, to]);
 
-  const periodBars = useMemo(
-    () =>
-      (data?.periods ?? []).map((p) => ({
-        bucket: p.bucket,
-        measuredMs: p.duration.measuredMs,
-        inferredMs: p.duration.inferredMs,
-        totalMs: p.duration.totalMs,
-      })),
-    [data],
-  );
+  const periodBars = useMemo(() => {
+    const periods = data?.periods ?? [];
+    const bucketed = bucketing === "week" ? rollUpIntoWeeks(periods) : periods;
+    return bucketed.map((p) => ({
+      bucket: p.bucket,
+      measuredMs: p.duration.measuredMs,
+      inferredMs: p.duration.inferredMs,
+      totalMs: p.duration.totalMs,
+    }));
+  }, [data, bucketing]);
 
   if (isLoading) {
     return (
@@ -186,9 +189,7 @@ export function ReadingStats() {
         <Paper p="md" radius="md" withBorder>
           <Stack gap="sm">
             <Group justify="space-between" wrap="wrap">
-              <Title order={4}>
-                Time per {granularity === "week" ? "week" : "day"}
-              </Title>
+              <Title order={4}>Time per {bucketing}</Title>
               <Text size="xs" c="dimmed">
                 {busiestBucketCaption(periodBars)}
               </Text>
