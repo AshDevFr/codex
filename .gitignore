@@ -15,3 +15,9 @@ plugins/**/openapi.json
 seed-config.yaml
 .playwright-mcp
 qa-*.png
+
+# Local config overlays: `<stem>.local.<ext>` sits beside a committed config
+# and is where secrets and per-host values go. Never commit one.
+*.local.yaml
+*.local.yml
+*.local.toml

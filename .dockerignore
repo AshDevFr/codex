@@ -79,6 +79,9 @@ codex.yaml
 
 # Config files (mounted as volumes, not needed in image)
 config/
+# ...except the starter template, which is compiled into the binary by
+# `codex-config` and so must exist in the build context.
+!config/codex.example.yaml
 
 # Docusaurus files
 docs/

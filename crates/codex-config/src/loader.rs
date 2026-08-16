@@ -114,11 +114,11 @@ impl Config {
 /// `CODEX_DATABASE__POSTGRES__PASSWORD` wrote that password into the generated
 /// YAML in plaintext.
 ///
-/// Kept inside the crate rather than in `config/`, which `.dockerignore`
-/// excludes so that operator configs are never baked into an image. A
-/// compile-time `include_str!` reaching outside the crate breaks in any build
-/// context that trims the repository, which is exactly what happened.
-pub const STARTER_CONFIG_YAML: &str = include_str!("codex.example.yaml");
+/// Lives in `config/` so it sits next to the other examples and can simply be
+/// copied. `.dockerignore` excludes that directory so operator configs are
+/// never baked into an image, with an explicit exception for this one file
+/// because the build needs it at compile time.
+pub const STARTER_CONFIG_YAML: &str = include_str!("../../../config/codex.example.yaml");
 
 /// Write [`STARTER_CONFIG_YAML`] to `path`, creating parent directories.
 ///
