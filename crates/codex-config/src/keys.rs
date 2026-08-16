@@ -141,7 +141,13 @@ fn walk(value: &Value, path: &str, out: &mut KeyRegistry) {
 fn key_probe() -> Config {
     let mut config = Config::default();
 
-    config.database.postgres = Some(PostgresConfig::default());
+    config.database.postgres = Some(PostgresConfig {
+        ssl_mode: Some(crate::PgSslMode::Prefer),
+        ssl_root_cert: Some(String::new()),
+        ssl_client_cert: Some(String::new()),
+        ssl_client_key: Some(String::new()),
+        ..PostgresConfig::default()
+    });
     config.database.sqlite = Some(SQLiteConfig {
         pragmas: Some(probe_string_map()),
         ..SQLiteConfig::default()
@@ -264,6 +270,8 @@ mod tests {
             // Carries `skip_serializing_if`, so it vanishes from the probe
             // rather than showing up as `null`; the drift tests cannot see it.
             "auth.cookie_secure",
+            "database.postgres.ssl_mode",
+            "database.postgres.ssl_root_cert",
         ] {
             assert!(registry.contains(path), "missing `{path}`");
         }
@@ -318,7 +326,6 @@ mod tests {
     #[test]
     fn unknown_paths_are_rejected() {
         let registry = registry();
-        assert!(!registry.contains("database.postgres.ssl_mode"));
         assert!(!registry.contains("plugins.log_level"));
         assert!(!registry.contains("task.worker.count"));
     }

@@ -47,6 +47,11 @@ database:
   #   username: codex
   #   password: codex          # prefer codex.local.yaml or the environment
   #   database_name: codex
+  #   # TLS. Unset leaves the driver default (`prefer`), which encrypts when
+  #   # the server offers it but accepts any certificate and falls back to
+  #   # plaintext, both silently. Use verify-full for anything remote.
+  #   ssl_mode: verify-full     # disable|allow|prefer|require|verify-ca|verify-full
+  #   ssl_root_cert: /etc/ssl/certs/postgres-ca.crt
   #   # Per process, not per deployment. Every replica, worker and job opens
   #   # its own pool against the server's shared max_connections.
   #   max_connections: 25

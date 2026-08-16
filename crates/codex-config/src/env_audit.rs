@@ -699,20 +699,29 @@ mod tests {
         }
     }
 
-    /// Documented today but backed by no field at all.
+    /// Documented at some point but backed by no field.
+    ///
+    /// `CODEX_DATABASE_POSTGRES_SSL_MODE` is deliberately absent: it was
+    /// documented without existing, and now it exists, so it resolves as an
+    /// ordinary legacy spelling rather than a typo.
     #[test]
     fn documented_but_nonexistent_settings_are_flagged() {
-        for var in [
-            "CODEX_DATABASE_POSTGRES_SSL_MODE",
-            "CODEX_PLUGINS_LOG_LEVEL",
-            "CODEX_THUMBNAIL_CACHE_DIR",
-        ] {
+        for var in ["CODEX_PLUGINS_LOG_LEVEL", "CODEX_THUMBNAIL_CACHE_DIR"] {
             assert!(
                 matches!(classify_one(var), Some(Finding::Unknown { .. })),
                 "{var} should be Unknown, got {:?}",
                 classify_one(var)
             );
         }
+    }
+
+    /// Documented in 1.x while no such field existed. It exists now, so the
+    /// old spelling must resolve to the new key rather than look like a typo.
+    #[test]
+    fn the_postgres_tls_mode_now_resolves() {
+        let (v2, path) = rename("CODEX_DATABASE_POSTGRES_SSL_MODE");
+        assert_eq!(v2, "CODEX_DATABASE__POSTGRES__SSL_MODE");
+        assert_eq!(path, "database.postgres.ssl_mode");
     }
 
     #[test]

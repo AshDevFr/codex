@@ -102,42 +102,40 @@ CODEX_DATABASE_POSTGRES_DATABASE_NAME=codex
 
 ### TLS
 
-Codex has no TLS setting in `codex.yaml`. The PostgreSQL driver reads the
-standard libpq environment variables and Codex does not override them, so set
-them alongside the `CODEX_*` variables:
+Configure TLS under `database.postgres`:
 
-```bash
-PGSSLMODE=verify-full
-PGSSLROOTCERT=/etc/ssl/certs/postgres-ca.crt
+```yaml
+database:
+  postgres:
+    ssl_mode: verify-full
+    ssl_root_cert: /etc/ssl/certs/postgres-ca.crt
 ```
 
-Without `PGSSLMODE`, the driver uses `prefer`: it negotiates TLS when the
-server offers it, accepts any certificate, and drops to an unencrypted
-connection when the server offers nothing. Both the missing verification and
-the downgrade are silent. Keep the default only when Codex and PostgreSQL sit
-on a network you trust.
+or with `CODEX_DATABASE__POSTGRES__SSL_MODE` and
+`CODEX_DATABASE__POSTGRES__SSL_ROOT_CERT`.
+
+Leaving `ssl_mode` unset falls back to the driver's own resolution, which is
+`prefer` unless `PGSSLMODE` says otherwise: it negotiates TLS when the server
+offers it, accepts any certificate, and drops to an unencrypted connection when
+the server offers nothing. Both the missing verification and the downgrade are
+silent. Keep that only when Codex and PostgreSQL sit on a network you trust.
 
 Use `verify-full` for a managed or remote database. `verify-ca` skips the
 hostname check and is the fallback when the certificate's subject does not
 match the host you connect to. `require` encrypts without verifying anything,
 which stops passive capture but not an active attacker.
 
-For mutual TLS, add `PGSSLCERT` and `PGSSLKEY`.
+For mutual TLS, add `ssl_client_cert` and `ssl_client_key`.
 
 :::note
-These are driver variables, so they have no `CODEX_` prefix and do not show up
-in `codex config check`. They apply to every command that connects, including
-`migrate`, `export`, `import` and `copy`. Note that a `?sslmode=` query
-parameter on a `codex copy` URL is **not** honored: the URL is decomposed into
-host, port, user, password and database name, and query parameters are
-discarded. Use `PGSSLMODE` there too.
-:::
+The libpq variables (`PGSSLMODE`, `PGSSLROOTCERT`, `PGSSLCERT`, `PGSSLKEY`) are
+still read when the matching Codex setting is unset, so a deployment configured
+that way keeps working; the Codex setting wins when both are present.
 
-:::info Changing in Codex 2.0
-`ssl_mode` and `ssl_root_cert` become real settings under
-`database.postgres`, validated by `codex config check` like anything else. The
-libpq variables keep working as a fallback, so a `PGSSLMODE` you set now does
-not need to be undone. See [Configuration](../configuration.md#postgresql-tls).
+A `?sslmode=` query parameter on a `codex copy` URL is **not** honored: the URL
+is decomposed into host, port, user, password and database name, and query
+parameters are discarded. Configure TLS on the config file for that side, or
+use `PGSSLMODE`.
 :::
 
 ### Connection Pooling
