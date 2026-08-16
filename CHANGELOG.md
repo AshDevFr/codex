@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.44.2] - 2026-08-16
+
+### 🐛 Bug Fixes
+
+- *(web)* Keep the activity calendar populated on the one-year range
+
 ## [1.44.1] - 2026-08-16
 
 ### 🐛 Bug Fixes
