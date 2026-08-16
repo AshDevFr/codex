@@ -6,9 +6,11 @@
 //! not mechanically reversible, which is why v2 switches to `__` between
 //! levels: `CODEX_RATE_LIMIT__ANONYMOUS_RPS`.
 //!
-//! This module maps a variable name to the setting it was aiming at. It powers
-//! two things: `codex config check`, which reports the v2 name for every
-//! variable that changes, and a single advisory line at startup.
+//! This module maps a variable name to the setting it was aiming at. A name
+//! in the old flat form is no longer read, so it is reported as an error with
+//! its replacement rather than ignored: a deployment that keeps
+//! `CODEX_RATE_LIMIT_ANONYMOUS_RPS` would otherwise silently run with default
+//! rate limits.
 //!
 //! It also catches plain mistakes. Several variables in the documentation
 //! today do nothing at all (`CODEX_DATABASE_POSTGRES_USER` instead of
@@ -18,7 +20,7 @@
 
 use crate::keys::{KeyRegistry, registry};
 use crate::loader::ENV_PREFIX;
-use crate::types::Config;
+use crate::types::{Config, ConfigError};
 use std::collections::{BTreeSet, HashMap};
 use std::sync::OnceLock;
 
@@ -91,22 +93,13 @@ pub const REMOVED_VARS: &[(&str, &str, &str)] = &[
 /// as advice in v1.44 and raised as errors in v2.0.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Finding {
-    /// A valid v1 name whose v2 spelling differs.
-    WillRename {
+    /// The old flat spelling. No longer read.
+    Legacy {
         var: String,
-        /// The v2 spelling, using `__` between nesting levels.
-        v2_name: String,
-        /// The config path both names resolve to.
+        /// The nested spelling that replaces it.
+        replacement: String,
+        /// The config path both forms aimed at.
         path: String,
-    },
-    /// A v2-style name, which this version does not read.
-    ///
-    /// Worth reporting loudly: the setting is being ignored right now, and
-    /// renaming ahead of the upgrade is the way operators get here.
-    NotYetValid {
-        var: String,
-        /// The name this version does read.
-        v1_name: String,
     },
     /// Removed in favour of a config key that cannot be derived by
     /// re-spelling the old name.
@@ -130,19 +123,21 @@ impl Finding {
     /// The environment variable this finding is about.
     pub fn var(&self) -> &str {
         match self {
-            Finding::WillRename { var, .. }
-            | Finding::NotYetValid { var, .. }
+            Finding::Legacy { var, .. }
             | Finding::Removed { var, .. }
             | Finding::Unknown { var, .. } => var,
         }
     }
 
-    /// Whether this finding means a setting is being ignored right now.
-    pub fn is_ignored_now(&self) -> bool {
-        matches!(
-            self,
-            Finding::NotYetValid { .. } | Finding::Removed { .. } | Finding::Unknown { .. }
-        )
+    /// Whether this must stop startup.
+    ///
+    /// True where the operator named a real setting in a form that is no
+    /// longer read, so continuing would run with a value they did not choose.
+    /// An unrecognized name is only a warning: another tool may legitimately
+    /// use the `CODEX_` prefix, and guessing wrong should not take a
+    /// deployment down.
+    pub fn is_fatal(&self) -> bool {
+        matches!(self, Finding::Legacy { .. } | Finding::Removed { .. })
     }
 }
 
@@ -212,37 +207,35 @@ pub fn classify(var: &str, registry: &KeyRegistry) -> Option<Finding> {
         });
     }
 
-    // A `__` anywhere means the operator wrote a v2-style name.
+    // A `__` anywhere means the operator wrote the current form. If it names a
+    // real setting there is nothing to say; the loader has already read it.
     if rest.contains("__") {
         let path = rest
             .split("__")
             .map(|s| s.to_lowercase())
             .collect::<Vec<_>>()
             .join(".");
-        return Some(if registry.contains(&path) {
-            Finding::NotYetValid {
-                var: var.to_string(),
-                v1_name: v1_name_for(&path),
-            }
+        return if registry.contains(&path) {
+            None
         } else {
-            Finding::Unknown {
+            Some(Finding::Unknown {
                 var: var.to_string(),
                 nearest: nearest_path(&path, registry),
-            }
-        });
+            })
+        };
     }
 
     match resolve_flat(rest, registry) {
         Some(path) => {
-            let v2_name = v2_name_for(&path);
-            // Single-segment settings such as `data_dir` spell the same in
-            // both schemes; there is nothing for the operator to change.
-            if v2_name == var {
+            let replacement = v2_name_for(&path);
+            // Single-segment settings such as `data_dir` spell the same either
+            // way, so they are still read and there is nothing to change.
+            if replacement == var {
                 None
             } else {
-                Some(Finding::WillRename {
+                Some(Finding::Legacy {
                     var: var.to_string(),
-                    v2_name,
+                    replacement,
                     path,
                 })
             }
@@ -252,6 +245,47 @@ pub fn classify(var: &str, registry: &KeyRegistry) -> Option<Finding> {
             nearest: nearest_path(rest, registry),
         }),
     }
+}
+
+/// Fail when the environment names a setting in a form that is no longer read.
+///
+/// Every offending variable is reported in one message. An operator with a
+/// dozen of them should fix all twelve in one pass, not discover them one
+/// restart at a time.
+pub fn enforce_env(config: &Config) -> Result<Vec<Finding>, ConfigError> {
+    let findings = audit_env_with_config(config);
+    let (fatal, warnings): (Vec<_>, Vec<_>) = findings.iter().partition(|f| f.is_fatal());
+
+    if fatal.is_empty() {
+        return Ok(warnings.into_iter().cloned().collect());
+    }
+
+    let mut message = String::from("environment variables that are no longer read:\n");
+    for finding in &fatal {
+        match finding {
+            Finding::Legacy {
+                var, replacement, ..
+            } => {
+                message.push_str(&format!("  {var}\n      renamed to {replacement}\n"));
+            }
+            Finding::Removed {
+                var,
+                replacement,
+                note,
+            } => {
+                message.push_str(&format!(
+                    "  {var}\n      replaced by {replacement} ({note})\n"
+                ));
+            }
+            _ => {}
+        }
+    }
+    message.push_str(
+        "\nNesting levels are separated by `__` since Codex 2.0. \
+         Run `codex config check` to see this list without starting the server.",
+    );
+
+    Err(ConfigError::new(message))
 }
 
 /// Resolve a flat v1 suffix (everything after `CODEX_`) to a config path.
@@ -329,7 +363,8 @@ fn match_segments(segments: &[&str], rest: &str) -> Option<Vec<String>> {
     match_segments(tail, remainder.strip_prefix('_')?)
 }
 
-/// The v1 spelling of a config path: every separator is a single `_`.
+/// The pre-2.0 flat spelling of a config path, where every separator was a
+/// single `_`. Kept for describing what an operator must change.
 pub fn v1_name_for(path: &str) -> String {
     format!("{ENV_PREFIX}{}", path.replace('.', "_").to_uppercase())
 }
@@ -426,13 +461,15 @@ mod tests {
 
     fn rename(var: &str) -> (String, String) {
         match classify_one(var) {
-            Some(Finding::WillRename { v2_name, path, .. }) => (v2_name, path),
-            other => panic!("expected {var} to be a rename, got {other:?}"),
+            Some(Finding::Legacy {
+                replacement, path, ..
+            }) => (replacement, path),
+            other => panic!("expected {var} to be a legacy name, got {other:?}"),
         }
     }
 
     #[test]
-    fn flat_names_map_to_double_underscore_names() {
+    fn legacy_flat_names_map_to_double_underscore_names() {
         for (var, expected_v2, expected_path) in [
             (
                 "CODEX_TASK_WORKER_COUNT",
@@ -616,14 +653,27 @@ mod tests {
         assert!(!NON_CONFIG_VARS.contains(&"CODEX_BIN_VERSION"));
     }
 
+    /// The current spelling is simply read; there is nothing to report.
     #[test]
-    fn v2_names_are_reported_as_not_yet_valid() {
-        match classify_one("CODEX_TASK__WORKER_COUNT") {
-            Some(Finding::NotYetValid { v1_name, .. }) => {
-                assert_eq!(v1_name, "CODEX_TASK_WORKER_COUNT");
-            }
-            other => panic!("expected NotYetValid, got {other:?}"),
-        }
+    fn nested_names_are_accepted_silently() {
+        assert_eq!(classify_one("CODEX_TASK__WORKER_COUNT"), None);
+        assert_eq!(classify_one("CODEX_DATABASE__POSTGRES__HOST"), None);
+    }
+
+    /// A nested name that does not resolve is still just a warning.
+    #[test]
+    fn a_nested_name_for_no_setting_is_unknown() {
+        assert!(matches!(
+            classify_one("CODEX_TASK__NOPE"),
+            Some(Finding::Unknown { .. })
+        ));
+    }
+
+    #[test]
+    fn legacy_and_removed_are_fatal_but_unknown_is_not() {
+        assert!(classify_one("CODEX_TASK_WORKER_COUNT").unwrap().is_fatal());
+        assert!(classify_one("CODEX_DISABLE_WORKERS").unwrap().is_fatal());
+        assert!(!classify_one("CODEX_NOT_A_THING_AT_ALL").unwrap().is_fatal());
     }
 
     #[test]
@@ -764,8 +814,8 @@ mod tests {
         ];
         for var in documented {
             assert!(
-                matches!(classify_one(var), Some(Finding::WillRename { .. })),
-                "{var} should resolve to a rename, got {:?}",
+                matches!(classify_one(var), Some(Finding::Legacy { .. })),
+                "{var} should be reported as a legacy spelling, got {:?}",
                 classify_one(var)
             );
         }
