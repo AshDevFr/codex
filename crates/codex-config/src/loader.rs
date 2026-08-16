@@ -925,6 +925,106 @@ database:
         });
     }
 
+    /// Every key the starter template names must be a real setting.
+    ///
+    /// The parse test above only exercises the handful of lines that are
+    /// uncommented, so a typo in any of the commented ones goes unnoticed, and
+    /// those are the lines operators uncomment. A key that does not exist is
+    /// silently ignored by the loader, so the failure is invisible: the
+    /// operator sets it, nothing happens, and nothing says why.
+    ///
+    /// The reverse direction is deliberately not checked. A setting missing
+    /// from the template is harmless, since the reference documentation covers
+    /// the whole surface and `config check` prints the resolved config, and
+    /// requiring every key here would turn a starter into a reference and put
+    /// a documentation chore on every new field.
+    #[test]
+    fn every_key_in_the_starter_template_is_a_real_setting() {
+        let registry = crate::registry();
+        let sections: std::collections::BTreeSet<&str> = registry
+            .all()
+            .filter_map(|key| key.split('.').next())
+            .collect();
+
+        // (indent, key) for each open level, innermost last.
+        let mut stack: Vec<(usize, String)> = Vec::new();
+        let mut unknown: Vec<String> = Vec::new();
+
+        for line in STARTER_CONFIG_YAML.lines() {
+            // A commented key still counts: uncommenting it is the intended
+            // use, so it has to be correct now.
+            let uncommented = match line.trim_start().strip_prefix('#') {
+                Some(rest) => {
+                    let indent = line.len() - line.trim_start().len();
+                    format!(
+                        "{}{}",
+                        " ".repeat(indent),
+                        rest.strip_prefix(' ').unwrap_or(rest)
+                    )
+                }
+                None => line.to_string(),
+            };
+
+            let indent = uncommented.len() - uncommented.trim_start().len();
+            let Some((name, value)) = uncommented.trim_start().split_once(':') else {
+                continue;
+            };
+            if name.is_empty()
+                || !name
+                    .chars()
+                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+            {
+                continue;
+            }
+
+            while stack.last().is_some_and(|(open, _)| *open >= indent) {
+                stack.pop();
+            }
+
+            // Prose is full of sentences that look like `word: ...`, so the
+            // top level needs a way to tell one from a section. A section
+            // carries no value of its own; a sentence always does. That keeps
+            // `exception: a list in the overlay ...` out while still catching a
+            // section that has been renamed or removed.
+            if stack.is_empty() {
+                let is_prose = indent > 0 || (!value.trim().is_empty() && !sections.contains(name));
+                if is_prose {
+                    continue;
+                }
+            }
+
+            stack.push((indent, name.to_string()));
+            let path = stack
+                .iter()
+                .map(|(_, key)| key.as_str())
+                .collect::<Vec<_>>()
+                .join(".");
+
+            // A section is any strict prefix of a real key, comparing `*`
+            // segments loosely so a concrete map key such as
+            // `auth.oidc.providers.authentik` matches
+            // `auth.oidc.providers.*.issuer_url`.
+            let segments: Vec<&str> = path.split('.').collect();
+            let is_section = registry.all().any(|key| {
+                let key_segments: Vec<&str> = key.split('.').collect();
+                key_segments.len() > segments.len()
+                    && key_segments
+                        .iter()
+                        .zip(segments.iter())
+                        .all(|(k, p)| *k == "*" || k == p)
+            });
+
+            if !registry.contains(&path) && !is_section {
+                unknown.push(path);
+            }
+        }
+
+        assert!(
+            unknown.is_empty(),
+            "the starter template names settings that do not exist: {unknown:#?}"
+        );
+    }
+
     /// It documents the surface, so a new section that never reaches it is a
     /// section operators cannot discover.
     #[test]

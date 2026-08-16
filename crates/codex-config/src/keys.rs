@@ -53,6 +53,18 @@ impl KeyRegistry {
         self.exact.iter().chain(self.wildcard.iter())
     }
 
+    /// File a path in whichever set matches its shape.
+    fn insert(&mut self, path: &str) {
+        if path.is_empty() {
+            return;
+        }
+        if path.split('.').any(|segment| segment == "*") {
+            self.wildcard.insert(path.to_string());
+        } else {
+            self.exact.insert(path.to_string());
+        }
+    }
+
     /// Whether `path` names a real setting. Wildcard segments match any single
     /// non-empty path segment.
     pub fn contains(&self, path: &str) -> bool {
@@ -94,12 +106,15 @@ fn build_registry() -> KeyRegistry {
 fn walk(value: &Value, path: &str, out: &mut KeyRegistry) {
     match value {
         Value::Object(fields) => {
-            // A map is settable as a whole, not only key by key:
-            // `CODEX_OBSERVABILITY_OTLP_HEADERS` takes the entire header set as
-            // `k1=v1,k2=v2`. Record the container alongside the per-key
-            // wildcard so that form is recognized too.
+            // A map is settable as a whole, not only key by key, so record the
+            // container alongside the per-key wildcard. It belongs in whichever
+            // set matches its own shape: a container that already sits under a
+            // wildcard (`auth.oidc.providers.*.role_mapping`) is not an exact
+            // path, and filing it as one puts a `*` into the set the
+            // environment classifier normalizes over, where it can only
+            // produce nonsense suggestions.
             if fields.contains_key(MAP_PROBE_KEY) && !path.is_empty() {
-                out.exact.insert(path.to_string());
+                out.insert(path);
             }
             for (name, child) in fields {
                 let segment = if name == MAP_PROBE_KEY { "*" } else { name };
@@ -111,16 +126,7 @@ fn walk(value: &Value, path: &str, out: &mut KeyRegistry) {
                 walk(child, &child_path, out);
             }
         }
-        _ => {
-            if path.is_empty() {
-                return;
-            }
-            if path.split('.').any(|s| s == "*") {
-                out.wildcard.insert(path.to_string());
-            } else {
-                out.exact.insert(path.to_string());
-            }
-        }
+        _ => out.insert(path),
     }
 }
 

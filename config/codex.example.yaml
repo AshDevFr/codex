@@ -52,6 +52,9 @@ database:
   #   # plaintext, both silently. Use verify-full for anything remote.
   #   ssl_mode: verify-full     # disable|allow|prefer|require|verify-ca|verify-full
   #   ssl_root_cert: /etc/ssl/certs/postgres-ca.crt
+  #   # Client certificate and key, only for mutual TLS.
+  #   ssl_client_cert: /etc/ssl/certs/codex-client.crt
+  #   ssl_client_key: /etc/ssl/private/codex-client.key
   #   # Per process, not per deployment. Every replica, worker and job opens
   #   # its own pool against the server's shared max_connections.
   #   max_connections: 25
