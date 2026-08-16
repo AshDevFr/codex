@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.44.1] - 2026-08-16
+
+### 🐛 Bug Fixes
+
+- *(db)* Make reading statistics work on PostgreSQL
+
 ## [1.44.0] - 2026-08-15
 
 ### 🚀 Features
