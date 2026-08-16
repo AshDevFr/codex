@@ -1,0 +1,20 @@
+# nextest configuration.
+#
+# PostgreSQL tests share one database. `setup_test_db_postgres` truncates it on
+# every call, so two of them running at once delete each other's fixtures; the
+# failure surfaces as a foreign-key violation on a row that existed a moment
+# earlier, or as an assertion about a count that another test just reset.
+#
+# This was invisible for as long as those tests silently skipped. Once they
+# started connecting for real, the races began, so they run one at a time.
+# SQLite tests are untouched: each gets its own database and stays parallel.
+#
+# The alternative is a schema or database per test, which is the better answer
+# if the PostgreSQL suite ever grows enough for serialisation to hurt.
+
+[test-groups]
+postgres = { max-threads = 1 }
+
+[[profile.default.overrides]]
+filter = 'test(~postgres)'
+test-group = 'postgres'

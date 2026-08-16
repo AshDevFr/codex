@@ -61,9 +61,26 @@ pub async fn setup_test_db_wrapper() -> (Database, TempDir) {
 /// especially for queries with JOINs and aggregations which may behave
 /// differently than SQLite.
 pub async fn setup_test_db_postgres() -> Option<sea_orm::DatabaseConnection> {
-    // Check if PostgreSQL testing is enabled via environment variable
-    let postgres_url = std::env::var("POSTGRES_TEST_URL")
-        .unwrap_or_else(|_| "postgres://codex:codex@localhost:54321/codex_test".to_string());
+    // Connection settings, in the order they are actually supplied.
+    //
+    // The Makefile exports POSTGRES_HOST/PORT/USER/PASSWORD/DB, so those come
+    // first. POSTGRES_TEST_URL stays supported for running cargo directly, and
+    // its default now matches this repository's own compose file.
+    //
+    // This ordering is load-bearing rather than tidy-up: reading only
+    // POSTGRES_TEST_URL meant `make test-postgres` connected to nothing, every
+    // ignored PostgreSQL test returned early, and the suite reported a pass
+    // having exercised no PostgreSQL at all. Two PostgreSQL-only bugs reached
+    // production behind that green tick.
+    let postgres_url = std::env::var("POSTGRES_TEST_URL").unwrap_or_else(|_| {
+        let host = std::env::var("POSTGRES_HOST").unwrap_or_else(|_| "localhost".to_string());
+        let port = std::env::var("POSTGRES_PORT").unwrap_or_else(|_| "5433".to_string());
+        let user = std::env::var("POSTGRES_USER").unwrap_or_else(|_| "codex_test".to_string());
+        let password =
+            std::env::var("POSTGRES_PASSWORD").unwrap_or_else(|_| "codex_test".to_string());
+        let database = std::env::var("POSTGRES_DB").unwrap_or_else(|_| "codex_test".to_string());
+        format!("postgres://{user}:{password}@{host}:{port}/{database}")
+    });
 
     // Try to connect - if it fails, skip the test gracefully
     let config = DatabaseConfig {

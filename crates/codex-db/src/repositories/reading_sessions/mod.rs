@@ -434,6 +434,19 @@ impl ReadingSessionRepository {
 
         let pass = Self::next_pass(db, session.user_id, session.book_id, session.kind).await?;
 
+        // A position-only write that trails a measured session belongs to it.
+        //
+        // Closing a reader emits two things: the measured session, and a final
+        // position save. Their order is not guaranteed, and in practice the
+        // position save often lands second. The forward sweep in
+        // `supersede_position_only` only looks at what already exists when a
+        // measured session arrives, so a straggler is never absorbed by it.
+        // This is the same rule applied from the other side.
+        if let Some(measured) = Self::trailing_measured_session(db, &session, pass).await? {
+            Self::fold_into_measured(db, measured, &session, now).await?;
+            return Ok(AppendOutcome::Merged);
+        }
+
         if let Some(existing) = Self::coalesce_candidate(db, &session, pass).await? {
             Self::extend(db, existing, &session, now).await?;
             return Ok(AppendOutcome::Merged);
@@ -550,6 +563,83 @@ impl ReadingSessionRepository {
             .await?;
 
         Ok(deleted.rows_affected)
+    }
+
+    /// A measured session this device just closed, if this write trails it.
+    ///
+    /// Deliberately narrow. It matches only a *measured* session, and only for
+    /// a write that carries no duration of its own, so it can never merge two
+    /// pieces of real reading or disturb how the compatibility surfaces behave.
+    /// Legacy-to-legacy merging is left entirely to
+    /// [`Self::coalesce_candidate`], whose rules the completion semantics are
+    /// tested against.
+    async fn trailing_measured_session<C: ConnectionTrait>(
+        db: &C,
+        session: &NewSession,
+        pass: i32,
+    ) -> Result<Option<reading_sessions::Model>> {
+        // A client reporting its own measured sessions is the only producer
+        // that emits this pairing, and only a position-only write can be
+        // absorbed without losing something.
+        if session.coalesce
+            && session.active_duration_ms.is_none()
+            && session.kind != SessionKind::Reset
+        {
+            let window_start = session.client_ended_at - Duration::minutes(COALESCE_WINDOW_MINUTES);
+
+            let candidate = ReadingSessions::find()
+                .filter(reading_sessions::Column::UserId.eq(session.user_id))
+                .filter(reading_sessions::Column::BookId.eq(session.book_id))
+                .filter(reading_sessions::Column::DeviceId.eq(session.device_id.clone()))
+                .filter(reading_sessions::Column::Pass.eq(pass))
+                .filter(
+                    reading_sessions::Column::DurationSource.eq(DurationSource::Measured.as_str()),
+                )
+                .filter(reading_sessions::Column::ClientEndedAt.gte(window_start))
+                .filter(reading_sessions::Column::ClientEndedAt.lte(session.client_ended_at))
+                .order_by_desc(reading_sessions::Column::ClientEndedAt)
+                .one(db)
+                .await?;
+
+            return Ok(candidate);
+        }
+
+        Ok(None)
+    }
+
+    /// Record a trailing position write against the session it belongs to.
+    ///
+    /// The measured duration is left exactly as reported: the incoming write
+    /// carries none, so there is nothing to add and inventing some would defeat
+    /// the point of measuring.
+    ///
+    /// The kind is adopted, which is the part that matters. A trailing write is
+    /// usually the completion that the reader registered as it closed, and
+    /// dropping it would leave the book reading as unfinished.
+    async fn fold_into_measured<C: ConnectionTrait>(
+        db: &C,
+        measured: reading_sessions::Model,
+        session: &NewSession,
+        now: DateTime<Utc>,
+    ) -> Result<()> {
+        let mut active: reading_sessions::ActiveModel = measured.clone().into();
+
+        if session.to_page.is_some() {
+            active.to_page = Set(session.to_page);
+        }
+        if session.to_percentage.is_some() {
+            active.to_percentage = Set(session.to_percentage);
+        }
+        if session.r2_progression.is_some() {
+            active.r2_progression = Set(session.r2_progression.clone());
+        }
+
+        active.kind = Set(session.kind.as_str().to_string());
+        active.client_ended_at = Set(session.client_ended_at.max(measured.client_ended_at));
+        active.server_recorded_at = Set(now);
+
+        active.update(db).await?;
+        Ok(())
     }
 
     /// The session this event should merge into, if any.
