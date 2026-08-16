@@ -2,6 +2,17 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.44.3] - 2026-08-16
+
+### 🚀 Features
+
+- *(stats)* Let the reading dashboard measure pages and books finished
+- *(stats)* Add calendar-year and all-time ranges to the reading dashboard
+
+### 🐛 Bug Fixes
+
+- *(stats)* Stop the reading dashboard misnaming and mis-ranking series
+
 ## [1.44.2] - 2026-08-16
 
 ### 🐛 Bug Fixes
