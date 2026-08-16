@@ -77,6 +77,7 @@ impl Config {
             .extract()
             .with_context(|| format!("failed to parse configuration from {}", path.display()))?;
 
+        config.blank_optionals_to_none();
         config.root_paths_at_data_dir(&|key| overrides.find_value(key).is_ok());
         config.validate()?;
 
@@ -112,7 +113,12 @@ impl Config {
 /// moment of first boot. A container started once with
 /// `CODEX_DATABASE__POSTGRES__PASSWORD` wrote that password into the generated
 /// YAML in plaintext.
-pub const STARTER_CONFIG_YAML: &str = include_str!("../../../config/codex.example.yaml");
+///
+/// Kept inside the crate rather than in `config/`, which `.dockerignore`
+/// excludes so that operator configs are never baked into an image. A
+/// compile-time `include_str!` reaching outside the crate breaks in any build
+/// context that trims the repository, which is exactly what happened.
+pub const STARTER_CONFIG_YAML: &str = include_str!("codex.example.yaml");
 
 /// Write [`STARTER_CONFIG_YAML`] to `path`, creating parent directories.
 ///
@@ -615,10 +621,10 @@ auth:
     // ---- input shapes the v1 override layer accepted ----
 
     #[test]
-    fn bools_accept_one_and_zero_from_the_environment() {
+    fn bools_are_written_as_true_and_false() {
         Jail::expect_with(|jail| {
-            jail.set_env("CODEX_KOMGA_API__ENABLED", "1");
-            jail.set_env("CODEX_API__CORS_ENABLED", "0");
+            jail.set_env("CODEX_KOMGA_API__ENABLED", "true");
+            jail.set_env("CODEX_API__CORS_ENABLED", "false");
 
             let config = Config::load(jail.directory().join("absent.yaml")).unwrap();
 
@@ -629,9 +635,10 @@ auth:
     }
 
     /// v1 read `eq_ignore_ascii_case("true") || == "1"`, so a typo meant
-    /// `false` and the operator never found out. It is now an error.
+    /// `false` and the operator never found out. Anything that is not a
+    /// boolean is now an error, `1` included.
     #[test]
-    fn a_misspelled_bool_stops_startup() {
+    fn a_value_that_is_not_a_bool_stops_startup() {
         Jail::expect_with(|jail| {
             jail.set_env("CODEX_KOMGA_API__ENABLED", "ture");
             let error = Config::load(jail.directory().join("absent.yaml")).unwrap_err();
@@ -644,13 +651,13 @@ auth:
     }
 
     #[test]
-    fn comma_separated_lists_come_through_the_environment() {
+    fn lists_use_bracket_syntax_in_the_environment() {
         Jail::expect_with(|jail| {
             jail.set_env(
                 "CODEX_API__CORS_ORIGINS",
-                "https://a.example, https://b.example",
+                "[https://a.example, https://b.example]",
             );
-            jail.set_env("CODEX_RATE_LIMIT__EXEMPT_PATHS", "/health,/metrics");
+            jail.set_env("CODEX_RATE_LIMIT__EXEMPT_PATHS", "[/health, /metrics]");
 
             let config = Config::load(jail.directory().join("absent.yaml")).unwrap();
 
@@ -680,11 +687,13 @@ auth:
     }
 
     #[test]
-    fn otlp_headers_accept_key_value_pairs() {
+    fn maps_use_brace_syntax_in_the_environment() {
         Jail::expect_with(|jail| {
+            // A value containing a space or comma must be quoted; those
+            // characters delimit entries.
             jail.set_env(
                 "CODEX_OBSERVABILITY__OTLP__HEADERS",
-                "authorization=Bearer tok,x-tenant=acme",
+                r#"{authorization="Bearer tok", x-tenant=acme}"#,
             );
 
             let config = Config::load(jail.directory().join("absent.yaml")).unwrap();
@@ -736,7 +745,7 @@ auth:
             );
             jail.set_env(
                 "CODEX_AUTH__OIDC__PROVIDERS__AUTHENTIK__ROLE_MAPPING__ADMIN",
-                "codex-admins, platform",
+                "[codex-admins, platform]",
             );
 
             let config = Config::load(jail.directory().join("absent.yaml")).unwrap();
@@ -845,7 +854,7 @@ task:
 images:
   decode_concurrency: 9
 plugins:
-  allowed_commands: deno,bun
+  allowed_commands: [deno, bun]
 database:
   run_migrations: false
   migration_wait_timeout_secs: 42
@@ -869,11 +878,11 @@ database:
     #[test]
     fn the_relocated_settings_are_settable_from_the_environment() {
         Jail::expect_with(|jail| {
-            jail.set_env("CODEX_AUTH__COOKIE_SECURE", "1");
+            jail.set_env("CODEX_AUTH__COOKIE_SECURE", "true");
             jail.set_env("CODEX_TASK__RUN_IN_PROCESS", "false");
             jail.set_env("CODEX_IMAGES__DECODE_CONCURRENCY", "12");
-            jail.set_env("CODEX_PLUGINS__ALLOWED_COMMANDS", "deno, bun");
-            jail.set_env("CODEX_DATABASE__RUN_MIGRATIONS", "no");
+            jail.set_env("CODEX_PLUGINS__ALLOWED_COMMANDS", "[deno, bun]");
+            jail.set_env("CODEX_DATABASE__RUN_MIGRATIONS", "false");
             jail.set_env("CODEX_DATABASE__MIGRATION_WAIT_TIMEOUT_SECS", "60");
 
             let config = Config::load(jail.directory().join("absent.yaml")).unwrap();

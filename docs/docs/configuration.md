@@ -835,19 +835,18 @@ All configuration options can be overridden with environment variables using the
 
 Configuration paths are converted to environment variables:
 - Use uppercase
-- Replace dots with underscores
+- Separate nesting levels with `__` (a single `_` still separates words inside one key)
 - Prefix with `CODEX_`
 
-:::warning These names change in Codex 2.0
-Because a single `_` separates both nesting levels and the words inside a field
-name, `CODEX_RATE_LIMIT__ANONYMOUS_RPS` is ambiguous: nothing in the name says
-the section is `rate_limit` rather than `rate`. Codex 2.0 uses `__` between
-nesting levels instead, so that variable becomes
-`CODEX_RATE_LIMIT__ANONYMOUS_RPS`.
+Values are typed. Booleans are `true`/`false`, lists are `[a, b]`, and maps are
+`{key=value, key=value}`; quote any entry containing a space or a comma. An
+empty value means "unset". Anything that does not parse stops the server rather
+than being silently discarded.
 
-Run `codex config check` to see the new name for every variable you currently
-set. **Do not rename anything until you upgrade**: this version does not read
-the new spelling, and a variable renamed early is silently ignored.
+:::info Upgrading from 1.x
+These names changed in Codex 2.0, and the old flat spelling is no longer read.
+Codex refuses to start when it sees one, listing each with its replacement. See
+the [upgrade guide](./migration/v2-config.md).
 :::
 
 | Config Path | Environment Variable |
@@ -922,7 +921,7 @@ CODEX_RATE_LIMIT__ANONYMOUS_RPS=10
 CODEX_RATE_LIMIT__ANONYMOUS_BURST=50
 CODEX_RATE_LIMIT__AUTHENTICATED_RPS=50
 CODEX_RATE_LIMIT__AUTHENTICATED_BURST=200
-CODEX_RATE_LIMIT__EXEMPT_PATHS=/health,/api/v1/events
+CODEX_RATE_LIMIT__EXEMPT_PATHS='[/health, /api/v1/events]'
 CODEX_RATE_LIMIT__CLEANUP_INTERVAL_SECS=60
 CODEX_RATE_LIMIT__BUCKET_TTL_SECS=300
 
@@ -931,7 +930,7 @@ CODEX_OBSERVABILITY__ENABLED=true
 CODEX_OBSERVABILITY__SERVICE_NAME=codex
 CODEX_OBSERVABILITY__OTLP__ENDPOINT=http://localhost:4317
 CODEX_OBSERVABILITY__OTLP__PROTOCOL=grpc
-CODEX_OBSERVABILITY__OTLP__HEADERS=signoz-access-token=abc123,x-tenant=production
+CODEX_OBSERVABILITY__OTLP__HEADERS='{signoz-access-token=abc123, x-tenant=production}'
 CODEX_OBSERVABILITY__OTLP__TIMEOUT_MS=5000
 CODEX_OBSERVABILITY__TRACES__ENABLED=true
 CODEX_OBSERVABILITY__TRACES__SAMPLE_RATIO=0.1

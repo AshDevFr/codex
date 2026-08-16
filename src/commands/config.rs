@@ -51,17 +51,35 @@ pub fn config_command(config_path: PathBuf, command: ConfigSubcommand) -> Result
 }
 
 fn check(config_path: &Path, strict: bool, quiet: bool) -> Result<()> {
-    // `resolve` rather than `load`: the point is to list every problem,
-    // and `load` refuses to start on the first one.
-    let config = resolve_config(config_path)?;
+    // `resolve` rather than `load`: the point is to list every problem, and
+    // `load` refuses to start on the first one.
+    //
+    // A value of the wrong type fails resolution outright, so there is no
+    // config to audit against. Report it and carry on with the name checks
+    // rather than returning, because a mistyped value and a misspelled
+    // variable are exactly the pair an operator wants to see together.
+    let (config, type_error) = match resolve_config(config_path) {
+        Ok(config) => (config, None),
+        Err(error) => (Config::default(), Some(format!("{error:#}"))),
+    };
+
     let findings = audit_env_with_config(&config);
-    let report = build_report(config_path, &config, &findings, quiet)?;
+    let report = build_report(
+        config_path,
+        &config,
+        &findings,
+        type_error.as_deref(),
+        // The resolved config is the defaults when resolution failed, so
+        // printing it would be a lie.
+        quiet || type_error.is_some(),
+    )?;
 
     print!("{report}");
 
-    // Match what the server will do: a fatal finding stops it, so `check`
-    // fails too. `--strict` additionally fails on warnings.
-    let failed = findings.iter().any(Finding::is_fatal) || (strict && !findings.is_empty());
+    // Match what the server will do: it refuses to start on either of these.
+    let failed = type_error.is_some()
+        || findings.iter().any(Finding::is_fatal)
+        || (strict && !findings.is_empty());
     if failed {
         std::process::exit(1);
     }
@@ -76,6 +94,7 @@ fn build_report(
     config_path: &Path,
     config: &Config,
     findings: &[Finding],
+    type_error: Option<&str>,
     quiet: bool,
 ) -> Result<String> {
     use std::fmt::Write as _;
@@ -106,7 +125,23 @@ fn build_report(
         .filter(|f| matches!(f, Finding::Unknown { .. }))
         .collect();
 
-    if findings.is_empty() {
+    if let Some(error) = type_error {
+        writeln!(out, "\nERROR: a value could not be parsed:\n")?;
+        for line in error.lines() {
+            writeln!(out, "  {line}")?;
+        }
+        writeln!(out, "\n  Values are typed. Booleans are `true`/`false`,")?;
+        writeln!(
+            out,
+            "  lists are `[a, b]`, maps are `{{key=value, key=value}}`."
+        )?;
+        writeln!(
+            out,
+            "  Parsing stops at the first bad value, so fix this one and run again."
+        )?;
+    }
+
+    if findings.is_empty() && type_error.is_none() {
         writeln!(out, "\n  No environment variable problems found.")?;
     }
 
@@ -197,6 +232,7 @@ mod tests {
             Path::new("config/codex.yaml"),
             &Config::default(),
             findings,
+            None,
             quiet,
         )
         .unwrap()
@@ -268,6 +304,36 @@ mod tests {
         assert!(text.contains("not a Codex setting; ignored"));
     }
 
+    /// A mistyped value must not hide the misspelled variable next to it.
+    #[test]
+    fn a_type_error_is_reported_alongside_name_findings() {
+        let text = build_report(
+            Path::new("config/codex.yaml"),
+            &Config::default(),
+            &[legacy(
+                "CODEX_TASK_WORKER_COUNT",
+                "CODEX_TASK__WORKER_COUNT",
+                "task.worker_count",
+            )],
+            Some(
+                "invalid type: found string \"x\", expected a boolean for key \"API.CORS_ENABLED\"",
+            ),
+            true,
+        )
+        .unwrap();
+
+        assert!(text.contains("a value could not be parsed"));
+        assert!(text.contains("API.CORS_ENABLED"));
+        assert!(
+            text.contains("`[a, b]`"),
+            "should show the list syntax: {text}"
+        );
+        assert!(
+            text.contains("CODEX_TASK__WORKER_COUNT"),
+            "the name finding must still appear: {text}"
+        );
+    }
+
     #[test]
     fn a_clean_environment_reports_nothing_to_fix() {
         assert!(report(&[], true).contains("No environment variable problems found."));
@@ -283,7 +349,7 @@ mod tests {
     fn the_printed_config_hides_secrets() {
         let mut config = Config::default();
         config.auth.jwt_secret = "a-real-signing-secret".to_string();
-        let text = build_report(Path::new("config/codex.yaml"), &config, &[], false).unwrap();
+        let text = build_report(Path::new("config/codex.yaml"), &config, &[], None, false).unwrap();
 
         assert!(!text.contains("a-real-signing-secret"));
         assert!(text.contains(codex_config::REDACTED));
@@ -294,7 +360,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let missing = dir.path().join("nope.yaml");
 
-        let text = build_report(&missing, &Config::default(), &[], true).unwrap();
+        let text = build_report(&missing, &Config::default(), &[], None, true).unwrap();
 
         assert!(text.contains("not found, using defaults"));
         assert!(!missing.exists(), "check must not create the config file");
