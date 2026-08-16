@@ -12,12 +12,18 @@ export type DurationBreakdownDto =
   components["schemas"]["DurationBreakdownDto"];
 export type ReadingStatsGranularity =
   components["schemas"]["ReadingStatsGranularity"];
+export type ReadingStatsSort = components["schemas"]["ReadingStatsSort"];
 
 export interface ReadingStatsParams {
   from?: Date;
   to?: Date;
   granularity?: ReadingStatsGranularity;
   seriesLimit?: number;
+  /**
+   * Ranking key for the breakdowns. Decides which rows survive the series
+   * limit, so it belongs in the request rather than in a client-side sort.
+   */
+  sort?: ReadingStatsSort;
 }
 
 export const readingStatsApi = {
@@ -36,6 +42,7 @@ export const readingStatsApi = {
     if (params.to) query.to = params.to.toISOString();
     if (params.granularity) query.granularity = params.granularity;
     if (params.seriesLimit) query.seriesLimit = String(params.seriesLimit);
+    if (params.sort) query.sort = params.sort;
 
     const response = await api.get<ReadingStatsResponse>("/reading-stats", {
       params: query,

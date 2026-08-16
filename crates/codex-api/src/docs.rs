@@ -989,6 +989,7 @@ The following paths are exempt from rate limiting:
             v1::dto::ReadingByFormatDto,
             v1::dto::DurationBreakdownDto,
             v1::dto::ReadingStatsGranularity,
+            v1::dto::ReadingStatsSort,
 
             // Reading session DTOs
             v1::dto::RecordReadingSessionsRequest,

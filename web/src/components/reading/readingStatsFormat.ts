@@ -7,6 +7,7 @@
  */
 
 import type { ReadingPeriodDto } from "@/api/readingStats";
+import type { ReadingMetric } from "@/store/readingStatsPreferencesStore";
 
 /**
  * Human duration, at the precision a reader actually cares about.
@@ -40,6 +41,39 @@ export interface CalendarDay {
   measuredMs: number;
   inferredMs: number;
   pagesRead: number;
+  booksFinished: number;
+}
+
+/** What a row is worth under the metric currently being drawn. */
+export function metricValue(
+  row: { totalMs: number; pagesRead: number; booksFinished: number },
+  metric: ReadingMetric,
+): number {
+  if (metric === "pages") return row.pagesRead;
+  if (metric === "booksFinished") return row.booksFinished;
+  return row.totalMs;
+}
+
+/** How a metric's value reads in a tooltip or a caption. */
+export function formatMetric(value: number, metric: ReadingMetric): string {
+  if (metric === "time") return formatDuration(value);
+  if (metric === "pages") return `${value.toLocaleString()} pages`;
+  return `${value.toLocaleString()} ${value === 1 ? "book" : "books"}`;
+}
+
+/**
+ * Compact form of the same, for captions where space is scarce.
+ *
+ * Counts keep their noun: a bare "421" in a caption says nothing about whether
+ * it counts pages, books or minutes.
+ */
+export function formatMetricShort(
+  value: number,
+  metric: ReadingMetric,
+): string {
+  if (metric === "time") return formatDurationShort(value);
+  if (metric === "pages") return `${value.toLocaleString()} pages`;
+  return `${value.toLocaleString()} ${value === 1 ? "book" : "books"}`;
 }
 
 /**
@@ -73,6 +107,7 @@ export function buildCalendar(
       measuredMs: period?.duration.measuredMs ?? 0,
       inferredMs: period?.duration.inferredMs ?? 0,
       pagesRead: period?.pagesRead ?? 0,
+      booksFinished: period?.booksFinished ?? 0,
     });
     cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
@@ -114,6 +149,7 @@ export function rollUpIntoWeeks(
         duration: { ...period.duration },
         pagesRead: period.pagesRead,
         sessions: period.sessions,
+        booksFinished: period.booksFinished,
       });
       continue;
     }
@@ -123,31 +159,62 @@ export function rollUpIntoWeeks(
     week.duration.totalMs += period.duration.totalMs;
     week.pagesRead += period.pagesRead;
     week.sessions += period.sessions;
+    week.booksFinished += period.booksFinished;
   }
 
   return [...byWeek.values()].sort((a, b) => a.bucket.localeCompare(b.bucket));
 }
 
 /**
- * Which of five ramp steps a day belongs in, or 0 for "no reading".
+ * Below this many days with reading, quantiles describe nothing.
  *
- * Thresholds are relative to the busiest day rather than absolute, so the
- * calendar is legible for someone reading twenty minutes a day and for someone
- * reading six hours. An absolute scale would flatten one of them to nothing.
+ * Four active days cannot be divided into five populated steps: the boundaries
+ * land on the same handful of values and the calendar shows fewer colours than
+ * its own legend advertises.
+ */
+const MIN_QUANTILE_SAMPLE = 8;
+
+/**
+ * The four boundaries between the five heat steps.
+ *
+ * Quantiles over the days that had reading, not fractions of the busiest day.
+ * A library marked read in bulk has one day holding an order of magnitude more
+ * than any genuine day; measured against that maximum, every real day falls in
+ * the faintest step and the calendar reads as uniformly empty. Quantiles are
+ * indifferent to how extreme the outlier is, because they count days rather
+ * than measure distance.
+ *
+ * Under {@link MIN_QUANTILE_SAMPLE} active days the scale falls back to
+ * fractions of the maximum, which stays stable on a handful of points.
+ */
+export function heatThresholds(values: number[]): number[] {
+  const read = values.filter((value) => value > 0).sort((a, b) => a - b);
+  if (read.length === 0) return [0, 0, 0, 0];
+
+  const max = read[read.length - 1];
+  if (read.length < MIN_QUANTILE_SAMPLE) {
+    return [0.2, 0.4, 0.6, 0.8].map((fraction) => fraction * max);
+  }
+
+  return [0.2, 0.4, 0.6, 0.8].map(
+    (quantile) => read[Math.floor(quantile * (read.length - 1))],
+  );
+}
+
+/**
+ * Which of five ramp steps a value belongs in, or 0 for "nothing read".
+ *
+ * Zero has its own step so a silent day is visibly different from a quiet one
+ * rather than merely paler.
  */
 export function heatLevel(
-  totalMs: number,
-  maxMs: number,
+  value: number,
+  thresholds: number[],
 ): 0 | 1 | 2 | 3 | 4 | 5 {
-  if (totalMs <= 0) return 0;
-  if (maxMs <= 0) return 0;
+  if (value <= 0) return 0;
 
-  const ratio = totalMs / maxMs;
-  if (ratio <= 0.2) return 1;
-  if (ratio <= 0.4) return 2;
-  if (ratio <= 0.6) return 3;
-  if (ratio <= 0.8) return 4;
-  return 5;
+  const step = thresholds.filter((threshold) => value > threshold).length;
+  return (step + 1) as 1 | 2 | 3 | 4 | 5;
 }
 
 /** Group days into calendar weeks, each column starting on Monday. */

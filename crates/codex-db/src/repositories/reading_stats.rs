@@ -53,6 +53,39 @@ impl StatsGranularity {
     }
 }
 
+/// Which measure a breakdown is ranked by.
+///
+/// Ranking happens in SQL because the series breakdown is limited: re-sorting
+/// the returned rows would order a set that was *selected* by a different
+/// measure, so the true leader by pages can be absent from a top-N chosen by
+/// time. A library whose reading predates session tracking has no time and no
+/// pages at all, which is why completions are rankable too.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum StatsSort {
+    Time,
+    Pages,
+    Completions,
+}
+
+impl StatsSort {
+    /// The `ORDER BY` clause for this key.
+    ///
+    /// Every arm falls back through the other measures before the caller's
+    /// name tiebreak, so a set that ties on the chosen key is still ordered by
+    /// something a reader would recognise rather than by insertion order.
+    fn order_by(self, tiebreak: &str) -> String {
+        let keys = match self {
+            Self::Time => [TOTAL_SUM, PAGES_SUM, COMPLETIONS_SUM],
+            Self::Pages => [PAGES_SUM, TOTAL_SUM, COMPLETIONS_SUM],
+            Self::Completions => [COMPLETIONS_SUM, TOTAL_SUM, PAGES_SUM],
+        };
+        format!(
+            "ORDER BY {} DESC, {} DESC, {} DESC, {tiebreak} ASC",
+            keys[0], keys[1], keys[2]
+        )
+    }
+}
+
 /// Reading time split by how it was arrived at.
 ///
 /// Never summed into one field at this layer. Presenting a combined figure is a
@@ -80,6 +113,8 @@ pub struct ReadingSummary {
     /// Distinct sittings, after coalescing.
     pub sessions: i64,
     pub books: i64,
+    /// Books finished in the window, from `completed` events.
+    pub books_finished: i64,
     /// Sessions whose producer could report neither measured nor reconstructed
     /// time. Surfaced so a suspiciously low total has a visible explanation.
     pub sessions_without_duration: i64,
@@ -93,6 +128,7 @@ pub struct ReadingPeriod {
     pub duration: DurationBreakdown,
     pub pages_read: i64,
     pub sessions: i64,
+    pub books_finished: i64,
 }
 
 /// Totals for one device.
@@ -103,6 +139,7 @@ pub struct ReadingByDevice {
     pub duration: DurationBreakdown,
     pub pages_read: i64,
     pub sessions: i64,
+    pub books_finished: i64,
     pub last_read_at: DateTime<Utc>,
 }
 
@@ -115,6 +152,7 @@ pub struct ReadingBySeries {
     pub pages_read: i64,
     pub sessions: i64,
     pub books: i64,
+    pub books_finished: i64,
 }
 
 /// Totals for one file format.
@@ -124,6 +162,7 @@ pub struct ReadingByFormat {
     pub duration: DurationBreakdown,
     pub pages_read: i64,
     pub sessions: i64,
+    pub books_finished: i64,
 }
 
 /// The window a query covers.
@@ -149,6 +188,15 @@ const MEASURED_SUM: &str = "CAST(COALESCE(SUM(CASE WHEN rs.duration_source = 'me
 const INFERRED_SUM: &str = "CAST(COALESCE(SUM(CASE WHEN rs.duration_source = 'inferred' \
      THEN rs.active_duration_ms ELSE 0 END), 0) AS BIGINT)";
 const PAGES_SUM: &str = "CAST(COALESCE(SUM(COALESCE(rs.pages_read, 0)), 0) AS BIGINT)";
+
+/// Books finished, as a SQL fragment.
+///
+/// The one measure that means the same thing on both sides of the session-log
+/// cutover. Backfilled rows carry no duration and no page count, so time and
+/// pages are silent about everything a reader did before time tracking; a
+/// completion is a completion either way.
+const COMPLETIONS_SUM: &str =
+    "CAST(COALESCE(SUM(CASE WHEN rs.kind = 'completed' THEN 1 ELSE 0 END), 0) AS BIGINT)";
 
 /// Measured and reconstructed time together, for ranking.
 ///
@@ -182,6 +230,7 @@ struct SummaryRow {
     inferred_ms: i64,
     pages_read: i64,
     sessions: i64,
+    books_finished: i64,
     books: i64,
     sessions_without_duration: i64,
 }
@@ -193,6 +242,7 @@ struct PeriodRow {
     inferred_ms: i64,
     pages_read: i64,
     sessions: i64,
+    books_finished: i64,
 }
 
 #[derive(Debug, FromQueryResult)]
@@ -203,6 +253,7 @@ struct DeviceRow {
     inferred_ms: i64,
     pages_read: i64,
     sessions: i64,
+    books_finished: i64,
     last_read_at: DateTime<Utc>,
 }
 
@@ -214,6 +265,7 @@ struct SeriesRow {
     inferred_ms: i64,
     pages_read: i64,
     sessions: i64,
+    books_finished: i64,
     books: i64,
 }
 
@@ -224,6 +276,7 @@ struct FormatRow {
     inferred_ms: i64,
     pages_read: i64,
     sessions: i64,
+    books_finished: i64,
 }
 
 impl ReadingStatsRepository {
@@ -239,6 +292,7 @@ impl ReadingStatsRepository {
                     {INFERRED_SUM} AS inferred_ms, \
                     {PAGES_SUM} AS pages_read, \
                     COUNT(*) AS sessions, \
+                    {COMPLETIONS_SUM} AS books_finished, \
                     COUNT(DISTINCT rs.book_id) AS books, \
                     CAST(COALESCE(SUM(CASE WHEN rs.active_duration_ms IS NULL THEN 1 ELSE 0 END), 0) \
                         AS BIGINT) AS sessions_without_duration \
@@ -263,6 +317,7 @@ impl ReadingStatsRepository {
                 },
                 pages_read: r.pages_read,
                 sessions: r.sessions,
+                books_finished: r.books_finished,
                 books: r.books,
                 sessions_without_duration: r.sessions_without_duration,
             }),
@@ -287,7 +342,8 @@ impl ReadingStatsRepository {
                     {MEASURED_SUM} AS measured_ms, \
                     {INFERRED_SUM} AS inferred_ms, \
                     {PAGES_SUM} AS pages_read, \
-                    COUNT(*) AS sessions \
+                    COUNT(*) AS sessions, \
+                    {COMPLETIONS_SUM} AS books_finished \
              FROM reading_sessions rs \
              WHERE rs.user_id = $1 AND {READING_KINDS} \
                AND rs.client_started_at >= $2 AND rs.client_started_at < $3 \
@@ -313,6 +369,7 @@ impl ReadingStatsRepository {
                 },
                 pages_read: r.pages_read,
                 sessions: r.sessions,
+                books_finished: r.books_finished,
             })
             .collect())
     }
@@ -322,8 +379,10 @@ impl ReadingStatsRepository {
         db: &C,
         user_id: Uuid,
         window: StatsWindow,
+        sort: StatsSort,
     ) -> Result<Vec<ReadingByDevice>> {
         let backend = db.get_database_backend();
+        let order_by = sort.order_by("device_id");
         let sql = format!(
             "SELECT rs.device_id AS device_id, \
                     MAX(rs.device_name) AS device_name, \
@@ -331,12 +390,13 @@ impl ReadingStatsRepository {
                     {INFERRED_SUM} AS inferred_ms, \
                     {PAGES_SUM} AS pages_read, \
                     COUNT(*) AS sessions, \
+                    {COMPLETIONS_SUM} AS books_finished, \
                     MAX(rs.client_ended_at) AS last_read_at \
              FROM reading_sessions rs \
              WHERE rs.user_id = $1 AND {READING_KINDS} \
                AND rs.client_started_at >= $2 AND rs.client_started_at < $3 \
              GROUP BY rs.device_id \
-             ORDER BY {TOTAL_SUM} DESC, sessions DESC, device_id ASC"
+             {order_by}"
         );
 
         let rows = DeviceRow::find_by_statement(Statement::from_sql_and_values(
@@ -358,6 +418,7 @@ impl ReadingStatsRepository {
                 },
                 pages_read: r.pages_read,
                 sessions: r.sessions,
+                books_finished: r.books_finished,
                 last_read_at: r.last_read_at,
             })
             .collect())
@@ -368,9 +429,11 @@ impl ReadingStatsRepository {
         db: &C,
         user_id: Uuid,
         window: StatsWindow,
+        sort: StatsSort,
         limit: u64,
     ) -> Result<Vec<ReadingBySeries>> {
         let backend = db.get_database_backend();
+        let order_by = sort.order_by(SERIES_TITLE_SORT);
         let sql = format!(
             "SELECT s.id AS series_id, \
                     COALESCE(sm.title, s.name) AS series_name, \
@@ -378,6 +441,7 @@ impl ReadingStatsRepository {
                     {INFERRED_SUM} AS inferred_ms, \
                     {PAGES_SUM} AS pages_read, \
                     COUNT(*) AS sessions, \
+                    {COMPLETIONS_SUM} AS books_finished, \
                     COUNT(DISTINCT rs.book_id) AS books \
              FROM reading_sessions rs \
              JOIN books b ON b.id = rs.book_id \
@@ -386,7 +450,7 @@ impl ReadingStatsRepository {
              WHERE rs.user_id = $1 AND {READING_KINDS} \
                AND rs.client_started_at >= $2 AND rs.client_started_at < $3 \
              GROUP BY s.id, s.name, sm.title, sm.title_sort \
-             ORDER BY {TOTAL_SUM} DESC, pages_read DESC, {SERIES_TITLE_SORT} ASC \
+             {order_by} \
              LIMIT $4"
         );
 
@@ -409,6 +473,7 @@ impl ReadingStatsRepository {
                 },
                 pages_read: r.pages_read,
                 sessions: r.sessions,
+                books_finished: r.books_finished,
                 books: r.books,
             })
             .collect())
@@ -420,20 +485,23 @@ impl ReadingStatsRepository {
         db: &C,
         user_id: Uuid,
         window: StatsWindow,
+        sort: StatsSort,
     ) -> Result<Vec<ReadingByFormat>> {
         let backend = db.get_database_backend();
+        let order_by = sort.order_by("format");
         let sql = format!(
             "SELECT b.format AS format, \
                     {MEASURED_SUM} AS measured_ms, \
                     {INFERRED_SUM} AS inferred_ms, \
                     {PAGES_SUM} AS pages_read, \
-                    COUNT(*) AS sessions \
+                    COUNT(*) AS sessions, \
+                    {COMPLETIONS_SUM} AS books_finished \
              FROM reading_sessions rs \
              JOIN books b ON b.id = rs.book_id \
              WHERE rs.user_id = $1 AND {READING_KINDS} \
                AND rs.client_started_at >= $2 AND rs.client_started_at < $3 \
              GROUP BY b.format \
-             ORDER BY {TOTAL_SUM} DESC, format ASC"
+             {order_by}"
         );
 
         let rows = FormatRow::find_by_statement(Statement::from_sql_and_values(
@@ -454,6 +522,7 @@ impl ReadingStatsRepository {
                 },
                 pages_read: r.pages_read,
                 sessions: r.sessions,
+                books_finished: r.books_finished,
             })
             .collect())
     }
@@ -1081,9 +1150,10 @@ mod tests {
         )
         .await;
 
-        let devices = ReadingStatsRepository::by_device(&db, user.id, whole_of_june())
-            .await
-            .unwrap();
+        let devices =
+            ReadingStatsRepository::by_device(&db, user.id, whole_of_june(), StatsSort::Time)
+                .await
+                .unwrap();
 
         assert_eq!(devices.len(), 2);
         assert_eq!(devices[0].device_id, "phone");
@@ -1112,9 +1182,10 @@ mod tests {
         )
         .await;
 
-        let devices = ReadingStatsRepository::by_device(&db, user.id, whole_of_june())
-            .await
-            .unwrap();
+        let devices =
+            ReadingStatsRepository::by_device(&db, user.id, whole_of_june(), StatsSort::Time)
+                .await
+                .unwrap();
 
         assert_eq!(devices[0].last_read_at, at(9, 9) + Duration::minutes(30));
     }
@@ -1141,15 +1212,133 @@ mod tests {
         )
         .await;
 
-        let series = ReadingStatsRepository::by_series(&db, user.id, whole_of_june(), 10)
-            .await
-            .unwrap();
+        let series =
+            ReadingStatsRepository::by_series(&db, user.id, whole_of_june(), StatsSort::Time, 10)
+                .await
+                .unwrap();
 
         assert_eq!(series.len(), 2);
         assert_eq!(series[0].series_name, "Berserk");
         assert_eq!(series[0].duration.measured_ms, 90 * MINUTE_MS);
         assert_eq!(series[0].books, 1);
         assert_eq!(series[1].series_name, "Vinland Saga");
+    }
+
+    /// The only measure a library backfilled from `read_progress` can answer.
+    /// Those rows carry no duration and no page count, but a completion means
+    /// the same thing before and after time tracking existed.
+    #[tokio::test]
+    async fn finished_books_are_counted_from_completions() {
+        let db = setup_test_db().await;
+        let user = create_user(&db, "reader").await;
+        let book = create_book(&db, "Berserk", "cbz").await;
+
+        insert(
+            &db,
+            user.id,
+            book.id,
+            SessionSpec::measured("phone", 30, at(1, 9)),
+        )
+        .await;
+        insert(
+            &db,
+            user.id,
+            book.id,
+            SessionSpec::measured("phone", 20, at(2, 9)).kind("completed"),
+        )
+        .await;
+        // A reset records a book being marked unread. It is bookkeeping, and is
+        // already excluded from sittings; it must not count as finishing one.
+        insert(
+            &db,
+            user.id,
+            book.id,
+            SessionSpec::without_duration("phone", at(3, 9)).kind("reset"),
+        )
+        .await;
+
+        let summary = ReadingStatsRepository::summary(&db, user.id, whole_of_june())
+            .await
+            .unwrap();
+
+        assert_eq!(summary.sessions, 2, "the reset is not a sitting");
+        assert_eq!(summary.books_finished, 1);
+    }
+
+    #[tokio::test]
+    async fn finished_books_appear_in_every_breakdown() {
+        let db = setup_test_db().await;
+        let user = create_user(&db, "reader").await;
+        let book = create_book(&db, "Berserk", "cbz").await;
+
+        insert(
+            &db,
+            user.id,
+            book.id,
+            SessionSpec::measured("phone", 20, at(1, 9)).kind("completed"),
+        )
+        .await;
+
+        let window = whole_of_june();
+        let periods =
+            ReadingStatsRepository::by_period(&db, user.id, window, StatsGranularity::Day)
+                .await
+                .unwrap();
+        let series = ReadingStatsRepository::by_series(&db, user.id, window, StatsSort::Time, 10)
+            .await
+            .unwrap();
+        let devices = ReadingStatsRepository::by_device(&db, user.id, window, StatsSort::Time)
+            .await
+            .unwrap();
+        let formats = ReadingStatsRepository::by_format(&db, user.id, window, StatsSort::Time)
+            .await
+            .unwrap();
+
+        assert_eq!(periods[0].books_finished, 1);
+        assert_eq!(series[0].books_finished, 1);
+        assert_eq!(devices[0].books_finished, 1);
+        assert_eq!(formats[0].books_finished, 1);
+    }
+
+    /// The ranking key has to be applied in SQL because the limit is: sorting
+    /// the returned rows would sort a set that was *selected* by a different
+    /// measure, so the true leader by pages can be missing from it entirely.
+    #[tokio::test]
+    async fn the_ranking_key_decides_which_series_survive_the_limit() {
+        let db = setup_test_db().await;
+        let user = create_user(&db, "reader").await;
+        let slow_read = create_book(&db, "Long Sitting", "cbz").await;
+        let fast_read = create_book(&db, "Quick Pages", "cbz").await;
+
+        insert(
+            &db,
+            user.id,
+            slow_read.id,
+            SessionSpec::measured("phone", 120, at(1, 9)).pages(5),
+        )
+        .await;
+        insert(
+            &db,
+            user.id,
+            fast_read.id,
+            SessionSpec::measured("phone", 10, at(2, 9))
+                .pages(400)
+                .kind("completed"),
+        )
+        .await;
+
+        let window = whole_of_june();
+        let top = async |sort| {
+            ReadingStatsRepository::by_series(&db, user.id, window, sort, 1)
+                .await
+                .unwrap()[0]
+                .series_name
+                .clone()
+        };
+
+        assert_eq!(top(StatsSort::Time).await, "Long Sitting");
+        assert_eq!(top(StatsSort::Pages).await, "Quick Pages");
+        assert_eq!(top(StatsSort::Completions).await, "Quick Pages");
     }
 
     /// `series.name` is the scanned directory name, which keeps suffixes like
@@ -1170,9 +1359,10 @@ mod tests {
         )
         .await;
 
-        let series = ReadingStatsRepository::by_series(&db, user.id, whole_of_june(), 10)
-            .await
-            .unwrap();
+        let series =
+            ReadingStatsRepository::by_series(&db, user.id, whole_of_june(), StatsSort::Time, 10)
+                .await
+                .unwrap();
 
         assert_eq!(series[0].series_name, "Prison School");
     }
@@ -1198,9 +1388,10 @@ mod tests {
         )
         .await;
 
-        let series = ReadingStatsRepository::by_series(&db, user.id, whole_of_june(), 10)
-            .await
-            .unwrap();
+        let series =
+            ReadingStatsRepository::by_series(&db, user.id, whole_of_june(), StatsSort::Time, 10)
+                .await
+                .unwrap();
 
         assert_eq!(series.len(), 1);
         assert_eq!(series[0].series_name, "Berserk");
@@ -1221,9 +1412,10 @@ mod tests {
             .await;
         }
 
-        let series = ReadingStatsRepository::by_series(&db, user.id, whole_of_june(), 2)
-            .await
-            .unwrap();
+        let series =
+            ReadingStatsRepository::by_series(&db, user.id, whole_of_june(), StatsSort::Time, 2)
+                .await
+                .unwrap();
 
         assert_eq!(series.len(), 2);
         assert_eq!(series[0].series_name, "A");
@@ -1252,9 +1444,10 @@ mod tests {
         )
         .await;
 
-        let formats = ReadingStatsRepository::by_format(&db, user.id, whole_of_june())
-            .await
-            .unwrap();
+        let formats =
+            ReadingStatsRepository::by_format(&db, user.id, whole_of_june(), StatsSort::Time)
+                .await
+                .unwrap();
 
         assert_eq!(formats.len(), 2);
         assert_eq!(formats[0].format, "cbz");
@@ -1370,13 +1563,13 @@ mod benchmarks {
         let period_ms = started.elapsed();
 
         let started = std::time::Instant::now();
-        ReadingStatsRepository::by_device(&db, user, window)
+        ReadingStatsRepository::by_device(&db, user, window, StatsSort::Time)
             .await
             .unwrap();
-        ReadingStatsRepository::by_series(&db, user, window, 10)
+        ReadingStatsRepository::by_series(&db, user, window, StatsSort::Time, 10)
             .await
             .unwrap();
-        ReadingStatsRepository::by_format(&db, user, window)
+        ReadingStatsRepository::by_format(&db, user, window, StatsSort::Time)
             .await
             .unwrap();
         let breakdowns_ms = started.elapsed();

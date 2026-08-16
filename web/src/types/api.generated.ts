@@ -17055,6 +17055,8 @@ export interface components {
         };
         /** @description Totals for one device, most-read first. */
         ReadingByDeviceDto: {
+            /** Format: int64 */
+            booksFinished: number;
             deviceId: string;
             /**
              * @description Friendly name where the client sent one, or the API key's label.
@@ -17071,6 +17073,8 @@ export interface components {
         };
         /** @description Totals for one file format. */
         ReadingByFormatDto: {
+            /** Format: int64 */
+            booksFinished: number;
             duration: components["schemas"]["DurationBreakdownDto"];
             /** @example cbz */
             format: string;
@@ -17086,6 +17090,8 @@ export interface components {
              * @description Distinct books of the series read in the window.
              */
             books: number;
+            /** Format: int64 */
+            booksFinished: number;
             duration: components["schemas"]["DurationBreakdownDto"];
             /** Format: int64 */
             pagesRead: number;
@@ -17104,6 +17110,11 @@ export interface components {
          *     be mostly padding.
          */
         ReadingPeriodDto: {
+            /**
+             * Format: int64
+             * @example 1
+             */
+            booksFinished: number;
             /**
              * @description ISO date of the bucket's start. Weeks start on Monday.
              * @example 2026-06-01
@@ -17259,6 +17270,15 @@ export interface components {
             /** Format: date-time */
             to: string;
         };
+        /**
+         * @description Which measure the series, device and format breakdowns are ranked by.
+         *
+         *     The series breakdown is limited, so this decides which rows survive that
+         *     limit, not merely what order they arrive in. Ranking by pages client-side
+         *     would sort a top-N that was chosen by time.
+         * @enum {string}
+         */
+        ReadingStatsSort: "time" | "pages" | "completions";
         /** @description Headline totals for the window. */
         ReadingSummaryDto: {
             /**
@@ -17266,6 +17286,13 @@ export interface components {
              * @example 12
              */
             books: number;
+            /**
+             * Format: int64
+             * @description Books finished in the window. Unlike time and pages, this is populated
+             *     for reading that predates session tracking.
+             * @example 5
+             */
+            booksFinished: number;
             duration: components["schemas"]["DurationBreakdownDto"];
             /**
              * Format: int64
@@ -28366,6 +28393,8 @@ export interface operations {
                 granularity?: components["schemas"]["ReadingStatsGranularity"];
                 /** @description How many series to return. Defaults to 10, capped at 50. */
                 seriesLimit?: number | null;
+                /** @description Ranking key for the breakdowns. Defaults to `time`. */
+                sort?: components["schemas"]["ReadingStatsSort"];
             };
             header?: never;
             path?: never;

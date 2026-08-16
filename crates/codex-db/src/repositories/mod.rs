@@ -95,7 +95,7 @@ pub use reading_sessions::{AppendOutcome, DeviceContext, NewSession, ReadingSess
 #[allow(unused_imports)]
 pub use reading_stats::{
     DurationBreakdown, ReadingByDevice, ReadingByFormat, ReadingBySeries, ReadingPeriod,
-    ReadingStatsRepository, ReadingSummary, StatsGranularity, StatsWindow,
+    ReadingStatsRepository, ReadingSummary, StatsGranularity, StatsSort, StatsWindow,
 };
 #[allow(unused_imports)]
 pub use refresh_token::{NewRefreshToken, RefreshTokenRepository};

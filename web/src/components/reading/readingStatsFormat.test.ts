@@ -6,6 +6,7 @@ import {
   formatDurationShort,
   groupIntoWeeks,
   heatLevel,
+  heatThresholds,
   rollUpIntoWeeks,
 } from "./readingStatsFormat";
 
@@ -119,23 +120,61 @@ describe("buildCalendar", () => {
 });
 
 describe("heatLevel", () => {
-  /// Relative to the busiest day, not to an absolute scale: otherwise a
+  /// Relative to the days actually read, not to an absolute scale: otherwise a
   /// twenty-minutes-a-day reader gets an entirely blank calendar.
-  it("scales against the busiest day", () => {
-    expect(heatLevel(20 * MINUTE, 20 * MINUTE)).toBe(5);
-    expect(heatLevel(2 * MINUTE, 20 * MINUTE)).toBe(1);
+  it("scales against the days that were read", () => {
+    const short = heatThresholds([2, 6, 10, 14, 20].map((m) => m * MINUTE));
+    expect(heatLevel(20 * MINUTE, short)).toBe(5);
+    expect(heatLevel(2 * MINUTE, short)).toBe(1);
 
-    expect(heatLevel(6 * HOUR, 6 * HOUR)).toBe(5);
-    expect(heatLevel(36 * MINUTE, 6 * HOUR)).toBe(1);
+    const long = heatThresholds([36 * MINUTE, 2 * HOUR, 4 * HOUR, 6 * HOUR]);
+    expect(heatLevel(6 * HOUR, long)).toBe(5);
+    expect(heatLevel(36 * MINUTE, long)).toBe(1);
   });
 
   it("gives no reading its own empty step", () => {
-    expect(heatLevel(0, 5 * HOUR)).toBe(0);
+    expect(heatLevel(0, heatThresholds([5 * HOUR]))).toBe(0);
   });
 
-  it("does not divide by a zero maximum", () => {
-    expect(heatLevel(0, 0)).toBe(0);
-    expect(heatLevel(10, 0)).toBe(0);
+  it("has a defined answer when nothing was read at all", () => {
+    expect(heatLevel(0, heatThresholds([]))).toBe(0);
+    expect(heatLevel(10, heatThresholds([]))).toBe(5);
+  });
+});
+
+describe("heatThresholds", () => {
+  /// The case that motivated quantiles: a bulk import day holds an order of
+  /// magnitude more than any real day. Scaled against the maximum, every
+  /// genuine day lands in the faintest step and the calendar reads as flat.
+  it("keeps ordinary days distributed under a bulk-import outlier", () => {
+    const ordinary = Array.from({ length: 40 }, (_, i) => i + 1);
+    const thresholds = heatThresholds([...ordinary, 1000]);
+
+    const levels = new Set(ordinary.map((v) => heatLevel(v, thresholds)));
+    expect(levels.size).toBeGreaterThan(3);
+    expect(heatLevel(1000, thresholds)).toBe(5);
+  });
+
+  /// Under a handful of active days there is no distribution to take quantiles
+  /// of, so the scale stays proportional to the busiest day.
+  it("falls back to fractions of the maximum on a small sample", () => {
+    const thresholds = heatThresholds([10, 100]);
+
+    expect(thresholds).toEqual([20, 40, 60, 80]);
+    expect(heatLevel(10, thresholds)).toBe(1);
+    expect(heatLevel(100, thresholds)).toBe(5);
+  });
+
+  it("ignores days with no reading when building the scale", () => {
+    expect(heatThresholds([0, 0, 10, 100])).toEqual(heatThresholds([10, 100]));
+  });
+
+  /// Every day identical is not an error, and must not report a spread that
+  /// isn't there.
+  it("gives uniform days a uniform level", () => {
+    const thresholds = heatThresholds(Array.from({ length: 30 }, () => 42));
+
+    expect(heatLevel(42, thresholds)).toBe(1);
   });
 });
 

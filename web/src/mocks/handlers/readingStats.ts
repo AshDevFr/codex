@@ -40,6 +40,7 @@ interface MockReadingDay {
   pagesRead: number;
   sessions: number;
   books: number;
+  booksFinished: number;
   seriesIndex: number;
   deviceId: string;
   format: string;
@@ -91,6 +92,9 @@ function generateHistory(): MockReadingDay[] {
       pagesRead: 0,
       sessions: 1 + Math.floor(random() * 11),
       books: 1 + Math.floor(random() * 4),
+      // The backfill seeds one row per book and most of them are completions,
+      // so books finished is the only measure this era can answer.
+      booksFinished: 1 + Math.floor(random() * 4),
       seriesIndex: Math.floor(random() * 24),
       deviceId: "legacy",
       format: pick(["cbz", "cbr", "epub", "pdf"]),
@@ -107,6 +111,7 @@ function generateHistory(): MockReadingDay[] {
     pagesRead: 0,
     sessions: 412,
     books: 412,
+    booksFinished: 412,
     seriesIndex: 3,
     deviceId: "legacy",
     format: "cbz",
@@ -131,6 +136,7 @@ function generateHistory(): MockReadingDay[] {
       pagesRead: 18 + Math.floor(random() * 90),
       sessions: 1 + Math.floor(random() * 4),
       books: 1 + Math.floor(random() * 2),
+      booksFinished: random() > 0.6 ? 1 : 0,
       seriesIndex: Math.floor(random() * 5),
       deviceId,
       format: inferred ? "epub" : pick(["cbz", "cbz", "cbr"]),
@@ -171,9 +177,26 @@ function groupBy<K>(
   return groups;
 }
 
-/** Time read descending, which is how the API ranks every breakdown. */
-function byTimeDesc(a: { duration: { totalMs: number } }, b: typeof a): number {
-  return b.duration.totalMs - a.duration.totalMs;
+/** A ranked row, whatever breakdown it came from. */
+interface Ranked {
+  duration: { totalMs: number };
+  pagesRead: number;
+  booksFinished: number;
+}
+
+/**
+ * Rank by the requested key, descending.
+ *
+ * The real endpoint ranks in SQL and then applies the series limit, so a mock
+ * that always ranked by time would hide the very behaviour the sort parameter
+ * exists for.
+ */
+function rankBy(sort: string): (a: Ranked, b: Ranked) => number {
+  if (sort === "pages") return (a, b) => b.pagesRead - a.pagesRead;
+  if (sort === "completions") {
+    return (a, b) => b.booksFinished - a.booksFinished;
+  }
+  return (a, b) => b.duration.totalMs - a.duration.totalMs;
 }
 
 export const readingStatsHandlers = [
@@ -185,6 +208,7 @@ export const readingStatsHandlers = [
     const to = url.searchParams.get("to");
     const granularity = url.searchParams.get("granularity") ?? "day";
     const seriesLimit = Number(url.searchParams.get("seriesLimit") ?? 8);
+    const rank = rankBy(url.searchParams.get("sort") ?? "time");
 
     const fromDay = from ? from.slice(0, 10) : "0000-01-01";
     const toDay = to ? to.slice(0, 10) : "9999-12-31";
@@ -200,6 +224,7 @@ export const readingStatsHandlers = [
         duration: durationOf(days),
         pagesRead: days.reduce((sum, d) => sum + d.pagesRead, 0),
         sessions: days.reduce((sum, d) => sum + d.sessions, 0),
+        booksFinished: days.reduce((sum, d) => sum + d.booksFinished, 0),
       }))
       .sort((a, b) => a.bucket.localeCompare(b.bucket));
 
@@ -215,9 +240,10 @@ export const readingStatsHandlers = [
           pagesRead: days.reduce((sum, d) => sum + d.pagesRead, 0),
           sessions: days.reduce((sum, d) => sum + d.sessions, 0),
           books: days.reduce((sum, d) => sum + d.books, 0),
+          booksFinished: days.reduce((sum, d) => sum + d.booksFinished, 0),
         };
       })
-      .sort(byTimeDesc)
+      .sort(rank)
       .slice(0, seriesLimit);
 
     const devices: ReadingByDeviceDto[] = [
@@ -229,9 +255,10 @@ export const readingStatsHandlers = [
         duration: durationOf(days),
         pagesRead: days.reduce((sum, d) => sum + d.pagesRead, 0),
         sessions: days.reduce((sum, d) => sum + d.sessions, 0),
+        booksFinished: days.reduce((sum, d) => sum + d.booksFinished, 0),
         lastReadAt: `${days[days.length - 1].date}T20:14:00Z`,
       }))
-      .sort(byTimeDesc);
+      .sort(rank);
 
     const formats: ReadingByFormatDto[] = [
       ...groupBy(inWindow, (day) => day.format),
@@ -241,9 +268,9 @@ export const readingStatsHandlers = [
         duration: durationOf(days),
         pagesRead: days.reduce((sum, d) => sum + d.pagesRead, 0),
         sessions: days.reduce((sum, d) => sum + d.sessions, 0),
-        books: days.reduce((sum, d) => sum + d.books, 0),
+        booksFinished: days.reduce((sum, d) => sum + d.booksFinished, 0),
       }))
-      .sort(byTimeDesc);
+      .sort(rank);
 
     const silent = inWindow.filter((d) => d.measuredMs + d.inferredMs === 0);
 
@@ -256,6 +283,7 @@ export const readingStatsHandlers = [
         pagesRead: inWindow.reduce((sum, d) => sum + d.pagesRead, 0),
         sessions: inWindow.reduce((sum, d) => sum + d.sessions, 0),
         books: inWindow.reduce((sum, d) => sum + d.books, 0),
+        booksFinished: inWindow.reduce((sum, d) => sum + d.booksFinished, 0),
         sessionsWithoutDuration: silent.reduce((sum, d) => sum + d.sessions, 0),
       },
       periods,

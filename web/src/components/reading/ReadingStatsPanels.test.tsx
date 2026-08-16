@@ -128,6 +128,7 @@ describe("TopSeries", () => {
       pagesRead: 120,
       sessions: 4,
       books: 2,
+      booksFinished: 2,
     },
     {
       seriesId: "22222222-2222-2222-2222-222222222222",
@@ -136,6 +137,7 @@ describe("TopSeries", () => {
       pagesRead: 40,
       sessions: 1,
       books: 1,
+      booksFinished: 0,
     },
   ];
 
@@ -336,6 +338,86 @@ describe("empty rows", () => {
 
     expect(screen.queryByText("pdf")).not.toBeInTheDocument();
     expect(screen.queryByText("0m")).not.toBeInTheDocument();
+  });
+});
+
+/// The whole point of the metric toggle: a row silent under one measure can be
+/// the reader's entire history under another.
+describe("the active metric", () => {
+  const legacy: ReadingByDeviceDto = {
+    deviceId: "legacy",
+    deviceName: null,
+    duration: duration(0),
+    pagesRead: 0,
+    sessions: 3656,
+    booksFinished: 412,
+    lastReadAt: "2026-08-16T12:00:00Z",
+  };
+
+  it("hides a row with no time when showing time", () => {
+    renderWithProviders(<DeviceBreakdown devices={[legacy]} metric="time" />);
+
+    expect(
+      screen.getByText("No devices recorded in this period."),
+    ).toBeInTheDocument();
+  });
+
+  it("shows that same row when showing books finished", () => {
+    renderWithProviders(
+      <DeviceBreakdown devices={[legacy]} metric="booksFinished" />,
+    );
+
+    expect(screen.getByText("Before time tracking")).toBeInTheDocument();
+    expect(screen.getByText("412 books")).toBeInTheDocument();
+  });
+
+  it("counts a series by pages when showing pages", () => {
+    renderWithProviders(
+      <TopSeries
+        series={[
+          {
+            seriesId: "11111111-1111-1111-1111-111111111111",
+            seriesName: "Berserk",
+            duration: duration(2 * HOUR),
+            pagesRead: 420,
+            sessions: 4,
+            books: 2,
+            booksFinished: 1,
+          },
+        ]}
+        metric="pages"
+      />,
+    );
+
+    expect(screen.getByText("420 pages")).toBeInTheDocument();
+    expect(screen.queryByText("2h")).not.toBeInTheDocument();
+  });
+
+  /// The calendar has to follow too, or the panels disagree about what they
+  /// are measuring while sitting on the same screen.
+  it("colours the calendar by the metric", () => {
+    const days = buildCalendar(
+      [
+        {
+          bucket: "2026-06-02",
+          duration: duration(0),
+          pagesRead: 0,
+          sessions: 9,
+          booksFinished: 3,
+        },
+      ],
+      new Date("2026-06-01T00:00:00Z"),
+      new Date("2026-06-03T00:00:00Z"),
+    );
+
+    const { container } = renderWithProviders(
+      <ActivityCalendar days={days} metric="booksFinished" />,
+    );
+
+    const lit = [...container.querySelectorAll("rect")].filter(
+      (cell) => cell.getAttribute("fill") !== "var(--heat-0)",
+    );
+    expect(lit).toHaveLength(1);
   });
 });
 

@@ -9070,6 +9070,15 @@
               "format": "int64",
               "minimum": 0
             }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "Ranking key for the breakdowns. Defaults to `time`.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ReadingStatsSort"
+            }
           }
         ],
         "responses": {
@@ -38254,9 +38263,14 @@
           "duration",
           "pagesRead",
           "sessions",
+          "booksFinished",
           "lastReadAt"
         ],
         "properties": {
+          "booksFinished": {
+            "type": "integer",
+            "format": "int64"
+          },
           "deviceId": {
             "type": "string"
           },
@@ -38292,9 +38306,14 @@
           "format",
           "duration",
           "pagesRead",
-          "sessions"
+          "sessions",
+          "booksFinished"
         ],
         "properties": {
+          "booksFinished": {
+            "type": "integer",
+            "format": "int64"
+          },
           "duration": {
             "$ref": "#/components/schemas/DurationBreakdownDto"
           },
@@ -38321,13 +38340,18 @@
           "duration",
           "pagesRead",
           "sessions",
-          "books"
+          "books",
+          "booksFinished"
         ],
         "properties": {
           "books": {
             "type": "integer",
             "format": "int64",
             "description": "Distinct books of the series read in the window."
+          },
+          "booksFinished": {
+            "type": "integer",
+            "format": "int64"
           },
           "duration": {
             "$ref": "#/components/schemas/DurationBreakdownDto"
@@ -38357,9 +38381,15 @@
           "bucket",
           "duration",
           "pagesRead",
-          "sessions"
+          "sessions",
+          "booksFinished"
         ],
         "properties": {
+          "booksFinished": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1
+          },
           "bucket": {
             "type": "string",
             "description": "ISO date of the bucket's start. Weeks start on Monday.",
@@ -38601,6 +38631,15 @@
           }
         }
       },
+      "ReadingStatsSort": {
+        "type": "string",
+        "description": "Which measure the series, device and format breakdowns are ranked by.\n\nThe series breakdown is limited, so this decides which rows survive that\nlimit, not merely what order they arrive in. Ranking by pages client-side\nwould sort a top-N that was chosen by time.",
+        "enum": [
+          "time",
+          "pages",
+          "completions"
+        ]
+      },
       "ReadingSummaryDto": {
         "type": "object",
         "description": "Headline totals for the window.",
@@ -38609,6 +38648,7 @@
           "pagesRead",
           "sessions",
           "books",
+          "booksFinished",
           "sessionsWithoutDuration"
         ],
         "properties": {
@@ -38616,6 +38656,12 @@
             "type": "integer",
             "format": "int64",
             "example": 12
+          },
+          "booksFinished": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Books finished in the window. Unlike time and pages, this is populated\nfor reading that predates session tracking.",
+            "example": 5
           },
           "duration": {
             "$ref": "#/components/schemas/DurationBreakdownDto"

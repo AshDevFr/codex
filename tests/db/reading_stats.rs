@@ -20,7 +20,7 @@ use codex::db::ScanningStrategy;
 use codex::db::entities::reading_sessions;
 use codex::db::repositories::{
     BookRepository, LibraryRepository, ReadingStatsRepository, SeriesRepository, StatsGranularity,
-    StatsWindow, UserRepository,
+    StatsSort, StatsWindow, UserRepository,
 };
 use common::*;
 use sea_orm::{ActiveModelTrait, DatabaseConnection, Set};
@@ -228,25 +228,41 @@ async fn exercise_reading_stats(db: &DatabaseConnection) {
     );
 
     // ---- Breakdowns: each carries its own aggregate expressions ----
-    let devices = ReadingStatsRepository::by_device(db, user, june())
+    let devices = ReadingStatsRepository::by_device(db, user, june(), StatsSort::Time)
         .await
         .expect("device breakdown must decode on this engine");
     assert_eq!(devices.len(), 3);
     assert_eq!(devices[0].device_id, "phone", "ranked by time read");
     assert_eq!(devices[0].duration.measured_ms, 75 * MINUTE_MS);
 
-    let series = ReadingStatsRepository::by_series(db, user, june(), 10)
+    let series = ReadingStatsRepository::by_series(db, user, june(), StatsSort::Time, 10)
         .await
         .expect("series breakdown must decode on this engine");
     assert_eq!(series.len(), 2);
     assert_eq!(series[0].series_name, "Berserk");
     assert_eq!(series[0].duration.total_ms(), 50 * MINUTE_MS);
 
-    let formats = ReadingStatsRepository::by_format(db, user, june())
+    let formats = ReadingStatsRepository::by_format(db, user, june(), StatsSort::Time)
         .await
         .expect("format breakdown must decode on this engine");
     assert_eq!(formats.len(), 2);
     assert_eq!(formats[0].format, "cbz");
+
+    // Each ranking key is a different `ORDER BY` over aggregate expressions,
+    // and PostgreSQL is the strict one about what may appear there. Ranking by
+    // time alone would leave two of the three statements never executed
+    // against the engine that runs in production.
+    for sort in [StatsSort::Time, StatsSort::Pages, StatsSort::Completions] {
+        ReadingStatsRepository::by_series(db, user, june(), sort, 10)
+            .await
+            .unwrap_or_else(|e| panic!("series ranked by {sort:?} must run: {e}"));
+        ReadingStatsRepository::by_device(db, user, june(), sort)
+            .await
+            .unwrap_or_else(|e| panic!("devices ranked by {sort:?} must run: {e}"));
+        ReadingStatsRepository::by_format(db, user, june(), sort)
+            .await
+            .unwrap_or_else(|e| panic!("formats ranked by {sort:?} must run: {e}"));
+    }
 
     // ---- Row count, used for the retention question ----
     let rows = ReadingStatsRepository::row_count(db, user).await.unwrap();

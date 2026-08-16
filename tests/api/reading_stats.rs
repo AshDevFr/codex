@@ -92,6 +92,25 @@ async fn record_session(
     minutes: i64,
     started: DateTime<Utc>,
 ) {
+    record_reading(
+        state, token, book_id, device, minutes, 10, "progress", started,
+    )
+    .await;
+}
+
+/// A session with the page count and kind spelled out, for the cases where
+/// time, pages and completions have to disagree with each other.
+#[allow(clippy::too_many_arguments)]
+async fn record_reading(
+    state: std::sync::Arc<codex::api::extractors::AuthState>,
+    token: &str,
+    book_id: Uuid,
+    device: &str,
+    minutes: i64,
+    pages: i64,
+    kind: &str,
+    started: DateTime<Utc>,
+) {
     let app = create_test_router(state).await;
     let request = post_json_request_with_auth(
         "/api/v1/reading-sessions",
@@ -100,10 +119,10 @@ async fn record_session(
             "bookId": book_id,
             "deviceId": device,
             "deviceName": "Test Device",
-            "kind": "progress",
+            "kind": kind,
             "toPage": 30,
             "activeDurationMs": minutes * MINUTE_MS,
-            "pagesRead": 10,
+            "pagesRead": pages,
             "clientStartedAt": started,
             "clientEndedAt": started + Duration::minutes(minutes),
         }]}),
@@ -300,6 +319,98 @@ async fn the_series_limit_is_applied_and_capped() {
     let (status, huge) = fetch_stats(state, &token, &format!("?{window}&seriesLimit=100000")).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(huge.expect("expected a JSON body").series.len(), 3);
+}
+
+/// The ranking key is applied before the limit, so it decides which series come
+/// back at all rather than merely their order. A client cannot reproduce this by
+/// re-sorting the response.
+#[tokio::test]
+async fn the_sort_key_decides_which_series_survive_the_limit() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_user_id, token) = admin_and_token(&db, &state, "reader").await;
+
+    let long_sitting = book_in_series(&db, "Long Sitting", "cbz").await;
+    let quick_pages = book_in_series(&db, "Quick Pages", "cbz").await;
+    record_reading(
+        state.clone(),
+        &token,
+        long_sitting.id,
+        "phone",
+        120,
+        5,
+        "progress",
+        at(3),
+    )
+    .await;
+    record_reading(
+        state.clone(),
+        &token,
+        quick_pages.id,
+        "phone",
+        10,
+        400,
+        "completed",
+        at(4),
+    )
+    .await;
+
+    let window = format!("from={}&to={}", q(at(1)), q(at(30)));
+    let top = |query: String| {
+        let state = state.clone();
+        let token = token.clone();
+        async move {
+            let (_, body) = fetch_stats(state, &token, &query).await;
+            body.expect("expected a JSON body").series[0]
+                .series_name
+                .clone()
+        }
+    };
+
+    assert_eq!(
+        top(format!("?{window}&seriesLimit=1")).await,
+        "Long Sitting"
+    );
+    assert_eq!(
+        top(format!("?{window}&seriesLimit=1&sort=pages")).await,
+        "Quick Pages"
+    );
+    assert_eq!(
+        top(format!("?{window}&seriesLimit=1&sort=completions")).await,
+        "Quick Pages"
+    );
+}
+
+/// Books finished is the one measure a backfilled library can answer, so it has
+/// to reach the client on every breakdown rather than only the summary.
+#[tokio::test]
+async fn finished_books_are_reported_everywhere() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_user_id, token) = admin_and_token(&db, &state, "reader").await;
+
+    let book = book_in_series(&db, "Berserk", "cbz").await;
+    record_reading(
+        state.clone(),
+        &token,
+        book.id,
+        "phone",
+        20,
+        10,
+        "completed",
+        at(3),
+    )
+    .await;
+
+    let window = format!("from={}&to={}", q(at(1)), q(at(30)));
+    let (_, body) = fetch_stats(state, &token, &format!("?{window}")).await;
+    let stats = body.expect("expected a JSON body");
+
+    assert_eq!(stats.summary.books_finished, 1);
+    assert_eq!(stats.periods[0].books_finished, 1);
+    assert_eq!(stats.series[0].books_finished, 1);
+    assert_eq!(stats.devices[0].books_finished, 1);
+    assert_eq!(stats.formats[0].books_finished, 1);
 }
 
 #[tokio::test]

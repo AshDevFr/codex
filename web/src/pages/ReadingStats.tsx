@@ -37,6 +37,12 @@ import {
   buildCalendar,
   rollUpIntoWeeks,
 } from "@/components/reading/readingStatsFormat";
+import {
+  READING_METRICS,
+  type ReadingMetric,
+  sortForMetric,
+  useReadingStatsPreferencesStore,
+} from "@/store/readingStatsPreferencesStore";
 
 const RANGES = [
   { value: "30", label: "30 days" },
@@ -57,6 +63,8 @@ function bucketingFor(days: number): "day" | "week" {
 
 export function ReadingStats() {
   const [rangeDays, setRangeDays] = useState("90");
+  const metric = useReadingStatsPreferencesStore((state) => state.metric);
+  const setMetric = useReadingStatsPreferencesStore((state) => state.setMetric);
   const days = Number(rangeDays);
 
   // Pinned to the day so the query key is stable across re-renders; a `now`
@@ -72,10 +80,20 @@ export function ReadingStats() {
 
   const bucketing = bucketingFor(days);
 
+  // The ranking key is part of the request because the server applies the
+  // series limit: ranking by pages here would sort a top-8 chosen by time.
+  const sort = sortForMetric(metric);
+
   const { data, isLoading, error } = useQuery({
-    queryKey: ["readingStats", rangeDays],
+    queryKey: ["readingStats", rangeDays, sort],
     queryFn: () =>
-      readingStatsApi.get({ from, to, granularity: "day", seriesLimit: 8 }),
+      readingStatsApi.get({
+        from,
+        to,
+        granularity: "day",
+        seriesLimit: 8,
+        sort,
+      }),
     staleTime: 60_000,
   });
 
@@ -92,6 +110,8 @@ export function ReadingStats() {
       measuredMs: p.duration.measuredMs,
       inferredMs: p.duration.inferredMs,
       totalMs: p.duration.totalMs,
+      pagesRead: p.pagesRead,
+      booksFinished: p.booksFinished,
     }));
   }, [data, bucketing]);
 
@@ -114,7 +134,11 @@ export function ReadingStats() {
   }
 
   const { summary } = data;
-  const hasInferred = summary.duration.inferredMs > 0;
+  // Provenance is a property of measured time. Under pages or books finished
+  // there is no estimate to disclose, so the legend and the caveat about it
+  // would be answering a question nobody asked.
+  const showingTime = metric === "time";
+  const hasInferred = showingTime && summary.duration.inferredMs > 0;
 
   return (
     <Container size="lg" py="md" className={classes.viz}>
@@ -126,12 +150,23 @@ export function ReadingStats() {
               How much you have read, and where.
             </Text>
           </div>
-          <SegmentedControl
-            value={rangeDays}
-            onChange={setRangeDays}
-            data={RANGES.map((r) => ({ value: r.value, label: r.label }))}
-            size="sm"
-          />
+          <Group gap="sm" wrap="wrap">
+            <SegmentedControl
+              value={metric}
+              onChange={(value) => setMetric(value as ReadingMetric)}
+              data={READING_METRICS.map((m) => ({
+                value: m.value,
+                label: m.label,
+              }))}
+              size="sm"
+            />
+            <SegmentedControl
+              value={rangeDays}
+              onChange={setRangeDays}
+              data={RANGES.map((r) => ({ value: r.value, label: r.label }))}
+              size="sm"
+            />
+          </Group>
         </Group>
 
         <Group gap="md" wrap="wrap" align="stretch">
@@ -150,6 +185,10 @@ export function ReadingStats() {
             value={summary.sessions.toLocaleString()}
           />
           <StatTile label="Books" value={summary.books.toLocaleString()} />
+          <StatTile
+            label="Books finished"
+            value={summary.booksFinished.toLocaleString()}
+          />
         </Group>
 
         {hasInferred && (
@@ -166,7 +205,7 @@ export function ReadingStats() {
           </Alert>
         )}
 
-        {summary.sessionsWithoutDuration > 0 && (
+        {showingTime && summary.sessionsWithoutDuration > 0 && (
           <Text size="xs" c="dimmed">
             {summary.sessionsWithoutDuration} of {summary.sessions} sittings
             reported no time at all, so the totals above are a floor rather than
@@ -182,19 +221,22 @@ export function ReadingStats() {
                 <ProvenanceLegend inferredMs={summary.duration.inferredMs} />
               )}
             </Group>
-            <ActivityCalendar days={calendar} />
+            <ActivityCalendar days={calendar} metric={metric} />
           </Stack>
         </Paper>
 
         <Paper p="md" radius="md" withBorder>
           <Stack gap="sm">
             <Group justify="space-between" wrap="wrap">
-              <Title order={4}>Time per {bucketing}</Title>
+              <Title order={4}>
+                {READING_METRICS.find((m) => m.value === metric)?.label} per{" "}
+                {bucketing}
+              </Title>
               <Text size="xs" c="dimmed">
-                {busiestBucketCaption(periodBars)}
+                {busiestBucketCaption(periodBars, metric)}
               </Text>
             </Group>
-            <PeriodBars periods={periodBars} />
+            <PeriodBars periods={periodBars} metric={metric} />
           </Stack>
         </Paper>
 
@@ -202,14 +244,14 @@ export function ReadingStats() {
           <Paper p="md" radius="md" withBorder style={{ flex: "1 1 320px" }}>
             <Stack gap="sm">
               <Title order={4}>Most read</Title>
-              <TopSeries series={data.series} />
+              <TopSeries series={data.series} metric={metric} />
             </Stack>
           </Paper>
 
           <Paper p="md" radius="md" withBorder style={{ flex: "1 1 320px" }}>
             <Stack gap="sm">
               <Title order={4}>Devices</Title>
-              <DeviceBreakdown devices={data.devices} />
+              <DeviceBreakdown devices={data.devices} metric={metric} />
             </Stack>
           </Paper>
         </Group>
@@ -218,7 +260,7 @@ export function ReadingStats() {
           <Paper p="md" radius="md" withBorder>
             <Stack gap="sm">
               <Title order={4}>Formats</Title>
-              <FormatBreakdown formats={data.formats} />
+              <FormatBreakdown formats={data.formats} metric={metric} />
             </Stack>
           </Paper>
         )}

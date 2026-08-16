@@ -17,14 +17,18 @@ import type {
   ReadingByFormatDto,
   ReadingBySeriesDto,
 } from "@/api/readingStats";
+import type { ReadingMetric } from "@/store/readingStatsPreferencesStore";
 import classes from "./ReadingStatsCharts.module.css";
 import {
   type CalendarDay,
   formatDayLabel,
   formatDuration,
-  formatDurationShort,
+  formatMetric,
+  formatMetricShort,
   groupIntoWeeks,
   heatLevel,
+  heatThresholds,
+  metricValue,
 } from "./readingStatsFormat";
 
 /** A headline figure. Not a chart: one number needs no axes. */
@@ -105,14 +109,22 @@ const WEEKDAYS = [
  * Levels are relative to the busiest day so the calendar is legible whether
  * someone reads twenty minutes a day or six hours.
  */
-export function ActivityCalendar({ days }: { days: CalendarDay[] }) {
+export function ActivityCalendar({
+  days,
+  metric = "time",
+}: {
+  days: CalendarDay[];
+  metric?: ReadingMetric;
+}) {
   const weeks = groupIntoWeeks(days);
-  const maxMs = days.reduce((max, d) => Math.max(max, d.totalMs), 0);
+  const values = days.map((day) => metricValue(day, metric));
+  const thresholds = heatThresholds(values);
+  const busiest = values.reduce((max, value) => Math.max(max, value), 0);
 
   // A window is empty when nothing was read in it, not when the API returned
   // no rows. Every window has days once the gaps are filled, so drawing on
   // row count alone renders a silent year as a full grid of empty cells.
-  if (weeks.length === 0 || maxMs === 0) {
+  if (weeks.length === 0 || busiest === 0) {
     return (
       <Text size="sm" c="dimmed">
         No reading recorded in this period.
@@ -148,13 +160,14 @@ export function ActivityCalendar({ days }: { days: CalendarDay[] }) {
             {weeks.map((week, weekIndex) =>
               week.map((day, dayIndex) => {
                 if (!day) return null;
-                const level = heatLevel(day.totalMs, maxMs);
+                const value = metricValue(day, metric);
+                const level = heatLevel(value, thresholds);
                 return (
                   <Tooltip
                     key={day.date}
                     label={
-                      day.totalMs > 0
-                        ? `${formatDayLabel(day.date)}: ${formatDuration(day.totalMs)}, ${day.pagesRead} pages`
+                      value > 0
+                        ? `${formatDayLabel(day.date)}: ${formatMetric(value, metric)}`
                         : `${formatDayLabel(day.date)}: no reading`
                     }
                     withArrow
@@ -203,13 +216,17 @@ export function ActivityCalendar({ days }: { days: CalendarDay[] }) {
  */
 export function PeriodBars({
   periods,
+  metric = "time",
 }: {
   periods: {
     bucket: string;
     measuredMs: number;
     inferredMs: number;
     totalMs: number;
+    pagesRead: number;
+    booksFinished: number;
   }[];
+  metric?: ReadingMetric;
 }) {
   if (periods.length === 0) {
     return (
@@ -219,7 +236,8 @@ export function PeriodBars({
     );
   }
 
-  const max = periods.reduce((m, p) => Math.max(m, p.totalMs), 0) || 1;
+  const max =
+    periods.reduce((m, p) => Math.max(m, metricValue(p, metric)), 0) || 1;
   const barWidth = 14;
   const gap = 6;
   const height = 140;
@@ -231,17 +249,24 @@ export function PeriodBars({
         width={Math.max(width, 200)}
         height={height + 20}
         role="img"
-        aria-label="Reading time per period"
+        aria-label="Reading per period"
       >
         {periods.map((p, i) => {
-          const totalH = Math.round((p.totalMs / max) * height);
-          const measuredH = Math.round((p.measuredMs / max) * height);
+          const value = metricValue(p, metric);
+          const totalH = Math.round((value / max) * height);
+          // The measured/estimated split is a statement about where a *time*
+          // came from. Under pages or books finished there is no provenance to
+          // report, so the bar is one piece.
+          const measuredH =
+            metric === "time"
+              ? Math.round((p.measuredMs / max) * height)
+              : totalH;
           const inferredH = Math.max(0, totalH - measuredH);
           const x = i * (barWidth + gap);
           return (
             <Tooltip
               key={p.bucket}
-              label={`${p.bucket}: ${formatDuration(p.totalMs)}`}
+              label={`${p.bucket}: ${formatMetric(value, metric)}`}
               withArrow
             >
               <g className={classes.bar}>
@@ -286,15 +311,42 @@ export function PeriodBars({
   );
 }
 
+/** A breakdown row, in the shape the metric helpers want. */
+function rowValue(
+  row: {
+    duration: { totalMs: number };
+    pagesRead: number;
+    booksFinished: number;
+  },
+  metric: ReadingMetric,
+): number {
+  return metricValue(
+    {
+      totalMs: row.duration.totalMs,
+      pagesRead: row.pagesRead,
+      booksFinished: row.booksFinished,
+    },
+    metric,
+  );
+}
+
 /**
- * Rows that contributed no time say nothing, so they are not drawn.
+ * Rows worth nothing under the metric on screen say nothing, so they are not
+ * drawn.
  *
- * Not the same as "has no data": the device the backfill calls `legacy` reports
- * no time at all and thousands of sittings. It is dropped here because this
- * panel measures time, not because the row is empty.
+ * Deliberately not "has no data": the device the backfill calls `legacy` has no
+ * time at all and thousands of sittings. Under time it is silent and drops out;
+ * under books finished it is most of the reader's history.
  */
-function hasTime(row: { duration: { totalMs: number } }): boolean {
-  return row.duration.totalMs > 0;
+function contributed(
+  row: {
+    duration: { totalMs: number };
+    pagesRead: number;
+    booksFinished: number;
+  },
+  metric: ReadingMetric,
+): boolean {
+  return rowValue(row, metric) > 0;
 }
 
 /**
@@ -316,7 +368,8 @@ function RankedRow({
   sublabel,
   measuredMs,
   inferredMs,
-  totalMs,
+  value,
+  metric,
   max,
 }: {
   label: string;
@@ -324,11 +377,15 @@ function RankedRow({
   sublabel?: string;
   measuredMs: number;
   inferredMs: number;
-  totalMs: number;
+  value: number;
+  metric: ReadingMetric;
   max: number;
 }) {
-  const measuredPct = max > 0 ? (measuredMs / max) * 100 : 0;
-  const inferredPct = max > 0 ? (inferredMs / max) * 100 : 0;
+  // Only time has a provenance split to draw; the other metrics are one bar.
+  const measuredPct =
+    max > 0 ? ((metric === "time" ? measuredMs : value) / max) * 100 : 0;
+  const inferredPct =
+    max > 0 && metric === "time" ? (inferredMs / max) * 100 : 0;
 
   return (
     <Stack gap={4}>
@@ -355,7 +412,7 @@ function RankedRow({
           c="dimmed"
           style={{ fontVariantNumeric: "tabular-nums", flex: "none" }}
         >
-          {formatDuration(totalMs)}
+          {formatMetric(value, metric)}
         </Text>
       </Group>
       <div className={classes.track}>
@@ -377,8 +434,14 @@ function RankedRow({
   );
 }
 
-export function TopSeries({ series }: { series: ReadingBySeriesDto[] }) {
-  const read = series.filter(hasTime);
+export function TopSeries({
+  series,
+  metric = "time",
+}: {
+  series: ReadingBySeriesDto[];
+  metric?: ReadingMetric;
+}) {
+  const read = series.filter((s) => contributed(s, metric));
 
   if (read.length === 0) {
     return (
@@ -387,7 +450,7 @@ export function TopSeries({ series }: { series: ReadingBySeriesDto[] }) {
       </Text>
     );
   }
-  const max = read.reduce((m, s) => Math.max(m, s.duration.totalMs), 0);
+  const max = read.reduce((m, s) => Math.max(m, rowValue(s, metric)), 0);
 
   return (
     <Stack gap="md">
@@ -399,7 +462,8 @@ export function TopSeries({ series }: { series: ReadingBySeriesDto[] }) {
           sublabel={`${s.pagesRead} pages across ${s.books} ${s.books === 1 ? "book" : "books"}`}
           measuredMs={s.duration.measuredMs}
           inferredMs={s.duration.inferredMs}
-          totalMs={s.duration.totalMs}
+          value={rowValue(s, metric)}
+          metric={metric}
           max={max}
         />
       ))}
@@ -409,10 +473,12 @@ export function TopSeries({ series }: { series: ReadingBySeriesDto[] }) {
 
 export function DeviceBreakdown({
   devices,
+  metric = "time",
 }: {
   devices: ReadingByDeviceDto[];
+  metric?: ReadingMetric;
 }) {
-  const used = devices.filter(hasTime);
+  const used = devices.filter((d) => contributed(d, metric));
 
   if (used.length === 0) {
     return (
@@ -421,7 +487,7 @@ export function DeviceBreakdown({
       </Text>
     );
   }
-  const max = used.reduce((m, d) => Math.max(m, d.duration.totalMs), 0);
+  const max = used.reduce((m, d) => Math.max(m, rowValue(d, metric)), 0);
 
   return (
     <Stack gap="md">
@@ -432,7 +498,8 @@ export function DeviceBreakdown({
           sublabel={`${d.sessions} ${d.sessions === 1 ? "sitting" : "sittings"}, last read ${new Date(d.lastReadAt).toLocaleDateString()}`}
           measuredMs={d.duration.measuredMs}
           inferredMs={d.duration.inferredMs}
-          totalMs={d.duration.totalMs}
+          value={rowValue(d, metric)}
+          metric={metric}
           max={max}
         />
       ))}
@@ -442,13 +509,15 @@ export function DeviceBreakdown({
 
 export function FormatBreakdown({
   formats,
+  metric = "time",
 }: {
   formats: ReadingByFormatDto[];
+  metric?: ReadingMetric;
 }) {
-  const read = formats.filter(hasTime);
+  const read = formats.filter((f) => contributed(f, metric));
 
   if (read.length === 0) return null;
-  const max = read.reduce((m, f) => Math.max(m, f.duration.totalMs), 0);
+  const max = read.reduce((m, f) => Math.max(m, rowValue(f, metric)), 0);
 
   return (
     <Group gap="lg" wrap="wrap">
@@ -458,13 +527,13 @@ export function FormatBreakdown({
             {f.format}
           </Text>
           <Text fw={600} style={{ fontVariantNumeric: "tabular-nums" }}>
-            {formatDuration(f.duration.totalMs)}
+            {formatMetric(rowValue(f, metric), metric)}
           </Text>
           <div className={classes.track}>
             <div
               className={classes.trackMeasured}
               style={{
-                width: `${max > 0 ? (f.duration.totalMs / max) * 100 : 0}%`,
+                width: `${max > 0 ? (rowValue(f, metric) / max) * 100 : 0}%`,
               }}
             />
           </div>
@@ -476,14 +545,21 @@ export function FormatBreakdown({
 
 /** Axis-free summary of the busiest bucket, for the period chart's caption. */
 export function busiestBucketCaption(
-  periods: { bucket: string; totalMs: number }[],
+  periods: {
+    bucket: string;
+    totalMs: number;
+    pagesRead: number;
+    booksFinished: number;
+  }[],
+  metric: ReadingMetric = "time",
 ): string | null {
   if (periods.length === 0) return null;
   const busiest = periods.reduce((best, p) =>
-    p.totalMs > best.totalMs ? p : best,
+    metricValue(p, metric) > metricValue(best, metric) ? p : best,
   );
-  if (busiest.totalMs <= 0) return null;
-  return `Busiest: ${busiest.bucket}, ${formatDurationShort(busiest.totalMs)}`;
+  const value = metricValue(busiest, metric);
+  if (value <= 0) return null;
+  return `Busiest: ${busiest.bucket}, ${formatMetricShort(value, metric)}`;
 }
 
 /** Re-exported so the page and its tests share one formatter. */

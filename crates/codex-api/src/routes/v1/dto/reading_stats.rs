@@ -7,7 +7,7 @@
 use chrono::{DateTime, Utc};
 use codex_db::repositories::{
     DurationBreakdown, ReadingByDevice, ReadingByFormat, ReadingBySeries, ReadingPeriod,
-    ReadingSummary, StatsGranularity,
+    ReadingSummary, StatsGranularity, StatsSort,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
@@ -32,6 +32,31 @@ impl From<ReadingStatsGranularity> for StatsGranularity {
     }
 }
 
+/// Which measure the series, device and format breakdowns are ranked by.
+///
+/// The series breakdown is limited, so this decides which rows survive that
+/// limit, not merely what order they arrive in. Ranking by pages client-side
+/// would sort a top-N that was chosen by time.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum ReadingStatsSort {
+    Time,
+    Pages,
+    /// Books finished. The only measure a library predating session tracking
+    /// can answer, since backfilled rows carry no duration and no page count.
+    Completions,
+}
+
+impl From<ReadingStatsSort> for StatsSort {
+    fn from(value: ReadingStatsSort) -> Self {
+        match value {
+            ReadingStatsSort::Time => Self::Time,
+            ReadingStatsSort::Pages => Self::Pages,
+            ReadingStatsSort::Completions => Self::Completions,
+        }
+    }
+}
+
 /// Query parameters for the statistics endpoint.
 #[derive(Debug, Clone, Deserialize, IntoParams)]
 #[serde(rename_all = "camelCase")]
@@ -44,6 +69,8 @@ pub struct ReadingStatsQuery {
     pub granularity: Option<ReadingStatsGranularity>,
     /// How many series to return. Defaults to 10, capped at 50.
     pub series_limit: Option<u64>,
+    /// Ranking key for the breakdowns. Defaults to `time`.
+    pub sort: Option<ReadingStatsSort>,
 }
 
 /// Reading time split by how it was arrived at.
@@ -88,6 +115,10 @@ pub struct ReadingSummaryDto {
     pub sessions: i64,
     #[schema(example = 12)]
     pub books: i64,
+    /// Books finished in the window. Unlike time and pages, this is populated
+    /// for reading that predates session tracking.
+    #[schema(example = 5)]
+    pub books_finished: i64,
     /// Sittings whose client could report no time at all. A large number here
     /// explains a total that looks lower than the reading felt.
     #[schema(example = 3)]
@@ -101,6 +132,7 @@ impl From<ReadingSummary> for ReadingSummaryDto {
             pages_read: value.pages_read,
             sessions: value.sessions,
             books: value.books,
+            books_finished: value.books_finished,
             sessions_without_duration: value.sessions_without_duration,
         }
     }
@@ -122,6 +154,8 @@ pub struct ReadingPeriodDto {
     pub pages_read: i64,
     #[schema(example = 4)]
     pub sessions: i64,
+    #[schema(example = 1)]
+    pub books_finished: i64,
 }
 
 impl From<ReadingPeriod> for ReadingPeriodDto {
@@ -131,6 +165,7 @@ impl From<ReadingPeriod> for ReadingPeriodDto {
             duration: value.duration.into(),
             pages_read: value.pages_read,
             sessions: value.sessions,
+            books_finished: value.books_finished,
         }
     }
 }
@@ -146,6 +181,7 @@ pub struct ReadingByDeviceDto {
     pub duration: DurationBreakdownDto,
     pub pages_read: i64,
     pub sessions: i64,
+    pub books_finished: i64,
     pub last_read_at: DateTime<Utc>,
 }
 
@@ -157,6 +193,7 @@ impl From<ReadingByDevice> for ReadingByDeviceDto {
             duration: value.duration.into(),
             pages_read: value.pages_read,
             sessions: value.sessions,
+            books_finished: value.books_finished,
             last_read_at: value.last_read_at,
         }
     }
@@ -174,6 +211,7 @@ pub struct ReadingBySeriesDto {
     pub sessions: i64,
     /// Distinct books of the series read in the window.
     pub books: i64,
+    pub books_finished: i64,
 }
 
 impl From<ReadingBySeries> for ReadingBySeriesDto {
@@ -185,6 +223,7 @@ impl From<ReadingBySeries> for ReadingBySeriesDto {
             pages_read: value.pages_read,
             sessions: value.sessions,
             books: value.books,
+            books_finished: value.books_finished,
         }
     }
 }
@@ -198,6 +237,7 @@ pub struct ReadingByFormatDto {
     pub duration: DurationBreakdownDto,
     pub pages_read: i64,
     pub sessions: i64,
+    pub books_finished: i64,
 }
 
 impl From<ReadingByFormat> for ReadingByFormatDto {
@@ -207,6 +247,7 @@ impl From<ReadingByFormat> for ReadingByFormatDto {
             duration: value.duration.into(),
             pages_read: value.pages_read,
             sessions: value.sessions,
+            books_finished: value.books_finished,
         }
     }
 }

@@ -3,7 +3,7 @@
 use super::super::dto::{
     DurationBreakdownDto, ReadingByDeviceDto, ReadingByFormatDto, ReadingBySeriesDto,
     ReadingPeriodDto, ReadingStatsGranularity, ReadingStatsQuery, ReadingStatsResponse,
-    ReadingSummaryDto,
+    ReadingStatsSort, ReadingSummaryDto,
 };
 use crate::{AppState, error::ApiError, extractors::AuthContext, permissions::Permission};
 use axum::{
@@ -96,6 +96,7 @@ pub async fn get_reading_stats(
     }
 
     let granularity = query.granularity.unwrap_or(ReadingStatsGranularity::Day);
+    let sort = query.sort.unwrap_or(ReadingStatsSort::Time).into();
     let series_limit = query
         .series_limit
         .unwrap_or(DEFAULT_SERIES_LIMIT)
@@ -114,13 +115,13 @@ pub async fn get_reading_stats(
     let periods = ReadingStatsRepository::by_period(&state.db, user_id, window, granularity.into())
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to bucket reading: {}", e)))?;
-    let devices = ReadingStatsRepository::by_device(&state.db, user_id, window)
+    let devices = ReadingStatsRepository::by_device(&state.db, user_id, window, sort)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to group by device: {}", e)))?;
-    let series = ReadingStatsRepository::by_series(&state.db, user_id, window, series_limit)
+    let series = ReadingStatsRepository::by_series(&state.db, user_id, window, sort, series_limit)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to group by series: {}", e)))?;
-    let formats = ReadingStatsRepository::by_format(&state.db, user_id, window)
+    let formats = ReadingStatsRepository::by_format(&state.db, user_id, window, sort)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to group by format: {}", e)))?;
 
