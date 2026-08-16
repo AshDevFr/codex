@@ -128,7 +128,7 @@ These pool sizes are **per process**, while PostgreSQL's own `max_connections` (
 (web replicas x max_connections) + (workers x max_connections) + jobs  <=  server max_connections - superuser_reserved_connections
 ```
 
-`background_max_connections` is **additive** to `max_connections` whenever task workers run in the same process as the web server. Multi-pod deployments run the web server with `CODEX_DISABLE_WORKERS=true`, so no background pool is created there.
+`background_max_connections` is **additive** to `max_connections` whenever task workers run in the same process as the web server. Multi-pod deployments run the web server with `CODEX_TASK__RUN_IN_PROCESS=false`, so no background pool is created there.
 
 Overrunning the budget does not degrade gracefully: the server refuses new connections with `FATAL: remaining connection slots are reserved`, and because a starting process needs a connection before it can do anything, **new pods fail to start while the running ones carry on looking healthy**. Codex logs a warning at startup when its pools do not fit, including when the connections already open on the server leave no room.
 :::
@@ -350,7 +350,7 @@ scheduler:
 
 | Setting | Default | Env Override | Description |
 |---------|---------|--------------|-------------|
-| `timezone` | `UTC` | `CODEX_SCHEDULER_TIMEZONE` | Default IANA timezone for all cron schedules |
+| `timezone` | `UTC` | `CODEX_SCHEDULER__TIMEZONE` | Default IANA timezone for all cron schedules |
 
 The timezone must be a valid IANA timezone name (e.g., `America/New_York`, `Europe/London`, `Asia/Tokyo`). Abbreviations like `PST` or offsets like `UTC+8` are **not** supported.
 
@@ -361,7 +361,7 @@ Priority: **Library `cronTimezone`** > **Server `scheduler.timezone`** > **UTC**
 :::
 
 :::note Docker Users
-The Docker `TZ` environment variable does **not** affect the cron scheduler. You must set `CODEX_SCHEDULER_TIMEZONE` (or configure `scheduler.timezone` in your YAML) for cron jobs to run in your local timezone.
+The Docker `TZ` environment variable does **not** affect the cron scheduler. You must set `CODEX_SCHEDULER__TIMEZONE` (or configure `scheduler.timezone` in your YAML) for cron jobs to run in your local timezone.
 :::
 
 ## Files Configuration
@@ -395,7 +395,7 @@ plugin SDK applies it to its own logger and exposes it so each plugin can adopt
 it for its own logging. Plugins honor it on a best-effort basis.
 
 :::tip
-Set `logging.level: debug` (or `CODEX_LOGGING_LEVEL=debug`) when debugging a
+Set `logging.level: debug` (or `CODEX_LOGGING__LEVEL=debug`) when debugging a
 misbehaving plugin to surface its diagnostic logging, then revert to `info` to
 keep logs quiet. Note that this makes the host verbose too.
 :::
@@ -480,7 +480,7 @@ wget -O- https://github.com/bblanchon/pdfium-binaries/releases/latest/download/p
 
 1. Download `pdfium-win-x64.zip` from [bblanchon/pdfium-binaries releases](https://github.com/bblanchon/pdfium-binaries/releases)
 2. Extract `pdfium.dll` to a directory in your `PATH`
-3. Or set `CODEX_PDF_PDFIUM_LIBRARY_PATH` to the full path of `pdfium.dll`
+3. Or set `CODEX_PDF__PDFIUM_LIBRARY_PATH` to the full path of `pdfium.dll`
 
 ### Without PDFium
 
@@ -675,7 +675,7 @@ rate_limit:
 Or via environment variable:
 
 ```bash
-CODEX_RATE_LIMIT_ENABLED=false
+CODEX_RATE_LIMIT__ENABLED=false
 ```
 
 :::caution
@@ -782,17 +782,17 @@ observability:
 
 | Setting | Default | Env Override | Description |
 |---------|---------|--------------|-------------|
-| `enabled` | `false` | `CODEX_OBSERVABILITY_ENABLED` | Master switch. No providers are initialized when `false`. |
-| `service_name` | `codex` | `CODEX_OBSERVABILITY_SERVICE_NAME` | Resource attribute that identifies this process in the backend UI. |
+| `enabled` | `false` | `CODEX_OBSERVABILITY__ENABLED` | Master switch. No providers are initialized when `false`. |
+| `service_name` | `codex` | `CODEX_OBSERVABILITY__SERVICE_NAME` | Resource attribute that identifies this process in the backend UI. |
 
 ### OTLP exporter (`observability.otlp`)
 
 | Setting | Default | Env Override | Description |
 |---------|---------|--------------|-------------|
-| `endpoint` | `""` | `CODEX_OBSERVABILITY_OTLP_ENDPOINT` | Collector URL. Required when `enabled: true`. |
-| `protocol` | `grpc` | `CODEX_OBSERVABILITY_OTLP_PROTOCOL` | One of `grpc`, `http/protobuf`, `http/json`. |
-| `headers` | `{}` | `CODEX_OBSERVABILITY_OTLP_HEADERS` | Map of arbitrary headers. Env format: `k1=v1,k2=v2`. |
-| `timeout_ms` | `5000` | `CODEX_OBSERVABILITY_OTLP_TIMEOUT_MS` | Per-export request timeout. |
+| `endpoint` | `""` | `CODEX_OBSERVABILITY__OTLP__ENDPOINT` | Collector URL. Required when `enabled: true`. |
+| `protocol` | `grpc` | `CODEX_OBSERVABILITY__OTLP__PROTOCOL` | One of `grpc`, `http/protobuf`, `http/json`. |
+| `headers` | `{}` | `CODEX_OBSERVABILITY__OTLP__HEADERS` | Map of arbitrary headers. Env format: `k1=v1,k2=v2`. |
+| `timeout_ms` | `5000` | `CODEX_OBSERVABILITY__OTLP__TIMEOUT_MS` | Per-export request timeout. |
 
 :::tip Endpoint format
 For gRPC endpoints, include the scheme: `http://host:4317` (cleartext) or `https://host:4317` (TLS).
@@ -803,8 +803,8 @@ For HTTP endpoints, point at the base URL only: `http://collector:4318`. The SDK
 
 | Setting | Default | Env Override | Description |
 |---------|---------|--------------|-------------|
-| `enabled` | `true` | `CODEX_OBSERVABILITY_TRACES_ENABLED` | Per-signal switch. Honored only when the parent `enabled` is also true. |
-| `sample_ratio` | `1.0` | `CODEX_OBSERVABILITY_TRACES_SAMPLE_RATIO` | Parent-based sampler ratio in `[0.0, 1.0]`. Out-of-range values are clamped. |
+| `enabled` | `true` | `CODEX_OBSERVABILITY__TRACES__ENABLED` | Per-signal switch. Honored only when the parent `enabled` is also true. |
+| `sample_ratio` | `1.0` | `CODEX_OBSERVABILITY__TRACES__SAMPLE_RATIO` | Parent-based sampler ratio in `[0.0, 1.0]`. Out-of-range values are clamped. |
 
 See the [sampling guidance table](./observability#sampling-guidance) for production-sized recommendations.
 
@@ -812,16 +812,16 @@ See the [sampling guidance table](./observability#sampling-guidance) for product
 
 | Setting | Default | Env Override | Description |
 |---------|---------|--------------|-------------|
-| `enabled` | `true` | `CODEX_OBSERVABILITY_METRICS_ENABLED` | Per-signal switch. Honored only when the parent `enabled` is also true. |
-| `export_interval_ms` | `30000` | `CODEX_OBSERVABILITY_METRICS_EXPORT_INTERVAL_MS` | Periodic reader export interval. Lower values increase load on the collector. |
+| `enabled` | `true` | `CODEX_OBSERVABILITY__METRICS__ENABLED` | Per-signal switch. Honored only when the parent `enabled` is also true. |
+| `export_interval_ms` | `30000` | `CODEX_OBSERVABILITY__METRICS__EXPORT_INTERVAL_MS` | Periodic reader export interval. Lower values increase load on the collector. |
 
 ### Browser RUM (`observability.browser`)
 
 | Setting | Default | Env Override | Description |
 |---------|---------|--------------|-------------|
-| `enabled` | `false` | `CODEX_OBSERVABILITY_BROWSER_ENABLED` | Opt-in switch for the OTLP proxy and the SPA's SDK bootstrap. |
-| `proxy_path` | `/api/v1/observability/otlp` | `CODEX_OBSERVABILITY_BROWSER_PROXY_PATH` | Path on the Codex server where the browser SDK POSTs OTLP batches. |
-| `sample_ratio` | `0.1` | `CODEX_OBSERVABILITY_BROWSER_SAMPLE_RATIO` | Client-side sample ratio. |
+| `enabled` | `false` | `CODEX_OBSERVABILITY__BROWSER__ENABLED` | Opt-in switch for the OTLP proxy and the SPA's SDK bootstrap. |
+| `proxy_path` | `/api/v1/observability/otlp` | `CODEX_OBSERVABILITY__BROWSER__PROXY_PATH` | Path on the Codex server where the browser SDK POSTs OTLP batches. |
+| `sample_ratio` | `0.1` | `CODEX_OBSERVABILITY__BROWSER__SAMPLE_RATIO` | Client-side sample ratio. |
 
 :::note Two independent switches
 `observability.browser.enabled` is intentionally independent from the backend `observability.enabled` flag. Some operators want server-side observability without shipping spans from every browser tab. The SDK additionally refuses to start if `observability.otlp.endpoint` is empty, so a misconfigured server cannot leak data via the browser.
@@ -840,7 +840,7 @@ Configuration paths are converted to environment variables:
 
 :::warning These names change in Codex 2.0
 Because a single `_` separates both nesting levels and the words inside a field
-name, `CODEX_RATE_LIMIT_ANONYMOUS_RPS` is ambiguous: nothing in the name says
+name, `CODEX_RATE_LIMIT__ANONYMOUS_RPS` is ambiguous: nothing in the name says
 the section is `rate_limit` rather than `rate`. Codex 2.0 uses `__` between
 nesting levels instead, so that variable becomes
 `CODEX_RATE_LIMIT__ANONYMOUS_RPS`.
@@ -852,94 +852,94 @@ the new spelling, and a variable renamed early is silently ignored.
 
 | Config Path | Environment Variable |
 |-------------|---------------------|
-| `database.db_type` | `CODEX_DATABASE_DB_TYPE` |
-| `database.postgres.host` | `CODEX_DATABASE_POSTGRES_HOST` |
-| `auth.jwt_secret` | `CODEX_AUTH_JWT_SECRET` |
-| `logging.level` | `CODEX_LOGGING_LEVEL` |
-| `scheduler.timezone` | `CODEX_SCHEDULER_TIMEZONE` |
+| `database.db_type` | `CODEX_DATABASE__DB_TYPE` |
+| `database.postgres.host` | `CODEX_DATABASE__POSTGRES__HOST` |
+| `auth.jwt_secret` | `CODEX_AUTH__JWT_SECRET` |
+| `logging.level` | `CODEX_LOGGING__LEVEL` |
+| `scheduler.timezone` | `CODEX_SCHEDULER__TIMEZONE` |
 
 ### Common Environment Variables
 
 ```bash
 # Database
-CODEX_DATABASE_DB_TYPE=postgres
-CODEX_DATABASE_POSTGRES_HOST=localhost
-CODEX_DATABASE_POSTGRES_PORT=5432
-CODEX_DATABASE_POSTGRES_USERNAME=codex
-CODEX_DATABASE_POSTGRES_PASSWORD=secret
-CODEX_DATABASE_POSTGRES_DATABASE_NAME=codex
+CODEX_DATABASE__DB_TYPE=postgres
+CODEX_DATABASE__POSTGRES__HOST=localhost
+CODEX_DATABASE__POSTGRES__PORT=5432
+CODEX_DATABASE__POSTGRES__USERNAME=codex
+CODEX_DATABASE__POSTGRES__PASSWORD=secret
+CODEX_DATABASE__POSTGRES__DATABASE_NAME=codex
 
 # Application
-CODEX_APPLICATION_HOST=0.0.0.0
-CODEX_APPLICATION_PORT=8080
+CODEX_APPLICATION__HOST=0.0.0.0
+CODEX_APPLICATION__PORT=8080
 
 # Authentication
-CODEX_AUTH_JWT_SECRET=your-secure-secret-key
+CODEX_AUTH__JWT_SECRET=your-secure-secret-key
 
 # Logging
-CODEX_LOGGING_LEVEL=debug
-CODEX_LOGGING_FILE=/var/log/codex/codex.log
+CODEX_LOGGING__LEVEL=debug
+CODEX_LOGGING__FILE=/var/log/codex/codex.log
 
 # API
-CODEX_API_ENABLE_API_DOCS=true
+CODEX_API__ENABLE_API_DOCS=true
 
 # Task Workers
-CODEX_TASK_WORKER_COUNT=4
+CODEX_TASK__WORKER_COUNT=4
 
 # Scanner
-CODEX_SCANNER_MAX_CONCURRENT_SCANS=2
+CODEX_SCANNER__MAX_CONCURRENT_SCANS=2
 
 # Scheduler
-CODEX_SCHEDULER_TIMEZONE=America/Los_Angeles
+CODEX_SCHEDULER__TIMEZONE=America/Los_Angeles
 
 # Files (thumbnails and uploads)
-CODEX_FILES_THUMBNAIL_DIR=data/thumbnails
-CODEX_FILES_UPLOADS_DIR=data/uploads
+CODEX_FILES__THUMBNAIL_DIR=data/thumbnails
+CODEX_FILES__UPLOADS_DIR=data/uploads
 
 # PDF Rendering
-# CODEX_PDF_PDFIUM_LIBRARY_PATH=/usr/local/lib/libpdfium.so  # Optional, auto-detected
-CODEX_PDF_RENDER_DPI=150
-CODEX_PDF_JPEG_QUALITY=85
-CODEX_PDF_CACHE_RENDERED_PAGES=true
-CODEX_PDF_CACHE_DIR=data/cache
+# CODEX_PDF__PDFIUM_LIBRARY_PATH=/usr/local/lib/libpdfium.so  # Optional, auto-detected
+CODEX_PDF__RENDER_DPI=150
+CODEX_PDF__JPEG_QUALITY=85
+CODEX_PDF__CACHE_RENDERED_PAGES=true
+CODEX_PDF__CACHE_DIR=data/cache
 
 # PDF Handle Cache (in-memory open-document cache)
-CODEX_PDF_HANDLE_CACHE_ENABLED=true
-CODEX_PDF_HANDLE_CACHE_CAPACITY=256
-CODEX_PDF_HANDLE_CACHE_IDLE_TTL_MINUTES=15
-CODEX_PDF_HANDLE_CACHE_SWEEP_INTERVAL_SECONDS=60
+CODEX_PDF_HANDLE_CACHE__ENABLED=true
+CODEX_PDF_HANDLE_CACHE__CAPACITY=256
+CODEX_PDF_HANDLE_CACHE__IDLE_TTL_MINUTES=15
+CODEX_PDF_HANDLE_CACHE__SWEEP_INTERVAL_SECONDS=60
 
 # Komga-Compatible API
-CODEX_KOMGA_API_ENABLED=true
-CODEX_KOMGA_API_PREFIX=komga
+CODEX_KOMGA_API__ENABLED=true
+CODEX_KOMGA_API__PREFIX=komga
 
 # Plugin Credential Encryption
 CODEX_ENCRYPTION_KEY=your-base64-encoded-32-byte-key
 
 # Rate Limiting
-CODEX_RATE_LIMIT_ENABLED=true
-CODEX_RATE_LIMIT_ANONYMOUS_RPS=10
-CODEX_RATE_LIMIT_ANONYMOUS_BURST=50
-CODEX_RATE_LIMIT_AUTHENTICATED_RPS=50
-CODEX_RATE_LIMIT_AUTHENTICATED_BURST=200
-CODEX_RATE_LIMIT_EXEMPT_PATHS=/health,/api/v1/events
-CODEX_RATE_LIMIT_CLEANUP_INTERVAL_SECS=60
-CODEX_RATE_LIMIT_BUCKET_TTL_SECS=300
+CODEX_RATE_LIMIT__ENABLED=true
+CODEX_RATE_LIMIT__ANONYMOUS_RPS=10
+CODEX_RATE_LIMIT__ANONYMOUS_BURST=50
+CODEX_RATE_LIMIT__AUTHENTICATED_RPS=50
+CODEX_RATE_LIMIT__AUTHENTICATED_BURST=200
+CODEX_RATE_LIMIT__EXEMPT_PATHS=/health,/api/v1/events
+CODEX_RATE_LIMIT__CLEANUP_INTERVAL_SECS=60
+CODEX_RATE_LIMIT__BUCKET_TTL_SECS=300
 
 # Observability (OpenTelemetry / OTLP)
-CODEX_OBSERVABILITY_ENABLED=true
-CODEX_OBSERVABILITY_SERVICE_NAME=codex
-CODEX_OBSERVABILITY_OTLP_ENDPOINT=http://localhost:4317
-CODEX_OBSERVABILITY_OTLP_PROTOCOL=grpc
-CODEX_OBSERVABILITY_OTLP_HEADERS=signoz-access-token=abc123,x-tenant=production
-CODEX_OBSERVABILITY_OTLP_TIMEOUT_MS=5000
-CODEX_OBSERVABILITY_TRACES_ENABLED=true
-CODEX_OBSERVABILITY_TRACES_SAMPLE_RATIO=0.1
-CODEX_OBSERVABILITY_METRICS_ENABLED=true
-CODEX_OBSERVABILITY_METRICS_EXPORT_INTERVAL_MS=30000
-CODEX_OBSERVABILITY_BROWSER_ENABLED=false
-CODEX_OBSERVABILITY_BROWSER_PROXY_PATH=/api/v1/observability/otlp
-CODEX_OBSERVABILITY_BROWSER_SAMPLE_RATIO=0.1
+CODEX_OBSERVABILITY__ENABLED=true
+CODEX_OBSERVABILITY__SERVICE_NAME=codex
+CODEX_OBSERVABILITY__OTLP__ENDPOINT=http://localhost:4317
+CODEX_OBSERVABILITY__OTLP__PROTOCOL=grpc
+CODEX_OBSERVABILITY__OTLP__HEADERS=signoz-access-token=abc123,x-tenant=production
+CODEX_OBSERVABILITY__OTLP__TIMEOUT_MS=5000
+CODEX_OBSERVABILITY__TRACES__ENABLED=true
+CODEX_OBSERVABILITY__TRACES__SAMPLE_RATIO=0.1
+CODEX_OBSERVABILITY__METRICS__ENABLED=true
+CODEX_OBSERVABILITY__METRICS__EXPORT_INTERVAL_MS=30000
+CODEX_OBSERVABILITY__BROWSER__ENABLED=false
+CODEX_OBSERVABILITY__BROWSER__PROXY_PATH=/api/v1/observability/otlp
+CODEX_OBSERVABILITY__BROWSER__SAMPLE_RATIO=0.1
 ```
 
 ## Runtime vs Startup Settings
@@ -1060,13 +1060,13 @@ files:
 Set these via Kubernetes ConfigMaps and Secrets:
 
 ```bash
-CODEX_DATABASE_DB_TYPE=postgres
-CODEX_DATABASE_POSTGRES_HOST=postgres-service
-CODEX_DATABASE_POSTGRES_PORT=5432
-CODEX_DATABASE_POSTGRES_USERNAME=<from secret>
-CODEX_DATABASE_POSTGRES_PASSWORD=<from secret>
-CODEX_DATABASE_POSTGRES_DATABASE_NAME=codex
-CODEX_AUTH_JWT_SECRET=<from secret>
+CODEX_DATABASE__DB_TYPE=postgres
+CODEX_DATABASE__POSTGRES__HOST=postgres-service
+CODEX_DATABASE__POSTGRES__PORT=5432
+CODEX_DATABASE__POSTGRES__USERNAME=<from secret>
+CODEX_DATABASE__POSTGRES__PASSWORD=<from secret>
+CODEX_DATABASE__POSTGRES__DATABASE_NAME=codex
+CODEX_AUTH__JWT_SECRET=<from secret>
 CODEX_ENCRYPTION_KEY=<from secret>
 ```
 

@@ -103,7 +103,7 @@ koreader_api:
 ### Via Environment Variables
 
 ```bash
-CODEX_KOREADER_API_ENABLED=true
+CODEX_KOREADER_API__ENABLED=true
 ```
 
 After enabling, restart Codex and run a **deep scan** on your libraries to compute KOReader-compatible file hashes.
@@ -124,8 +124,8 @@ komga_api:
 ### Via Environment Variables
 
 ```bash
-CODEX_KOMGA_API_ENABLED=true
-CODEX_KOMGA_API_PREFIX=komga
+CODEX_KOMGA_API__ENABLED=true
+CODEX_KOMGA_API__PREFIX=komga
 ```
 
 ## API Endpoints

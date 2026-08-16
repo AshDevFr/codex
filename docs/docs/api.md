@@ -30,7 +30,7 @@ api:
 Or via environment variable:
 
 ```bash
-CODEX_API_ENABLE_API_DOCS=true
+CODEX_API__ENABLE_API_DOCS=true
 ```
 
 ### Accessing API Docs

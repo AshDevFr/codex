@@ -107,7 +107,7 @@ docker compose exec codex env | grep CODEX
 
 4. **Enable debug logging temporarily**:
    ```bash
-   CODEX_LOGGING_LEVEL=debug docker compose up
+   CODEX_LOGGING__LEVEL=debug docker compose up
    ```
 
 ### Server Hanging on Restart
@@ -750,7 +750,7 @@ For detailed debugging:
 
 3. **Enable debug logging**:
    ```bash
-   CODEX_LOGGING_LEVEL=debug docker compose up
+   CODEX_LOGGING__LEVEL=debug docker compose up
    ```
 
 ### Common Error Codes

@@ -81,30 +81,30 @@ All OIDC settings can be configured via environment variables:
 
 ```bash
 # Global settings
-CODEX_AUTH_OIDC_ENABLED=true
-CODEX_AUTH_OIDC_AUTO_CREATE_USERS=true
-CODEX_AUTH_OIDC_DEFAULT_ROLE=reader
-CODEX_AUTH_OIDC_REDIRECT_URI_BASE="https://codex.example.com"
+CODEX_AUTH__OIDC__ENABLED=true
+CODEX_AUTH__OIDC__AUTO_CREATE_USERS=true
+CODEX_AUTH__OIDC__DEFAULT_ROLE=reader
+CODEX_AUTH__OIDC__REDIRECT_URI_BASE="https://codex.example.com"
 
 # Provider-specific settings
-CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_DISPLAY_NAME="Authentik"
-CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_ISSUER_URL="https://authentik.example.com/application/o/codex/"
-CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_CLIENT_ID="codex"
-CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_CLIENT_SECRET="your-secret"
-CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_CLIENT_SECRET_ENV="MY_OIDC_SECRET"
-CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_SCOPES="email, profile, groups"
-CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_GROUPS_CLAIM="groups"
-CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_USERNAME_CLAIM="preferred_username"
-CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_EMAIL_CLAIM="email"
-CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_ACCEPTED_AUDIENCES="codex-client, other-trusted-client"
+CODEX_AUTH__OIDC__PROVIDERS__AUTHENTIK__DISPLAY_NAME="Authentik"
+CODEX_AUTH__OIDC__PROVIDERS__AUTHENTIK__ISSUER_URL="https://authentik.example.com/application/o/codex/"
+CODEX_AUTH__OIDC__PROVIDERS__AUTHENTIK__CLIENT_ID="codex"
+CODEX_AUTH__OIDC__PROVIDERS__AUTHENTIK__CLIENT_SECRET="your-secret"
+CODEX_AUTH__OIDC__PROVIDERS__AUTHENTIK__CLIENT_SECRET_ENV="MY_OIDC_SECRET"
+CODEX_AUTH__OIDC__PROVIDERS__AUTHENTIK__SCOPES="email, profile, groups"
+CODEX_AUTH__OIDC__PROVIDERS__AUTHENTIK__GROUPS_CLAIM="groups"
+CODEX_AUTH__OIDC__PROVIDERS__AUTHENTIK__USERNAME_CLAIM="preferred_username"
+CODEX_AUTH__OIDC__PROVIDERS__AUTHENTIK__EMAIL_CLAIM="email"
+CODEX_AUTH__OIDC__PROVIDERS__AUTHENTIK__ACCEPTED_AUDIENCES="codex-client, other-trusted-client"
 
 # Role mapping (comma-separated group names per role)
-CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_ROLE_MAPPING_ADMIN="codex-admins, administrators"
-CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_ROLE_MAPPING_MAINTAINER="codex-editors"
-CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_ROLE_MAPPING_READER="codex-users, users"
+CODEX_AUTH__OIDC__PROVIDERS__AUTHENTIK__ROLE_MAPPING__ADMIN="codex-admins, administrators"
+CODEX_AUTH__OIDC__PROVIDERS__AUTHENTIK__ROLE_MAPPING__MAINTAINER="codex-editors"
+CODEX_AUTH__OIDC__PROVIDERS__AUTHENTIK__ROLE_MAPPING__READER="codex-users, users"
 ```
 
-Providers can also be created entirely via environment variables (no YAML needed). Setting `CODEX_AUTH_OIDC_PROVIDERS_<NAME>_ISSUER_URL` is sufficient to create a new provider entry.
+Providers can also be created entirely via environment variables (no YAML needed). Setting `CODEX_AUTH__OIDC__PROVIDERS__<NAME>_ISSUER_URL` is sufficient to create a new provider entry.
 
 :::tip
 Use `client_secret_env` instead of `client_secret` to avoid storing secrets in configuration files:

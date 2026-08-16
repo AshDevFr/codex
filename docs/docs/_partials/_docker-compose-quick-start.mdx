@@ -15,7 +15,7 @@ services:
       PUID: 1000
       PGID: 1000
       # Generate with: openssl rand -base64 32
-      CODEX_AUTH_JWT_SECRET: "your-secure-secret-here"
+      CODEX_AUTH__JWT_SECRET: "your-secure-secret-here"
     restart: unless-stopped
 
 volumes:
