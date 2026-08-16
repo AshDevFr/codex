@@ -9112,6 +9112,42 @@
         ]
       }
     },
+    "/api/v1/reading-stats/coverage": {
+      "get": {
+        "tags": [
+          "Reading Statistics"
+        ],
+        "summary": "The span the caller's reading history covers.",
+        "description": "Separate from the statistics themselves because it deliberately ignores the\nwindow: a client needs it to know which years it can offer at all, and the\nanswer moves at most once a day, so it is worth caching for far longer than\nany windowed figure.",
+        "operationId": "get_reading_coverage",
+        "responses": {
+          "200": {
+            "description": "First and last dates this reader read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingCoverageDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/readlists": {
       "get": {
         "tags": [
@@ -38371,6 +38407,26 @@
           "sessions": {
             "type": "integer",
             "format": "int64"
+          }
+        }
+      },
+      "ReadingCoverageDto": {
+        "type": "object",
+        "description": "The span a reader's history covers, independent of any window.\n\nIts own endpoint rather than a field on the statistics response: that\nresponse describes a window, and these two dates deliberately ignore it. A\nclient uses them to decide which years it can offer, and they change at most\nonce a day, so they are worth caching far longer than the statistics are.\n\nBoth are null for a reader who has never read anything.",
+        "properties": {
+          "firstReadAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "lastReadAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
           }
         }
       },

@@ -200,6 +200,15 @@ function rankBy(sort: string): (a: Ranked, b: Ranked) => number {
 }
 
 export const readingStatsHandlers = [
+  // Unwindowed: which years the reader has any history in at all.
+  http.get("*/api/v1/reading-stats/coverage", async () => {
+    await delay(80);
+    return HttpResponse.json({
+      firstReadAt: `${HISTORY[0].date}T09:00:00Z`,
+      lastReadAt: `${HISTORY[HISTORY.length - 1].date}T21:00:00Z`,
+    });
+  }),
+
   http.get("*/api/v1/reading-stats", async ({ request }) => {
     await delay(150);
 

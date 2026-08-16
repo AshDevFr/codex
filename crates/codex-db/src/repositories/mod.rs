@@ -94,8 +94,9 @@ pub use read_progress::ReadProgressRepository;
 pub use reading_sessions::{AppendOutcome, DeviceContext, NewSession, ReadingSessionRepository};
 #[allow(unused_imports)]
 pub use reading_stats::{
-    DurationBreakdown, ReadingByDevice, ReadingByFormat, ReadingBySeries, ReadingPeriod,
-    ReadingStatsRepository, ReadingSummary, StatsGranularity, StatsSort, StatsWindow,
+    DurationBreakdown, ReadingByDevice, ReadingByFormat, ReadingBySeries, ReadingCoverage,
+    ReadingPeriod, ReadingStatsRepository, ReadingSummary, StatsGranularity, StatsSort,
+    StatsWindow,
 };
 #[allow(unused_imports)]
 pub use refresh_token::{NewRefreshToken, RefreshTokenRepository};

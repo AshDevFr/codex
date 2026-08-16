@@ -413,6 +413,59 @@ async fn finished_books_are_reported_everywhere() {
     assert_eq!(stats.formats[0].books_finished, 1);
 }
 
+/// Coverage exists so a client knows which years it can offer. It must ignore
+/// the window, which is exactly why it is not a field on the statistics
+/// response.
+#[tokio::test]
+async fn coverage_reports_the_whole_history() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_user_id, token) = admin_and_token(&db, &state, "reader").await;
+
+    let book = book_in_series(&db, "Berserk", "cbz").await;
+    record_session(state.clone(), &token, book.id, "phone", 30, at(2)).await;
+    record_session(state.clone(), &token, book.id, "phone", 30, at(20)).await;
+
+    let app = create_test_router(state).await;
+    let request = get_request_with_auth("/api/v1/reading-stats/coverage", &token);
+    let (status, body): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+    let coverage = body.expect("expected a JSON body");
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(coverage["firstReadAt"], serde_json::json!(q(at(2))));
+    assert_eq!(coverage["lastReadAt"], serde_json::json!(q(at(20))));
+}
+
+#[tokio::test]
+async fn coverage_is_null_for_a_reader_with_no_history() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_user_id, token) = admin_and_token(&db, &state, "reader").await;
+
+    let app = create_test_router(state).await;
+    let request = get_request_with_auth("/api/v1/reading-stats/coverage", &token);
+    let (status, body): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+    let coverage = body.expect("expected a JSON body");
+
+    assert_eq!(status, StatusCode::OK);
+    assert!(coverage["firstReadAt"].is_null());
+    assert!(coverage["lastReadAt"].is_null());
+}
+
+#[tokio::test]
+async fn coverage_requires_authentication() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+
+    let app = create_test_router(state).await;
+    let request = get_request("/api/v1/reading-stats/coverage");
+    let (status, _body) = make_request(app, request).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
 #[tokio::test]
 async fn statistics_require_authentication() {
     let (db, _temp_dir) = setup_test_db().await;

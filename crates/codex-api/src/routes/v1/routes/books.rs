@@ -179,6 +179,11 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
         .route("/reading-sessions", post(handlers::record_reading_sessions))
         // Aggregations over that log.
         .route("/reading-stats", get(handlers::get_reading_stats))
+        // Unwindowed: which years the reader has any history in at all.
+        .route(
+            "/reading-stats/coverage",
+            get(handlers::get_reading_coverage),
+        )
         // Mark as read/unread routes
         .route("/books/{book_id}/read", post(handlers::mark_book_as_read))
         .route(

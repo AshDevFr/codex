@@ -7,7 +7,11 @@ import {
   groupIntoWeeks,
   heatLevel,
   heatThresholds,
+  resolveRange,
+  rollUpIntoMonths,
   rollUpIntoWeeks,
+  windowFor,
+  yearsCovered,
 } from "./readingStatsFormat";
 
 const MINUTE = 60_000;
@@ -23,6 +27,7 @@ function period(bucket: string, minutes: number): ReadingPeriodDto {
     },
     pagesRead: 10,
     sessions: 1,
+    booksFinished: 1,
   };
 }
 
@@ -258,6 +263,143 @@ describe("rollUpIntoWeeks", () => {
 
   it("has nothing to roll up when nothing was read", () => {
     expect(rollUpIntoWeeks([])).toEqual([]);
+  });
+});
+
+describe("rollUpIntoMonths", () => {
+  it("sums days into the first of their month", () => {
+    const months = rollUpIntoMonths([
+      period("2026-06-01", 30),
+      period("2026-06-30", 45),
+      period("2026-07-02", 15),
+    ]);
+
+    expect(months.map((m) => m.bucket)).toEqual(["2026-06-01", "2026-07-01"]);
+    expect(months[0].duration.totalMs).toBe(75 * MINUTE);
+    expect(months[1].duration.totalMs).toBe(15 * MINUTE);
+  });
+
+  it("keeps months in date order across a year boundary", () => {
+    const months = rollUpIntoMonths([
+      period("2026-01-05", 10),
+      period("2025-12-31", 10),
+    ]);
+
+    expect(months.map((m) => m.bucket)).toEqual(["2025-12-01", "2026-01-01"]);
+  });
+
+  it("does not mutate the days it was given", () => {
+    const days = [period("2026-06-01", 30), period("2026-06-02", 30)];
+    rollUpIntoMonths(days);
+
+    expect(days[0].duration.totalMs).toBe(30 * MINUTE);
+  });
+});
+
+describe("windowFor", () => {
+  const now = new Date("2026-08-16T14:30:00Z");
+  const coverage = { firstReadAt: "2024-03-04T18:22:11Z", lastReadAt: null };
+
+  it("counts a relative range back from today, inclusive", () => {
+    const { from, to, bars } = windowFor(
+      { kind: "relative", days: 30 },
+      coverage,
+      now,
+    );
+
+    expect(from.toISOString().slice(0, 10)).toBe("2026-07-18");
+    expect(to.toISOString().slice(0, 10)).toBe("2026-08-16");
+    expect(bars).toBe("day");
+  });
+
+  /// A year of daily bars is unreadable, so the long ranges widen the bucket.
+  /// The request stays daily either way; this is a drawing decision.
+  it("widens the bucket as the window grows", () => {
+    expect(windowFor({ kind: "relative", days: 365 }, coverage, now).bars).toBe(
+      "week",
+    );
+    expect(windowFor({ kind: "year", year: 2025 }, coverage, now).bars).toBe(
+      "week",
+    );
+    expect(windowFor({ kind: "all" }, coverage, now).bars).toBe("month");
+  });
+
+  /// A calendar year is the whole year, not the year so far: the grid keeps its
+  /// shape and the empty days at the end read as "not yet" rather than absent.
+  it("covers a whole calendar year", () => {
+    const { from, to } = windowFor({ kind: "year", year: 2025 }, coverage, now);
+
+    expect(from.toISOString().slice(0, 10)).toBe("2025-01-01");
+    expect(to.toISOString().slice(0, 10)).toBe("2025-12-31");
+  });
+
+  it("starts all-time at the reader's first recorded reading", () => {
+    const { from, to } = windowFor({ kind: "all" }, coverage, now);
+
+    expect(from.toISOString().slice(0, 10)).toBe("2024-03-04");
+    expect(to.toISOString().slice(0, 10)).toBe("2026-08-16");
+  });
+
+  /// Nothing read yet is not an error: all-time collapses to today rather than
+  /// asking the API for every date since the epoch.
+  it("handles all-time for a reader who has never read", () => {
+    const { from, to } = windowFor(
+      { kind: "all" },
+      { firstReadAt: null, lastReadAt: null },
+      now,
+    );
+
+    expect(from.toISOString().slice(0, 10)).toBe("2026-08-16");
+    expect(to.toISOString().slice(0, 10)).toBe("2026-08-16");
+  });
+});
+
+describe("resolveRange", () => {
+  /// A stored year can outlive its data, or be restored under a different
+  /// account entirely. The store cannot know which years are real, so the page
+  /// decides here rather than trusting what it read back.
+  it("falls back when the stored year has no data", () => {
+    expect(resolveRange({ kind: "year", year: 2019 }, [2025, 2026])).toEqual({
+      kind: "relative",
+      days: 90,
+    });
+  });
+
+  it("keeps a stored year that still exists", () => {
+    expect(resolveRange({ kind: "year", year: 2025 }, [2025, 2026])).toEqual({
+      kind: "year",
+      year: 2025,
+    });
+  });
+
+  it("leaves relative and all-time ranges alone", () => {
+    expect(resolveRange({ kind: "relative", days: 30 }, [])).toEqual({
+      kind: "relative",
+      days: 30,
+    });
+    expect(resolveRange({ kind: "all" }, [])).toEqual({ kind: "all" });
+  });
+});
+
+describe("yearsCovered", () => {
+  it("lists every year from the first reading to now, newest first", () => {
+    const years = yearsCovered(
+      { firstReadAt: "2024-03-04T18:22:11Z", lastReadAt: null },
+      new Date("2026-08-16T00:00:00Z"),
+    );
+
+    expect(years).toEqual([2026, 2025, 2024]);
+  });
+
+  /// Years with no reading in the middle are still offered: the reader knows
+  /// they exist, and a gap in the list looks like a bug.
+  it("offers nothing when the reader has never read", () => {
+    expect(
+      yearsCovered(
+        { firstReadAt: null, lastReadAt: null },
+        new Date("2026-08-16T00:00:00Z"),
+      ),
+    ).toEqual([]);
   });
 });
 

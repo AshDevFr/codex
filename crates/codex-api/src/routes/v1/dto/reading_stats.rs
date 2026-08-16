@@ -6,8 +6,8 @@
 
 use chrono::{DateTime, Utc};
 use codex_db::repositories::{
-    DurationBreakdown, ReadingByDevice, ReadingByFormat, ReadingBySeries, ReadingPeriod,
-    ReadingSummary, StatsGranularity, StatsSort,
+    DurationBreakdown, ReadingByDevice, ReadingByFormat, ReadingBySeries, ReadingCoverage,
+    ReadingPeriod, ReadingSummary, StatsGranularity, StatsSort,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
@@ -248,6 +248,30 @@ impl From<ReadingByFormat> for ReadingByFormatDto {
             pages_read: value.pages_read,
             sessions: value.sessions,
             books_finished: value.books_finished,
+        }
+    }
+}
+
+/// The span a reader's history covers, independent of any window.
+///
+/// Its own endpoint rather than a field on the statistics response: that
+/// response describes a window, and these two dates deliberately ignore it. A
+/// client uses them to decide which years it can offer, and they change at most
+/// once a day, so they are worth caching far longer than the statistics are.
+///
+/// Both are null for a reader who has never read anything.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadingCoverageDto {
+    pub first_read_at: Option<DateTime<Utc>>,
+    pub last_read_at: Option<DateTime<Utc>>,
+}
+
+impl From<ReadingCoverage> for ReadingCoverageDto {
+    fn from(value: ReadingCoverage) -> Self {
+        Self {
+            first_read_at: value.first_read_at,
+            last_read_at: value.last_read_at,
         }
     }
 }

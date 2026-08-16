@@ -6,8 +6,12 @@
  * rendering anything.
  */
 
-import type { ReadingPeriodDto } from "@/api/readingStats";
-import type { ReadingMetric } from "@/store/readingStatsPreferencesStore";
+import type { ReadingCoverage, ReadingPeriodDto } from "@/api/readingStats";
+import type {
+  ReadingMetric,
+  ReadingRange,
+} from "@/store/readingStatsPreferencesStore";
+import { DEFAULT_READING_RANGE } from "@/store/readingStatsPreferencesStore";
 
 /**
  * Human duration, at the precision a reader actually cares about.
@@ -136,15 +140,23 @@ function mondayOf(iso: string): string {
 export function rollUpIntoWeeks(
   periods: ReadingPeriodDto[],
 ): ReadingPeriodDto[] {
-  const byWeek = new Map<string, ReadingPeriodDto>();
+  return rollUpBy(periods, mondayOf);
+}
+
+/** Sum daily buckets into whatever coarser bucket `keyOf` names. */
+function rollUpBy(
+  periods: ReadingPeriodDto[],
+  keyOf: (iso: string) => string,
+): ReadingPeriodDto[] {
+  const buckets = new Map<string, ReadingPeriodDto>();
 
   for (const period of periods) {
-    const bucket = mondayOf(period.bucket);
-    const week = byWeek.get(bucket);
+    const bucket = keyOf(period.bucket);
+    const existing = buckets.get(bucket);
 
-    if (!week) {
+    if (!existing) {
       // Copied, not aliased: the caller still holds these day objects.
-      byWeek.set(bucket, {
+      buckets.set(bucket, {
         bucket,
         duration: { ...period.duration },
         pagesRead: period.pagesRead,
@@ -154,15 +166,131 @@ export function rollUpIntoWeeks(
       continue;
     }
 
-    week.duration.measuredMs += period.duration.measuredMs;
-    week.duration.inferredMs += period.duration.inferredMs;
-    week.duration.totalMs += period.duration.totalMs;
-    week.pagesRead += period.pagesRead;
-    week.sessions += period.sessions;
-    week.booksFinished += period.booksFinished;
+    existing.duration.measuredMs += period.duration.measuredMs;
+    existing.duration.inferredMs += period.duration.inferredMs;
+    existing.duration.totalMs += period.duration.totalMs;
+    existing.pagesRead += period.pagesRead;
+    existing.sessions += period.sessions;
+    existing.booksFinished += period.booksFinished;
   }
 
-  return [...byWeek.values()].sort((a, b) => a.bucket.localeCompare(b.bucket));
+  return [...buckets.values()].sort((a, b) => a.bucket.localeCompare(b.bucket));
+}
+
+/** The first of the month containing an ISO date. */
+function firstOfMonth(iso: string): string {
+  return `${iso.slice(0, 7)}-01`;
+}
+
+/**
+ * Collapse daily buckets into calendar months.
+ *
+ * The twin of {@link rollUpIntoWeeks}, for the all-time range where even weekly
+ * bars run to hundreds of columns. Keyed by the first of the month, which is
+ * how the server keys months too.
+ */
+export function rollUpIntoMonths(
+  periods: ReadingPeriodDto[],
+): ReadingPeriodDto[] {
+  return rollUpBy(periods, firstOfMonth);
+}
+
+/**
+ * The window a range covers, and how wide the period chart's bars should be.
+ *
+ * Pure, so the awkward parts (a calendar year is the whole year; all-time has
+ * to start somewhere real) are testable without rendering or fetching.
+ *
+ * The bucket width is a drawing decision only. The request is always daily,
+ * because the calendar needs every day and one request has to serve both.
+ */
+export function windowFor(
+  range: ReadingRange,
+  coverage: ReadingCoverage,
+  now: Date,
+): { from: Date; to: Date; bars: "day" | "week" | "month" } {
+  const endOfToday = new Date(now);
+  endOfToday.setUTCHours(23, 59, 59, 999);
+
+  if (range.kind === "all") {
+    // Nothing read yet collapses to today rather than asking for every date
+    // since the epoch.
+    const first = coverage.firstReadAt ? new Date(coverage.firstReadAt) : now;
+    const from = new Date(first);
+    from.setUTCHours(0, 0, 0, 0);
+    return { from, to: endOfToday, bars: "month" };
+  }
+
+  if (range.kind === "year") {
+    // The whole calendar year, not the year so far: a part-year grid changes
+    // shape as the year goes on, and the empty cells at the end are honest.
+    return {
+      from: new Date(Date.UTC(range.year, 0, 1, 0, 0, 0, 0)),
+      to: new Date(Date.UTC(range.year, 11, 31, 23, 59, 59, 999)),
+      bars: "week",
+    };
+  }
+
+  const from = new Date(endOfToday);
+  from.setUTCDate(from.getUTCDate() - (range.days - 1));
+  from.setUTCHours(0, 0, 0, 0);
+  return { from, to: endOfToday, bars: range.days > 90 ? "week" : "day" };
+}
+
+/**
+ * Every year the reader could ask for, newest first.
+ *
+ * Years they read nothing in are included: the reader knows those years
+ * happened, and a gap in the list reads as a bug rather than as silence.
+ */
+export function yearsCovered(coverage: ReadingCoverage, now: Date): number[] {
+  if (!coverage.firstReadAt) return [];
+
+  const first = new Date(coverage.firstReadAt).getUTCFullYear();
+  const last = now.getUTCFullYear();
+  const years: number[] = [];
+  for (let year = last; year >= first; year -= 1) years.push(year);
+  return years;
+}
+
+/**
+ * The range to actually show, given what was restored from storage.
+ *
+ * A stored year can outlive its data, or be restored under a different account
+ * entirely. The store cannot know which years are real, so the decision lives
+ * here where the available years are known, and stays a pure function.
+ */
+export function resolveRange(
+  stored: ReadingRange,
+  availableYears: number[],
+): ReadingRange {
+  if (stored.kind === "year" && !availableYears.includes(stored.year)) {
+    return DEFAULT_READING_RANGE;
+  }
+  return stored;
+}
+
+/**
+ * Split days into calendar years, newest first.
+ *
+ * All-time draws one grid per year rather than one grid spanning a decade,
+ * which would be unreadable at any cell size that still fits on a screen.
+ */
+export function groupIntoYears(
+  days: CalendarDay[],
+): { year: number; days: CalendarDay[] }[] {
+  const byYear = new Map<number, CalendarDay[]>();
+
+  for (const day of days) {
+    const year = Number(day.date.slice(0, 4));
+    const existing = byYear.get(year);
+    if (existing) existing.push(day);
+    else byYear.set(year, [day]);
+  }
+
+  return [...byYear.entries()]
+    .map(([year, yearDays]) => ({ year, days: yearDays }))
+    .sort((a, b) => b.year - a.year);
 }
 
 /**

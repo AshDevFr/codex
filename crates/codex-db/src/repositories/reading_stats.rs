@@ -165,6 +165,14 @@ pub struct ReadingByFormat {
     pub books_finished: i64,
 }
 
+/// The span a reader's whole history covers, independent of any window.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReadingCoverage {
+    /// When this reader first read anything, or `None` if they never have.
+    pub first_read_at: Option<DateTime<Utc>>,
+    pub last_read_at: Option<DateTime<Utc>>,
+}
+
 /// The window a query covers.
 #[derive(Copy, Clone, Debug)]
 pub struct StatsWindow {
@@ -525,6 +533,46 @@ impl ReadingStatsRepository {
                 books_finished: r.books_finished,
             })
             .collect())
+    }
+
+    /// The span a reader's history actually covers, ignoring any window.
+    ///
+    /// Deliberately unwindowed, which is why it is not folded into the
+    /// statistics response: that response describes a window, and a field
+    /// inside it that ignored the window would be read as obeying it. A client
+    /// needs this to know which years it can offer, and the answer changes at
+    /// most once a day.
+    ///
+    /// Both figures are `None` for a reader who has never read.
+    pub async fn coverage<C: ConnectionTrait>(db: &C, user_id: Uuid) -> Result<ReadingCoverage> {
+        #[derive(Debug, FromQueryResult)]
+        struct CoverageRow {
+            first_read_at: Option<DateTime<Utc>>,
+            last_read_at: Option<DateTime<Utc>>,
+        }
+
+        let backend = db.get_database_backend();
+        let sql = format!(
+            "SELECT MIN(rs.client_started_at) AS first_read_at, \
+                    MAX(rs.client_started_at) AS last_read_at \
+             FROM reading_sessions rs \
+             WHERE rs.user_id = $1 AND {READING_KINDS}"
+        );
+
+        let row = CoverageRow::find_by_statement(Statement::from_sql_and_values(
+            backend,
+            &sql,
+            [Value::Uuid(Some(Box::new(user_id)))],
+        ))
+        .one(db)
+        .await?;
+
+        Ok(
+            row.map_or_else(ReadingCoverage::default, |r| ReadingCoverage {
+                first_read_at: r.first_read_at,
+                last_read_at: r.last_read_at,
+            }),
+        )
     }
 
     /// How many session rows a user has, for judging whether retention or
@@ -1222,6 +1270,82 @@ mod tests {
         assert_eq!(series[0].duration.measured_ms, 90 * MINUTE_MS);
         assert_eq!(series[0].books, 1);
         assert_eq!(series[1].series_name, "Vinland Saga");
+    }
+
+    /// Coverage answers "which years can this reader ask for", so it must not
+    /// be bounded by whatever window the dashboard happens to be showing.
+    #[tokio::test]
+    async fn coverage_spans_the_whole_history() {
+        let db = setup_test_db().await;
+        let user = create_user(&db, "reader").await;
+        let book = create_book(&db, "Berserk", "cbz").await;
+
+        insert(
+            &db,
+            user.id,
+            book.id,
+            SessionSpec::measured("phone", 30, at(2, 9)),
+        )
+        .await;
+        insert(
+            &db,
+            user.id,
+            book.id,
+            SessionSpec::measured("phone", 30, at(20, 9)),
+        )
+        .await;
+        // A reset is bookkeeping rather than reading, so it must not stretch
+        // the span into a year the reader never read in.
+        insert(
+            &db,
+            user.id,
+            book.id,
+            SessionSpec::without_duration("phone", at(28, 9)).kind("reset"),
+        )
+        .await;
+
+        let coverage = ReadingStatsRepository::coverage(&db, user.id)
+            .await
+            .unwrap();
+
+        assert_eq!(coverage.first_read_at, Some(at(2, 9)));
+        assert_eq!(coverage.last_read_at, Some(at(20, 9)));
+    }
+
+    #[tokio::test]
+    async fn coverage_is_empty_for_a_reader_who_never_read() {
+        let db = setup_test_db().await;
+        let user = create_user(&db, "reader").await;
+
+        let coverage = ReadingStatsRepository::coverage(&db, user.id)
+            .await
+            .unwrap();
+
+        assert_eq!(coverage.first_read_at, None);
+        assert_eq!(coverage.last_read_at, None);
+    }
+
+    /// Coverage is per reader, like every other statistic here.
+    #[tokio::test]
+    async fn coverage_never_leaks_between_readers() {
+        let db = setup_test_db().await;
+        let reader = create_user(&db, "reader").await;
+        let other = create_user(&db, "other").await;
+        let book = create_book(&db, "Berserk", "cbz").await;
+
+        insert(
+            &db,
+            other.id,
+            book.id,
+            SessionSpec::measured("phone", 30, at(2, 9)),
+        )
+        .await;
+
+        let coverage = ReadingStatsRepository::coverage(&db, reader.id)
+            .await
+            .unwrap();
+
+        assert_eq!(coverage.first_read_at, None);
     }
 
     /// The only measure a library backfilled from `read_progress` can answer.

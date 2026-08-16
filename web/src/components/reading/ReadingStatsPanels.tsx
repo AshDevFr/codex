@@ -11,6 +11,7 @@
  */
 
 import { Anchor, Box, Group, Paper, Stack, Text, Tooltip } from "@mantine/core";
+import { useLayoutEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import type {
   ReadingByDeviceDto,
@@ -112,13 +113,30 @@ const WEEKDAYS = [
 export function ActivityCalendar({
   days,
   metric = "time",
+  thresholds: sharedThresholds,
+  showLegend = true,
 }: {
   days: CalendarDay[];
   metric?: ReadingMetric;
+  /**
+   * Whether to draw the scale legend.
+   *
+   * Stacked years share one scale, so repeating the legend under each grid
+   * would suggest each has its own.
+   */
+  showLegend?: boolean;
+  /**
+   * Scale to draw against, when several calendars sit on one screen.
+   *
+   * Stacked years each computing their own scale would make a light year look
+   * exactly like a heavy one, which is the opposite of what a stack is for.
+   */
+  thresholds?: number[];
 }) {
+  const scroller = useScrolledToEnd(`${days.length}:${metric}`);
   const weeks = groupIntoWeeks(days);
   const values = days.map((day) => metricValue(day, metric));
-  const thresholds = heatThresholds(values);
+  const thresholds = sharedThresholds ?? heatThresholds(values);
   const busiest = values.reduce((max, value) => Math.max(max, value), 0);
 
   // A window is empty when nothing was read in it, not when the API returned
@@ -137,7 +155,7 @@ export function ActivityCalendar({
 
   return (
     <Stack gap="xs">
-      <Box className={classes.scroller}>
+      <Box className={classes.scroller} ref={scroller}>
         <Group gap="xs" wrap="nowrap" align="flex-start">
           <Stack gap={CELL_GAP} style={{ paddingTop: 1 }}>
             {WEEKDAYS.map((weekday) => (
@@ -188,23 +206,44 @@ export function ActivityCalendar({
           </svg>
         </Group>
       </Box>
-      <Group gap={6} justify="flex-end">
-        <Text size="10px" c="dimmed">
-          Less
-        </Text>
-        {[0, 1, 2, 3, 4, 5].map((level) => (
-          <span
-            key={level}
-            className={classes.swatch}
-            style={{ background: `var(--heat-${level})` }}
-          />
-        ))}
-        <Text size="10px" c="dimmed">
-          More
-        </Text>
-      </Group>
+      {showLegend && (
+        <Group gap={6} justify="flex-end">
+          <Text size="10px" c="dimmed">
+            Less
+          </Text>
+          {[0, 1, 2, 3, 4, 5].map((level) => (
+            <span
+              key={level}
+              className={classes.swatch}
+              style={{ background: `var(--heat-${level})` }}
+            />
+          ))}
+          <Text size="10px" c="dimmed">
+            More
+          </Text>
+        </Group>
+      )}
     </Stack>
   );
+}
+
+/**
+ * Keep a horizontal scroller pinned to its newest end.
+ *
+ * These charts run left-to-right in time and overflow once the window is long.
+ * Left-aligned, they open on the oldest buckets, which for most readers are the
+ * empty ones: a year of history looks like a blank panel until you scroll.
+ */
+function useScrolledToEnd(dependency: unknown) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: dependency is the change-trigger; the effect only reads a ref
+  useLayoutEffect(() => {
+    const element = ref.current;
+    if (element) element.scrollLeft = element.scrollWidth;
+  }, [dependency]);
+
+  return ref;
 }
 
 /**
@@ -228,6 +267,8 @@ export function PeriodBars({
   }[];
   metric?: ReadingMetric;
 }) {
+  const scroller = useScrolledToEnd(`${periods.length}:${metric}`);
+
   if (periods.length === 0) {
     return (
       <Text size="sm" c="dimmed">
@@ -244,7 +285,7 @@ export function PeriodBars({
   const width = periods.length * (barWidth + gap);
 
   return (
-    <Box className={classes.scroller}>
+    <Box className={classes.scroller} ref={scroller}>
       <svg
         width={Math.max(width, 200)}
         height={height + 20}

@@ -13,6 +13,7 @@ export type DurationBreakdownDto =
 export type ReadingStatsGranularity =
   components["schemas"]["ReadingStatsGranularity"];
 export type ReadingStatsSort = components["schemas"]["ReadingStatsSort"];
+export type ReadingCoverage = components["schemas"]["ReadingCoverageDto"];
 
 export interface ReadingStatsParams {
   from?: Date;
@@ -47,6 +48,17 @@ export const readingStatsApi = {
     const response = await api.get<ReadingStatsResponse>("/reading-stats", {
       params: query,
     });
+    return response.data;
+  },
+
+  /**
+   * The span the reader's history covers, ignoring any window.
+   *
+   * Separate from the statistics because it is window-independent: it decides
+   * which years can be offered at all, and it changes at most once a day.
+   */
+  coverage: async (): Promise<ReadingCoverage> => {
+    const response = await api.get<ReadingCoverage>("/reading-stats/coverage");
     return response.data;
   },
 };

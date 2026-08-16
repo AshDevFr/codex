@@ -265,6 +265,14 @@ async fn exercise_reading_stats(db: &DatabaseConnection) {
     }
 
     // ---- Row count, used for the retention question ----
+    // Decoding a nullable MIN/MAX over a timestamp column is engine-specific
+    // enough to be worth running on both, like the sums above it.
+    let coverage = ReadingStatsRepository::coverage(db, user)
+        .await
+        .expect("coverage must decode on this engine");
+    assert!(coverage.first_read_at.is_some());
+    assert!(coverage.last_read_at >= coverage.first_read_at);
+
     let rows = ReadingStatsRepository::row_count(db, user).await.unwrap();
     assert_eq!(rows, 5, "the reset is still a row, just not a sitting");
 }

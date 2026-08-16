@@ -13,6 +13,8 @@ const MINUTE = 60_000;
 let requestedGranularities: (string | null)[] = [];
 /** Ranking keys the page asked for, newest last. */
 let requestedSorts: (string | null)[] = [];
+/** Windows the page asked for, newest last. */
+let requestedWindows: { from: string | null; to: string | null }[] = [];
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -22,10 +24,20 @@ const server = setupServer(
   http.get("*/api/v1/settings/branding", () =>
     HttpResponse.json({ applicationName: "Codex" }),
   ),
+  http.get("*/reading-stats/coverage", () =>
+    HttpResponse.json({
+      firstReadAt: "2024-03-04T18:22:11Z",
+      lastReadAt: new Date().toISOString(),
+    }),
+  ),
   http.get("*/reading-stats", ({ request }) => {
     const url = new URL(request.url);
     requestedGranularities.push(url.searchParams.get("granularity"));
     requestedSorts.push(url.searchParams.get("sort"));
+    requestedWindows.push({
+      from: url.searchParams.get("from"),
+      to: url.searchParams.get("to"),
+    });
 
     return HttpResponse.json({
       from: url.searchParams.get("from"),
@@ -69,7 +81,11 @@ afterEach(() => {
   server.resetHandlers();
   requestedGranularities = [];
   requestedSorts = [];
-  useReadingStatsPreferencesStore.setState({ metric: "time" });
+  requestedWindows = [];
+  useReadingStatsPreferencesStore.setState({
+    metric: "time",
+    range: { kind: "relative", days: 90 },
+  });
 });
 afterAll(() => server.close());
 
@@ -221,6 +237,98 @@ describe("ReadingStats", () => {
       await screen.findByText("Books finished per day"),
     ).toBeInTheDocument();
     expect(screen.queryByText("Time per day")).not.toBeInTheDocument();
+  });
+
+  /// Years come from the coverage endpoint, which deliberately ignores the
+  /// window: the range control cannot offer a year it does not know exists.
+  it("offers a year for every year the reader has history in", async () => {
+    renderWithProviders(<ReadingStats />);
+
+    await screen.findByText("Daily activity");
+
+    expect(
+      screen.getByRole("button", { name: "All time" }),
+    ).toBeInTheDocument();
+    for (const year of ["2024", "2025", "2026"]) {
+      expect(screen.getByRole("button", { name: year })).toBeInTheDocument();
+    }
+  });
+
+  /// A calendar year is the whole year, not the year so far.
+  it("asks for a whole calendar year when one is picked", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<ReadingStats />);
+
+    await screen.findByText("Daily activity");
+    await user.click(screen.getByRole("button", { name: "2025" }));
+
+    await waitFor(() => {
+      const window = requestedWindows[requestedWindows.length - 1];
+      expect(window.from).toContain("2025-01-01");
+      expect(window.to).toContain("2025-12-31");
+    });
+    expect(await screen.findByText("Time per week")).toBeInTheDocument();
+  });
+
+  /// All-time starts where the reader's history does, and spans years, so one
+  /// grid per year rather than one grid ten years wide.
+  it("draws a calendar per year over all time", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<ReadingStats />);
+
+    await screen.findByText("Daily activity");
+    await user.click(screen.getByRole("button", { name: "All time" }));
+
+    await waitFor(() => {
+      const window = requestedWindows[requestedWindows.length - 1];
+      expect(window.from).toContain("2024-03-04");
+    });
+
+    expect(await screen.findByText("Time per month")).toBeInTheDocument();
+
+    // One grid for the year that has reading; the two silent years say so
+    // rather than drawing a full year of empty cells.
+    await waitFor(() =>
+      expect(
+        screen.getAllByRole("img", { name: /Daily reading activity/ }),
+      ).toHaveLength(1),
+    );
+    expect(
+      screen.getAllByText("No reading recorded in this period."),
+    ).toHaveLength(2);
+  });
+
+  /// All-time's window comes from the coverage request, which resolves after
+  /// the first render. Keyed only by the range name, the query would keep the
+  /// result it fetched for the placeholder window and show an empty dashboard
+  /// forever. Only reproducible when all-time is the *restored* range.
+  it("uses the real window when all time is restored from storage", async () => {
+    useReadingStatsPreferencesStore.setState({ range: { kind: "all" } });
+
+    renderWithProviders(<ReadingStats />);
+
+    await screen.findByText("Daily activity");
+    await waitFor(() => {
+      const window = requestedWindows[requestedWindows.length - 1];
+      expect(window.from).toContain("2024-03-04");
+    });
+  });
+
+  /// A stored year can outlive its data, or arrive from another account. The
+  /// page must not ask for a window the reader has no history in.
+  it("falls back when the stored year is not on offer", async () => {
+    useReadingStatsPreferencesStore.setState({
+      range: { kind: "year", year: 2019 },
+    });
+
+    renderWithProviders(<ReadingStats />);
+
+    await screen.findByText("Daily activity");
+    await waitFor(() => {
+      const window = requestedWindows[requestedWindows.length - 1];
+      expect(window.from).not.toContain("2019");
+    });
+    expect(screen.getByText("Time per day")).toBeInTheDocument();
   });
 
   /// The calendar is daily whatever the period chart shows. Requesting weekly

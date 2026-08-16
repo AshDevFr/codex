@@ -3038,6 +3038,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reading-stats/coverage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The span the caller's reading history covers.
+         * @description Separate from the statistics themselves because it deliberately ignores the
+         *     window: a client needs it to know which years it can offer at all, and the
+         *     answer moves at most once a day, so it is worth caching for far longer than
+         *     any windowed figure.
+         */
+        get: operations["get_reading_coverage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/readlists": {
         parameters: {
             query?: never;
@@ -17103,6 +17126,22 @@ export interface components {
             sessions: number;
         };
         /**
+         * @description The span a reader's history covers, independent of any window.
+         *
+         *     Its own endpoint rather than a field on the statistics response: that
+         *     response describes a window, and these two dates deliberately ignore it. A
+         *     client uses them to decide which years it can offer, and they change at most
+         *     once a day, so they are worth caching far longer than the statistics are.
+         *
+         *     Both are null for a reader who has never read anything.
+         */
+        ReadingCoverageDto: {
+            /** Format: date-time */
+            firstReadAt?: string | null;
+            /** Format: date-time */
+            lastReadAt?: string | null;
+        };
+        /**
          * @description One bucket of the time series.
          *
          *     Buckets with no reading are absent rather than zero: a client knows the
@@ -28417,6 +28456,40 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_reading_coverage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description First and last dates this reader read */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingCoverageDto"];
+                };
             };
             /** @description Unauthorized */
             401: {

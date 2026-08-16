@@ -2,8 +2,8 @@
 
 use super::super::dto::{
     DurationBreakdownDto, ReadingByDeviceDto, ReadingByFormatDto, ReadingBySeriesDto,
-    ReadingPeriodDto, ReadingStatsGranularity, ReadingStatsQuery, ReadingStatsResponse,
-    ReadingStatsSort, ReadingSummaryDto,
+    ReadingCoverageDto, ReadingPeriodDto, ReadingStatsGranularity, ReadingStatsQuery,
+    ReadingStatsResponse, ReadingStatsSort, ReadingSummaryDto,
 };
 use crate::{AppState, error::ApiError, extractors::AuthContext, permissions::Permission};
 use axum::{
@@ -135,4 +135,37 @@ pub async fn get_reading_stats(
         series: series.into_iter().map(Into::into).collect(),
         formats: formats.into_iter().map(Into::into).collect(),
     }))
+}
+
+/// The span the caller's reading history covers.
+///
+/// Separate from the statistics themselves because it deliberately ignores the
+/// window: a client needs it to know which years it can offer at all, and the
+/// answer moves at most once a day, so it is worth caching for far longer than
+/// any windowed figure.
+#[utoipa::path(
+    get,
+    path = "/api/v1/reading-stats/coverage",
+    responses(
+        (status = 200, description = "First and last dates this reader read", body = ReadingCoverageDto),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Reading Statistics"
+)]
+pub async fn get_reading_coverage(
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+) -> Result<Json<ReadingCoverageDto>, ApiError> {
+    auth.require_permission(&Permission::ProgressRead)?;
+
+    let coverage = ReadingStatsRepository::coverage(&state.db, auth.user_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to read coverage: {}", e)))?;
+
+    Ok(Json(coverage.into()))
 }

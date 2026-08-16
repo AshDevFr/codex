@@ -7,6 +7,7 @@
 
 import {
   Alert,
+  Button,
   Center,
   Container,
   Group,
@@ -19,7 +20,7 @@ import {
 } from "@mantine/core";
 import { IconInfoCircle } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { readingStatsApi } from "@/api/readingStats";
 import classes from "@/components/reading/ReadingStatsCharts.module.css";
 import {
@@ -35,57 +36,74 @@ import {
 } from "@/components/reading/ReadingStatsPanels";
 import {
   buildCalendar,
+  groupIntoYears,
+  heatThresholds,
+  metricValue,
+  resolveRange,
+  rollUpIntoMonths,
   rollUpIntoWeeks,
+  windowFor,
+  yearsCovered,
 } from "@/components/reading/readingStatsFormat";
 import {
   READING_METRICS,
+  RELATIVE_RANGES,
   type ReadingMetric,
+  rangeKey,
   sortForMetric,
   useReadingStatsPreferencesStore,
 } from "@/store/readingStatsPreferencesStore";
 
-const RANGES = [
-  { value: "30", label: "30 days" },
-  { value: "90", label: "90 days" },
-  { value: "365", label: "1 year" },
-] as const;
-
-/**
- * Bucket size for the period chart.
- *
- * A year of daily bars is unreadable, so the long range is drawn as weeks. This
- * is a display choice only: the request is always daily, because the calendar
- * below needs every day and one request has to serve both.
- */
-function bucketingFor(days: number): "day" | "week" {
-  return days > 90 ? "week" : "day";
-}
+/** Bucket labels for the period chart's heading. */
+const BAR_LABELS = { day: "day", week: "week", month: "month" } as const;
 
 export function ReadingStats() {
-  const [rangeDays, setRangeDays] = useState("90");
   const metric = useReadingStatsPreferencesStore((state) => state.metric);
   const setMetric = useReadingStatsPreferencesStore((state) => state.setMetric);
-  const days = Number(rangeDays);
+  const storedRange = useReadingStatsPreferencesStore((state) => state.range);
+  const setRange = useReadingStatsPreferencesStore((state) => state.setRange);
 
-  // Pinned to the day so the query key is stable across re-renders; a `now`
-  // that moves every render would refetch continuously.
-  const { from, to } = useMemo(() => {
-    const end = new Date();
-    end.setUTCHours(23, 59, 59, 999);
-    const start = new Date(end);
-    start.setUTCDate(start.getUTCDate() - (days - 1));
-    start.setUTCHours(0, 0, 0, 0);
-    return { from: start, to: end };
-  }, [days]);
+  // Pinned to the day so query keys are stable across re-renders; a `now` that
+  // moved every render would refetch continuously.
+  const today = useMemo(() => new Date(), []);
 
-  const bucketing = bucketingFor(days);
+  // Window-independent, and changes at most once a day, so it is fetched once
+  // and kept far longer than any windowed figure.
+  const { data: coverage } = useQuery({
+    queryKey: ["readingStats", "coverage"],
+    queryFn: () => readingStatsApi.coverage(),
+    staleTime: 60 * 60_000,
+  });
+
+  const years = useMemo(
+    () => yearsCovered(coverage ?? { firstReadAt: null }, today),
+    [coverage, today],
+  );
+
+  // A stored year can outlive its data, or arrive from another account.
+  const range = resolveRange(storedRange, years);
+
+  const { from, to, bars } = useMemo(
+    () => windowFor(range, coverage ?? { firstReadAt: null }, today),
+    [range, coverage, today],
+  );
 
   // The ranking key is part of the request because the server applies the
   // series limit: ranking by pages here would sort a top-8 chosen by time.
   const sort = sortForMetric(metric);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["readingStats", rangeDays, sort],
+    // The window is part of the key, not just the range's name. All-time's
+    // window comes from the coverage request, so it changes after the first
+    // render; keyed only by "all", the placeholder window's empty result would
+    // be served forever.
+    queryKey: [
+      "readingStats",
+      rangeKey(range),
+      from.toISOString(),
+      to.toISOString(),
+      sort,
+    ],
     queryFn: () =>
       readingStatsApi.get({
         from,
@@ -94,6 +112,10 @@ export function ReadingStats() {
         seriesLimit: 8,
         sort,
       }),
+    // All-time cannot be asked for until coverage says where history starts.
+    // Without this it fetches a one-day placeholder window first and discards
+    // it, which shows as a flash of zeroes.
+    enabled: range.kind !== "all" || coverage !== undefined,
     staleTime: 60_000,
   });
 
@@ -102,9 +124,26 @@ export function ReadingStats() {
     return buildCalendar(data.periods, from, to);
   }, [data, from, to]);
 
+  // All-time spans years, and one grid ten years wide is unreadable at any cell
+  // size that fits a screen. Every year shares one scale so a light year cannot
+  // be mistaken for a heavy one.
+  const calendarYears = useMemo(
+    () => (range.kind === "all" ? groupIntoYears(calendar) : []),
+    [range, calendar],
+  );
+  const sharedThresholds = useMemo(
+    () => heatThresholds(calendar.map((day) => metricValue(day, metric))),
+    [calendar, metric],
+  );
+
   const periodBars = useMemo(() => {
     const periods = data?.periods ?? [];
-    const bucketed = bucketing === "week" ? rollUpIntoWeeks(periods) : periods;
+    const bucketed =
+      bars === "month"
+        ? rollUpIntoMonths(periods)
+        : bars === "week"
+          ? rollUpIntoWeeks(periods)
+          : periods;
     return bucketed.map((p) => ({
       bucket: p.bucket,
       measuredMs: p.duration.measuredMs,
@@ -113,7 +152,7 @@ export function ReadingStats() {
       pagesRead: p.pagesRead,
       booksFinished: p.booksFinished,
     }));
-  }, [data, bucketing]);
+  }, [data, bars]);
 
   if (isLoading) {
     return (
@@ -161,13 +200,49 @@ export function ReadingStats() {
               size="sm"
             />
             <SegmentedControl
-              value={rangeDays}
-              onChange={setRangeDays}
-              data={RANGES.map((r) => ({ value: r.value, label: r.label }))}
+              value={range.kind === "relative" ? String(range.days) : "custom"}
+              onChange={(value) =>
+                setRange({
+                  kind: "relative",
+                  days: Number(value) as 30 | 90 | 365,
+                })
+              }
+              data={RELATIVE_RANGES.map((r) => ({
+                value: String(r.days),
+                label: r.label,
+              }))}
               size="sm"
             />
           </Group>
         </Group>
+
+        {/* Calendar years are not rolling windows, so they get their own row
+            rather than being mixed into the relative control above. */}
+        {years.length > 0 && (
+          <Group gap="xs" wrap="wrap" justify="flex-end">
+            <Button
+              size="compact-xs"
+              variant={range.kind === "all" ? "filled" : "subtle"}
+              onClick={() => setRange({ kind: "all" })}
+            >
+              All time
+            </Button>
+            {years.map((year) => (
+              <Button
+                key={year}
+                size="compact-xs"
+                variant={
+                  range.kind === "year" && range.year === year
+                    ? "filled"
+                    : "subtle"
+                }
+                onClick={() => setRange({ kind: "year", year })}
+              >
+                {year}
+              </Button>
+            ))}
+          </Group>
+        )}
 
         <Group gap="md" wrap="wrap" align="stretch">
           <StatTile
@@ -221,7 +296,27 @@ export function ReadingStats() {
                 <ProvenanceLegend inferredMs={summary.duration.inferredMs} />
               )}
             </Group>
-            <ActivityCalendar days={calendar} metric={metric} />
+            {range.kind === "all" ? (
+              <Stack gap="lg">
+                {calendarYears.map(({ year, days }, index) => (
+                  <Stack gap={4} key={year}>
+                    <Text size="xs" c="dimmed" fw={600}>
+                      {year}
+                    </Text>
+                    <ActivityCalendar
+                      days={days}
+                      metric={metric}
+                      thresholds={sharedThresholds}
+                      // One legend for the stack, under the last grid, where
+                      // it sits in the single-calendar case too.
+                      showLegend={index === calendarYears.length - 1}
+                    />
+                  </Stack>
+                ))}
+              </Stack>
+            ) : (
+              <ActivityCalendar days={calendar} metric={metric} />
+            )}
           </Stack>
         </Paper>
 
@@ -230,7 +325,7 @@ export function ReadingStats() {
             <Group justify="space-between" wrap="wrap">
               <Title order={4}>
                 {READING_METRICS.find((m) => m.value === metric)?.label} per{" "}
-                {bucketing}
+                {BAR_LABELS[bars]}
               </Title>
               <Text size="xs" c="dimmed">
                 {busiestBucketCaption(periodBars, metric)}

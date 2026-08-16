@@ -31,9 +31,41 @@ export function sortForMetric(metric: ReadingMetric): ReadingStatsSort {
   return "time";
 }
 
+/**
+ * Which slice of history the dashboard shows.
+ *
+ * A tagged union rather than a number of days, because a calendar year is not
+ * a rolling window and all-time has no fixed length. Relative ranges count back
+ * from today; a year is that whole calendar year.
+ */
+export type ReadingRange =
+  | { kind: "relative"; days: 30 | 90 | 365 }
+  | { kind: "year"; year: number }
+  | { kind: "all" };
+
+export const DEFAULT_READING_RANGE: ReadingRange = {
+  kind: "relative",
+  days: 90,
+};
+
+export const RELATIVE_RANGES: { days: 30 | 90 | 365; label: string }[] = [
+  { days: 30, label: "30 days" },
+  { days: 90, label: "90 days" },
+  { days: 365, label: "1 year" },
+];
+
+/** A stable key for a range, for query keys and control state. */
+export function rangeKey(range: ReadingRange): string {
+  if (range.kind === "all") return "all";
+  if (range.kind === "year") return `year-${range.year}`;
+  return `days-${range.days}`;
+}
+
 export interface ReadingStatsPreferencesState {
   metric: ReadingMetric;
   setMetric: (metric: ReadingMetric) => void;
+  range: ReadingRange;
+  setRange: (range: ReadingRange) => void;
 }
 
 export const useReadingStatsPreferencesStore =
@@ -43,6 +75,8 @@ export const useReadingStatsPreferencesStore =
         (set) => ({
           metric: "time",
           setMetric: (metric) => set({ metric }),
+          range: DEFAULT_READING_RANGE,
+          setRange: (range) => set({ range }),
         }),
         { name: "reading-stats-preferences-storage" },
       ),
