@@ -21,8 +21,8 @@ pub use types::{
 };
 
 pub use env_audit::{
-    Finding, NON_CONFIG_VARS, audit, audit_env, audit_env_with_config, classify,
-    secret_env_targets, v1_name_for, v2_name_for,
+    Finding, NON_CONFIG_VARS, REMOVED_VARS, audit, audit_env, audit_env_with_config, classify,
+    enforce_env, secret_env_targets, v1_name_for, v2_name_for,
 };
 pub use keys::{KeyRegistry, registry};
 pub use loader::{ENV_NESTING_SEPARATOR, ENV_PREFIX};

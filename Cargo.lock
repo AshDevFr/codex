@@ -961,6 +961,7 @@ dependencies = [
  "serde_yaml",
  "serial_test",
  "tempfile",
+ "tracing",
 ]
 
 [[package]]

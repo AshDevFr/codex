@@ -347,6 +347,12 @@ const DEFAULT_PLUGINS_SUBDIR: &str = "plugins";
 #[derive(Debug)]
 pub struct ConfigError(String);
 
+impl ConfigError {
+    pub(crate) fn new(message: impl Into<String>) -> Self {
+        Self(message.into())
+    }
+}
+
 impl std::fmt::Display for ConfigError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&self.0)

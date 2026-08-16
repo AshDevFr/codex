@@ -99,64 +99,21 @@ pub fn load_config(config_path: PathBuf) -> anyhow::Result<(Config, bool)> {
         false
     };
 
-    let config = resolve_config(&config_path)?;
-
-    warn_about_renamed_env_vars();
+    let config = Config::load(&config_path)?;
 
     Ok((config, config_created))
 }
 
-/// Resolve configuration without touching the filesystem.
+/// Resolve configuration for inspection: no file is created, and an
+/// environment naming settings in the pre-2.0 form is reported by the caller
+/// rather than rejected here.
 ///
-/// A missing file yields the defaults rather than being created, so callers
-/// that only want to *inspect* the configuration leave no trace. `config
-/// check` relies on this: it is meant to run as a Kubernetes initContainer
-/// against a read-only mount, and a validation step that writes a config file
-/// as a side effect would be its own bug.
+/// `config check` relies on both. It runs as a Kubernetes initContainer
+/// against a read-only mount, so writing a config file as a side effect would
+/// be its own bug, and it needs to list every problem rather than stop at the
+/// first.
 pub fn resolve_config(config_path: &Path) -> anyhow::Result<Config> {
-    Config::load(config_path)
-}
-
-/// Emit a single line when environment variables will need renaming in the
-/// next major version, or are being ignored right now.
-///
-/// Deliberately one line rather than one per variable. In this version the
-/// flat names are still correct, so a warning per variable would be recurring
-/// noise about something the operator cannot act on yet. `codex config check`
-/// is where the detail lives.
-fn warn_about_renamed_env_vars() {
-    if let Some(notice) = env_var_notice(&codex_config::audit_env()) {
-        warn!("{notice}");
-    }
-}
-
-/// The single advisory line, or `None` when there is nothing to say.
-///
-/// Returning at most one string is the point: the count goes in the log and
-/// the detail lives in `codex config check`. Naming each variable here would
-/// put a growing block in every process's startup output on every boot.
-fn env_var_notice(findings: &[codex_config::Finding]) -> Option<String> {
-    if findings.is_empty() {
-        return None;
-    }
-
-    let ignored = findings.iter().filter(|f| f.is_ignored_now()).count();
-    let renamed = findings.len() - ignored;
-
-    Some(match (renamed, ignored) {
-        (0, _) => format!(
-            "{ignored} environment variable(s) are not being read. \
-             Run `codex config check` for details."
-        ),
-        (_, 0) => format!(
-            "{renamed} environment variable(s) will be renamed in Codex 2.0. \
-             Run `codex config check` for the list."
-        ),
-        _ => format!(
-            "{renamed} environment variable(s) will be renamed in Codex 2.0 and \
-             {ignored} are not being read. Run `codex config check` for details."
-        ),
-    })
+    Config::resolve(config_path)
 }
 
 /// Bundle of long-lived guards returned by [`init_tracing`].
@@ -1149,62 +1106,6 @@ mod tests {
         assert!(db_path.parent().unwrap().exists());
         assert!(pdf_cache_dir.exists());
         assert!(plugins_dir.exists());
-    }
-
-    fn rename_finding(var: &str) -> codex_config::Finding {
-        codex_config::Finding::WillRename {
-            var: var.to_string(),
-            v2_name: format!("{var}__X"),
-            path: "task.worker_count".to_string(),
-        }
-    }
-
-    fn ignored_finding(var: &str) -> codex_config::Finding {
-        codex_config::Finding::NotYetValid {
-            var: var.to_string(),
-            v1_name: "CODEX_TASK_WORKER_COUNT".to_string(),
-        }
-    }
-
-    #[test]
-    fn env_notice_is_silent_when_nothing_is_wrong() {
-        assert_eq!(env_var_notice(&[]), None);
-    }
-
-    /// One line regardless of how many variables are involved. A per-variable
-    /// warning would be recurring noise about names that are still correct in
-    /// this version.
-    #[test]
-    fn env_notice_is_a_single_line_that_names_no_variables() {
-        let findings: Vec<_> = (0..14)
-            .map(|i| rename_finding(&format!("CODEX_THING_{i}")))
-            .collect();
-        let notice = env_var_notice(&findings).expect("should produce a notice");
-
-        assert_eq!(notice.lines().count(), 1, "notice must be one line");
-        assert!(
-            !notice.contains("CODEX_"),
-            "notice must not name variables: {notice}"
-        );
-        assert!(notice.contains("14"), "notice should carry the count");
-        assert!(notice.contains("codex config check"));
-    }
-
-    #[test]
-    fn env_notice_distinguishes_renames_from_ignored_variables() {
-        let renames_only = env_var_notice(&[rename_finding("CODEX_A")]).unwrap();
-        assert!(renames_only.contains("renamed in Codex 2.0"));
-        assert!(!renames_only.contains("not being read"));
-
-        let ignored_only = env_var_notice(&[ignored_finding("CODEX_B__C")]).unwrap();
-        assert!(ignored_only.contains("not being read"));
-        assert!(!ignored_only.contains("renamed in Codex 2.0"));
-
-        let both = env_var_notice(&[rename_finding("CODEX_A"), ignored_finding("CODEX_B__C")])
-            .expect("should produce a notice");
-        assert!(both.contains("renamed in Codex 2.0"));
-        assert!(both.contains("not being read"));
-        assert_eq!(both.lines().count(), 1);
     }
 
     /// `resolve_config` backs `codex config check`, which is meant to run

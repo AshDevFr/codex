@@ -35,6 +35,34 @@ impl Config {
     /// are a complete configuration on their own, which is what a container
     /// with no mounted file relies on.
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self> {
+        let config = Self::resolve(path)?;
+
+        // After resolution, not before: unknown keys are ignored by serde so
+        // extraction always succeeds in the case this catches, and exempting
+        // the variables a provider's `client_secret_env` names needs the
+        // resolved config.
+        for warning in crate::enforce_env(&config)? {
+            if let crate::Finding::Unknown { var, nearest } = warning {
+                match nearest {
+                    Some(path) => tracing::warn!(
+                        "{var} is not a Codex setting; did you mean {}?",
+                        crate::v2_name_for(&path)
+                    ),
+                    None => tracing::warn!("{var} is not a Codex setting; ignoring"),
+                }
+            }
+        }
+
+        Ok(config)
+    }
+
+    /// Resolve configuration without checking the environment for names that
+    /// are no longer read.
+    ///
+    /// `codex config check` uses this so it can report every problem at once
+    /// instead of dying on the first. Everything that starts a process wants
+    /// [`Config::load`].
+    pub fn resolve<P: AsRef<Path>>(path: P) -> Result<Self> {
         let path = path.as_ref();
 
         // The same layers twice: once over the defaults to produce the config,
@@ -221,12 +249,72 @@ mod tests {
         });
     }
 
-    /// v1 spelling must NOT be honoured. It is reported by the validator with
-    /// its replacement instead of quietly half-working.
+    /// The old flat spelling is not read, and must not be quietly ignored:
+    /// a deployment that keeps it would run on a value nobody chose.
     #[test]
-    fn the_old_flat_names_are_not_read() {
+    fn the_old_flat_names_stop_startup() {
         Jail::expect_with(|jail| {
             jail.set_env("CODEX_APPLICATION_PORT", "4321");
+
+            let error = Config::load(jail.directory().join("absent.yaml")).unwrap_err();
+            let message = format!("{error:#}");
+
+            assert!(message.contains("CODEX_APPLICATION_PORT"), "{message}");
+            assert!(
+                message.contains("CODEX_APPLICATION__PORT"),
+                "error must name the replacement: {message}"
+            );
+            Ok(())
+        });
+    }
+
+    /// `resolve` skips the check so `config check` can report everything at
+    /// once rather than dying on the first offender.
+    #[test]
+    fn resolve_ignores_the_old_names_instead_of_failing() {
+        Jail::expect_with(|jail| {
+            jail.set_env("CODEX_APPLICATION_PORT", "4321");
+
+            let config = Config::resolve(jail.directory().join("absent.yaml")).unwrap();
+
+            assert_eq!(config.application.port, 8080, "the old name is not read");
+            Ok(())
+        });
+    }
+
+    /// Every offender in one message: twelve of them should be one fix, not
+    /// twelve restarts.
+    #[test]
+    fn every_offending_variable_is_reported_together() {
+        Jail::expect_with(|jail| {
+            jail.set_env("CODEX_APPLICATION_PORT", "1");
+            jail.set_env("CODEX_TASK_WORKER_COUNT", "2");
+            jail.set_env("CODEX_DISABLE_WORKERS", "true");
+
+            let error = Config::load(jail.directory().join("absent.yaml")).unwrap_err();
+            let message = format!("{error:#}");
+
+            for var in [
+                "CODEX_APPLICATION_PORT",
+                "CODEX_TASK_WORKER_COUNT",
+                "CODEX_DISABLE_WORKERS",
+            ] {
+                assert!(message.contains(var), "{var} missing from: {message}");
+            }
+            assert!(
+                message.contains("INVERTED"),
+                "the inverted replacement must be called out: {message}"
+            );
+            Ok(())
+        });
+    }
+
+    /// An unrecognized name is a warning, never fatal: another tool may use
+    /// the same prefix, and guessing wrong should not take a deployment down.
+    #[test]
+    fn an_unrecognized_variable_does_not_stop_startup() {
+        Jail::expect_with(|jail| {
+            jail.set_env("CODEX_SOMETHING_NOBODY_KNOWS", "x");
             let config = Config::load(jail.directory().join("absent.yaml")).unwrap();
             assert_eq!(config.application.port, 8080);
             Ok(())

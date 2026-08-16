@@ -1,8 +1,9 @@
 //! `codex config` — inspect configuration without starting the server.
 //!
-//! `check` resolves the configuration exactly as `serve` would, reports every
-//! environment variable that this version does not read or that changes name
-//! in the next major version, and prints the result with secrets removed.
+//! `check` resolves the configuration the way `serve` does, reports every
+//! `CODEX_` variable that is not read, and prints the result with secrets
+//! removed. Unlike `serve` it lists every problem rather than stopping at the
+//! first, which is the whole point of running it before a deployment.
 //!
 //! It opens no database connection and writes nothing, so it is safe to run as
 //! a Kubernetes initContainer ahead of the app container, or as a one-off Job
@@ -20,7 +21,7 @@ use codex_config::{Config, Finding, audit_env_with_config, redacted_yaml};
 pub enum ConfigSubcommand {
     /// Validate environment variables and print the resolved configuration
     Check {
-        /// Exit non-zero if anything at all was reported, not just errors
+        /// Also fail on warnings, not just on settings that are no longer read
         #[arg(long)]
         strict: bool,
 
@@ -37,13 +38,18 @@ pub fn config_command(config_path: PathBuf, command: ConfigSubcommand) -> Result
 }
 
 fn check(config_path: &Path, strict: bool, quiet: bool) -> Result<()> {
+    // `resolve` rather than `load`: the point is to list every problem,
+    // and `load` refuses to start on the first one.
     let config = resolve_config(config_path)?;
     let findings = audit_env_with_config(&config);
     let report = build_report(config_path, &config, &findings, quiet)?;
 
     print!("{report}");
 
-    if strict && !findings.is_empty() {
+    // Match what the server will do: a fatal finding stops it, so `check`
+    // fails too. `--strict` additionally fails on warnings.
+    let failed = findings.iter().any(Finding::is_fatal) || (strict && !findings.is_empty());
+    if failed {
         std::process::exit(1);
     }
     Ok(())
@@ -74,13 +80,13 @@ fn build_report(
         }
     )?;
 
-    let renames: Vec<&Finding> = findings
+    let legacy: Vec<&Finding> = findings
         .iter()
-        .filter(|f| matches!(f, Finding::WillRename { .. }))
+        .filter(|f| matches!(f, Finding::Legacy { .. }))
         .collect();
-    let ignored: Vec<&Finding> = findings
+    let removed: Vec<&Finding> = findings
         .iter()
-        .filter(|f| matches!(f, Finding::NotYetValid { .. }))
+        .filter(|f| matches!(f, Finding::Removed { .. }))
         .collect();
     let unknown: Vec<&Finding> = findings
         .iter()
@@ -91,34 +97,42 @@ fn build_report(
         writeln!(out, "\n  No environment variable problems found.")?;
     }
 
-    if !renames.is_empty() {
+    if !legacy.is_empty() {
         writeln!(
             out,
-            "\nEnvironment variables that change name in Codex 2.0 ({}):",
-            renames.len()
+            "\nERROR: environment variables that are no longer read ({}):",
+            legacy.len()
         )?;
-        let width = renames.iter().map(|f| f.var().len()).max().unwrap_or(0);
-        for finding in &renames {
-            if let Finding::WillRename { var, v2_name, .. } = finding {
-                writeln!(out, "  {var:<width$}  ->  {v2_name}")?;
+        let width = legacy.iter().map(|f| f.var().len()).max().unwrap_or(0);
+        for finding in &legacy {
+            if let Finding::Legacy {
+                var, replacement, ..
+            } = finding
+            {
+                writeln!(out, "  {var:<width$}  ->  {replacement}")?;
             }
         }
         writeln!(
             out,
-            "\n  These names are correct for this version. Do not rename them until you\n  \
-             upgrade to Codex 2.0: this version does not read the new spelling."
+            "\n  Nesting levels are separated by `__` since Codex 2.0."
         )?;
+        writeln!(out, "  A single `_` still separates words inside one key.")?;
     }
 
-    if !ignored.is_empty() {
+    if !removed.is_empty() {
         writeln!(
             out,
-            "\nEnvironment variables that are NOT being read right now ({}):",
-            ignored.len()
+            "\nERROR: environment variables that were replaced ({}):",
+            removed.len()
         )?;
-        for finding in &ignored {
-            if let Finding::NotYetValid { var, v1_name } = finding {
-                writeln!(out, "  {var}\n      this version reads {v1_name} instead")?;
+        for finding in &removed {
+            if let Finding::Removed {
+                var,
+                replacement,
+                note,
+            } = finding
+            {
+                writeln!(out, "  {var}\n      use {replacement}  ({note})")?;
             }
         }
     }
@@ -126,7 +140,7 @@ fn build_report(
     if !unknown.is_empty() {
         writeln!(
             out,
-            "\nUnrecognized environment variables ({}):",
+            "\nWarning: unrecognized environment variables ({}):",
             unknown.len()
         )?;
         for finding in &unknown {
@@ -135,7 +149,7 @@ fn build_report(
                     Some(path) => writeln!(
                         out,
                         "  {var}\n      not a Codex setting; did you mean {}?",
-                        codex_config::v1_name_for(path)
+                        codex_config::v2_name_for(path)
                     )?,
                     None => writeln!(out, "  {var}\n      not a Codex setting; ignored")?,
                 }
@@ -157,10 +171,10 @@ fn build_report(
 mod tests {
     use super::*;
 
-    fn rename(var: &str, v2_name: &str, path: &str) -> Finding {
-        Finding::WillRename {
+    fn legacy(var: &str, replacement: &str, path: &str) -> Finding {
+        Finding::Legacy {
             var: var.to_string(),
-            v2_name: v2_name.to_string(),
+            replacement: replacement.to_string(),
             path: path.to_string(),
         }
     }
@@ -176,15 +190,15 @@ mod tests {
     }
 
     #[test]
-    fn renames_are_listed_with_their_replacement() {
+    fn legacy_names_are_listed_with_their_replacement() {
         let text = report(
             &[
-                rename(
+                legacy(
                     "CODEX_TASK_WORKER_COUNT",
                     "CODEX_TASK__WORKER_COUNT",
                     "task.worker_count",
                 ),
-                rename(
+                legacy(
                     "CODEX_APPLICATION_PORT",
                     "CODEX_APPLICATION__PORT",
                     "application.port",
@@ -192,45 +206,32 @@ mod tests {
             ],
             true,
         );
-        assert!(text.contains("change name in Codex 2.0 (2)"));
-        assert!(text.contains("CODEX_TASK_WORKER_COUNT"));
+        assert!(text.contains("no longer read (2)"));
         assert!(text.contains("CODEX_TASK__WORKER_COUNT"));
         assert!(text.contains("CODEX_APPLICATION__PORT"));
+        assert!(text.contains("separated by `__`"));
     }
 
-    /// Renaming early silently drops the setting, so the report has to say so
-    /// rather than just handing over the new name.
+    /// The two inverted replacements are the ones worth reading carefully, so
+    /// the note has to reach the report.
     #[test]
-    fn the_report_warns_against_renaming_early() {
+    fn replaced_variables_carry_their_note() {
         let text = report(
-            &[rename(
-                "CODEX_TASK_WORKER_COUNT",
-                "CODEX_TASK__WORKER_COUNT",
-                "task.worker_count",
-            )],
-            true,
-        );
-        assert!(
-            text.contains("Do not rename them until you"),
-            "missing the do-not-rename-early warning:\n{text}"
-        );
-    }
-
-    #[test]
-    fn variables_not_being_read_are_called_out() {
-        let text = report(
-            &[Finding::NotYetValid {
-                var: "CODEX_TASK__WORKER_COUNT".to_string(),
-                v1_name: "CODEX_TASK_WORKER_COUNT".to_string(),
+            &[Finding::Removed {
+                var: "CODEX_DISABLE_WORKERS".to_string(),
+                replacement: "CODEX_TASK__RUN_IN_PROCESS".to_string(),
+                note: "INVERTED: `DISABLE_WORKERS=true` becomes `RUN_IN_PROCESS=false`".to_string(),
             }],
             true,
         );
-        assert!(text.contains("NOT being read right now (1)"));
-        assert!(text.contains("this version reads CODEX_TASK_WORKER_COUNT instead"));
+        assert!(text.contains("were replaced (1)"));
+        assert!(text.contains("CODEX_TASK__RUN_IN_PROCESS"));
+        assert!(text.contains("INVERTED"));
     }
 
+    /// Unknown names are advisory; the heading must not read as an error.
     #[test]
-    fn unknown_variables_suggest_a_v1_name() {
+    fn unknown_variables_are_a_warning_with_a_suggestion() {
         let text = report(
             &[Finding::Unknown {
                 var: "CODEX_DATABASE_POSTGRES_USER".to_string(),
@@ -238,11 +239,8 @@ mod tests {
             }],
             true,
         );
-        assert!(text.contains("Unrecognized environment variables (1)"));
-        assert!(
-            text.contains("did you mean CODEX_DATABASE_POSTGRES_USERNAME?"),
-            "suggestion should use this version's spelling:\n{text}"
-        );
+        assert!(text.contains("Warning: unrecognized"));
+        assert!(text.contains("did you mean CODEX_DATABASE__POSTGRES__USERNAME?"));
     }
 
     #[test]
@@ -259,8 +257,7 @@ mod tests {
 
     #[test]
     fn a_clean_environment_reports_nothing_to_fix() {
-        let text = report(&[], true);
-        assert!(text.contains("No environment variable problems found."));
+        assert!(report(&[], true).contains("No environment variable problems found."));
     }
 
     #[test]
