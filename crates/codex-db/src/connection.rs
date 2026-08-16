@@ -27,6 +27,70 @@ pub struct Database {
     conn: DatabaseConnection,
 }
 
+/// Characters that must be escaped inside the userinfo part of a URL.
+///
+/// A password is arbitrary text, and `@`, `/`, `:`, `?` and `#` all mean
+/// something to a URL parser. Interpolating one directly, as this used to,
+/// silently produced a connection string pointing somewhere else.
+const USERINFO_ESCAPE: &percent_encoding::AsciiSet = &percent_encoding::NON_ALPHANUMERIC
+    .remove(b'-')
+    .remove(b'.')
+    .remove(b'_')
+    .remove(b'~');
+
+/// Characters escaped inside a query value. Narrower than the userinfo set:
+/// `-._~`, `/` and `:` are all legal here, and escaping them turns a readable
+/// certificate path into noise.
+const QUERY_ESCAPE: &percent_encoding::AsciiSet = &percent_encoding::NON_ALPHANUMERIC
+    .remove(b'-')
+    .remove(b'.')
+    .remove(b'_')
+    .remove(b'~')
+    .remove(b'/')
+    .remove(b':');
+
+/// Build the PostgreSQL connection URL, including TLS settings.
+///
+/// TLS parameters are only appended when configured, so leaving `ssl_mode`
+/// unset keeps the driver's own resolution (and therefore `PGSSLMODE`) intact
+/// for deployments set up before the setting existed.
+fn postgres_url(config: &codex_config::PostgresConfig) -> String {
+    use percent_encoding::utf8_percent_encode as encode;
+
+    let mut url = format!(
+        "postgres://{}:{}@{}:{}/{}",
+        encode(&config.username, USERINFO_ESCAPE),
+        encode(&config.password, USERINFO_ESCAPE),
+        config.host,
+        config.port,
+        config.database_name,
+    );
+
+    let mut params: Vec<(&str, String)> = Vec::new();
+    if let Some(mode) = config.ssl_mode {
+        params.push(("sslmode", mode.as_str().to_string()));
+    }
+    if let Some(path) = &config.ssl_root_cert {
+        params.push(("sslrootcert", path.clone()));
+    }
+    if let Some(path) = &config.ssl_client_cert {
+        params.push(("sslcert", path.clone()));
+    }
+    if let Some(path) = &config.ssl_client_key {
+        params.push(("sslkey", path.clone()));
+    }
+
+    if !params.is_empty() {
+        let query: Vec<String> = params
+            .iter()
+            .map(|(k, v)| format!("{k}={}", encode(v, QUERY_ESCAPE)))
+            .collect();
+        url.push('?');
+        url.push_str(&query.join("&"));
+    }
+    url
+}
+
 impl Database {
     /// Validate pragma key to prevent SQL injection
     /// Only allows alphanumeric characters and underscores
@@ -138,15 +202,7 @@ impl Database {
                     .as_ref()
                     .context("PostgreSQL configuration is required when db_type is postgres")?;
 
-                // Build connection string
-                let connection_string = format!(
-                    "postgres://{}:{}@{}:{}/{}",
-                    postgres_config.username,
-                    postgres_config.password,
-                    postgres_config.host,
-                    postgres_config.port,
-                    postgres_config.database_name
-                );
+                let connection_string = postgres_url(postgres_config);
 
                 // Configure connection pool options
                 let mut opt = ConnectOptions::new(connection_string);
@@ -515,6 +571,54 @@ impl Database {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use codex_config::{PgSslMode, PostgresConfig};
+
+    fn pg(f: impl FnOnce(&mut PostgresConfig)) -> String {
+        let mut config = PostgresConfig::default();
+        f(&mut config);
+        postgres_url(&config)
+    }
+
+    /// Interpolating the password directly meant one containing `@` or `/`
+    /// pointed the connection at a different host entirely.
+    #[test]
+    fn credentials_are_percent_encoded() {
+        let url = pg(|c| {
+            c.username = "co dex".to_string();
+            c.password = "p@ss/w:rd?#".to_string();
+            c.host = "db.internal".to_string();
+        });
+
+        assert!(
+            url.starts_with("postgres://co%20dex:p%40ss%2Fw%3Ard%3F%23@db.internal:"),
+            "credentials must be escaped: {url}"
+        );
+    }
+
+    /// No TLS keys means no query string, so the driver keeps resolving
+    /// `PGSSLMODE` for deployments configured before the setting existed.
+    #[test]
+    fn no_tls_settings_leaves_the_url_untouched() {
+        let url = pg(|_| {});
+        assert!(!url.contains('?'), "unexpected query string: {url}");
+    }
+
+    #[test]
+    fn the_tls_mode_reaches_the_url() {
+        let url = pg(|c| c.ssl_mode = Some(PgSslMode::VerifyFull));
+        assert!(url.ends_with("?sslmode=verify-full"), "{url}");
+    }
+
+    #[test]
+    fn certificate_paths_reach_the_url() {
+        let url = pg(|c| {
+            c.ssl_mode = Some(PgSslMode::VerifyCa);
+            c.ssl_root_cert = Some("/etc/ssl/ca.crt".to_string());
+        });
+        assert!(url.contains("sslmode=verify-ca"), "{url}");
+        assert!(url.contains("sslrootcert=/etc/ssl/ca.crt"), "{url}");
+    }
     use codex_config::{DatabaseConfig, DatabaseType, SQLiteConfig};
     use tempfile::TempDir;
 

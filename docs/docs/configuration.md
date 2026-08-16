@@ -135,57 +135,47 @@ Overrunning the budget does not degrade gracefully: the server refuses new conne
 
 #### PostgreSQL TLS
 
-TLS is **not** configured in `codex.yaml`. There is no `ssl_mode` setting.
-Codex builds a plain `postgres://` URL and lets the driver apply the standard
-libpq environment variables, so those are the supported way to control
-transport security:
+TLS is configured under `database.postgres`:
 
-| Variable | Purpose |
-|----------|---------|
-| `PGSSLMODE` | Negotiation mode (see the table below). Defaults to `prefer`. |
-| `PGSSLROOTCERT` | Path to the CA certificate used to verify the server. |
-| `PGSSLCERT`, `PGSSLKEY` | Client certificate and key, for mutual TLS. |
+```yaml
+database:
+  postgres:
+    ssl_mode: verify-full
+    ssl_root_cert: /etc/ssl/certs/postgres-ca.crt
+    # ssl_client_cert / ssl_client_key for mutual TLS
+```
 
-| `PGSSLMODE` | Encrypted | Certificate verified | Hostname verified |
+| Setting | Purpose |
+|---------|---------|
+| `ssl_mode` | Negotiation mode (see the table below). Unset leaves the driver default, `prefer`. |
+| `ssl_root_cert` | CA certificate used to verify the server. |
+| `ssl_client_cert`, `ssl_client_key` | Client certificate and key, for mutual TLS. |
+
+| `ssl_mode` | Encrypted | Certificate verified | Hostname verified |
 |-------------|-----------|----------------------|-------------------|
 | `disable` | no | no | no |
 | `allow` | only if the server requires it | no | no |
-| `prefer` *(default)* | only if the server offers it | **no** | **no** |
+| `prefer` *(driver default)* | only if the server offers it | **no** | **no** |
 | `require` | yes | no | no |
 | `verify-ca` | yes | yes | no |
 | `verify-full` | yes | yes | yes |
 
-:::warning The default guards against eavesdropping, not against interception
-`prefer` encrypts the connection when the server offers TLS, but it accepts
-**any** certificate and **silently falls back to an unencrypted connection**
-when the server does not offer one. Neither the fallback nor a bogus
+:::warning Leaving `ssl_mode` unset guards against eavesdropping, not interception
+The driver default is `prefer`: it encrypts when the server offers TLS, but it
+accepts **any** certificate and **silently falls back to an unencrypted
+connection** when the server offers none. Neither the fallback nor a bogus
 certificate is logged, so a downgrade looks exactly like a healthy start.
 
-That is adequate on a private network you control. It is not adequate over any
-link an attacker could sit on. Require verification explicitly:
-
-```bash
-PGSSLMODE=verify-full
-PGSSLROOTCERT=/etc/ssl/certs/postgres-ca.crt
-```
+That is adequate on a private network you control, and not much else. Set
+`ssl_mode: verify-full` for anything remote or managed.
 :::
 
-:::note These are not `CODEX_` variables
-They are read by the PostgreSQL driver rather than by Codex, so they carry no
-`CODEX_` prefix and will not appear in `codex config check` output. They apply
-to every command that opens a PostgreSQL connection, including `serve`,
-`worker`, `migrate`, `export`, `import` and `copy`.
-:::
-
-:::info Changing in Codex 2.0
-TLS becomes a first-class setting: `database.postgres.ssl_mode` and
-`database.postgres.ssl_root_cert` in `codex.yaml`, with matching
-`CODEX_DATABASE__POSTGRES__SSL_MODE` and `CODEX_DATABASE__POSTGRES__SSL_ROOT_CERT`
-environment variables. `codex config check` will then validate them like any
-other setting.
-
-The libpq variables above keep working as a fallback, so nothing you configure
-now has to be undone. Configuring both will make the Codex setting win.
+:::note The libpq variables still work
+`PGSSLMODE`, `PGSSLROOTCERT`, `PGSSLCERT` and `PGSSLKEY` are read by the driver
+when the corresponding Codex setting is unset, so a deployment configured that
+way keeps working. The Codex setting wins when both are present. Being driver
+variables they carry no `CODEX_` prefix and do not appear in `codex config
+check`.
 :::
 
 ## Application Configuration

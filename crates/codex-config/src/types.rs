@@ -713,6 +713,42 @@ pub enum DatabaseType {
     SQLite,
 }
 
+/// How much protection to demand on the PostgreSQL connection.
+///
+/// The names match libpq, and so do the semantics. Note the gap between
+/// `require` and `verify-ca`: `require` encrypts but accepts any certificate,
+/// which stops passive capture and not an active attacker.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum PgSslMode {
+    /// Never use TLS.
+    Disable,
+    /// Use TLS only if the server insists.
+    Allow,
+    /// Use TLS if offered, fall back to plaintext, verify nothing.
+    Prefer,
+    /// Require TLS, but accept any certificate.
+    Require,
+    /// Require TLS and verify the certificate against the CA.
+    VerifyCa,
+    /// Require TLS and verify both the certificate and the hostname.
+    VerifyFull,
+}
+
+impl PgSslMode {
+    /// The libpq spelling, which is what goes in the connection URL.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            PgSslMode::Disable => "disable",
+            PgSslMode::Allow => "allow",
+            PgSslMode::Prefer => "prefer",
+            PgSslMode::Require => "require",
+            PgSslMode::VerifyCa => "verify-ca",
+            PgSslMode::VerifyFull => "verify-full",
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(default)]
 pub struct PostgresConfig {
@@ -721,6 +757,31 @@ pub struct PostgresConfig {
     pub username: String,
     pub password: String,
     pub database_name: String,
+
+    /// TLS mode for this connection.
+    ///
+    /// Unset leaves the driver's own default in place, which is `prefer`:
+    /// encrypt when the server offers it, accept any certificate, and fall
+    /// back to plaintext otherwise, silently in both cases. That is adequate
+    /// on a private network and not much else. Setting it here also overrides
+    /// `PGSSLMODE`, which remains the fallback for deployments configured
+    /// before this setting existed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssl_mode: Option<PgSslMode>,
+
+    /// CA certificate used to verify the server, required by `verify-ca` and
+    /// `verify-full` unless the system trust store already has it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::de::optional_string")]
+    pub ssl_root_cert: Option<String>,
+
+    /// Client certificate and key, for mutual TLS.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::de::optional_string")]
+    pub ssl_client_cert: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::de::optional_string")]
+    pub ssl_client_key: Option<String>,
 
     // Connection Pool Settings
     /// Maximum number of connections in the pool (default: 25)
@@ -783,6 +844,10 @@ impl Default for PostgresConfig {
             username: "codex".to_string(),
             password: "codex".to_string(),
             database_name: "codex".to_string(),
+            ssl_mode: None,
+            ssl_root_cert: None,
+            ssl_client_cert: None,
+            ssl_client_key: None,
             // Pool settings - PostgreSQL can handle more concurrent connections
             max_connections: 25,
             min_connections: 2,

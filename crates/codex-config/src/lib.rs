@@ -16,8 +16,8 @@ pub use types::{
     EmailConfig, FilesConfig, ImagesConfig, KomgaApiConfig, KoreaderApiConfig, LoggingConfig,
     ObservabilityBrowserConfig, ObservabilityConfig, ObservabilityMetricsConfig,
     ObservabilityTracesConfig, OidcConfig, OidcDefaultRole, OidcProviderConfig, OtlpConfig,
-    OtlpProtocol, PdfConfig, PdfHandleCacheConfig, PluginsConfig, PostgresConfig, RateLimitConfig,
-    SQLiteConfig, ScannerConfig, SchedulerConfig, TaskConfig,
+    OtlpProtocol, PdfConfig, PdfHandleCacheConfig, PgSslMode, PluginsConfig, PostgresConfig,
+    RateLimitConfig, SQLiteConfig, ScannerConfig, SchedulerConfig, TaskConfig,
 };
 
 pub use env_audit::{

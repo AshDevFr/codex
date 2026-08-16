@@ -48,6 +48,9 @@ migration = { path = "../../migration" }
 # Repository-level helpers.
 serde_json = "1.0"
 rand = "0.10"
+# Credentials go into a connection URL, so they must be percent-encoded.
+percent-encoding = "2"
+
 # Used by `connection::Database` to set sqlx logging level on connect.
 log = "0.4"
 # Pulled in optionally for `test-utils` so test_helpers can mint temp

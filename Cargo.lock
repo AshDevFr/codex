@@ -977,6 +977,7 @@ dependencies = [
  "codex-utils",
  "log",
  "migration",
+ "percent-encoding",
  "rand 0.10.0",
  "sea-orm",
  "sea-orm-migration",
