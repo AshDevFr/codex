@@ -20,7 +20,7 @@ pub async fn export_command(
     no_plugins: bool,
     progress: bool,
 ) -> Result<()> {
-    let (config, _created) = load_config(config_path.clone())?;
+    let config = load_config(config_path.clone())?;
     let _tracing = init_tracing(&config)?;
     info!("Loading configuration from {:?}", config_path);
 

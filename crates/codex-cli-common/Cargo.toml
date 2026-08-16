@@ -34,6 +34,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-opentelemetry = { version = "0.33", optional = true }
 
 [dev-dependencies]
+figment = { version = "0.10", features = ["test"] }
 tempfile = { workspace = true }
 serial_test = { workspace = true }
 codex-db = { workspace = true, features = ["test-utils"] }

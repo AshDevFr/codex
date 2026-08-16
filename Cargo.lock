@@ -939,6 +939,7 @@ dependencies = [
  "codex-events",
  "codex-services",
  "codex-tasks",
+ "figment",
  "sea-orm",
  "serial_test",
  "tempfile",

@@ -20,7 +20,7 @@ pub async fn import_command(
     no_verify: bool,
     full_verification: bool,
 ) -> Result<()> {
-    let (config, _created) = load_config(config_path.clone())?;
+    let config = load_config(config_path.clone())?;
     let _tracing = init_tracing(&config)?;
     info!("Loading configuration from {:?}", config_path);
 
@@ -162,7 +162,7 @@ files:
     }
 
     async fn seed_library(config_path: &Path, name: &str) {
-        let (config, _) = load_config(config_path.to_path_buf()).unwrap();
+        let config = load_config(config_path.to_path_buf()).unwrap();
         let db = Database::new(&config.database).await.unwrap();
         db.run_migrations().await.unwrap();
         db.create_library(name, "/lib", codex_db::ScanningStrategy::Default)
@@ -171,7 +171,7 @@ files:
     }
 
     async fn library_names(config_path: &Path) -> Vec<String> {
-        let (config, _) = load_config(config_path.to_path_buf()).unwrap();
+        let config = load_config(config_path.to_path_buf()).unwrap();
         let db = Database::new(&config.database).await.unwrap();
         db.list_libraries()
             .await

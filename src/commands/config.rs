@@ -14,7 +14,7 @@ use clap::Subcommand;
 use std::path::{Path, PathBuf};
 
 use codex_cli_common::resolve_config;
-use codex_config::{Config, Finding, audit_env_with_config, redacted_yaml};
+use codex_config::{Config, Finding, audit_env_with_config, redacted_yaml, write_starter_config};
 
 /// Configuration subcommands
 #[derive(Subcommand, Debug)]
@@ -29,11 +29,24 @@ pub enum ConfigSubcommand {
         #[arg(short, long)]
         quiet: bool,
     },
+
+    /// Write a commented starter configuration file
+    Init {
+        /// Replace an existing file
+        #[arg(long)]
+        force: bool,
+    },
 }
 
 pub fn config_command(config_path: PathBuf, command: ConfigSubcommand) -> Result<()> {
     match command {
         ConfigSubcommand::Check { strict, quiet } => check(&config_path, strict, quiet),
+        ConfigSubcommand::Init { force } => {
+            write_starter_config(&config_path, force)?;
+            println!("Wrote a starter configuration to {}", config_path.display());
+            println!("Edit it, then run `codex config check` to validate.");
+            Ok(())
+        }
     }
 }
 
