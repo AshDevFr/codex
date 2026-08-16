@@ -80,28 +80,17 @@ pub fn ensure_data_directories(config: &Config) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Load and apply configuration
-pub fn load_config(config_path: PathBuf) -> anyhow::Result<(Config, bool)> {
-    // Ensure config file parent directory exists
-    ensure_parent_dir_exists(&config_path)?;
-
-    // Check if config file exists, if not create a default one
-    let config_created = if !config_path.exists() {
-        println!(
-            "Config file not found at {:?}, creating default configuration...",
-            config_path
-        );
-        let default_config = Config::default();
-        default_config.to_file(&config_path)?;
-        println!("Default config file created at {:?}", config_path);
-        true
-    } else {
-        false
-    };
-
-    let config = Config::load(&config_path)?;
-
-    Ok((config, config_created))
+/// Load configuration for a process that is about to run.
+///
+/// A missing file is not an error and is not created: defaults plus the
+/// environment are a complete configuration, which is what a container with
+/// nothing mounted relies on. Codex used to write `Config::default()` to disk
+/// here instead, which produced an uncommented dump and, because the defaults
+/// were read from the environment at the time, captured whatever secrets were
+/// set on that first boot. `codex config init` writes a commented template
+/// when an operator actually asks for one.
+pub fn load_config(config_path: PathBuf) -> anyhow::Result<Config> {
+    Config::load(&config_path)
 }
 
 /// Resolve configuration for inspection: no file is created, and an
@@ -1133,20 +1122,42 @@ mod tests {
         assert_eq!(config.application.port, 9123);
     }
 
+    /// Loading must leave no trace. Codex used to write `Config::default()`
+    /// here, which produced an uncommented dump and, because the defaults were
+    /// read from the environment, captured whatever secrets were set on that
+    /// first boot.
     #[test]
-    fn test_load_config_creates_parent_directory() {
+    fn load_config_does_not_create_anything() {
         let temp_dir = TempDir::new().unwrap();
         let config_path = temp_dir.path().join("config").join("codex.yaml");
 
-        assert!(!config_path.parent().unwrap().exists());
+        let config = load_config(config_path.clone()).unwrap();
 
-        let (config, created) = load_config(config_path.clone()).unwrap();
-
-        assert!(config_path.parent().unwrap().exists());
-        assert!(config_path.exists());
-        assert!(created);
-        // Verify it's a valid config
+        assert!(!config_path.exists(), "no config file should be written");
+        assert!(
+            !config_path.parent().unwrap().exists(),
+            "no directory should be created either"
+        );
         assert!(!config.application.host.is_empty());
+    }
+
+    /// The specific leak the change closes.
+    // `figment::Error` is large and every `Jail` closure returns it.
+    #[allow(clippy::result_large_err)]
+    #[test]
+    fn a_secret_in_the_environment_is_never_written_to_disk() {
+        figment::Jail::expect_with(|jail| {
+            let config_path = jail.directory().join("codex.yaml");
+            jail.set_env("CODEX_DATABASE__POSTGRES__PASSWORD", "super-secret");
+
+            load_config(config_path.clone()).unwrap();
+
+            assert!(
+                !config_path.exists(),
+                "startup must not serialize an env-provided secret to disk"
+            );
+            Ok(())
+        });
     }
 
     #[tokio::test]

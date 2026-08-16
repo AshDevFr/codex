@@ -81,7 +81,7 @@ pub enum TasksSubcommand {
 /// Main task command handler - routes to specific subcommands
 pub async fn tasks_command(config_path: PathBuf, subcommand: TasksSubcommand) -> Result<()> {
     // Load configuration and initialize database
-    let (config, _) = load_config(config_path)?;
+    let config = load_config(config_path)?;
     let db = init_database(&config).await?;
     let conn = db.sea_orm_connection();
 

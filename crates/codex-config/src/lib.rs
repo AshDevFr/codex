@@ -25,5 +25,5 @@ pub use env_audit::{
     enforce_env, secret_env_targets, v1_name_for, v2_name_for,
 };
 pub use keys::{KeyRegistry, registry};
-pub use loader::{ENV_NESTING_SEPARATOR, ENV_PREFIX};
+pub use loader::{ENV_NESTING_SEPARATOR, ENV_PREFIX, STARTER_CONFIG_YAML, write_starter_config};
 pub use redact::{REDACTED, UNSET, redacted_value, redacted_yaml};

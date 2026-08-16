@@ -12,7 +12,7 @@ use tracing::info;
 /// Worker command handler - starts task workers without web server
 pub async fn worker_command(config_path: PathBuf) -> anyhow::Result<()> {
     // Load configuration
-    let (config, _config_created) = load_config(config_path.clone())?;
+    let config = load_config(config_path.clone())?;
 
     // Initialize tracing with config (composes fmt + optional OTel layer)
     let tracing_handles = init_tracing(&config)?;

@@ -1,0 +1,171 @@
+# Codex configuration
+#
+# Every key below is optional: Codex starts with no config file at all, and
+# anything absent here falls back to the default shown in the comment.
+#
+# Precedence, lowest to highest:
+#
+#   1. built-in defaults
+#   2. this file
+#   3. codex.local.yaml  (a sibling file, if present)
+#   4. CODEX_* environment variables
+#
+# `codex.local.yaml` is the place for secrets and per-host overrides. It merges
+# key by key, so it only needs the handful you want to change. Lists are the
+# exception: a list in the overlay replaces the base list rather than adding
+# to it.
+#
+# Environment variables separate nesting levels with a double underscore and
+# words within one key with a single underscore:
+#
+#   rate_limit.anonymous_rps  ->  CODEX_RATE_LIMIT__ANONYMOUS_RPS
+#   database.postgres.host    ->  CODEX_DATABASE__POSTGRES__HOST
+#
+# Run `codex config check` to validate this file and see the resolved result
+# with secrets redacted.
+
+# Base directory for everything Codex writes. Each path below defaults to a
+# subdirectory of it, so setting this one key moves them all together.
+data_dir: data
+
+database:
+  # sqlite (default) or postgres
+  db_type: sqlite
+
+  sqlite:
+    # Defaults to <data_dir>/codex.db
+    # path: data/codex.db
+    pragmas:
+      journal_mode: WAL
+      foreign_keys: "ON"
+    # max_connections: 64
+    # min_connections: 2
+
+  # postgres:
+  #   host: localhost
+  #   port: 5432
+  #   username: codex
+  #   password: codex          # prefer codex.local.yaml or the environment
+  #   database_name: codex
+  #   # Per process, not per deployment. Every replica, worker and job opens
+  #   # its own pool against the server's shared max_connections.
+  #   max_connections: 25
+
+  # Apply pending migrations at startup. Set false when a separate Job or init
+  # container owns them; Codex then waits for the schema instead of applying it.
+  # run_migrations: true
+  # migration_wait_timeout_secs: 300
+  # migration_wait_interval_secs: 2
+
+application:
+  host: 0.0.0.0
+  port: 8080
+  # Public URL, used for OIDC redirects and email links. Without it Codex
+  # falls back to http://{host}:{port}, which is wrong behind a proxy.
+  # base_url: https://codex.example.com
+
+auth:
+  # Generate with: openssl rand -base64 32
+  jwt_secret: INSECURE_DEFAULT_SECRET_CHANGE_IN_PRODUCTION
+  # jwt_expiry_hours: 24
+  # refresh_token_enabled: true
+  # Send `Secure` on auth cookies. Off by default so plain-HTTP development
+  # works; turn it on anywhere TLS is terminated.
+  # cookie_secure: true
+
+  # oidc:
+  #   enabled: true
+  #   providers:
+  #     authentik:
+  #       display_name: Authentik
+  #       issuer_url: https://idp.example.com/application/o/codex/
+  #       client_id: codex
+  #       # Either the secret itself, or the name of a variable holding it:
+  #       # client_secret: ...
+  #       client_secret_env: CODEX_OIDC_AUTHENTIK_SECRET
+  #       role_mapping:
+  #         admin: [codex-admins]
+
+logging:
+  # error | warn | info | debug | trace
+  level: info
+  console: true
+  # file: /var/log/codex/codex.log
+
+# api:
+#   # base_path: /api/v1
+#   # enable_api_docs: false
+#   # cors_enabled: true
+#   # cors_origins: ["*"]
+
+task:
+  # Workers per process.
+  worker_count: 2
+  # Run workers in this process. Set false for a web-only replica in a
+  # deployment where workers have their own pods.
+  # run_in_process: true
+
+# scanner:
+#   # max_concurrent_scans: 2
+
+scheduler:
+  # IANA timezone for cron schedules.
+  timezone: UTC
+
+# files:
+#   # All default to subdirectories of data_dir.
+#   # thumbnail_dir: data/thumbnails
+#   # uploads_dir: data/uploads
+#   # plugins_dir: data/plugins
+
+# images:
+#   # Concurrent decode/resize/render operations. Each one holds an uncompressed
+#   # bitmap, so this bounds peak image memory.
+#   # decode_concurrency: 3
+
+# pdf:
+#   # render_dpi: 150
+#   # jpeg_quality: 85
+#   # cache_dir: data/cache
+
+# pdf_handle_cache:
+#   # enabled: true
+#   # capacity: 256
+
+# plugins:
+#   # Extra executables plugins may spawn, on top of the built-in runtimes
+#   # (node, npx, python, python3, uv, uvx).
+#   # allowed_commands: [deno]
+
+# rate_limit:
+#   # enabled: true
+#   # anonymous_rps: 10
+#   # authenticated_rps: 50
+
+# komga_api:
+#   # Komga-compatible API for third-party clients. Off by default.
+#   # enabled: false
+#   # prefix: komga
+
+# koreader_api:
+#   # enabled: false
+
+# email:
+#   smtp_host: localhost
+#   smtp_port: 587
+#   smtp_username: codex
+#   smtp_password: ...          # prefer codex.local.yaml or the environment
+#   smtp_from_email: noreply@example.com
+
+# observability:
+#   enabled: true
+#   service_name: codex
+#   otlp:
+#     endpoint: http://collector:4317
+#     protocol: grpc            # grpc | http/protobuf | http/json
+#     headers: {}
+#   traces:
+#     enabled: true
+#     sample_ratio: 1.0
+#   metrics:
+#     enabled: true

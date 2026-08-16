@@ -103,6 +103,38 @@ impl Config {
     }
 }
 
+/// The commented starter shipped with the binary, written by `codex config
+/// init`.
+///
+/// A template rather than a dump of `Config::default()`. Serializing the live
+/// defaults produced a file with no comments, and, because the defaults used
+/// to be read from the environment, it captured whatever was set at the
+/// moment of first boot. A container started once with
+/// `CODEX_DATABASE__POSTGRES__PASSWORD` wrote that password into the generated
+/// YAML in plaintext.
+pub const STARTER_CONFIG_YAML: &str = include_str!("../../../config/codex.example.yaml");
+
+/// Write [`STARTER_CONFIG_YAML`] to `path`, creating parent directories.
+///
+/// Refuses to overwrite unless `force`, so a stray `config init` cannot clobber
+/// a tuned production config.
+pub fn write_starter_config(path: &Path, force: bool) -> Result<()> {
+    if path.exists() && !force {
+        anyhow::bail!(
+            "refusing to overwrite the existing config at {}; pass --force to replace it",
+            path.display()
+        );
+    }
+    if let Some(parent) = path.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        fs::create_dir_all(parent).with_context(|| format!("creating {}", parent.display()))?;
+    }
+    fs::write(path, STARTER_CONFIG_YAML)
+        .with_context(|| format!("writing starter config to {}", path.display()))?;
+    Ok(())
+}
+
 /// Stack the file, overlay and environment layers onto `base`.
 fn layers(path: &Path, base: Figment) -> Figment {
     let mut figment = base;
@@ -867,6 +899,72 @@ database:
             "migrations were applied by default before"
         );
         assert!(!config.auth.cookie_secure(), "Secure was off by default");
+    }
+
+    // ---- starter template ----
+
+    /// The template must parse, or `config init` hands the operator a file
+    /// that stops the server.
+    #[test]
+    fn the_starter_template_is_a_valid_config() {
+        Jail::expect_with(|jail| {
+            jail.create_file("codex.yaml", STARTER_CONFIG_YAML)?;
+            let config = Config::load(jail.directory().join("codex.yaml")).unwrap();
+            assert_eq!(config.application.port, 8080);
+            assert_eq!(config.scheduler.timezone, "UTC");
+            Ok(())
+        });
+    }
+
+    /// It documents the surface, so a new section that never reaches it is a
+    /// section operators cannot discover.
+    #[test]
+    fn the_starter_template_mentions_every_section() {
+        for section in [
+            "database:",
+            "application:",
+            "auth:",
+            "logging:",
+            "api:",
+            "task:",
+            "scanner:",
+            "scheduler:",
+            "files:",
+            "images:",
+            "pdf:",
+            "plugins:",
+            "rate_limit:",
+            "komga_api:",
+            "koreader_api:",
+            "email:",
+            "observability:",
+        ] {
+            assert!(
+                STARTER_CONFIG_YAML.contains(section),
+                "the starter template does not mention `{section}`"
+            );
+        }
+    }
+
+    #[test]
+    fn writing_the_starter_creates_parents_and_refuses_to_clobber() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("nested").join("codex.yaml");
+
+        write_starter_config(&path, false).unwrap();
+        assert!(path.exists());
+
+        std::fs::write(&path, "application:\n  port: 1234\n").unwrap();
+        let error = write_starter_config(&path, false).unwrap_err();
+        assert!(error.to_string().contains("--force"), "{error}");
+        assert!(std::fs::read_to_string(&path).unwrap().contains("1234"));
+
+        write_starter_config(&path, true).unwrap();
+        assert!(
+            std::fs::read_to_string(&path)
+                .unwrap()
+                .contains("Codex configuration")
+        );
     }
 
     #[test]

@@ -13,7 +13,7 @@ use tracing::info;
 /// Serve command handler - starts the media server
 pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     // Load configuration
-    let (config, config_created) = load_config(config_path.clone())?;
+    let config = load_config(config_path.clone())?;
 
     // Initialize tracing with config (composes fmt + optional OTel layer)
     let tracing_handles = init_tracing(&config)?;
@@ -24,9 +24,6 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         tracing_handles.observability.metrics_enabled(),
     );
 
-    if config_created {
-        info!("Created default configuration file");
-    }
     info!("Loading configuration from {:?}", config_path);
     info!("Configuration loaded successfully");
 

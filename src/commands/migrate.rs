@@ -6,7 +6,7 @@ use tracing::info;
 /// Migrate command handler - runs database migrations and exits
 pub async fn migrate_command(config_path: PathBuf) -> Result<()> {
     // Load configuration
-    let (config, _config_created) = load_config(config_path.clone())?;
+    let config = load_config(config_path.clone())?;
 
     // Initialize tracing with config (composes fmt + optional OTel layer)
     let _tracing_handles = init_tracing(&config)?;

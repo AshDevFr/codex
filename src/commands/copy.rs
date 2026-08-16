@@ -27,7 +27,7 @@ pub async fn copy_command(
     full_verification: bool,
 ) -> Result<()> {
     // Local config: used for tracing and as the fallback for an omitted side.
-    let (local_config, _created) = load_config(config_path.clone())?;
+    let local_config = load_config(config_path.clone())?;
     let _tracing = init_tracing(&local_config)?;
 
     let source_explicit = resolve_side(
@@ -139,7 +139,7 @@ fn resolve_side(
         return Ok(Some(database_config_from_url(&u)?));
     }
     if let Some(path) = config_file {
-        let (config, _created) = load_config(path.to_path_buf())?;
+        let config = load_config(path.to_path_buf())?;
         return Ok(Some(config.database));
     }
     Ok(None)
@@ -197,7 +197,7 @@ files:
 
         // Seed the source.
         {
-            let (config, _) = load_config(src_cfg.clone()).unwrap();
+            let config = load_config(src_cfg.clone()).unwrap();
             let db = Database::new(&config.database).await.unwrap();
             db.run_migrations().await.unwrap();
             db.create_library("Manga", "/lib", codex_db::ScanningStrategy::Default)
@@ -220,7 +220,7 @@ files:
         .await
         .expect("copy should succeed");
 
-        let (config, _) = load_config(tgt_cfg).unwrap();
+        let config = load_config(tgt_cfg).unwrap();
         let db = Database::new(&config.database).await.unwrap();
         let libs = db.list_libraries().await.unwrap();
         assert_eq!(libs.len(), 1);
