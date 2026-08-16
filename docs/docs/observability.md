@@ -25,11 +25,11 @@ Jaeger exposes its UI at [http://localhost:16686](http://localhost:16686). Hit a
 The env overrides live in `docker-compose.yml` under the `codex-dev` and `codex-dev-worker` services:
 
 ```yaml
-CODEX_OBSERVABILITY_ENABLED: "true"
-CODEX_OBSERVABILITY_SERVICE_NAME: codex
-CODEX_OBSERVABILITY_OTLP_ENDPOINT: http://jaeger:4317
-CODEX_OBSERVABILITY_OTLP_PROTOCOL: grpc
-CODEX_OBSERVABILITY_BROWSER_ENABLED: "true"   # codex-dev only; enables RUM proxy
+CODEX_OBSERVABILITY__ENABLED: "true"
+CODEX_OBSERVABILITY__SERVICE_NAME: codex
+CODEX_OBSERVABILITY__OTLP__ENDPOINT: http://jaeger:4317
+CODEX_OBSERVABILITY__OTLP__PROTOCOL: grpc
+CODEX_OBSERVABILITY__BROWSER__ENABLED: "true"   # codex-dev only; enables RUM proxy
 ```
 
 `config/config.docker.yaml` itself ships with the `observability:` block commented out so a production deployment using the same config doesn't quietly start exporting telemetry — the dev override is intentionally local to the compose file.

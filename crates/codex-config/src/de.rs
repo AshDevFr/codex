@@ -138,6 +138,16 @@ where
             Ok(split_csv(value))
         }
 
+        // figment turns an all-digit value into a number before serde sees it,
+        // so a single numeric entry would otherwise fail to deserialize.
+        fn visit_u64<E: de::Error>(self, value: u64) -> Result<Vec<String>, E> {
+            Ok(vec![value.to_string()])
+        }
+
+        fn visit_i64<E: de::Error>(self, value: i64) -> Result<Vec<String>, E> {
+            Ok(vec![value.to_string()])
+        }
+
         fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Vec<String>, A::Error> {
             let mut out = Vec::new();
             while let Some(item) = seq.next_element::<String>()? {
@@ -158,40 +168,87 @@ pub fn string_map<'de, D>(deserializer: D) -> Result<HashMap<String, String>, D:
 where
     D: Deserializer<'de>,
 {
-    struct StringMap;
+    deserializer.deserialize_any(StringMapVisitor)
+}
 
-    impl<'de> Visitor<'de> for StringMap {
-        type Value = HashMap<String, String>;
+struct StringMapVisitor;
+
+impl<'de> Visitor<'de> for StringMapVisitor {
+    type Value = HashMap<String, String>;
+
+    fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str("a map, or a comma-separated list of key=value pairs")
+    }
+
+    fn visit_str<E: de::Error>(self, value: &str) -> Result<Self::Value, E> {
+        let mut out = HashMap::new();
+        for entry in split_csv(value) {
+            let (key, val) = entry
+                .split_once('=')
+                .ok_or_else(|| E::custom(format!("expected `key=value`, found `{entry}`")))?;
+            let key = key.trim();
+            if key.is_empty() {
+                return Err(E::custom(format!("empty key in `{entry}`")));
+            }
+            out.insert(key.to_string(), val.trim().to_string());
+        }
+        Ok(out)
+    }
+
+    fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+        let mut out = HashMap::new();
+        while let Some((key, value)) = map.next_entry::<String, String>()? {
+            out.insert(key, value);
+        }
+        Ok(out)
+    }
+}
+
+/// An optional string map, empty meaning absent.
+///
+/// `database.sqlite.pragmas` is `Option<HashMap<..>>`, so it needs the option
+/// wrapper for the same reason `optional_truthy_bool` does: serde hands the
+/// inner value to the option's deserializer, bypassing [`string_map`].
+pub fn optional_string_map<'de, D>(
+    deserializer: D,
+) -> Result<Option<HashMap<String, String>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    struct OptionalStringMap;
+
+    impl<'de> Visitor<'de> for OptionalStringMap {
+        type Value = Option<HashMap<String, String>>;
 
         fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            f.write_str("a map, or a comma-separated list of key=value pairs")
+            f.write_str("a map, `key=value` pairs, or nothing")
+        }
+
+        fn visit_none<E: de::Error>(self) -> Result<Self::Value, E> {
+            Ok(None)
+        }
+
+        fn visit_unit<E: de::Error>(self) -> Result<Self::Value, E> {
+            Ok(None)
         }
 
         fn visit_str<E: de::Error>(self, value: &str) -> Result<Self::Value, E> {
-            let mut out = HashMap::new();
-            for entry in split_csv(value) {
-                let (key, val) = entry
-                    .split_once('=')
-                    .ok_or_else(|| E::custom(format!("expected `key=value`, found `{entry}`")))?;
-                let key = key.trim();
-                if key.is_empty() {
-                    return Err(E::custom(format!("empty key in `{entry}`")));
-                }
-                out.insert(key.to_string(), val.trim().to_string());
+            if value.is_empty() {
+                return Ok(None);
             }
-            Ok(out)
+            StringMapVisitor.visit_str(value).map(Some)
         }
 
-        fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
-            let mut out = HashMap::new();
-            while let Some((key, value)) = map.next_entry::<String, String>()? {
-                out.insert(key, value);
-            }
-            Ok(out)
+        fn visit_map<A: MapAccess<'de>>(self, map: A) -> Result<Self::Value, A::Error> {
+            StringMapVisitor.visit_map(map).map(Some)
+        }
+
+        fn visit_some<D2: Deserializer<'de>>(self, inner: D2) -> Result<Self::Value, D2::Error> {
+            inner.deserialize_any(StringMapVisitor).map(Some)
         }
     }
 
-    deserializer.deserialize_any(StringMap)
+    deserializer.deserialize_option(OptionalStringMap)
 }
 
 /// A map whose values are themselves comma-separated lists.
@@ -377,6 +434,16 @@ mod tests {
             .unwrap()
             .value;
         assert!(empty.is_empty());
+    }
+
+    /// figment parses an all-digit value as a number, so a one-element list
+    /// of digits must still work.
+    #[test]
+    fn lists_accept_a_bare_number() {
+        let parsed = serde_yaml::from_str::<ListHolder>("value: 8080")
+            .unwrap()
+            .value;
+        assert_eq!(parsed, vec!["8080"]);
     }
 
     #[test]

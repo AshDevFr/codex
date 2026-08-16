@@ -147,7 +147,7 @@ Plugin data is isolated per user. Each user-plugin connection has a unique `user
 
 Plugins run as **child processes** spawned by Codex, communicating over stdin/stdout via JSON-RPC. This provides process-level isolation:
 
-- **Command allowlist**: Only approved commands can be used to launch plugins (`node`, `npx`, `python`, `python3`, `uv`, `uvx`, and paths under `/opt/codex/plugins/`). Custom commands can be allowed via the `CODEX_PLUGIN_ALLOWED_COMMANDS` environment variable.
+- **Command allowlist**: Only approved commands can be used to launch plugins (`node`, `npx`, `python`, `python3`, `uv`, `uvx`, and paths under `/opt/codex/plugins/`). Custom commands can be allowed via the `CODEX_PLUGINS__ALLOWED_COMMANDS` environment variable.
 - **Environment variable blocklist**: Dangerous environment variables are stripped before spawning plugins, including `LD_*`, `DYLD_*`, `PATH`, `HOME`, `PYTHONPATH`, `NODE_PATH`, and others that could enable library injection or path manipulation.
 - **Request timeout**: Every JSON-RPC request has a **30-second timeout**. If a plugin hangs or becomes unresponsive, the request fails gracefully rather than blocking the server.
 - **Health monitoring**: Failed requests are tracked, and plugins that fail repeatedly are automatically disabled.

@@ -67,14 +67,14 @@ spec:
           image: codex:latest
           args: ["config", "check", "--strict", "--quiet"]
           env:
-            - name: CODEX_DATABASE_DB_TYPE
+            - name: CODEX_DATABASE__DB_TYPE
               value: "postgres"
-            - name: CODEX_DATABASE_POSTGRES_HOST
+            - name: CODEX_DATABASE__POSTGRES__HOST
               valueFrom:
                 configMapKeyRef:
                   name: codex-config
                   key: postgres-host
-            - name: CODEX_AUTH_JWT_SECRET
+            - name: CODEX_AUTH__JWT_SECRET
               valueFrom:
                 secretKeyRef:
                   name: codex-secrets
@@ -85,19 +85,19 @@ spec:
           ports:
             - containerPort: 8080
           env:
-            - name: CODEX_DATABASE_DB_TYPE
+            - name: CODEX_DATABASE__DB_TYPE
               value: "postgres"
-            - name: CODEX_DATABASE_POSTGRES_HOST
+            - name: CODEX_DATABASE__POSTGRES__HOST
               valueFrom:
                 configMapKeyRef:
                   name: codex-config
                   key: postgres-host
-            - name: CODEX_DATABASE_POSTGRES_PASSWORD
+            - name: CODEX_DATABASE__POSTGRES__PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: codex-secrets
                   key: postgres-password
-            - name: CODEX_AUTH_JWT_SECRET
+            - name: CODEX_AUTH__JWT_SECRET
               valueFrom:
                 secretKeyRef:
                   name: codex-secrets

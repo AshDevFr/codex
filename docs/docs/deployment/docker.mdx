@@ -53,7 +53,7 @@ services:
       # Codex data
       - codex-data:/app/data
     environment:
-      CODEX_AUTH_JWT_SECRET: "your-secure-secret-here"
+      CODEX_AUTH__JWT_SECRET: "your-secure-secret-here"
     restart: unless-stopped
 
 volumes:
@@ -78,7 +78,7 @@ services:
       # Use a local directory for data
       - ./codex-data:/app/data
     environment:
-      CODEX_AUTH_JWT_SECRET: "your-secure-secret-here"
+      CODEX_AUTH__JWT_SECRET: "your-secure-secret-here"
     restart: unless-stopped
 ```
 
@@ -118,14 +118,14 @@ services:
       - /path/to/your/library:/library:ro
       - codex-data:/app/data
     environment:
-      CODEX_AUTH_JWT_SECRET: "your-secure-secret-here"
-      CODEX_DATABASE_DB_TYPE: postgres
-      CODEX_DATABASE_POSTGRES_HOST: postgres
-      CODEX_DATABASE_POSTGRES_PORT: 5432
-      CODEX_DATABASE_POSTGRES_USERNAME: codex
-      CODEX_DATABASE_POSTGRES_PASSWORD: codex
-      CODEX_DATABASE_POSTGRES_DATABASE_NAME: codex
-      # CODEX_SCHEDULER_TIMEZONE: America/Los_Angeles  # IANA timezone for cron jobs (default: UTC)
+      CODEX_AUTH__JWT_SECRET: "your-secure-secret-here"
+      CODEX_DATABASE__DB_TYPE: postgres
+      CODEX_DATABASE__POSTGRES__HOST: postgres
+      CODEX_DATABASE__POSTGRES__PORT: 5432
+      CODEX_DATABASE__POSTGRES__USERNAME: codex
+      CODEX_DATABASE__POSTGRES__PASSWORD: codex
+      CODEX_DATABASE__POSTGRES__DATABASE_NAME: codex
+      # CODEX_SCHEDULER__TIMEZONE: America/Los_Angeles  # IANA timezone for cron jobs (default: UTC)
     restart: unless-stopped
 
 volumes:
@@ -134,7 +134,7 @@ volumes:
 ```
 
 :::tip Timezone for Cron Jobs
-The Docker `TZ` environment variable does **not** affect Codex cron scheduling. To run scheduled library scans in your local timezone, set `CODEX_SCHEDULER_TIMEZONE` to a valid [IANA timezone name](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) (e.g., `America/Los_Angeles`, `Europe/London`). Each library can also override this with its own timezone in the scanning configuration.
+The Docker `TZ` environment variable does **not** affect Codex cron scheduling. To run scheduled library scans in your local timezone, set `CODEX_SCHEDULER__TIMEZONE` to a valid [IANA timezone name](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) (e.g., `America/Los_Angeles`, `Europe/London`). Each library can also override this with its own timezone in the scanning configuration.
 :::
 
 ## Separate Worker Containers (Advanced)
@@ -158,13 +158,13 @@ x-codex-common: &codex-common
     - /path/to/your/library:/library:ro
     - codex-data:/app/data
   environment: &codex-env
-    CODEX_AUTH_JWT_SECRET: "your-secure-secret-here"
-    CODEX_DATABASE_DB_TYPE: postgres
-    CODEX_DATABASE_POSTGRES_HOST: postgres
-    CODEX_DATABASE_POSTGRES_PORT: 5432
-    CODEX_DATABASE_POSTGRES_USERNAME: codex
-    CODEX_DATABASE_POSTGRES_PASSWORD: codex
-    CODEX_DATABASE_POSTGRES_DATABASE_NAME: codex
+    CODEX_AUTH__JWT_SECRET: "your-secure-secret-here"
+    CODEX_DATABASE__DB_TYPE: postgres
+    CODEX_DATABASE__POSTGRES__HOST: postgres
+    CODEX_DATABASE__POSTGRES__PORT: 5432
+    CODEX_DATABASE__POSTGRES__USERNAME: codex
+    CODEX_DATABASE__POSTGRES__PASSWORD: codex
+    CODEX_DATABASE__POSTGRES__DATABASE_NAME: codex
   depends_on:
     postgres:
       condition: service_healthy
@@ -195,8 +195,8 @@ services:
       - "8080:8080"
     environment:
       <<: *codex-env
-      # Disable workers in the web container
-      CODEX_DISABLE_WORKERS: "true"
+      # Workers run in their own container
+      CODEX_TASK__RUN_IN_PROCESS: "false"
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
       interval: 10s
@@ -212,9 +212,9 @@ services:
     environment:
       <<: *codex-env
       # Number of parallel task workers
-      CODEX_TASK_WORKER_COUNT: "4"
-      # Skip migrations (web container handles them)
-      CODEX_SKIP_MIGRATIONS: "true"
+      CODEX_TASK__WORKER_COUNT: "4"
+      # The web container applies migrations; this one waits for them
+      CODEX_DATABASE__RUN_MIGRATIONS: "false"
     depends_on:
       postgres:
         condition: service_healthy
@@ -230,9 +230,9 @@ volumes:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `CODEX_DISABLE_WORKERS` | Disable background workers in web container | `false` |
-| `CODEX_SKIP_MIGRATIONS` | Skip database migrations on startup | `false` |
-| `CODEX_TASK_WORKER_COUNT` | Number of parallel task workers | `4` |
+| `CODEX_TASK__RUN_IN_PROCESS` | Run background workers in this container | `true` |
+| `CODEX_DATABASE__RUN_MIGRATIONS` | Apply migrations at startup; when false, wait for them | `true` |
+| `CODEX_TASK__WORKER_COUNT` | Number of parallel task workers | `4` |
 
 ### Scaling Workers
 
@@ -290,7 +290,7 @@ services:
     environment:
       PUID: 1000
       PGID: 1000
-      CODEX_AUTH_JWT_SECRET: "your-secret-here"
+      CODEX_AUTH__JWT_SECRET: "your-secret-here"
     volumes:
       - ./codex-data:/app/data
       - ./codex-config:/app/config
@@ -309,11 +309,11 @@ Common environment variables for Docker:
 |----------|-------------|---------|
 | `PUID` | User ID for file permissions | `1000` |
 | `PGID` | Group ID for file permissions | `1000` |
-| `CODEX_AUTH_JWT_SECRET` | JWT signing secret | `your-secret-key` |
-| `CODEX_DATABASE_DB_TYPE` | Database type | `postgres` or `sqlite` |
-| `CODEX_DATABASE_POSTGRES_HOST` | PostgreSQL host | `postgres` |
-| `CODEX_DATABASE_POSTGRES_PASSWORD` | PostgreSQL password | `secret` |
-| `CODEX_LOGGING_LEVEL` | Log level | `info`, `debug` |
+| `CODEX_AUTH__JWT_SECRET` | JWT signing secret | `your-secret-key` |
+| `CODEX_DATABASE__DB_TYPE` | Database type | `postgres` or `sqlite` |
+| `CODEX_DATABASE__POSTGRES__HOST` | PostgreSQL host | `postgres` |
+| `CODEX_DATABASE__POSTGRES__PASSWORD` | PostgreSQL password | `secret` |
+| `CODEX_LOGGING__LEVEL` | Log level | `info`, `debug` |
 
 See [Configuration](../configuration) for all options.
 

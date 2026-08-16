@@ -6,7 +6,7 @@ docker run -d \
   -v codex-data:/app/data \
   -e PUID=1000 \
   -e PGID=1000 \
-  -e CODEX_AUTH_JWT_SECRET="$(openssl rand -base64 32)" \
+  -e CODEX_AUTH__JWT_SECRET="$(openssl rand -base64 32)" \
   ghcr.io/ashdevfr/codex:latest
 ```
 

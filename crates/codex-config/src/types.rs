@@ -865,6 +865,7 @@ impl Default for PostgresConfig {
 #[serde(default)]
 pub struct SQLiteConfig {
     pub path: String,
+    #[serde(deserialize_with = "crate::de::optional_string_map")]
     pub pragmas: Option<HashMap<String, String>>,
 
     // Connection Pool Settings

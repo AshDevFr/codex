@@ -13,6 +13,11 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: "category",
+      label: "Upgrading",
+      items: ["migration/v2-config"],
+    },
+    {
+      type: "category",
       label: "Libraries & Scanning",
       items: [
         "libraries",

@@ -136,7 +136,7 @@ What you need to prepare depends on the engine:
 - **SQLite target — nothing to create.** Like `serve`, `import` writes a default
   config if none exists and creates the database file (and its parent
   directories) automatically. Just point `database.sqlite.path` (or
-  `CODEX_DATABASE_SQLITE_PATH`) at the destination and run it.
+  `CODEX_DATABASE__SQLITE__PATH`) at the destination and run it.
 - **PostgreSQL target — create the empty database and role first.** PostgreSQL
   won't create a database from a connection string, so provision it once (your
   Kubernetes chart / operator / an init job typically does this):

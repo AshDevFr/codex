@@ -50,21 +50,21 @@ services:
       # Configuration overrides (optional - uses CODEX_ prefix)
       # These override values in the config file
       # Application configuration
-      # CODEX_APPLICATION_HOST: 0.0.0.0
-      # CODEX_APPLICATION_PORT: 8080
+      # CODEX_APPLICATION__HOST: 0.0.0.0
+      # CODEX_APPLICATION__PORT: 8080
 
       # Database connection
-      # CODEX_DATABASE_DB_TYPE: postgres
-      # CODEX_DATABASE_POSTGRES_HOST: postgres
-      # CODEX_DATABASE_POSTGRES_PORT: 5432
-      # CODEX_DATABASE_POSTGRES_USERNAME: codex
-      # CODEX_DATABASE_POSTGRES_PASSWORD: codex
-      # CODEX_DATABASE_POSTGRES_DATABASE_NAME: codex
+      # CODEX_DATABASE__DB_TYPE: postgres
+      # CODEX_DATABASE__POSTGRES__HOST: postgres
+      # CODEX_DATABASE__POSTGRES__PORT: 5432
+      # CODEX_DATABASE__POSTGRES__USERNAME: codex
+      # CODEX_DATABASE__POSTGRES__PASSWORD: codex
+      # CODEX_DATABASE__POSTGRES__DATABASE_NAME: codex
       #
       # Startup-time settings (in config file, require restart):
-      # CODEX_TASK_WORKER_COUNT: 4 # Number of parallel task workers per pod
-      # CODEX_SCANNER_MAX_CONCURRENT_SCANS: 2 # Maximum number of concurrent library scans
-      # CODEX_FILES_THUMBNAIL_DIR: data/thumbnails # Thumbnail cache directory (default: data/thumbnails)
+      # CODEX_TASK__WORKER_COUNT: 4 # Number of parallel task workers per pod
+      # CODEX_SCANNER__MAX_CONCURRENT_SCANS: 2 # Maximum number of concurrent library scans
+      # CODEX_FILES__THUMBNAIL_DIR: data/thumbnails # Thumbnail cache directory (default: data/thumbnails)
     networks:
       - codex-network
     restart: unless-stopped
@@ -114,34 +114,34 @@ services:
       # Encryption key for plugin secrets (base64-encoded 32-byte key)
       # Generate with: openssl rand -base64 32
       CODEX_ENCRYPTION_KEY: "pjImnrzPzSmuvBKkzWAlTzrfyZ9O3pU/9IKuRT94Y/w="
-      # Disable workers in web container (workers run in separate container)
-      CODEX_DISABLE_WORKERS: "true"
+      # Workers run in a separate container
+      CODEX_TASK__RUN_IN_PROCESS: "false"
       # OAuth redirect URI base (must match the externally-facing URL users see in their browser)
       # In dev, the Vite frontend on :5173 proxies API calls to the backend
-      CODEX_AUTH_OIDC_REDIRECT_URI_BASE: "http://localhost:5173"
+      CODEX_AUTH__OIDC__REDIRECT_URI_BASE: "http://localhost:5173"
       # Configuration overrides (optional - uses CODEX_ prefix)
       # Uncomment and modify as needed to override config.docker.yaml values
       # Database connection
-      # CODEX_DATABASE_DB_TYPE: postgres
-      # CODEX_DATABASE_POSTGRES_HOST: postgres
-      # CODEX_DATABASE_POSTGRES_PORT: 5432
-      # CODEX_DATABASE_POSTGRES_USERNAME: codex
-      # CODEX_DATABASE_POSTGRES_PASSWORD: codex
-      # CODEX_DATABASE_POSTGRES_DATABASE_NAME: codex
-      CODEX_SCHEDULER_TIMEZONE: America/Los_Angeles
-      CODEX_LOGGING_LEVEL: debug
+      # CODEX_DATABASE__DB_TYPE: postgres
+      # CODEX_DATABASE__POSTGRES__HOST: postgres
+      # CODEX_DATABASE__POSTGRES__PORT: 5432
+      # CODEX_DATABASE__POSTGRES__USERNAME: codex
+      # CODEX_DATABASE__POSTGRES__PASSWORD: codex
+      # CODEX_DATABASE__POSTGRES__DATABASE_NAME: codex
+      CODEX_SCHEDULER__TIMEZONE: America/Los_Angeles
+      CODEX_LOGGING__LEVEL: debug
       # OpenTelemetry observability: ship traces/metrics to the bundled Jaeger
       # sidecar so `make dev-up` "just works". The Codex config files keep
       # observability disabled by default (trust posture for production
       # deployments); the dev compose overrides that here.
-      CODEX_OBSERVABILITY_ENABLED: "true"
-      CODEX_OBSERVABILITY_SERVICE_NAME: codex
-      CODEX_OBSERVABILITY_OTLP_ENDPOINT: http://jaeger:4317
-      CODEX_OBSERVABILITY_OTLP_PROTOCOL: grpc
+      CODEX_OBSERVABILITY__ENABLED: "true"
+      CODEX_OBSERVABILITY__SERVICE_NAME: codex
+      CODEX_OBSERVABILITY__OTLP__ENDPOINT: http://jaeger:4317
+      CODEX_OBSERVABILITY__OTLP__PROTOCOL: grpc
       # The browser RUM proxy always speaks OTLP/HTTP; point it at Jaeger's
       # HTTP port (4318) instead of reusing the gRPC endpoint above.
-      CODEX_OBSERVABILITY_OTLP_PROXY_ENDPOINT: http://jaeger:4318
-      CODEX_OBSERVABILITY_BROWSER_ENABLED: "true"
+      CODEX_OBSERVABILITY__OTLP__PROXY_ENDPOINT: http://jaeger:4318
+      CODEX_OBSERVABILITY__BROWSER__ENABLED: "true"
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
       interval: 10s
@@ -159,7 +159,7 @@ services:
       - dev
 
   # Codex worker (dedicated worker container for development)
-  # Note: Workers also check migrations on startup, but will skip if CODEX_SKIP_MIGRATIONS is set
+  # Note: workers check migrations on startup; database.run_migrations=false makes them wait instead
   codex-dev-worker:
     build:
       context: .
@@ -226,22 +226,22 @@ services:
       # Encryption key for plugin secrets (must match codex-dev)
       CODEX_ENCRYPTION_KEY: "pjImnrzPzSmuvBKkzWAlTzrfyZ9O3pU/9IKuRT94Y/w="
       # Worker count (can also be set in config file)
-      CODEX_TASK_WORKER_COUNT: "2"
-      CODEX_SKIP_MIGRATIONS: "true"
+      CODEX_TASK__WORKER_COUNT: "2"
+      CODEX_DATABASE__RUN_MIGRATIONS: "false"
       # Database connection
-      # CODEX_DATABASE_DB_TYPE: postgres
-      # CODEX_DATABASE_POSTGRES_HOST: postgres
-      # CODEX_DATABASE_POSTGRES_PORT: 5432
-      # CODEX_DATABASE_POSTGRES_USERNAME: codex
-      # CODEX_DATABASE_POSTGRES_PASSWORD: codex
-      # CODEX_DATABASE_POSTGRES_DATABASE_NAME: codex
-      CODEX_LOGGING_LEVEL: debug
+      # CODEX_DATABASE__DB_TYPE: postgres
+      # CODEX_DATABASE__POSTGRES__HOST: postgres
+      # CODEX_DATABASE__POSTGRES__PORT: 5432
+      # CODEX_DATABASE__POSTGRES__USERNAME: codex
+      # CODEX_DATABASE__POSTGRES__PASSWORD: codex
+      # CODEX_DATABASE__POSTGRES__DATABASE_NAME: codex
+      CODEX_LOGGING__LEVEL: debug
       # OpenTelemetry observability: same overrides as codex-dev so the worker
       # emits spans/metrics into the same Jaeger sidecar.
-      CODEX_OBSERVABILITY_ENABLED: "true"
-      CODEX_OBSERVABILITY_SERVICE_NAME: codex
-      CODEX_OBSERVABILITY_OTLP_ENDPOINT: http://jaeger:4317
-      CODEX_OBSERVABILITY_OTLP_PROTOCOL: grpc
+      CODEX_OBSERVABILITY__ENABLED: "true"
+      CODEX_OBSERVABILITY__SERVICE_NAME: codex
+      CODEX_OBSERVABILITY__OTLP__ENDPOINT: http://jaeger:4317
+      CODEX_OBSERVABILITY__OTLP__PROTOCOL: grpc
     networks:
       - codex-network
     profiles:
@@ -373,7 +373,7 @@ services:
   # Accepts OTLP natively on 4317 (gRPC) / 4318 (HTTP), serves the UI on 16686,
   # and stores spans in memory. Available in the dev profile; the codex-dev and
   # codex-dev-worker services above are pre-wired to send OTLP here via
-  # CODEX_OBSERVABILITY_OTLP_ENDPOINT=http://jaeger:4317.
+  # CODEX_OBSERVABILITY__OTLP__ENDPOINT=http://jaeger:4317.
   jaeger:
     image: jaegertracing/all-in-one:1.62.0
     container_name: codex-jaeger
@@ -449,7 +449,7 @@ services:
     command:
       ["codex", "serve", "--config", "/app/config/config.screenshots.yaml"]
     environment:
-      CODEX_LOGGING_LEVEL: info
+      CODEX_LOGGING__LEVEL: info
       CODEX_ENCRYPTION_KEY: "pjImnrzPzSmuvBKkzWAlTzrfyZ9O3pU/9IKuRT94Y/w="
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
