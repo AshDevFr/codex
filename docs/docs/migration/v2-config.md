@@ -72,20 +72,48 @@ instead of the environment.
 
 ## Other behaviour changes
 
-**A bad value now stops the server.** The old override layer discarded values
-it could not parse, so `CODEX_KOMGA_API_ENABLED=ture` quietly meant `false`.
-Unrecognized input is now an error naming the variable.
+**Values are typed, and a bad one stops the server.** The old override layer
+hand-parsed each value and discarded anything it could not read, so
+`CODEX_KOMGA_API_ENABLED=ture` quietly meant `false`. Values are now parsed by
+type, and anything that does not fit is an error naming the variable.
+
+This is the second thing to change when you upgrade, after the names:
+
+| Type | Before | Now |
+| ---- | ------ | --- |
+| boolean | `1`, `0`, `yes`, `no`, `on`, `off`, `true`, `false` | `true` or `false` |
+| list | `a,b,c` | `[a, b, c]` |
+| map | `k1=v1,k2=v2` | `{k1=v1, k2=v2}` |
+| number | unchanged | unchanged |
+| string | unchanged | unchanged |
+
+```bash
+# before
+CODEX_API_CORS_ORIGINS=https://a.example,https://b.example
+CODEX_OBSERVABILITY_OTLP_HEADERS=authorization=Bearer tok,x-tenant=acme
+CODEX_KOMGA_API_ENABLED=1
+
+# now
+CODEX_API__CORS_ORIGINS='[https://a.example, https://b.example]'
+CODEX_OBSERVABILITY__OTLP__HEADERS='{authorization="Bearer tok", x-tenant=acme}'
+CODEX_KOMGA_API__ENABLED=true
+```
+
+Quote a map or list value that contains a space or a comma, since those
+delimit entries.
+
+An empty value still means "unset", so blanking a variable to turn a setting
+off keeps working.
+
+Parsing stops at the first bad value, so `codex config check` reports one type
+error at a time. The variable-name checks still run alongside it, so you will
+not have to fix them one restart apart.
 
 **Startup no longer writes a config file.** Codex used to serialize its
 defaults to disk when the file was missing, which produced an uncommented dump
 and, because those defaults were read from the environment, could capture a
 database password in plaintext. Run `codex config init` for a commented
 starter instead.
-
-**Values keep the shapes you already use.** Booleans still accept
-`true`/`false`, `1`/`0`, `yes`/`no` and `on`/`off`. Lists still accept a
-comma-separated string. `CODEX_OBSERVABILITY__OTLP__HEADERS` still accepts
-`k1=v1,k2=v2`. An empty value still means "unset".
 
 ## New in this release
 
