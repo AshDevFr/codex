@@ -10,7 +10,8 @@
  * would say they were different things.
  */
 
-import { Box, Group, Paper, Stack, Text, Tooltip } from "@mantine/core";
+import { Anchor, Box, Group, Paper, Stack, Text, Tooltip } from "@mantine/core";
+import { Link } from "react-router-dom";
 import type {
   ReadingByDeviceDto,
   ReadingByFormatDto,
@@ -108,7 +109,10 @@ export function ActivityCalendar({ days }: { days: CalendarDay[] }) {
   const weeks = groupIntoWeeks(days);
   const maxMs = days.reduce((max, d) => Math.max(max, d.totalMs), 0);
 
-  if (weeks.length === 0) {
+  // A window is empty when nothing was read in it, not when the API returned
+  // no rows. Every window has days once the gaps are filled, so drawing on
+  // row count alone renders a silent year as a full grid of empty cells.
+  if (weeks.length === 0 || maxMs === 0) {
     return (
       <Text size="sm" c="dimmed">
         No reading recorded in this period.
@@ -282,9 +286,33 @@ export function PeriodBars({
   );
 }
 
+/**
+ * Rows that contributed no time say nothing, so they are not drawn.
+ *
+ * Not the same as "has no data": the device the backfill calls `legacy` reports
+ * no time at all and thousands of sittings. It is dropped here because this
+ * panel measures time, not because the row is empty.
+ */
+function hasTime(row: { duration: { totalMs: number } }): boolean {
+  return row.duration.totalMs > 0;
+}
+
+/**
+ * The device id the session backfill coins for reading that predates time
+ * tracking. It is bookkeeping, not a device the reader owns, so it never
+ * appears verbatim.
+ */
+const LEGACY_DEVICE_ID = "legacy";
+
+function deviceLabel(device: ReadingByDeviceDto): string {
+  if (device.deviceId === LEGACY_DEVICE_ID) return "Before time tracking";
+  return device.deviceName ?? device.deviceId;
+}
+
 /** A labelled row with a proportional bar. Used for series, devices, formats. */
 function RankedRow({
   label,
+  href,
   sublabel,
   measuredMs,
   inferredMs,
@@ -292,6 +320,7 @@ function RankedRow({
   max,
 }: {
   label: string;
+  href?: string;
   sublabel?: string;
   measuredMs: number;
   inferredMs: number;
@@ -304,9 +333,23 @@ function RankedRow({
   return (
     <Stack gap={4}>
       <Group justify="space-between" wrap="nowrap" gap="sm">
-        <Text size="sm" truncate style={{ minWidth: 0 }}>
-          {label}
-        </Text>
+        {href ? (
+          <Anchor
+            component={Link}
+            to={href}
+            size="sm"
+            truncate
+            c="inherit"
+            underline="hover"
+            style={{ minWidth: 0 }}
+          >
+            {label}
+          </Anchor>
+        ) : (
+          <Text size="sm" truncate style={{ minWidth: 0 }}>
+            {label}
+          </Text>
+        )}
         <Text
           size="sm"
           c="dimmed"
@@ -335,21 +378,24 @@ function RankedRow({
 }
 
 export function TopSeries({ series }: { series: ReadingBySeriesDto[] }) {
-  if (series.length === 0) {
+  const read = series.filter(hasTime);
+
+  if (read.length === 0) {
     return (
       <Text size="sm" c="dimmed">
         No series read in this period.
       </Text>
     );
   }
-  const max = series.reduce((m, s) => Math.max(m, s.duration.totalMs), 0);
+  const max = read.reduce((m, s) => Math.max(m, s.duration.totalMs), 0);
 
   return (
     <Stack gap="md">
-      {series.map((s) => (
+      {read.map((s) => (
         <RankedRow
           key={s.seriesId}
           label={s.seriesName}
+          href={`/series/${s.seriesId}`}
           sublabel={`${s.pagesRead} pages across ${s.books} ${s.books === 1 ? "book" : "books"}`}
           measuredMs={s.duration.measuredMs}
           inferredMs={s.duration.inferredMs}
@@ -366,21 +412,23 @@ export function DeviceBreakdown({
 }: {
   devices: ReadingByDeviceDto[];
 }) {
-  if (devices.length === 0) {
+  const used = devices.filter(hasTime);
+
+  if (used.length === 0) {
     return (
       <Text size="sm" c="dimmed">
         No devices recorded in this period.
       </Text>
     );
   }
-  const max = devices.reduce((m, d) => Math.max(m, d.duration.totalMs), 0);
+  const max = used.reduce((m, d) => Math.max(m, d.duration.totalMs), 0);
 
   return (
     <Stack gap="md">
-      {devices.map((d) => (
+      {used.map((d) => (
         <RankedRow
           key={d.deviceId}
-          label={d.deviceName ?? d.deviceId}
+          label={deviceLabel(d)}
           sublabel={`${d.sessions} ${d.sessions === 1 ? "sitting" : "sittings"}, last read ${new Date(d.lastReadAt).toLocaleDateString()}`}
           measuredMs={d.duration.measuredMs}
           inferredMs={d.duration.inferredMs}
@@ -397,12 +445,14 @@ export function FormatBreakdown({
 }: {
   formats: ReadingByFormatDto[];
 }) {
-  if (formats.length === 0) return null;
-  const max = formats.reduce((m, f) => Math.max(m, f.duration.totalMs), 0);
+  const read = formats.filter(hasTime);
+
+  if (read.length === 0) return null;
+  const max = read.reduce((m, f) => Math.max(m, f.duration.totalMs), 0);
 
   return (
     <Group gap="lg" wrap="wrap">
-      {formats.map((f) => (
+      {read.map((f) => (
         <Stack key={f.format} gap={2} style={{ minWidth: 90 }}>
           <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
             {f.format}

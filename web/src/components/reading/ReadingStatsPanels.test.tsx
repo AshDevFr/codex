@@ -8,6 +8,7 @@ import {
   ActivityCalendar,
   busiestBucketCaption,
   DeviceBreakdown,
+  FormatBreakdown,
   ProvenanceLegend,
   StatTile,
   TopSeries,
@@ -57,9 +58,18 @@ describe("ActivityCalendar", () => {
     ).toBeInTheDocument();
   });
 
+  /// Silent days are drawn too, so the grid has no holes where the quiet days
+  /// were. One day of reading is enough to make the window worth drawing.
   it("draws a cell for every day in the window", () => {
     const days = buildCalendar(
-      [],
+      [
+        {
+          bucket: "2026-06-03",
+          duration: duration(45 * MINUTE),
+          pagesRead: 20,
+          sessions: 1,
+        },
+      ],
       new Date("2026-06-01T00:00:00Z"),
       new Date("2026-06-07T00:00:00Z"),
     );
@@ -69,9 +79,34 @@ describe("ActivityCalendar", () => {
     expect(container.querySelectorAll("rect")).toHaveLength(7);
   });
 
-  it("labels the grid for screen readers", () => {
+  /// A filled window always has weeks, so "did the API return nothing" is the
+  /// wrong question: a year the reader did not read in produces 365 zeroes and
+  /// a uniformly empty grid that looks exactly like a bug.
+  it("says so plainly when every day in the window is zero", () => {
     const days = buildCalendar(
       [],
+      new Date("2026-01-01T00:00:00Z"),
+      new Date("2026-12-31T00:00:00Z"),
+    );
+
+    const { container } = renderWithProviders(<ActivityCalendar days={days} />);
+
+    expect(
+      screen.getByText("No reading recorded in this period."),
+    ).toBeInTheDocument();
+    expect(container.querySelectorAll("rect")).toHaveLength(0);
+  });
+
+  it("labels the grid for screen readers", () => {
+    const days = buildCalendar(
+      [
+        {
+          bucket: "2026-06-02",
+          duration: duration(45 * MINUTE),
+          pagesRead: 20,
+          sessions: 1,
+        },
+      ],
       new Date("2026-06-01T00:00:00Z"),
       new Date("2026-06-03T00:00:00Z"),
     );
@@ -126,6 +161,15 @@ describe("TopSeries", () => {
       screen.getByText("No series read in this period."),
     ).toBeInTheDocument();
   });
+
+  it("links each series to its detail page", () => {
+    renderWithProviders(<TopSeries series={series} />);
+
+    expect(screen.getByRole("link", { name: "Berserk" })).toHaveAttribute(
+      "href",
+      "/series/11111111-1111-1111-1111-111111111111",
+    );
+  });
 });
 
 describe("DeviceBreakdown", () => {
@@ -165,6 +209,158 @@ describe("DeviceBreakdown", () => {
     renderWithProviders(<DeviceBreakdown devices={devices} />);
 
     expect(screen.getByText(/1 sitting, last read/)).toBeInTheDocument();
+  });
+});
+
+/// Rows that contributed no time are noise: before this, a library imported
+/// from before time tracking filled every panel with "0m" rows.
+describe("empty rows", () => {
+  it("leaves series that contributed no time out of the ranking", () => {
+    renderWithProviders(
+      <TopSeries
+        series={[
+          {
+            seriesId: "11111111-1111-1111-1111-111111111111",
+            seriesName: "Berserk",
+            duration: duration(2 * HOUR),
+            pagesRead: 120,
+            sessions: 4,
+            books: 2,
+          },
+          {
+            seriesId: "22222222-2222-2222-2222-222222222222",
+            seriesName: "Imported Series",
+            duration: duration(0),
+            pagesRead: 0,
+            sessions: 6,
+            books: 6,
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("Berserk")).toBeInTheDocument();
+    expect(screen.queryByText("Imported Series")).not.toBeInTheDocument();
+  });
+
+  it("says so plainly when every series is empty", () => {
+    renderWithProviders(
+      <TopSeries
+        series={[
+          {
+            seriesId: "22222222-2222-2222-2222-222222222222",
+            seriesName: "Imported Series",
+            duration: duration(0),
+            pagesRead: 0,
+            sessions: 6,
+            books: 6,
+          },
+        ]}
+      />,
+    );
+
+    expect(
+      screen.getByText("No series read in this period."),
+    ).toBeInTheDocument();
+  });
+
+  it("leaves devices that reported no time out", () => {
+    renderWithProviders(
+      <DeviceBreakdown
+        devices={[
+          {
+            deviceId: "browser-1",
+            deviceName: "Codex Web (Mac)",
+            duration: duration(90 * MINUTE),
+            pagesRead: 60,
+            sessions: 3,
+            lastReadAt: "2026-06-10T12:00:00Z",
+          },
+          {
+            deviceId: "legacy",
+            deviceName: null,
+            duration: duration(0),
+            pagesRead: 0,
+            sessions: 3656,
+            lastReadAt: "2026-08-16T12:00:00Z",
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("Codex Web (Mac)")).toBeInTheDocument();
+    expect(screen.queryByText(/3656 sittings/)).not.toBeInTheDocument();
+  });
+
+  it("leaves formats that reported no time out", () => {
+    renderWithProviders(
+      <FormatBreakdown
+        formats={[
+          {
+            format: "cbz",
+            duration: duration(90 * MINUTE),
+            pagesRead: 60,
+            sessions: 3,
+            books: 2,
+          },
+          {
+            format: "pdf",
+            duration: duration(0),
+            pagesRead: 0,
+            sessions: 0,
+            books: 0,
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("cbz")).toBeInTheDocument();
+    expect(screen.queryByText("pdf")).not.toBeInTheDocument();
+    expect(screen.getByText("1h 30m")).toBeInTheDocument();
+  });
+
+  it("renders no format panel at all when every format is empty", () => {
+    renderWithProviders(
+      <FormatBreakdown
+        formats={[
+          {
+            format: "pdf",
+            duration: duration(0),
+            pagesRead: 0,
+            sessions: 0,
+            books: 0,
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.queryByText("pdf")).not.toBeInTheDocument();
+    expect(screen.queryByText("0m")).not.toBeInTheDocument();
+  });
+});
+
+/// `legacy` is a device id the backfill invents for reading that predates
+/// session tracking. Showing it raw presents an implementation detail as a
+/// piece of hardware the reader owns.
+describe("the legacy device", () => {
+  it("is named for what it is", () => {
+    renderWithProviders(
+      <DeviceBreakdown
+        devices={[
+          {
+            deviceId: "legacy",
+            deviceName: null,
+            duration: duration(30 * MINUTE),
+            pagesRead: 10,
+            sessions: 12,
+            lastReadAt: "2026-06-10T12:00:00Z",
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("Before time tracking")).toBeInTheDocument();
+    expect(screen.queryByText("legacy")).not.toBeInTheDocument();
   });
 });
 

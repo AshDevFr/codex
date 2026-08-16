@@ -164,6 +164,18 @@ const TOTAL_SUM: &str = "CAST(COALESCE(SUM(CASE WHEN rs.duration_source IN ('mea
 /// and counting it would inflate session counts with non-events.
 const READING_KINDS: &str = "rs.kind IN ('progress', 'completed')";
 
+/// How a series is displayed and ordered.
+///
+/// `series.name` is the scanned directory name, kept verbatim so files still
+/// match after a rename; the title a reader sees is `series_metadata.title`,
+/// which preprocessing rules have cleaned (a "(Digital)" suffix stripped, a
+/// dash turned into a colon). Statistics must name a series the way the rest of
+/// the app does, and order it the way the library orders it.
+///
+/// Left-joined and coalesced rather than inner-joined: a series whose metadata
+/// row is missing has to keep appearing in the reader's own history.
+const SERIES_TITLE_SORT: &str = "COALESCE(sm.title_sort, sm.title, s.name)";
+
 #[derive(Debug, FromQueryResult)]
 struct SummaryRow {
     measured_ms: i64,
@@ -361,7 +373,7 @@ impl ReadingStatsRepository {
         let backend = db.get_database_backend();
         let sql = format!(
             "SELECT s.id AS series_id, \
-                    s.name AS series_name, \
+                    COALESCE(sm.title, s.name) AS series_name, \
                     {MEASURED_SUM} AS measured_ms, \
                     {INFERRED_SUM} AS inferred_ms, \
                     {PAGES_SUM} AS pages_read, \
@@ -370,10 +382,11 @@ impl ReadingStatsRepository {
              FROM reading_sessions rs \
              JOIN books b ON b.id = rs.book_id \
              JOIN series s ON s.id = b.series_id \
+             LEFT JOIN series_metadata sm ON sm.series_id = s.id \
              WHERE rs.user_id = $1 AND {READING_KINDS} \
                AND rs.client_started_at >= $2 AND rs.client_started_at < $3 \
-             GROUP BY s.id, s.name \
-             ORDER BY {TOTAL_SUM} DESC, pages_read DESC, series_name ASC \
+             GROUP BY s.id, s.name, sm.title, sm.title_sort \
+             ORDER BY {TOTAL_SUM} DESC, pages_read DESC, {SERIES_TITLE_SORT} ASC \
              LIMIT $4"
         );
 
@@ -492,7 +505,7 @@ mod discriminator_guard {
 mod tests {
     use super::*;
     use crate::entities::reading_sessions::DurationSource;
-    use crate::entities::{books, reading_sessions, users};
+    use crate::entities::{books, reading_sessions, series_metadata, users};
     use crate::repositories::{
         BookRepository, LibraryRepository, SeriesRepository, UserRepository,
     };
@@ -500,7 +513,7 @@ mod tests {
     use chrono::{Duration, TimeZone};
     use codex_models::ScanningStrategy;
     use codex_utils::password;
-    use sea_orm::{ActiveModelTrait, DatabaseConnection, Set};
+    use sea_orm::{ActiveModelTrait, DatabaseConnection, EntityTrait, Set};
 
     const MINUTE_MS: i64 = 60_000;
 
@@ -540,12 +553,32 @@ mod tests {
     /// A book in a named series, so series and format aggregations have
     /// something meaningful to group by.
     async fn create_book(db: &DatabaseConnection, series_name: &str, format: &str) -> books::Model {
+        create_book_titled(db, series_name, None, format).await
+    }
+
+    /// A book whose series carries a metadata title distinct from the scanned
+    /// directory name, which is the normal case once preprocessing rules have
+    /// cleaned a title.
+    async fn create_book_titled(
+        db: &DatabaseConnection,
+        series_name: &str,
+        metadata_title: Option<&str>,
+        format: &str,
+    ) -> books::Model {
         let library = LibraryRepository::create(db, "Lib", "/lib", ScanningStrategy::Default)
             .await
             .unwrap();
-        let series = SeriesRepository::create(db, library.id, series_name, None)
-            .await
-            .unwrap();
+        let series = SeriesRepository::create_with_fingerprint_and_title(
+            db,
+            library.id,
+            series_name,
+            None,
+            series_name.to_string(),
+            metadata_title,
+            None,
+        )
+        .await
+        .unwrap();
         let book = books::Model {
             id: Uuid::new_v4(),
             series_id: series.id,
@@ -1117,6 +1150,60 @@ mod tests {
         assert_eq!(series[0].duration.measured_ms, 90 * MINUTE_MS);
         assert_eq!(series[0].books, 1);
         assert_eq!(series[1].series_name, "Vinland Saga");
+    }
+
+    /// `series.name` is the scanned directory name, which keeps suffixes like
+    /// "(Digital)" so files still match. Every other surface displays
+    /// `series_metadata.title`, and statistics must agree with them.
+    #[tokio::test]
+    async fn series_are_named_by_their_metadata_title() {
+        let db = setup_test_db().await;
+        let user = create_user(&db, "reader").await;
+        let book =
+            create_book_titled(&db, "Prison School (Digital)", Some("Prison School"), "cbz").await;
+
+        insert(
+            &db,
+            user.id,
+            book.id,
+            SessionSpec::measured("phone", 30, at(1, 9)),
+        )
+        .await;
+
+        let series = ReadingStatsRepository::by_series(&db, user.id, whole_of_june(), 10)
+            .await
+            .unwrap();
+
+        assert_eq!(series[0].series_name, "Prison School");
+    }
+
+    /// Metadata is created alongside every series today, but a missing row must
+    /// leave the series in the statistics under its directory name rather than
+    /// dropping it from the reader's history.
+    #[tokio::test]
+    async fn a_series_without_metadata_still_appears() {
+        let db = setup_test_db().await;
+        let user = create_user(&db, "reader").await;
+        let book = create_book(&db, "Berserk", "cbz").await;
+        series_metadata::Entity::delete_by_id(book.series_id)
+            .exec(&db)
+            .await
+            .unwrap();
+
+        insert(
+            &db,
+            user.id,
+            book.id,
+            SessionSpec::measured("phone", 30, at(1, 9)),
+        )
+        .await;
+
+        let series = ReadingStatsRepository::by_series(&db, user.id, whole_of_june(), 10)
+            .await
+            .unwrap();
+
+        assert_eq!(series.len(), 1);
+        assert_eq!(series[0].series_name, "Berserk");
     }
 
     #[tokio::test]
