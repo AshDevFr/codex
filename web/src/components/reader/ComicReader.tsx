@@ -1120,6 +1120,7 @@ export function ComicReader({
           pageGap={webtoonPageGap}
           sidePadding={webtoonSidePadding}
           pageDimensions={pageDimensions}
+          getPageUrl={getPageUrl}
           scrollContainerRef={scrollContainerRef}
           tapRef={touchRef}
           leadingSlot={webtoonLeadingPanel}

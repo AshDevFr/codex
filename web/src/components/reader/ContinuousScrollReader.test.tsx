@@ -326,6 +326,36 @@ describe("ContinuousScrollReader", () => {
     });
   });
 
+  describe("Page image URLs", () => {
+    it("should use the getPageUrl prop when provided", () => {
+      renderWithProviders(
+        <ContinuousScrollReader
+          {...defaultProps}
+          bookId="my-book-id"
+          getPageUrl={(pageNumber) =>
+            `/api/v1/books/my-book-id/pages/${pageNumber}?width=1536`
+          }
+        />,
+      );
+
+      expect(screen.getByTestId("page-image-1")).toHaveAttribute(
+        "src",
+        "/api/v1/books/my-book-id/pages/1?width=1536",
+      );
+    });
+
+    it("should fall back to the plain page endpoint without the prop", () => {
+      renderWithProviders(
+        <ContinuousScrollReader {...defaultProps} bookId="my-book-id" />,
+      );
+
+      expect(screen.getByTestId("page-image-1")).toHaveAttribute(
+        "src",
+        "/api/v1/books/my-book-id/pages/1",
+      );
+    });
+  });
+
   describe("Intersection Observer", () => {
     it("should create an IntersectionObserver", () => {
       renderWithProviders(<ContinuousScrollReader {...defaultProps} />);

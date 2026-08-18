@@ -51,6 +51,13 @@ interface ContinuousScrollReaderProps {
   pageDimensions?: ReadonlyMap<number, PageDimension>;
   /** Side padding as percentage (0-40) */
   sidePadding?: number;
+  /**
+   * Builds the image URL for a page. Supplied by the parent so the reader and
+   * the preloader request the *same* URL: the parent appends `?width=` when the
+   * "downscale pages" setting is on, and a mismatch here would mean the
+   * preloader warms a cache entry the reader never asks for.
+   */
+  getPageUrl?: (pageNumber: number) => string;
   /** Callback when the visible page changes (for progress tracking) */
   onPageChange?: (page: number) => void;
   /** External ref to the scroll container (for keyboard scrolling) */
@@ -123,6 +130,7 @@ export function ContinuousScrollReader({
   pageGap,
   preloadBuffer,
   sidePadding = 0,
+  getPageUrl,
   pageDimensions,
   onPageChange,
   scrollContainerRef,
@@ -222,11 +230,13 @@ export function ContinuousScrollReader({
       const pageNumber = i + 1;
       return {
         pageNumber,
-        src: `/api/v1/books/${bookId}/pages/${pageNumber}`,
+        src:
+          getPageUrl?.(pageNumber) ??
+          `/api/v1/books/${bookId}/pages/${pageNumber}`,
         isLoaded: loadedPages.has(pageNumber),
       };
     });
-  }, [bookId, totalPages, loadedPages]);
+  }, [bookId, totalPages, loadedPages, getPageUrl]);
 
   // Determine which pages should be rendered (visible + buffer)
   const pagesToRender = useMemo(() => {

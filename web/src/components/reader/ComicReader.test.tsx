@@ -69,14 +69,17 @@ const { mockTrailingHolder } = vi.hoisted(() => ({
     onTrailingReachedChange: undefined as
       | undefined
       | ((reached: boolean) => void),
+    getPageUrl: undefined as undefined | ((pageNumber: number) => string),
   },
 }));
 
 vi.mock("./ContinuousScrollReader", () => ({
   ContinuousScrollReader: (props: {
     onTrailingReachedChange?: (reached: boolean) => void;
+    getPageUrl?: (pageNumber: number) => string;
   }) => {
     mockTrailingHolder.onTrailingReachedChange = props.onTrailingReachedChange;
+    mockTrailingHolder.getPageUrl = props.getPageUrl;
     return null;
   },
 }));
@@ -319,6 +322,41 @@ describe("ComicReader", () => {
       // Verify the reading direction is set
       expect(useReaderStore.getState().readingDirectionOverride).toBe(
         "webtoon",
+      );
+    });
+  });
+
+  describe("continuous scroll page URLs", () => {
+    it("should request downscaled pages when the setting is on", () => {
+      useReaderStore.setState({
+        settings: { ...defaultSettings, downscalePages: true },
+        readingDirectionOverride: "webtoon",
+      });
+
+      renderWithProviders(
+        <ComicReader {...defaultProps} readingDirectionOverride="webtoon" />,
+      );
+
+      // The continuous reader must build its URLs the same way the preloader
+      // does, or the preloader warms a cache entry the reader never requests.
+      expect(mockTrailingHolder.getPageUrl).toBeDefined();
+      expect(mockTrailingHolder.getPageUrl?.(3)).toMatch(
+        /\/api\/v1\/books\/[^/]+\/pages\/3\?width=\d+$/,
+      );
+    });
+
+    it("should request original pages when the setting is off", () => {
+      useReaderStore.setState({
+        settings: { ...defaultSettings, downscalePages: false },
+        readingDirectionOverride: "webtoon",
+      });
+
+      renderWithProviders(
+        <ComicReader {...defaultProps} readingDirectionOverride="webtoon" />,
+      );
+
+      expect(mockTrailingHolder.getPageUrl?.(3)).toMatch(
+        /\/api\/v1\/books\/[^/]+\/pages\/3$/,
       );
     });
   });
