@@ -177,6 +177,7 @@ export function ReadingStats() {
   // there is no estimate to disclose, so the legend and the caveat about it
   // would be answering a question nobody asked.
   const showingTime = metric === "time";
+  const showingPages = metric === "pages";
   const hasInferred = showingTime && summary.duration.inferredMs > 0;
 
   return (
@@ -284,6 +285,18 @@ export function ReadingStats() {
           <Text size="xs" c="dimmed">
             {summary.sessionsWithoutDuration} of {summary.sessions} sittings
             reported no time at all, so the totals above are a floor rather than
+            the full picture.
+          </Text>
+        )}
+
+        {/* Pages are known only for sittings a reading app measured itself.
+            Reading that predates session tracking, and anything synced by an
+            app that only saves a position, counts as zero pages rather than as
+            missing, so the page views need the same floor caveat time gets. */}
+        {showingPages && summary.sessionsWithoutPages > 0 && (
+          <Text size="xs" c="dimmed">
+            {summary.sessionsWithoutPages} of {summary.sessions} sittings
+            reported no page count, so the totals above are a floor rather than
             the full picture.
           </Text>
         )}

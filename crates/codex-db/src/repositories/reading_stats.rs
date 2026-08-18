@@ -118,6 +118,11 @@ pub struct ReadingSummary {
     /// Sessions whose producer could report neither measured nor reconstructed
     /// time. Surfaced so a suspiciously low total has a visible explanation.
     pub sessions_without_duration: i64,
+    /// Sessions that reported no page count. Only a client that measures its
+    /// own sitting reports one, so this covers everything read before session
+    /// tracking existed as well as every app that just saves a position.
+    /// Surfaced for the same reason as the duration gap.
+    pub sessions_without_pages: i64,
 }
 
 /// One bucket of a time series.
@@ -241,6 +246,7 @@ struct SummaryRow {
     books_finished: i64,
     books: i64,
     sessions_without_duration: i64,
+    sessions_without_pages: i64,
 }
 
 #[derive(Debug, FromQueryResult)]
@@ -303,7 +309,9 @@ impl ReadingStatsRepository {
                     {COMPLETIONS_SUM} AS books_finished, \
                     COUNT(DISTINCT rs.book_id) AS books, \
                     CAST(COALESCE(SUM(CASE WHEN rs.active_duration_ms IS NULL THEN 1 ELSE 0 END), 0) \
-                        AS BIGINT) AS sessions_without_duration \
+                        AS BIGINT) AS sessions_without_duration, \
+                    CAST(COALESCE(SUM(CASE WHEN rs.pages_read IS NULL THEN 1 ELSE 0 END), 0) \
+                        AS BIGINT) AS sessions_without_pages \
              FROM reading_sessions rs \
              WHERE rs.user_id = $1 AND {READING_KINDS} \
                AND rs.client_started_at >= $2 AND rs.client_started_at < $3"
@@ -328,6 +336,7 @@ impl ReadingStatsRepository {
                 books_finished: r.books_finished,
                 books: r.books,
                 sessions_without_duration: r.sessions_without_duration,
+                sessions_without_pages: r.sessions_without_pages,
             }),
         )
     }
@@ -762,6 +771,11 @@ mod tests {
             }
         }
 
+        fn without_pages(mut self) -> Self {
+            self.pages = None;
+            self
+        }
+
         fn kind(mut self, kind: &'static str) -> Self {
             self.kind = kind;
             self
@@ -907,6 +921,51 @@ mod tests {
         assert_eq!(summary.sessions, 2);
         assert_eq!(summary.sessions_without_duration, 1);
         assert_eq!(summary.duration.total_ms(), 30 * MINUTE_MS);
+    }
+
+    /// Pages are as silent as time about everything read before session
+    /// tracking, and about every app that only saves a position. Counted
+    /// separately for the same reason duration is: so a low total reads as an
+    /// incomplete record rather than as "you barely read".
+    ///
+    /// Independent of the duration gap: a client can measure its own sitting
+    /// and still not report a page count.
+    #[tokio::test]
+    async fn sessions_with_no_page_count_are_counted_separately() {
+        let db = setup_test_db().await;
+        let user = create_user(&db, "reader").await;
+        let book = create_book(&db, "Berserk", "cbz").await;
+
+        insert(
+            &db,
+            user.id,
+            book.id,
+            SessionSpec::measured("phone", 30, at(1, 9)),
+        )
+        .await;
+        insert(
+            &db,
+            user.id,
+            book.id,
+            SessionSpec::measured("phone", 15, at(1, 11)).without_pages(),
+        )
+        .await;
+        insert(
+            &db,
+            user.id,
+            book.id,
+            SessionSpec::without_duration("opds", at(1, 12)),
+        )
+        .await;
+
+        let summary = ReadingStatsRepository::summary(&db, user.id, whole_of_june())
+            .await
+            .unwrap();
+
+        assert_eq!(summary.sessions, 3);
+        assert_eq!(summary.pages_read, 10);
+        assert_eq!(summary.sessions_without_pages, 2);
+        assert_eq!(summary.sessions_without_duration, 1);
     }
 
     /// Marking a book unread is bookkeeping, not a sitting.

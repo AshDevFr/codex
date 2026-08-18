@@ -54,6 +54,7 @@ const server = setupServer(
         sessions: 5,
         booksFinished: 2,
         sessionsWithoutDuration: 0,
+        sessionsWithoutPages: 0,
       },
       // One day of reading, today, so the assertion holds whatever the window.
       periods: [
@@ -147,6 +148,7 @@ describe("ReadingStats", () => {
             sessions: 40,
             booksFinished: 12,
             sessionsWithoutDuration: 38,
+            sessionsWithoutPages: 38,
           },
           periods: [
             {
@@ -178,6 +180,64 @@ describe("ReadingStats", () => {
     );
   });
 
+  /// Pages are as blind to a backfilled library as time is, so the page total
+  /// needs the same caveat. Without it the Pages view presents a floor as if it
+  /// were the whole record.
+  it("discloses missing page counts when showing pages", async () => {
+    const user = userEvent.setup();
+    server.use(
+      http.get("*/reading-stats", () =>
+        HttpResponse.json({
+          from: null,
+          to: null,
+          granularity: "day",
+          summary: {
+            books: 3,
+            duration: { measuredMs: 0, inferredMs: 0, totalMs: 0 },
+            pagesRead: 120,
+            sessions: 40,
+            booksFinished: 12,
+            sessionsWithoutDuration: 38,
+            sessionsWithoutPages: 36,
+          },
+          periods: [
+            {
+              bucket: today(),
+              duration: { measuredMs: 0, inferredMs: 0, totalMs: 0 },
+              pagesRead: 120,
+              sessions: 40,
+              booksFinished: 12,
+            },
+          ],
+          devices: [],
+          series: [],
+          formats: [],
+        }),
+      ),
+    );
+
+    renderWithProviders(<ReadingStats />);
+
+    // Silent under Time: that view discloses its own gap.
+    expect(
+      await screen.findByText(/38 of 40 sittings reported no time/),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/36 of 40 sittings reported no page count/),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("radio", { name: "Pages" }));
+
+    expect(
+      await screen.findByText(/36 of 40 sittings reported no page count/),
+    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        screen.queryByText(/38 of 40 sittings reported no time/),
+      ).not.toBeInTheDocument(),
+    );
+  });
+
   /// A backfilled library has no time at all. Books finished is the one measure
   /// it can answer, so the calendar has to light up under it.
   it("draws a calendar under books finished where time is silent", async () => {
@@ -195,6 +255,7 @@ describe("ReadingStats", () => {
             sessions: 40,
             booksFinished: 12,
             sessionsWithoutDuration: 40,
+            sessionsWithoutPages: 40,
           },
           periods: [
             {

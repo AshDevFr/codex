@@ -38705,7 +38705,8 @@
           "sessions",
           "books",
           "booksFinished",
-          "sessionsWithoutDuration"
+          "sessionsWithoutDuration",
+          "sessionsWithoutPages"
         ],
         "properties": {
           "books": {
@@ -38737,6 +38738,12 @@
             "type": "integer",
             "format": "int64",
             "description": "Sittings whose client could report no time at all. A large number here\nexplains a total that looks lower than the reading felt.",
+            "example": 3
+          },
+          "sessionsWithoutPages": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Sittings whose client reported no page count. Only a reader that\nmeasures its own sitting reports one, so this covers reading that\npredates session tracking as well as apps that only save a position.",
             "example": 3
           }
         }

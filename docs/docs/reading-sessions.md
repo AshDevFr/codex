@@ -116,6 +116,23 @@ Anything larger than the session's own span is clamped to that span. Omit the
 field entirely if you cannot measure it honestly. Omitting it is recorded as
 "unknown", which is correct; sending `0` would be a claim.
 
+### Counting pages
+
+`pagesRead` is the number of pages actually turned during the sitting, not the
+distance between where it started and ended: a reader who jumps to the end of a
+volume has not read the pages they skipped.
+
+It is the only source the statistics have for pages. A sitting that omits it
+counts as zero pages rather than as unknown, so it disappears from the Pages
+view of the reading dashboard even though its time still shows up. That is also
+why reading recorded before session tracking existed, and reading synced by an
+app that only saves a position, contributes no pages at all. The dashboard says
+how many sittings reported no page count so the total is not mistaken for a
+complete record.
+
+Omit the field if you cannot count honestly, exactly as with
+`activeDurationMs`.
+
 ### The activity rules
 
 Implement these exactly. If one client idles after 2 minutes and another after

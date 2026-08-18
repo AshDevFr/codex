@@ -17351,6 +17351,14 @@ export interface components {
              * @example 3
              */
             sessionsWithoutDuration: number;
+            /**
+             * Format: int64
+             * @description Sittings whose client reported no page count. Only a reader that
+             *     measures its own sitting reports one, so this covers reading that
+             *     predates session tracking as well as apps that only save a position.
+             * @example 3
+             */
+            sessionsWithoutPages: number;
         };
         /** @description A single recommendation for the user */
         RecommendationDto: {

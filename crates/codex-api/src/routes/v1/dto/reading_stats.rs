@@ -123,6 +123,11 @@ pub struct ReadingSummaryDto {
     /// explains a total that looks lower than the reading felt.
     #[schema(example = 3)]
     pub sessions_without_duration: i64,
+    /// Sittings whose client reported no page count. Only a reader that
+    /// measures its own sitting reports one, so this covers reading that
+    /// predates session tracking as well as apps that only save a position.
+    #[schema(example = 3)]
+    pub sessions_without_pages: i64,
 }
 
 impl From<ReadingSummary> for ReadingSummaryDto {
@@ -134,6 +139,7 @@ impl From<ReadingSummary> for ReadingSummaryDto {
             books: value.books,
             books_finished: value.books_finished,
             sessions_without_duration: value.sessions_without_duration,
+            sessions_without_pages: value.sessions_without_pages,
         }
     }
 }

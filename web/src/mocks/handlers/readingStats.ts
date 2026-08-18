@@ -282,6 +282,9 @@ export const readingStatsHandlers = [
       .sort(rank);
 
     const silent = inWindow.filter((d) => d.measuredMs + d.inferredMs === 0);
+    // Days with no pages stand in for the backfilled history a real library
+    // has: sittings that were recorded but never carried a page count.
+    const pageless = inWindow.filter((d) => d.pagesRead === 0);
 
     const response: ReadingStatsResponse = {
       from: from ?? `${fromDay}T00:00:00Z`,
@@ -294,6 +297,7 @@ export const readingStatsHandlers = [
         books: inWindow.reduce((sum, d) => sum + d.books, 0),
         booksFinished: inWindow.reduce((sum, d) => sum + d.booksFinished, 0),
         sessionsWithoutDuration: silent.reduce((sum, d) => sum + d.sessions, 0),
+        sessionsWithoutPages: pageless.reduce((sum, d) => sum + d.sessions, 0),
       },
       periods,
       devices,
