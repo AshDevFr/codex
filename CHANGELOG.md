@@ -2,6 +2,13 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.44.5] - 2026-08-18
+
+### 🐛 Bug Fixes
+
+- *(reader)* Make webtoon page requests honour the downscale setting
+- *(reader)* Stop the webtoon reader mutating the DOM when a scroll settles
+
 ## [1.44.4] - 2026-08-18
 
 ### 🐛 Bug Fixes
