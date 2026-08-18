@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.44.4] - 2026-08-18
+
+### 🐛 Bug Fixes
+
+- *(stats)* Disclose sittings that reported no page count
+
 ## [1.44.3] - 2026-08-16
 
 ### 🚀 Features
