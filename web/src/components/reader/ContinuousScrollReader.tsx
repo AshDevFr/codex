@@ -40,8 +40,6 @@ interface ContinuousScrollReaderProps {
   backgroundColor: BackgroundColor;
   /** Gap between pages in pixels */
   pageGap?: number;
-  /** Number of pages to preload above/below visible area */
-  preloadBuffer?: number;
   /**
    * Real per-page pixel dimensions (from backend analysis), keyed by page
    * number. When present, each page's box is reserved at its exact rendered
@@ -128,7 +126,6 @@ export function ContinuousScrollReader({
   fitMode,
   backgroundColor,
   pageGap,
-  preloadBuffer,
   sidePadding = 0,
   getPageUrl,
   pageDimensions,
@@ -142,7 +139,6 @@ export function ContinuousScrollReader({
 }: ContinuousScrollReaderProps) {
   // Use explicit undefined checks to allow 0 as a valid value
   const effectivePageGap = pageGap ?? DEFAULT_PAGE_GAP;
-  const effectivePreloadBuffer = preloadBuffer ?? 0;
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Ref callback that assigns the container to the internal ref, the optional
@@ -183,11 +179,6 @@ export function ContinuousScrollReader({
   // layout shifts.  Cleared by the next user-initiated scroll event.
   const syncTargetPageRef = useRef<number | null>(null);
 
-  // Track which pages are visible (ref is source of truth; state triggers renders).
-  // lastFlushedVisibleRef caches a serialised snapshot so we can skip no-op updates.
-  const visiblePagesRef = useRef<Set<number>>(new Set());
-  const lastFlushedVisibleRef = useRef("");
-  const [visiblePages, setVisiblePages] = useState<Set<number>>(new Set());
   // Track which pages have been loaded
   const [loadedPages, setLoadedPages] = useState<Set<number>>(new Set());
   // Current page based on scroll position (topmost visible page).
@@ -223,8 +214,8 @@ export function ContinuousScrollReader({
     return () => observer.disconnect();
   }, [sidePadding]);
 
-  // Generate page entries.  Deliberately does NOT depend on visiblePages;
-  // visibility only affects pagesToRender (below) which is a separate memo.
+  // Generate page entries.  Every page is rendered; the browser decides which
+  // ones are worth painting (see `content-visibility` on the page boxes).
   const pages: PageEntry[] = useMemo(() => {
     return Array.from({ length: totalPages }, (_, i) => {
       const pageNumber = i + 1;
@@ -237,28 +228,6 @@ export function ContinuousScrollReader({
       };
     });
   }, [bookId, totalPages, loadedPages, getPageUrl]);
-
-  // Determine which pages should be rendered (visible + buffer)
-  const pagesToRender = useMemo(() => {
-    const minVisible = Math.min(...visiblePages);
-    const maxVisible = Math.max(...visiblePages);
-
-    // If no pages visible yet, render around initial page
-    if (visiblePages.size === 0) {
-      const start = Math.max(1, initialPage - effectivePreloadBuffer);
-      const end = Math.min(totalPages, initialPage + effectivePreloadBuffer);
-      return new Set(
-        Array.from({ length: end - start + 1 }, (_, i) => start + i),
-      );
-    }
-
-    // Render visible pages plus buffer
-    const start = Math.max(1, minVisible - effectivePreloadBuffer);
-    const end = Math.min(totalPages, maxVisible + effectivePreloadBuffer);
-    return new Set(
-      Array.from({ length: end - start + 1 }, (_, i) => start + i),
-    );
-  }, [visiblePages, initialPage, totalPages, effectivePreloadBuffer]);
 
   // Stable refs for callbacks used inside the scroll/observer effects.
   // These let the effects read the latest prop values without re-running.
@@ -290,11 +259,10 @@ export function ContinuousScrollReader({
   const trailingReachedRef = useRef(false);
   const leadingReachedRef = useRef(false);
 
-  // Set up intersection observer.
-  // The observer only updates refs and visiblePages state (for lazy loading).
-  // It never sets currentVisiblePage state directly; that is flushed by the
-  // debounced scroll handler below, so mid-animation frames cause zero
-  // re-renders from page tracking.
+  // Set up intersection observer.  It only ever writes refs: page tracking is
+  // flushed to the store by the debounced scroll handler below, and nothing in
+  // the render path depends on visibility, so scrolling causes no re-renders
+  // and therefore no DOM changes inside the scroller.
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -306,7 +274,6 @@ export function ContinuousScrollReader({
     };
 
     observerRef.current = new IntersectionObserver((entries) => {
-      const currentVisible = visiblePagesRef.current;
       let topMostPage = currentVisiblePageRef.current;
       let topMostVisibleHeight = 0;
 
@@ -315,7 +282,6 @@ export function ContinuousScrollReader({
         if (Number.isNaN(pageNum)) continue;
 
         if (entry.isIntersecting) {
-          currentVisible.add(pageNum);
           const rect = entry.boundingClientRect;
           const containerRect = container.getBoundingClientRect();
           const visibleTop = Math.max(rect.top, containerRect.top);
@@ -331,8 +297,6 @@ export function ContinuousScrollReader({
             topMostPage = pageNum;
             topMostVisibleHeight = visibleHeight;
           }
-        } else {
-          currentVisible.delete(pageNum);
         }
       }
 
@@ -369,18 +333,8 @@ export function ContinuousScrollReader({
     const flush = () => {
       const cbs = callbacksRef.current;
 
-      // Sync visible pages to state only when the set contents actually changed,
-      // avoiding unnecessary re-renders that cause visual flicker.
-      const snapshot = Array.from(visiblePagesRef.current).sort().join(",");
-      if (snapshot !== lastFlushedVisibleRef.current) {
-        lastFlushedVisibleRef.current = snapshot;
-        setVisiblePages(new Set(visiblePagesRef.current));
-      }
-
-      // While an external sync is active, skip page reporting.
-      // The observer is also locked, so currentVisiblePageRef
-      // still holds the sync target.  We only flush visible-pages state
-      // (above) so lazy loading keeps working.
+      // While an external sync is active, skip page reporting.  The observer is
+      // also locked, so currentVisiblePageRef still holds the sync target.
       if (syncTargetPageRef.current != null) return;
 
       // Transition-panel reach detection.  When a trailing "Next Chapter"
@@ -714,12 +668,11 @@ export function ContinuousScrollReader({
           </Box>
         )}
         {pages.map((page) => {
-          const shouldRender = pagesToRender.has(page.pageNumber);
-          // Reserve the page's height while it is a placeholder OR rendered but
-          // not yet loaded, so both virtualising in/out and the loading state
-          // are layout-neutral and don't shift the scroll position.  Prefer the
-          // exact height from real dimensions; fall back to the last measured
-          // height, then the average estimate (un-analyzed books only).
+          // Reserve the page's exact height until its image has loaded, so the
+          // loading state is layout-neutral and the scroll position never
+          // jumps.  Prefer the exact height from real dimensions; fall back to
+          // the last measured height, then the average estimate (un-analyzed
+          // books only).
           const exactHeight = knownReservedHeight(page.pageNumber);
           const measuredHeight = pageHeightsRef.current.get(page.pageNumber);
           const reservedHeight =
@@ -738,59 +691,55 @@ export function ContinuousScrollReader({
               style={{
                 position: "relative",
                 width: "100%",
-                minHeight:
-                  shouldRender && page.isLoaded ? undefined : reservedHeight,
+                minHeight: page.isLoaded ? undefined : reservedHeight,
                 display: "flex",
                 justifyContent: "center",
                 alignItems: "center",
+                // Off-screen pages are skipped by the browser rather than
+                // unmounted by React.  Mounting and unmounting images is a
+                // structural change to the scroller, and doing that ~100ms
+                // after a flick settles makes iOS WebKit present one composited
+                // frame at the pre-gesture scroll offset.  Handing the decision
+                // to the browser keeps the DOM completely still while reading.
+                contentVisibility: "auto",
+                // The size a skipped box reports.  `auto` remembers the height
+                // the page actually rendered at, so re-skipping a page that has
+                // been seen is exact even when the reserved height was a guess.
+                containIntrinsicHeight: `auto ${reservedHeight}`,
               }}
             >
-              {shouldRender ? (
-                <>
-                  {!page.isLoaded && (
-                    // Overlay the loader so it never expands the reserved box
-                    // (a short page may be shorter than the loader).
-                    <Center
-                      style={{ position: "absolute", inset: 0, width: "100%" }}
-                    >
-                      <Loader size="md" color="gray" />
-                    </Center>
-                  )}
-                  <img
-                    src={page.src}
-                    alt={`Page ${page.pageNumber}`}
-                    data-testid={`page-image-${page.pageNumber}`}
-                    style={{
-                      ...getImageStyles(),
-                      display: page.isLoaded ? "block" : "none",
-                    }}
-                    onLoad={() => handleImageLoad(page.pageNumber)}
-                    onError={() => {
-                      if (page.pageNumber > 1) {
-                        useReaderStore
-                          .getState()
-                          .correctTotalPages(page.pageNumber - 1);
-                      }
-                    }}
-                  />
-                </>
-              ) : (
-                // Placeholder for unrendered pages
-                <Box
-                  data-testid={`page-placeholder-${page.pageNumber}`}
-                  style={{
-                    width: "100%",
-                    height: reservedHeight,
-                    display: "flex",
-                    justifyContent: "center",
-                    alignItems: "center",
-                  }}
+              {!page.isLoaded && (
+                // Overlay the loader so it never expands the reserved box
+                // (a short page may be shorter than the loader).
+                <Center
+                  style={{ position: "absolute", inset: 0, width: "100%" }}
                 >
-                  <Text c="dimmed" size="sm">
-                    Page {page.pageNumber}
-                  </Text>
-                </Box>
+                  <Loader size="md" color="gray" />
+                </Center>
               )}
+              <img
+                src={page.src}
+                alt={`Page ${page.pageNumber}`}
+                data-testid={`page-image-${page.pageNumber}`}
+                // The browser fetches and decodes a page when it is close to
+                // being needed.  Pages further ahead are still warmed into the
+                // HTTP cache by the reader's own preloader, so the user's
+                // preload setting still governs how far ahead work happens.
+                loading="lazy"
+                decoding="async"
+                style={{
+                  ...getImageStyles(),
+                  display: page.isLoaded ? "block" : "none",
+                }}
+                onLoad={() => handleImageLoad(page.pageNumber)}
+                onError={() => {
+                  if (page.pageNumber > 1) {
+                    useReaderStore
+                      .getState()
+                      .correctTotalPages(page.pageNumber - 1);
+                  }
+                }}
+              />
             </Box>
           );
         })}

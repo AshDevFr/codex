@@ -1116,7 +1116,6 @@ export function ComicReader({
           initialPage={currentPage}
           fitMode={fitMode}
           backgroundColor={backgroundColor}
-          preloadBuffer={preloadPages}
           pageGap={webtoonPageGap}
           sidePadding={webtoonSidePadding}
           pageDimensions={pageDimensions}

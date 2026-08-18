@@ -150,11 +150,7 @@ describe("ContinuousScrollReader", () => {
   describe("Lazy Loading", () => {
     it("should initially render pages around the initial page", () => {
       renderWithProviders(
-        <ContinuousScrollReader
-          {...defaultProps}
-          initialPage={5}
-          preloadBuffer={2}
-        />,
+        <ContinuousScrollReader {...defaultProps} initialPage={5} />,
       );
 
       // Pages 3-7 should be rendered (5 +/- 2)
@@ -165,28 +161,9 @@ describe("ContinuousScrollReader", () => {
       }
     });
 
-    it("should render placeholders for pages outside buffer", () => {
-      renderWithProviders(
-        <ContinuousScrollReader
-          {...defaultProps}
-          totalPages={20}
-          initialPage={1}
-          preloadBuffer={2}
-        />,
-      );
-
-      // Pages far from initial should have placeholders
-      const farPagePlaceholder = screen.queryByTestId("page-placeholder-15");
-      expect(farPagePlaceholder).toBeInTheDocument();
-    });
-
     it("should render images for pages within buffer", async () => {
       renderWithProviders(
-        <ContinuousScrollReader
-          {...defaultProps}
-          initialPage={1}
-          preloadBuffer={2}
-        />,
+        <ContinuousScrollReader {...defaultProps} initialPage={1} />,
       );
 
       // Pages 1-3 should have images (1 + 2 buffer)
@@ -323,6 +300,52 @@ describe("ContinuousScrollReader", () => {
           "/api/v1/books/my-book-id/pages/1",
         );
       }
+    });
+  });
+
+  describe("Browser-managed virtualisation", () => {
+    it("should render an image for every page, however far away", () => {
+      renderWithProviders(
+        <ContinuousScrollReader
+          {...defaultProps}
+          totalPages={20}
+          initialPage={1}
+        />,
+      );
+
+      // Rendering is no longer windowed in React: every page keeps its <img>
+      // so a settled scroll never has to mount or unmount one.
+      for (let i = 1; i <= 20; i++) {
+        expect(screen.getByTestId(`page-image-${i}`)).toBeInTheDocument();
+        expect(
+          screen.queryByTestId(`page-placeholder-${i}`),
+        ).not.toBeInTheDocument();
+      }
+    });
+
+    it("should hand off-screen skipping to the browser on each page box", () => {
+      renderWithProviders(
+        <ContinuousScrollReader
+          {...defaultProps}
+          totalPages={20}
+          initialPage={1}
+        />,
+      );
+
+      const container = screen.getByTestId("page-container-15");
+      expect(container).toHaveStyle({ contentVisibility: "auto" });
+      // The reserved height doubles as the placeholder size while skipped.
+      expect(container.style.containIntrinsicHeight).toMatch(/^auto .+/);
+    });
+
+    it("should let the browser defer fetching and decoding of page images", () => {
+      renderWithProviders(
+        <ContinuousScrollReader {...defaultProps} totalPages={20} />,
+      );
+
+      const image = screen.getByTestId("page-image-20");
+      expect(image).toHaveAttribute("loading", "lazy");
+      expect(image).toHaveAttribute("decoding", "async");
     });
   });
 
@@ -612,7 +635,6 @@ describe("ContinuousScrollReader", () => {
           {...defaultProps}
           totalPages={20}
           initialPage={5}
-          preloadBuffer={2}
         />,
       );
 
@@ -673,7 +695,6 @@ describe("ContinuousScrollReader", () => {
           {...defaultProps}
           totalPages={20}
           initialPage={5}
-          preloadBuffer={0}
         />,
       );
 
@@ -768,47 +789,6 @@ describe("ContinuousScrollReader", () => {
     });
   });
 
-  describe("Preload Buffer", () => {
-    it("should respect custom preload buffer", () => {
-      renderWithProviders(
-        <ContinuousScrollReader
-          {...defaultProps}
-          totalPages={20}
-          initialPage={10}
-          preloadBuffer={5}
-        />,
-      );
-
-      // Pages 5-15 should be in the render range (10 +/- 5)
-      // Check that page 5 is not a placeholder
-      const page5Placeholder = screen.queryByTestId("page-placeholder-5");
-      const page15Placeholder = screen.queryByTestId("page-placeholder-15");
-
-      // These should NOT be placeholders since they're within buffer
-      expect(page5Placeholder).not.toBeInTheDocument();
-      expect(page15Placeholder).not.toBeInTheDocument();
-
-      // Page 1 should be a placeholder (outside buffer)
-      const page1Placeholder = screen.queryByTestId("page-placeholder-1");
-      expect(page1Placeholder).toBeInTheDocument();
-    });
-
-    it("should use default preload buffer when not specified", () => {
-      renderWithProviders(
-        <ContinuousScrollReader
-          {...defaultProps}
-          totalPages={20}
-          initialPage={10}
-        />,
-      );
-
-      // Default buffer is 2, so pages 8-12 should be rendered
-      // Page 1 should be a placeholder
-      const page1Placeholder = screen.queryByTestId("page-placeholder-1");
-      expect(page1Placeholder).toBeInTheDocument();
-    });
-  });
-
   describe("Accessibility", () => {
     it("should have alt text for images", () => {
       renderWithProviders(
@@ -899,20 +879,15 @@ describe("ContinuousScrollReader", () => {
     // content above the viewport shifted and the reader "snapped" / lost the
     // stop position when scrolling settled. A virtualised page must reserve its
     // last measured height instead.
-    it("reserves a loaded page's measured height when it is virtualised out", async () => {
-      vi.useFakeTimers();
-
-      renderWithProviders(
+    it("reserves a loaded page's measured height as its skipped size", async () => {
+      const { rerender } = renderWithProviders(
         <ContinuousScrollReader
           {...defaultProps}
           totalPages={20}
           initialPage={1}
-          preloadBuffer={0}
         />,
       );
 
-      // Page 1 renders initially (visible set is empty -> render around initial
-      // page). Give its container a concrete rendered height, then load it.
       const page1Container = screen.getByTestId("page-container-1");
       Object.defineProperty(page1Container, "offsetHeight", {
         configurable: true,
@@ -923,45 +898,38 @@ describe("ContinuousScrollReader", () => {
       await act(async () => {
         image1.dispatchEvent(new Event("load"));
       });
-
-      // Scroll far away so page 1 leaves the (zero) buffer and virtualises.
-      const scrollContainer = screen.getByTestId("continuous-scroll-container");
-      const page10Container = screen.getByTestId("page-container-10");
-      act(() => {
-        mockObserverInstance?.simulateIntersection([
-          {
-            target: page10Container,
-            isIntersecting: true,
-            boundingClientRect: { top: 0, bottom: 800, height: 800 } as DOMRect,
-          },
-        ]);
-        scrollContainer.dispatchEvent(new Event("scroll", { bubbles: false }));
-      });
+      // Heights are measured in a layout effect, so they apply from the next
+      // render onward.
       await act(async () => {
-        vi.advanceTimersByTime(150);
+        rerender(
+          <ContinuousScrollReader
+            {...defaultProps}
+            totalPages={20}
+            initialPage={1}
+          />,
+        );
       });
 
-      // Page 1 is now a placeholder, but keeps the height it was measured at
-      // rather than reverting to 100vh, so content below it does not shift.
-      const placeholder = screen.getByTestId("page-placeholder-1");
-      expect(placeholder).toHaveStyle({ height: "742px" });
-
-      vi.useRealTimers();
+      // When the browser skips page 1 it reports the height the page actually
+      // rendered at, so content below it does not shift.
+      expect(
+        screen.getByTestId("page-container-1").style.containIntrinsicHeight,
+      ).toBe("auto 742px");
     });
 
-    it("falls back to a viewport-height placeholder for never-measured pages", () => {
+    it("falls back to a viewport height for never-measured pages", () => {
       renderWithProviders(
         <ContinuousScrollReader
           {...defaultProps}
           totalPages={20}
           initialPage={1}
-          preloadBuffer={2}
         />,
       );
 
       // With no measurements at all, unmeasured pages use the 100vh guess.
-      const placeholder = screen.getByTestId("page-placeholder-15");
-      expect(placeholder).toHaveStyle({ height: "100vh" });
+      const container = screen.getByTestId("page-container-15");
+      expect(container.style.containIntrinsicHeight).toBe("auto 100vh");
+      expect(container).toHaveStyle({ minHeight: "100vh" });
     });
 
     it("reserves height for a rendered page whose image has not loaded yet", () => {
@@ -970,7 +938,6 @@ describe("ContinuousScrollReader", () => {
           {...defaultProps}
           totalPages={20}
           initialPage={1}
-          preloadBuffer={0}
         />,
       );
 
@@ -988,7 +955,6 @@ describe("ContinuousScrollReader", () => {
           {...defaultProps}
           totalPages={20}
           initialPage={1}
-          preloadBuffer={0}
         />,
       );
 
@@ -1013,15 +979,15 @@ describe("ContinuousScrollReader", () => {
             {...defaultProps}
             totalPages={20}
             initialPage={1}
-            preloadBuffer={0}
           />,
         );
       });
 
       // Webtoon pages are tall; once one page is measured, never-measured
-      // placeholders use the measured average instead of the 100vh guess.
-      const placeholder = screen.getByTestId("page-placeholder-10");
-      expect(placeholder).toHaveStyle({ height: "1500px" });
+      // pages use the measured average instead of the 100vh guess.
+      expect(
+        screen.getByTestId("page-container-10").style.containIntrinsicHeight,
+      ).toBe("auto 1500px");
     });
 
     it("does not manually adjust scrollTop when a page above grows on load", async () => {
@@ -1035,7 +1001,6 @@ describe("ContinuousScrollReader", () => {
           {...defaultProps}
           totalPages={20}
           initialPage={1}
-          preloadBuffer={1}
         />,
       );
 
@@ -1085,13 +1050,13 @@ describe("ContinuousScrollReader", () => {
           fitMode="original"
           totalPages={20}
           initialPage={1}
-          preloadBuffer={0}
           pageDimensions={pageDimensions}
         />,
       );
 
-      const placeholder = screen.getByTestId("page-placeholder-10");
-      expect(placeholder).toHaveStyle({ height: "1234px" });
+      const container = screen.getByTestId("page-container-10");
+      expect(container.style.containIntrinsicHeight).toBe("auto 1234px");
+      expect(container).toHaveStyle({ minHeight: "1234px" });
     });
   });
 
