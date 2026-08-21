@@ -380,6 +380,12 @@ auth:
 | `oidc.allowed_redirect_uris` | `[]` | Exact post-login redirect targets to accept (e.g. `codexreader://auth`), for native and desktop clients. Compared as whole strings, and an empty list permits none. |
 | `oidc.providers` | `{}` | Provider blocks, keyed by the name used in the callback URL. |
 
+Sign-in spans two requests: Codex builds an authorization URL, the identity
+provider sends the browser back to the callback. The state that links them is kept
+in the database, so the replica handling the callback need not be the one that
+started the flow and no session affinity is required. Abandoned sign-ins are swept
+every 15 minutes; they expire after 5 minutes either way.
+
 See [OIDC / Single Sign-On](./users/oidc) for full setup instructions and provider guides.
 
 ## API Configuration

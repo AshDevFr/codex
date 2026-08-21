@@ -250,9 +250,32 @@ spec:
 
 ## Session Handling
 
-- JWT tokens are stateless (no sticky sessions needed)
-- Any pod can handle any request
-- Load balancing works without session affinity
+- JWT tokens are stateless, so authenticating a request needs no server-side lookup
+- Multi-step sign-in flows keep their in-flight state in the database, not in the
+  pod that started them
+- Load balancing therefore works without session affinity, and no sticky sessions
+  are needed
+
+The second point is the one that is easy to lose. A few flows span two requests
+that the load balancer is free to send to different pods: OIDC sign-on issues an
+authorization request and later receives a callback, and connecting a user plugin
+over OAuth does the same. The server-side half of those flows (the CSRF state, the
+PKCE verifier, the nonce) lives in the database precisely so the pod handling the
+callback does not have to be the pod that started the flow.
+
+Codex 2.0.0 and earlier held that state in memory. On those versions, running more
+than one replica without session affinity fails every OIDC login and every plugin
+OAuth connect with `Invalid or expired OIDC state`, because the two legs are
+consecutive requests and round-robin sends them to different pods almost every
+time. Either upgrade or run a single replica.
+
+Entity change events are bridged between replicas over PostgreSQL `LISTEN`/`NOTIFY`
+so that a change made through one pod reaches the SSE subscribers and search index
+of the others. This is another reason multi-replica deployments require PostgreSQL.
+
+If you add server-side state that has to survive from one request to the next, put
+it in the database. Anything held in a pod's memory silently reintroduces a need
+for session affinity that nothing here enforces.
 
 ## Horizontal Pod Autoscaler
 

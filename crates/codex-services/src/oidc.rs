@@ -1354,6 +1354,44 @@ mod tests {
         assert_eq!(groups, vec!["custom1", "custom2"]);
     }
 
+    /// A state past its TTL is refused, and refused as expired rather than as
+    /// unknown.
+    ///
+    /// The store deliberately hands expired rows back so this branch can tell
+    /// the two apart, and rows now outlive their TTL until the sweep runs, so
+    /// the check is reached in normal operation rather than only in theory.
+    #[tokio::test]
+    async fn test_exchange_code_rejects_a_state_past_its_ttl() {
+        let service = db_backed_service(create_test_config()).await;
+        service
+            .pending_states
+            .insert(
+                "stale".to_string(),
+                PendingAuth {
+                    pkce_verifier: "verifier".to_string(),
+                    nonce: "nonce".to_string(),
+                    created_at: Utc::now() - Duration::seconds(AUTH_STATE_TTL_SECS + 60),
+                    provider_name: "test-provider".to_string(),
+                    redirect_uri: None,
+                },
+            )
+            .await
+            .expect("state stored");
+
+        let err = service
+            .exchange_code("test-provider", "any-code", "stale")
+            .await
+            .expect_err("an expired state must not be exchangeable");
+        assert!(
+            err.to_string().contains("expired"),
+            "the caller should learn the state expired, got: {err}"
+        );
+
+        // Consumed on the way past: the flow is over, so a retry must not find
+        // it still sitting there.
+        assert_eq!(service.pending_state_count().await, 0);
+    }
+
     #[tokio::test]
     async fn test_cleanup_expired_states() {
         let service = db_backed_service(create_test_config()).await;
