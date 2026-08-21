@@ -462,10 +462,12 @@ pub async fn oauth_start(
     }
 
     // Rate-limit OAuth flow initiation: max 3 pending flows per user
-    const MAX_PENDING_OAUTH_FLOWS_PER_USER: usize = 3;
+    const MAX_PENDING_OAUTH_FLOWS_PER_USER: u64 = 3;
     let pending = state
         .oauth_state_manager
-        .pending_count_for_user(auth.user_id);
+        .pending_count_for_user(auth.user_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to count pending OAuth flows: {}", e)))?;
     if pending >= MAX_PENDING_OAUTH_FLOWS_PER_USER {
         return Err(ApiError::TooManyRequests(format!(
             "Too many pending OAuth flows (max {}). Please complete or wait for existing flows to expire.",
@@ -515,6 +517,7 @@ pub async fn oauth_start(
             &client_id,
             &redirect_uri,
         )
+        .await
         .map_err(|e| ApiError::Internal(format!("Failed to start OAuth flow: {}", e)))?;
 
     debug!(
@@ -554,6 +557,7 @@ pub async fn oauth_callback(
     let pending = state
         .oauth_state_manager
         .validate_state(&query.state)
+        .await
         .map_err(|e| {
             warn!(error = %e, "OAuth callback state validation failed");
             ApiError::BadRequest(format!("Invalid or expired OAuth state: {}", e))

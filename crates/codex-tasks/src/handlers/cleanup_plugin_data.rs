@@ -1,10 +1,15 @@
 //! Handler for CleanupPluginData task
 //!
-//! Periodically cleans up expired key-value data from plugin storage — both
+//! Periodically cleans up expired key-value data from plugin storage, both
 //! the per-user `user_plugin_data` table and the system-scoped `plugin_data`
-//! table. Entries with a past `expires_at` timestamp are deleted in bulk.
-//! Also cleans up expired OAuth state flows from the in-memory
-//! `OAuthStateManager` to prevent memory leaks.
+//! table, plus abandoned OAuth connect flows in `user_plugin_oauth_states`.
+//! Entries with a past `expires_at` timestamp are deleted in bulk.
+//!
+//! The OAuth sweep works on the table rather than on an `OAuthStateManager`
+//! handle. It used to take the handle, and that never worked in a split
+//! deployment: `serve` built the manager holding the real flows while the
+//! standalone `worker` that runs this task was never given one, so the sweep
+//! ran against nothing while the flows accumulated in another process.
 
 use anyhow::Result;
 use sea_orm::DatabaseConnection;
@@ -15,25 +20,18 @@ use tracing::info;
 use crate::handlers::TaskHandler;
 use crate::types::TaskResult;
 use codex_db::entities::tasks;
-use codex_db::repositories::{PluginDataRepository, UserPluginDataRepository};
+use codex_db::repositories::{
+    PluginDataRepository, UserPluginDataRepository, UserPluginOAuthStateRepository,
+};
 use codex_events::EventBroadcaster;
-use codex_services::user_plugin::OAuthStateManager;
 
 /// Handler for cleaning up expired plugin storage data and OAuth state
 #[derive(Default)]
-pub struct CleanupPluginDataHandler {
-    oauth_state_manager: Option<Arc<OAuthStateManager>>,
-}
+pub struct CleanupPluginDataHandler;
 
 impl CleanupPluginDataHandler {
     pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Set the OAuth state manager for cleaning up expired OAuth flows
-    pub fn with_oauth_state_manager(mut self, manager: Arc<OAuthStateManager>) -> Self {
-        self.oauth_state_manager = Some(manager);
-        self
+        Self
     }
 }
 
@@ -50,15 +48,9 @@ impl TaskHandler for CleanupPluginDataHandler {
             let deleted_count = UserPluginDataRepository::cleanup_expired(db).await?
                 + PluginDataRepository::cleanup_expired(db).await?;
 
-            // Clean up expired OAuth pending flows from in-memory state
-            let (oauth_cleaned, oauth_remaining) =
-                if let Some(ref manager) = self.oauth_state_manager {
-                    let cleaned = manager.cleanup_expired();
-                    let remaining = manager.pending_count();
-                    (cleaned, remaining)
-                } else {
-                    (0, 0)
-                };
+            // Clean up abandoned OAuth connect flows.
+            let oauth_cleaned = UserPluginOAuthStateRepository::delete_expired(db).await?;
+            let oauth_remaining = UserPluginOAuthStateRepository::count(db).await?;
 
             info!(
                 "Task {}: Plugin data cleanup complete - deleted {} expired storage entries, \
@@ -84,56 +76,181 @@ impl TaskHandler for CleanupPluginDataHandler {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use codex_services::plugin::protocol::OAuthConfig;
+    use chrono::{Duration, Utc};
+    use codex_config::{DatabaseConfig, DatabaseType, SQLiteConfig};
+    use codex_db::Database;
+    use codex_db::entities::{tasks, users};
+    use codex_db::repositories::{NewUserPluginOAuthState, PluginsRepository, UserRepository};
+    use std::collections::HashMap;
+    use tempfile::TempDir;
     use uuid::Uuid;
+
+    async fn setup() -> (DatabaseConnection, TempDir) {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test.db");
+
+        let mut pragmas = HashMap::new();
+        pragmas.insert("foreign_keys".to_string(), "ON".to_string());
+
+        let config = DatabaseConfig {
+            db_type: DatabaseType::SQLite,
+            postgres: None,
+            sqlite: Some(SQLiteConfig {
+                path: db_path.to_str().unwrap().to_string(),
+                pragmas: Some(pragmas),
+                ..SQLiteConfig::default()
+            }),
+            ..DatabaseConfig::default()
+        };
+
+        let db = Database::new(&config).await.unwrap();
+        db.run_migrations().await.unwrap();
+        (db.sea_orm_connection().clone(), temp_dir)
+    }
+
+    async fn create_test_user(db: &DatabaseConnection) -> users::Model {
+        let now = Utc::now();
+        let user = users::Model {
+            id: Uuid::new_v4(),
+            username: format!("u-{}", Uuid::new_v4()),
+            email: format!("{}@example.com", Uuid::new_v4()),
+            password_hash: "h".to_string(),
+            role: "reader".to_string(),
+            is_active: true,
+            email_verified: true,
+            permissions: json!([]),
+            created_at: now,
+            updated_at: now,
+            last_login_at: None,
+        };
+        UserRepository::create(db, &user).await.unwrap()
+    }
+
+    async fn create_test_plugin(db: &DatabaseConnection) -> Uuid {
+        PluginsRepository::create(
+            db,
+            &format!("cleanup_plugin_{}", Uuid::new_v4()),
+            "Cleanup Test Plugin",
+            Some("A test plugin"),
+            "user",
+            "node",
+            vec!["index.js".to_string()],
+            vec![],
+            None,
+            vec![],
+            vec![],
+            vec![],
+            None,
+            "env",
+            None,
+            true,
+            None,
+            None,
+            None,
+            None, // log_level
+        )
+        .await
+        .unwrap()
+        .id
+    }
+
+    /// Persist an OAuth flow directly, as another process would have.
+    async fn insert_flow(
+        db: &DatabaseConnection,
+        plugin_id: Uuid,
+        user_id: Uuid,
+        expires_in_secs: i64,
+    ) {
+        let now = Utc::now();
+        UserPluginOAuthStateRepository::create(
+            db,
+            NewUserPluginOAuthState {
+                state: Uuid::new_v4().to_string(),
+                plugin_id,
+                user_id,
+                pkce_verifier: None,
+                pkce_challenge: None,
+                redirect_uri: "https://example.com/callback".to_string(),
+                created_at: now,
+                expires_at: now + Duration::seconds(expires_in_secs),
+            },
+        )
+        .await
+        .unwrap();
+    }
+
+    fn task_row() -> tasks::Model {
+        let now = Utc::now();
+        tasks::Model {
+            id: Uuid::new_v4(),
+            task_type: "cleanup_plugin_data".to_string(),
+            library_id: None,
+            series_id: None,
+            book_id: None,
+            params: None,
+            status: "running".to_string(),
+            priority: 100,
+            locked_by: None,
+            locked_until: None,
+            attempts: 0,
+            max_attempts: 1,
+            last_error: None,
+            reschedule_count: 0,
+            max_reschedules: 0,
+            result: None,
+            scheduled_for: now,
+            created_at: now,
+            started_at: Some(now),
+            completed_at: None,
+        }
+    }
 
     #[test]
     fn test_handler_creation() {
         let _handler = CleanupPluginDataHandler::new();
     }
 
-    #[test]
-    fn test_handler_with_oauth_state_manager() {
-        let manager = Arc::new(OAuthStateManager::new());
-        let handler = CleanupPluginDataHandler::new().with_oauth_state_manager(manager.clone());
-        assert!(handler.oauth_state_manager.is_some());
-    }
+    /// The sweep has to reach flows this process never created.
+    ///
+    /// This is the regression guard for the reason the OAuth sweep moved off an
+    /// in-process handle: `serve` creates the flows and the standalone `worker`
+    /// runs this task, so a handler that could only see its own process's
+    /// memory swept nothing at all in a split deployment.
+    #[tokio::test]
+    async fn cleanup_removes_expired_oauth_flows_created_elsewhere() {
+        let (db, _temp) = setup().await;
+        let plugin_id = create_test_plugin(&db).await;
+        let user = create_test_user(&db).await;
 
-    #[test]
-    fn test_cleanup_expired_oauth_flows() {
-        let manager = Arc::new(OAuthStateManager::new());
-        let config = OAuthConfig {
-            authorization_url: "https://example.com/auth".to_string(),
-            token_url: "https://example.com/token".to_string(),
-            scopes: vec![],
-            pkce: false,
-            user_info_url: None,
-            client_id: None,
-        };
+        insert_flow(&db, plugin_id, user.id, 300).await;
+        insert_flow(&db, plugin_id, user.id, -1).await;
 
-        // Create a fresh flow (should NOT be cleaned up)
-        manager
-            .start_oauth_flow(
-                Uuid::new_v4(),
-                Uuid::new_v4(),
-                &config,
-                "client-id",
-                "https://example.com/callback",
-            )
+        let result = CleanupPluginDataHandler::new()
+            .handle(&task_row(), &db, None)
+            .await
             .unwrap();
 
-        assert_eq!(manager.pending_count(), 1);
-
-        // Cleanup should not remove fresh flows
-        let removed = manager.cleanup_expired();
-        assert_eq!(removed, 0);
-        assert_eq!(manager.pending_count(), 1);
+        assert!(result.success);
+        assert_eq!(
+            UserPluginOAuthStateRepository::count(&db).await.unwrap(),
+            1,
+            "only the expired flow should have been swept"
+        );
     }
 
-    #[test]
-    fn test_handler_without_oauth_manager_still_works() {
-        // Handler without OAuthStateManager should work fine (no-op for OAuth cleanup)
-        let handler = CleanupPluginDataHandler::new();
-        assert!(handler.oauth_state_manager.is_none());
+    #[tokio::test]
+    async fn cleanup_leaves_live_oauth_flows_alone() {
+        let (db, _temp) = setup().await;
+        let plugin_id = create_test_plugin(&db).await;
+        let user = create_test_user(&db).await;
+
+        insert_flow(&db, plugin_id, user.id, 300).await;
+
+        CleanupPluginDataHandler::new()
+            .handle(&task_row(), &db, None)
+            .await
+            .unwrap();
+
+        assert_eq!(UserPluginOAuthStateRepository::count(&db).await.unwrap(), 1);
     }
 }

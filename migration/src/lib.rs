@@ -209,6 +209,7 @@ pub mod m20260729_000104_backfill_read_completions;
 pub mod m20260814_000105_create_reading_sessions;
 pub mod m20260814_000106_backfill_reading_sessions;
 mod m20260820_000107_create_oidc_pending_states;
+mod m20260820_000108_create_user_plugin_oauth_states;
 
 pub struct Migrator;
 
@@ -397,6 +398,9 @@ impl MigratorTrait for Migrator {
             // authorization request and the callback no longer have to be
             // served by the same replica.
             Box::new(m20260820_000107_create_oidc_pending_states::Migration),
+            // The same move for plugin OAuth connect flows, which also fixes a
+            // sweep that ran in the wrong process.
+            Box::new(m20260820_000108_create_user_plugin_oauth_states::Migration),
         ]
     }
 }

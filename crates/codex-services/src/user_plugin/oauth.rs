@@ -6,10 +6,10 @@
 use anyhow::{Result, anyhow};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{DateTime, Duration, Utc};
-use dashmap::DashMap;
+use codex_db::repositories::{NewUserPluginOAuthState, UserPluginOAuthStateRepository};
 use rand::Rng;
+use sea_orm::DatabaseConnection;
 use serde::Deserialize;
-use std::sync::Arc;
 use tracing::{debug, warn};
 use uuid::Uuid;
 
@@ -60,18 +60,21 @@ pub struct OAuthResult {
     pub scope: Option<String>,
 }
 
-/// OAuth state manager for tracking pending OAuth flows
+/// OAuth state manager for tracking pending OAuth flows.
+///
+/// Pending flows live in the database rather than in this process. The
+/// authorization request and the callback are separate HTTP requests, so a
+/// deployment running more than one `codex serve` behind a load balancer
+/// without session affinity routes them to different processes, and an
+/// in-process map would fail the flow every time.
 #[derive(Clone)]
 pub struct OAuthStateManager {
-    /// Map of state parameter -> pending flow
-    pending_flows: Arc<DashMap<String, PendingOAuthFlow>>,
+    db: DatabaseConnection,
 }
 
 impl OAuthStateManager {
-    pub fn new() -> Self {
-        Self {
-            pending_flows: Arc::new(DashMap::new()),
-        }
+    pub fn new(db: DatabaseConnection) -> Self {
+        Self { db }
     }
 
     /// Generate a cryptographically random state parameter
@@ -100,7 +103,7 @@ impl OAuthStateManager {
     /// Build the authorization URL for a plugin's OAuth flow
     ///
     /// Returns (authorization_url, state_token)
-    pub fn start_oauth_flow(
+    pub async fn start_oauth_flow(
         &self,
         plugin_id: Uuid,
         user_id: Uuid,
@@ -145,16 +148,21 @@ impl OAuthStateManager {
         }
 
         // Store pending flow
-        let pending = PendingOAuthFlow {
-            plugin_id,
-            user_id,
-            pkce_verifier,
-            pkce_challenge,
-            redirect_uri: redirect_uri.to_string(),
-            created_at: Utc::now(),
-        };
-
-        self.pending_flows.insert(state.clone(), pending);
+        let created_at = Utc::now();
+        UserPluginOAuthStateRepository::create(
+            &self.db,
+            NewUserPluginOAuthState {
+                state: state.clone(),
+                plugin_id,
+                user_id,
+                pkce_verifier,
+                pkce_challenge,
+                redirect_uri: redirect_uri.to_string(),
+                created_at,
+                expires_at: created_at + Duration::seconds(OAUTH_STATE_TTL_SECS),
+            },
+        )
+        .await?;
 
         debug!(
             plugin_id = %plugin_id,
@@ -168,11 +176,19 @@ impl OAuthStateManager {
     /// Validate and consume a state parameter, returning the pending flow
     ///
     /// This is called during the OAuth callback to verify CSRF protection
-    pub fn validate_state(&self, state: &str) -> Result<PendingOAuthFlow> {
-        let (_, pending) = self
-            .pending_flows
-            .remove(state)
+    pub async fn validate_state(&self, state: &str) -> Result<PendingOAuthFlow> {
+        let row = UserPluginOAuthStateRepository::consume(&self.db, state)
+            .await?
             .ok_or_else(|| anyhow!("Invalid or expired OAuth state parameter"))?;
+
+        let pending = PendingOAuthFlow {
+            plugin_id: row.plugin_id,
+            user_id: row.user_id,
+            pkce_verifier: row.pkce_verifier,
+            pkce_challenge: row.pkce_challenge,
+            redirect_uri: row.redirect_uri,
+            created_at: row.created_at,
+        };
 
         // Check TTL
         let age = Utc::now().signed_duration_since(pending.created_at);
@@ -266,55 +282,151 @@ impl OAuthStateManager {
         })
     }
 
-    /// Clean up expired pending flows
-    pub fn cleanup_expired(&self) -> usize {
-        let now = Utc::now();
-        let ttl = Duration::seconds(OAUTH_STATE_TTL_SECS);
-        let mut removed = 0;
-
-        self.pending_flows.retain(|_, flow| {
-            let expired = now.signed_duration_since(flow.created_at) > ttl;
-            if expired {
-                removed += 1;
-            }
-            !expired
-        });
-
+    /// Clean up expired pending flows. Returns the number removed.
+    pub async fn cleanup_expired(&self) -> Result<u64> {
+        let removed = UserPluginOAuthStateRepository::delete_expired(&self.db).await?;
         if removed > 0 {
             debug!(removed, "Cleaned up expired OAuth flows");
         }
-
-        removed
+        Ok(removed)
     }
 
     /// Get the total number of pending flows (used in tests and monitoring)
-    pub fn pending_count(&self) -> usize {
-        self.pending_flows.len()
+    pub async fn pending_count(&self) -> Result<u64> {
+        UserPluginOAuthStateRepository::count(&self.db).await
     }
 
-    /// Get the number of pending flows for a specific user (for rate-limiting)
+    /// Get the number of unexpired flows for a specific user (for rate-limiting).
     ///
-    /// Performs an opportunistic cleanup of expired flows before counting,
-    /// so that expired flows (past `OAUTH_STATE_TTL_SECS`) don't permanently
-    /// block users from starting new OAuth flows.
-    pub fn pending_count_for_user(&self, user_id: Uuid) -> usize {
-        self.cleanup_expired();
-        self.pending_flows
-            .iter()
-            .filter(|entry| entry.value().user_id == user_id)
-            .count()
-    }
-}
-
-impl Default for OAuthStateManager {
-    fn default() -> Self {
-        Self::new()
+    /// Expiry is applied in the query rather than by sweeping first, so an
+    /// abandoned flow stops counting against the user the moment it expires
+    /// instead of whenever the next sweep happens to run.
+    pub async fn pending_count_for_user(&self, user_id: Uuid) -> Result<u64> {
+        UserPluginOAuthStateRepository::count_live_for_user(&self.db, user_id).await
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use codex_db::entities::{plugins, users};
+    use codex_db::repositories::{PluginsRepository, UserRepository};
+    use codex_db::test_helpers::setup_test_db;
+    use serde_json::json;
+
+    /// A manager plus the rows its foreign keys require.
+    struct Fixture {
+        db: DatabaseConnection,
+        manager: OAuthStateManager,
+        plugin: plugins::Model,
+        user: users::Model,
+    }
+
+    impl Fixture {
+        async fn new() -> Self {
+            let db = setup_test_db().await;
+            let plugin = create_test_plugin(&db).await;
+            let user = create_test_user(&db).await;
+            Self {
+                manager: OAuthStateManager::new(db.clone()),
+                db,
+                plugin,
+                user,
+            }
+        }
+
+        /// A second manager over the same database, standing in for a second
+        /// replica: separate process state, one shared store.
+        fn other_replica(&self) -> OAuthStateManager {
+            OAuthStateManager::new(self.db.clone())
+        }
+
+        async fn another_user(&self) -> users::Model {
+            create_test_user(&self.db).await
+        }
+
+        async fn start(&self, user_id: Uuid, config: &OAuthConfig) -> (String, String) {
+            self.manager
+                .start_oauth_flow(
+                    self.plugin.id,
+                    user_id,
+                    config,
+                    "client-id",
+                    "https://codex.local/callback",
+                )
+                .await
+                .unwrap()
+        }
+
+        /// Persist a flow that is already past its TTL. Used instead of
+        /// backdating a live row, which the in-memory implementation allowed
+        /// but a stored `expires_at` does not.
+        async fn insert_expired(&self, user_id: Uuid) -> String {
+            let state = OAuthStateManager::generate_state();
+            let created_at = Utc::now() - Duration::seconds(OAUTH_STATE_TTL_SECS + 60);
+            UserPluginOAuthStateRepository::create(
+                &self.db,
+                NewUserPluginOAuthState {
+                    state: state.clone(),
+                    plugin_id: self.plugin.id,
+                    user_id,
+                    pkce_verifier: None,
+                    pkce_challenge: None,
+                    redirect_uri: "https://codex.local/callback".to_string(),
+                    created_at,
+                    expires_at: created_at + Duration::seconds(OAUTH_STATE_TTL_SECS),
+                },
+            )
+            .await
+            .unwrap();
+            state
+        }
+    }
+
+    async fn create_test_user(db: &DatabaseConnection) -> users::Model {
+        let now = Utc::now();
+        let user = users::Model {
+            id: Uuid::new_v4(),
+            username: format!("u-{}", Uuid::new_v4()),
+            email: format!("{}@example.com", Uuid::new_v4()),
+            password_hash: "h".to_string(),
+            role: "reader".to_string(),
+            is_active: true,
+            email_verified: true,
+            permissions: json!([]),
+            created_at: now,
+            updated_at: now,
+            last_login_at: None,
+        };
+        UserRepository::create(db, &user).await.unwrap()
+    }
+
+    async fn create_test_plugin(db: &DatabaseConnection) -> plugins::Model {
+        PluginsRepository::create(
+            db,
+            &format!("oauth_plugin_{}", Uuid::new_v4()),
+            "OAuth Test Plugin",
+            Some("A test plugin"),
+            "user",
+            "node",
+            vec!["index.js".to_string()],
+            vec![],
+            None,
+            vec![],
+            vec![],
+            vec![],
+            None,
+            "env",
+            None,
+            true,
+            None,
+            None,
+            None,
+            None, // log_level
+        )
+        .await
+        .unwrap()
+    }
 
     fn test_oauth_config() -> OAuthConfig {
         OAuthConfig {
@@ -365,27 +477,17 @@ mod tests {
         assert_eq!(challenge, expected_challenge);
     }
 
-    #[test]
-    fn test_start_oauth_flow() {
-        let manager = OAuthStateManager::new();
+    #[tokio::test]
+    async fn test_start_oauth_flow() {
+        let fx = Fixture::new().await;
         let config = test_oauth_config();
-        let plugin_id = Uuid::new_v4();
-        let user_id = Uuid::new_v4();
 
-        let (auth_url, state) = manager
-            .start_oauth_flow(
-                plugin_id,
-                user_id,
-                &config,
-                "my-client-id",
-                "https://codex.local/api/v1/user/plugins/oauth/callback",
-            )
-            .unwrap();
+        let (auth_url, state) = fx.start(fx.user.id, &config).await;
 
         // Auth URL should contain required parameters
         assert!(auth_url.starts_with("https://example.com/oauth/authorize?"));
         assert!(auth_url.contains("response_type=code"));
-        assert!(auth_url.contains("client_id=my-client-id"));
+        assert!(auth_url.contains("client_id=client-id"));
         assert!(auth_url.contains("redirect_uri="));
         assert!(auth_url.contains("state="));
         assert!(auth_url.contains("scope=read") && auth_url.contains("write"));
@@ -393,30 +495,20 @@ mod tests {
         assert!(auth_url.contains("code_challenge_method=S256"));
 
         // State should be stored
-        assert_eq!(manager.pending_count(), 1);
+        assert_eq!(fx.manager.pending_count().await.unwrap(), 1);
 
         // State should be non-empty
         assert!(!state.is_empty());
     }
 
-    #[test]
-    fn test_start_oauth_flow_without_pkce() {
-        let manager = OAuthStateManager::new();
+    #[tokio::test]
+    async fn test_start_oauth_flow_without_pkce() {
+        let fx = Fixture::new().await;
         let mut config = test_oauth_config();
         config.pkce = false;
         config.scopes = vec![];
-        let plugin_id = Uuid::new_v4();
-        let user_id = Uuid::new_v4();
 
-        let (auth_url, _) = manager
-            .start_oauth_flow(
-                plugin_id,
-                user_id,
-                &config,
-                "my-client-id",
-                "https://codex.local/callback",
-            )
-            .unwrap();
+        let (auth_url, _) = fx.start(fx.user.id, &config).await;
 
         // Should NOT contain PKCE parameters
         assert!(!auth_url.contains("code_challenge"));
@@ -426,240 +518,219 @@ mod tests {
         assert!(!auth_url.contains("scope="));
     }
 
-    #[test]
-    fn test_validate_state_success() {
-        let manager = OAuthStateManager::new();
+    #[tokio::test]
+    async fn test_validate_state_success() {
+        let fx = Fixture::new().await;
         let config = test_oauth_config();
-        let plugin_id = Uuid::new_v4();
-        let user_id = Uuid::new_v4();
 
-        let (_, state) = manager
-            .start_oauth_flow(
-                plugin_id,
-                user_id,
-                &config,
-                "client-id",
-                "https://codex.local/callback",
-            )
-            .unwrap();
+        let (_, state) = fx.start(fx.user.id, &config).await;
 
         // Validate should succeed
-        let pending = manager.validate_state(&state).unwrap();
-        assert_eq!(pending.plugin_id, plugin_id);
-        assert_eq!(pending.user_id, user_id);
+        let pending = fx.manager.validate_state(&state).await.unwrap();
+        assert_eq!(pending.plugin_id, fx.plugin.id);
+        assert_eq!(pending.user_id, fx.user.id);
         assert!(pending.pkce_verifier.is_some());
 
         // State should be consumed (removed)
-        assert_eq!(manager.pending_count(), 0);
+        assert_eq!(fx.manager.pending_count().await.unwrap(), 0);
     }
 
-    #[test]
-    fn test_validate_state_invalid() {
-        let manager = OAuthStateManager::new();
-
-        // Should fail for unknown state
-        assert!(manager.validate_state("nonexistent").is_err());
-    }
-
-    #[test]
-    fn test_validate_state_consumed() {
-        let manager = OAuthStateManager::new();
+    /// A plugin OAuth flow begun on one process has to be completable on
+    /// another. The authorization request and the callback are separate HTTP
+    /// requests, so a deployment running more than one `codex serve` behind a
+    /// load balancer routes them to different processes.
+    #[tokio::test]
+    async fn test_pending_flow_is_visible_to_another_process() {
+        let fx = Fixture::new().await;
         let config = test_oauth_config();
 
-        let (_, state) = manager
-            .start_oauth_flow(
-                Uuid::new_v4(),
-                Uuid::new_v4(),
-                &config,
-                "client-id",
-                "https://codex.local/callback",
-            )
-            .unwrap();
+        let (_, state) = fx.start(fx.user.id, &config).await;
 
-        // First validation should succeed
-        assert!(manager.validate_state(&state).is_ok());
-
-        // Second validation should fail (state consumed)
-        assert!(manager.validate_state(&state).is_err());
+        let pending = fx
+            .other_replica()
+            .validate_state(&state)
+            .await
+            .expect("a flow started by one process must be consumable by another");
+        assert_eq!(pending.plugin_id, fx.plugin.id);
+        assert_eq!(pending.user_id, fx.user.id);
+        assert_eq!(pending.redirect_uri, "https://codex.local/callback");
     }
 
-    #[test]
-    fn test_cleanup_expired() {
-        let manager = OAuthStateManager::new();
+    /// Consuming on one replica must consume everywhere, or the CSRF token is
+    /// single-use only against the process that happens to serve the callback.
+    #[tokio::test]
+    async fn test_state_consumed_on_one_process_is_gone_on_the_other() {
+        let fx = Fixture::new().await;
+        let config = test_oauth_config();
+
+        let (_, state) = fx.start(fx.user.id, &config).await;
+
+        assert!(fx.manager.validate_state(&state).await.is_ok());
+        assert!(
+            fx.other_replica().validate_state(&state).await.is_err(),
+            "a consumed state must not be redeemable on another replica"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_validate_state_invalid() {
+        let fx = Fixture::new().await;
+
+        // Should fail for unknown state
+        assert!(fx.manager.validate_state("nonexistent").await.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_validate_state_consumed() {
+        let fx = Fixture::new().await;
+        let config = test_oauth_config();
+
+        let (_, state) = fx.start(fx.user.id, &config).await;
+
+        // First validation should succeed
+        assert!(fx.manager.validate_state(&state).await.is_ok());
+
+        // Second validation should fail (state consumed)
+        assert!(fx.manager.validate_state(&state).await.is_err());
+    }
+
+    /// An expired flow is rejected even when the sweep has not run yet.
+    #[tokio::test]
+    async fn test_validate_state_rejects_expired_flow() {
+        let fx = Fixture::new().await;
+        let expired = fx.insert_expired(fx.user.id).await;
+
+        let err = fx
+            .manager
+            .validate_state(&expired)
+            .await
+            .expect_err("an expired flow must not validate");
+        assert!(
+            err.to_string().contains("expired"),
+            "the error should say the flow expired, got: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_cleanup_expired() {
+        let fx = Fixture::new().await;
         let config = test_oauth_config();
 
         // Create a flow
-        manager
-            .start_oauth_flow(
-                Uuid::new_v4(),
-                Uuid::new_v4(),
-                &config,
-                "client-id",
-                "https://codex.local/callback",
-            )
-            .unwrap();
+        fx.start(fx.user.id, &config).await;
 
-        assert_eq!(manager.pending_count(), 1);
+        assert_eq!(fx.manager.pending_count().await.unwrap(), 1);
 
         // Cleanup should not remove fresh flows
-        let removed = manager.cleanup_expired();
+        let removed = fx.manager.cleanup_expired().await.unwrap();
         assert_eq!(removed, 0);
-        assert_eq!(manager.pending_count(), 1);
+        assert_eq!(fx.manager.pending_count().await.unwrap(), 1);
     }
 
-    #[test]
-    fn test_multiple_flows() {
-        let manager = OAuthStateManager::new();
+    /// The sweep must reach flows this process never created, which is the
+    /// whole reason it moved off an in-process map: in production the sweep
+    /// runs in the worker while the flows are started in serve.
+    #[tokio::test]
+    async fn test_cleanup_reaches_flows_started_by_another_process() {
+        let fx = Fixture::new().await;
+        let _ = fx.insert_expired(fx.user.id).await;
+
+        let removed = fx.other_replica().cleanup_expired().await.unwrap();
+
+        assert_eq!(removed, 1);
+        assert_eq!(fx.manager.pending_count().await.unwrap(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_multiple_flows() {
+        let fx = Fixture::new().await;
         let config = test_oauth_config();
 
         // Start multiple flows
-        let (_, state1) = manager
-            .start_oauth_flow(
-                Uuid::new_v4(),
-                Uuid::new_v4(),
-                &config,
-                "client-id",
-                "https://codex.local/callback",
-            )
-            .unwrap();
+        let (_, state1) = fx.start(fx.user.id, &config).await;
+        let (_, state2) = fx.start(fx.user.id, &config).await;
 
-        let (_, state2) = manager
-            .start_oauth_flow(
-                Uuid::new_v4(),
-                Uuid::new_v4(),
-                &config,
-                "client-id",
-                "https://codex.local/callback",
-            )
-            .unwrap();
-
-        assert_eq!(manager.pending_count(), 2);
+        assert_eq!(fx.manager.pending_count().await.unwrap(), 2);
 
         // States should be different
         assert_ne!(state1, state2);
 
         // Each should validate independently
-        assert!(manager.validate_state(&state1).is_ok());
-        assert_eq!(manager.pending_count(), 1);
-        assert!(manager.validate_state(&state2).is_ok());
-        assert_eq!(manager.pending_count(), 0);
+        assert!(fx.manager.validate_state(&state1).await.is_ok());
+        assert_eq!(fx.manager.pending_count().await.unwrap(), 1);
+        assert!(fx.manager.validate_state(&state2).await.is_ok());
+        assert_eq!(fx.manager.pending_count().await.unwrap(), 0);
     }
 
-    #[test]
-    fn test_pending_count_for_user() {
-        let manager = OAuthStateManager::new();
+    #[tokio::test]
+    async fn test_pending_count_for_user() {
+        let fx = Fixture::new().await;
         let config = test_oauth_config();
-        let user_a = Uuid::new_v4();
-        let user_b = Uuid::new_v4();
+        let user_b = fx.another_user().await;
 
-        // Start flows for user_a
-        manager
-            .start_oauth_flow(
-                Uuid::new_v4(),
-                user_a,
-                &config,
-                "client-id",
-                "https://codex.local/callback",
-            )
-            .unwrap();
-        manager
-            .start_oauth_flow(
-                Uuid::new_v4(),
-                user_a,
-                &config,
-                "client-id",
-                "https://codex.local/callback",
-            )
-            .unwrap();
+        // Start flows for the fixture user
+        fx.start(fx.user.id, &config).await;
+        fx.start(fx.user.id, &config).await;
 
         // Start a flow for user_b
-        manager
-            .start_oauth_flow(
-                Uuid::new_v4(),
-                user_b,
-                &config,
-                "client-id",
-                "https://codex.local/callback",
-            )
-            .unwrap();
+        fx.start(user_b.id, &config).await;
 
-        assert_eq!(manager.pending_count(), 3);
-        assert_eq!(manager.pending_count_for_user(user_a), 2);
-        assert_eq!(manager.pending_count_for_user(user_b), 1);
-        assert_eq!(manager.pending_count_for_user(Uuid::new_v4()), 0);
+        assert_eq!(fx.manager.pending_count().await.unwrap(), 3);
+        assert_eq!(
+            fx.manager.pending_count_for_user(fx.user.id).await.unwrap(),
+            2
+        );
+        assert_eq!(
+            fx.manager.pending_count_for_user(user_b.id).await.unwrap(),
+            1
+        );
+        assert_eq!(
+            fx.manager
+                .pending_count_for_user(Uuid::new_v4())
+                .await
+                .unwrap(),
+            0
+        );
     }
 
-    #[test]
-    fn test_pending_count_for_user_excludes_expired_flows() {
-        let manager = OAuthStateManager::new();
-        let config = test_oauth_config();
-        let user_id = Uuid::new_v4();
+    #[tokio::test]
+    async fn test_pending_count_for_user_excludes_expired_flows() {
+        let fx = Fixture::new().await;
 
-        // Start 3 flows for the user
         for _ in 0..3 {
-            manager
-                .start_oauth_flow(
-                    Uuid::new_v4(),
-                    user_id,
-                    &config,
-                    "client-id",
-                    "https://codex.local/callback",
-                )
-                .unwrap();
+            let _ = fx.insert_expired(fx.user.id).await;
         }
 
-        assert_eq!(manager.pending_count_for_user(user_id), 3);
-
-        // Manually expire all flows by backdating their created_at
-        let expired_time = Utc::now() - Duration::seconds(OAUTH_STATE_TTL_SECS + 1);
-        for mut entry in manager.pending_flows.iter_mut() {
-            entry.value_mut().created_at = expired_time;
-        }
-
-        // pending_count_for_user should now return 0 (expired flows are cleaned up)
-        assert_eq!(manager.pending_count_for_user(user_id), 0);
-
-        // The expired flows should have been removed from the map
-        assert_eq!(manager.pending_count(), 0);
+        // The rows are still present, but none of them is live, so none of
+        // them counts against the user's concurrent-flow limit.
+        assert_eq!(fx.manager.pending_count().await.unwrap(), 3);
+        assert_eq!(
+            fx.manager.pending_count_for_user(fx.user.id).await.unwrap(),
+            0
+        );
     }
 
-    #[test]
-    fn test_expired_flows_do_not_block_new_flows() {
-        let manager = OAuthStateManager::new();
+    #[tokio::test]
+    async fn test_expired_flows_do_not_block_new_flows() {
+        let fx = Fixture::new().await;
         let config = test_oauth_config();
-        let user_id = Uuid::new_v4();
 
-        // Start 3 flows (would hit the typical max-3 limit)
+        // Three expired flows, which would hit the typical max-3 limit if they
+        // still counted.
         for _ in 0..3 {
-            manager
-                .start_oauth_flow(
-                    Uuid::new_v4(),
-                    user_id,
-                    &config,
-                    "client-id",
-                    "https://codex.local/callback",
-                )
-                .unwrap();
+            let _ = fx.insert_expired(fx.user.id).await;
         }
 
-        // Expire all existing flows
-        let expired_time = Utc::now() - Duration::seconds(OAUTH_STATE_TTL_SECS + 1);
-        for mut entry in manager.pending_flows.iter_mut() {
-            entry.value_mut().created_at = expired_time;
-        }
-
-        // Count should be 0 after cleanup (triggered by pending_count_for_user)
-        assert_eq!(manager.pending_count_for_user(user_id), 0);
+        assert_eq!(
+            fx.manager.pending_count_for_user(fx.user.id).await.unwrap(),
+            0
+        );
 
         // Should be able to start a new flow (not blocked by expired ones)
-        let result = manager.start_oauth_flow(
-            Uuid::new_v4(),
-            user_id,
-            &config,
-            "client-id",
-            "https://codex.local/callback",
+        fx.start(fx.user.id, &config).await;
+        assert_eq!(
+            fx.manager.pending_count_for_user(fx.user.id).await.unwrap(),
+            1
         );
-        assert!(result.is_ok());
-        assert_eq!(manager.pending_count_for_user(user_id), 1);
     }
 }

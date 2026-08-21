@@ -30,6 +30,7 @@ pub use super::users::Entity as Users;
 #[allow(unused_imports)]
 pub use super::oidc_connections::Entity as OidcConnections;
 pub use super::oidc_pending_states::Entity as OidcPendingStates;
+pub use super::user_plugin_oauth_states::Entity as UserPluginOauthStates;
 
 // Plugin entities (exported for external use, may not be used internally)
 #[allow(unused_imports)]

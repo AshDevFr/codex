@@ -71,7 +71,7 @@ async fn create_test_app_state_with_metrics(db: DatabaseConnection) -> Arc<AppSt
     let refresh_token_service = Arc::new(RefreshTokenService::new(db.clone(), 30));
 
     Arc::new(AppState {
-        db,
+        db: db.clone(),
         jwt_service,
         refresh_token_service,
         auth_config,
@@ -96,7 +96,9 @@ async fn create_test_app_state_with_metrics(db: DatabaseConnection) -> Arc<AppSt
         plugin_metrics_service,
         oidc_service: None,
         idp_bearer: None,
-        oauth_state_manager: Arc::new(codex::services::user_plugin::OAuthStateManager::new()),
+        oauth_state_manager: Arc::new(codex::services::user_plugin::OAuthStateManager::new(
+            db.clone(),
+        )),
         export_storage: None,
         plugin_file_storage: None,
         scheduler_timezone: "UTC".to_string(),

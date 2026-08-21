@@ -7,6 +7,11 @@
 //! When those tasks emit entity events, the events are recorded in the task
 //! result. This service replays those events when tasks complete, bridging
 //! events across process boundaries.
+//!
+//! It also listens for entity changes published by sibling web replicas, which
+//! is a different gap: those events are emitted directly by an API handler and
+//! never belong to a task, so nothing replays them. See
+//! [`crate::entity_event_publisher`] for the sending half.
 
 use anyhow::{Context, Result};
 use chrono::TimeZone;
@@ -42,6 +47,11 @@ pub struct TaskListener {
     pool: PgPool,
     db: DatabaseConnection,
     broadcaster: Arc<EventBroadcaster>,
+    /// This process's id, used to ignore the entity events it published
+    /// itself. PostgreSQL delivers a notification to every listener, the
+    /// sender included, so without this the emitting replica would deliver its
+    /// own event to its SSE subscribers twice.
+    origin: Uuid,
 }
 
 impl TaskListener {
@@ -49,6 +59,7 @@ impl TaskListener {
     pub fn from_sea_orm(
         db: &DatabaseConnection,
         broadcaster: Arc<EventBroadcaster>,
+        origin: Uuid,
     ) -> Result<Self> {
         // Extract the underlying sqlx PgPool from SeaORM
         // Caller should ensure database is PostgreSQL before calling this
@@ -75,6 +86,7 @@ impl TaskListener {
             pool,
             db: db.clone(),
             broadcaster,
+            origin,
         })
     }
 
@@ -83,8 +95,9 @@ impl TaskListener {
     /// This runs indefinitely and should be spawned as a background task.
     pub async fn start(self) -> Result<()> {
         info!(
-            "Starting PostgreSQL task listener on channels 'task_completion' and '{}'",
-            crate::task_progress_publisher::TASK_PROGRESS_CHANNEL
+            "Starting PostgreSQL listener on channels 'task_completion', '{}' and '{}'",
+            crate::task_progress_publisher::TASK_PROGRESS_CHANNEL,
+            crate::entity_event_publisher::ENTITY_EVENTS_CHANNEL
         );
 
         let mut listener = PgListener::connect_with(&self.pool)
@@ -101,6 +114,11 @@ impl TaskListener {
             .await
             .context("Failed to listen on 'task_progress' channel")?;
 
+        listener
+            .listen(crate::entity_event_publisher::ENTITY_EVENTS_CHANNEL)
+            .await
+            .context("Failed to listen on 'entity_events' channel")?;
+
         info!("Task listener connected and listening");
 
         loop {
@@ -113,6 +131,8 @@ impl TaskListener {
                     let result = if channel == crate::task_progress_publisher::TASK_PROGRESS_CHANNEL
                     {
                         self.handle_progress(payload)
+                    } else if channel == crate::entity_event_publisher::ENTITY_EVENTS_CHANNEL {
+                        self.handle_entity_event(payload)
                     } else {
                         self.handle_notification(payload).await
                     };
@@ -142,6 +162,27 @@ impl TaskListener {
         // No local subscribers is expected when nobody is watching; emit_task
         // logs that at debug internally, so ignore the error here.
         let _ = self.broadcaster.emit_task(event);
+        Ok(())
+    }
+
+    /// Handle an entity change published by another web replica.
+    ///
+    /// Re-broadcast with `emit_local`, never `emit`: `emit` would forward the
+    /// event straight back to the publisher and bounce it between replicas
+    /// without end.
+    fn handle_entity_event(&self, payload: &str) -> Result<()> {
+        let envelope: crate::entity_event_publisher::EntityEventEnvelope =
+            serde_json::from_str(payload).context("Failed to parse entity event payload")?;
+
+        // Our own event, already delivered locally when it was emitted.
+        if envelope.origin == self.origin {
+            return Ok(());
+        }
+
+        // No local subscribers is normal when nobody is watching; the search
+        // index listener is a subscriber in its own right, so this is not
+        // wasted even with no browsers connected.
+        let _ = self.broadcaster.emit_local(envelope.event);
         Ok(())
     }
 

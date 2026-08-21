@@ -57,8 +57,35 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     let (settings_service, settings_auto_reload_handle) =
         init_settings_service(db.sea_orm_connection(), background_task_cancel.clone()).await?;
 
-    // Create event broadcaster for real-time updates
-    let event_broadcaster = Arc::new(codex_events::EventBroadcaster::new(1000));
+    // Identifies this process on the entity-event channel, so the events it
+    // publishes can be told apart from a sibling replica's when they come back
+    // off the wire.
+    let replica_id = uuid::Uuid::new_v4();
+
+    // Create event broadcaster for real-time updates.
+    //
+    // On PostgreSQL the broadcaster also feeds a publisher that mirrors entity
+    // changes to sibling replicas. Without it, a change served by this replica
+    // would be invisible to every other replica's SSE subscribers and search
+    // index. SQLite deployments are single-process, so there is nobody to tell.
+    let (event_broadcaster, entity_publisher_handle) =
+        if config.database.db_type == DatabaseType::Postgres {
+            let (tx, rx) = tokio::sync::mpsc::channel(1000);
+            let broadcaster =
+                Arc::new(codex_events::EventBroadcaster::new(1000).with_entity_notifier(tx));
+            let handle = codex_services::entity_event_publisher::spawn(
+                db.sea_orm_connection().clone(),
+                replica_id,
+                rx,
+            );
+            info!(
+                "Entity event publisher initialized (replica {})",
+                replica_id
+            );
+            (broadcaster, Some(handle))
+        } else {
+            (Arc::new(codex_events::EventBroadcaster::new(1000)), None)
+        };
     info!("Event broadcaster initialized");
 
     // Start cleanup event subscriber to handle file cleanup on entity deletion
@@ -76,6 +103,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         match codex_services::TaskListener::from_sea_orm(
             db.sea_orm_connection(),
             event_broadcaster.clone(),
+            replica_id,
         ) {
             Ok(listener) => {
                 tokio::spawn(async move {
@@ -444,8 +472,12 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     plugin_manager.start_health_checks().await;
     info!("  Plugin health checks started (60s interval)");
 
-    // Initialize OAuth state manager (shared between API and workers for cleanup)
-    let oauth_state_manager = Arc::new(codex_services::user_plugin::OAuthStateManager::new());
+    // Pending connect flows live in the database, so the callback can be served
+    // by a different replica than the one that started the flow, and so the
+    // cleanup task can sweep them from whichever process runs it.
+    let oauth_state_manager = Arc::new(codex_services::user_plugin::OAuthStateManager::new(
+        db.sea_orm_connection().clone(),
+    ));
 
     // Create export storage for series export tasks (shared between workers and API)
     let exports_dir = settings_service
@@ -494,7 +526,6 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
             Some(pdf_page_cache.clone()),
             Some(pdf_handle_cache.clone()),
             Some(plugin_manager.clone()),
-            Some(oauth_state_manager.clone()),
             export_storage.clone(),
             // Single-process mode: workers share this process's broadcaster,
             // which already has the live SSE subscribers, so no cross-process
@@ -703,6 +734,15 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     info!("Waiting for fuzzy search event listener to complete...");
     if let Err(e) = fuzzy_listener_handle.await {
         tracing::warn!("Fuzzy search event listener panicked: {}", e);
+    }
+
+    // The entity event publisher ends on its own once the broadcaster's sender
+    // is dropped, but that only happens after every AppState clone is gone.
+    // Abort rather than wait, so shutdown is not held up by a channel that no
+    // longer has anything to carry.
+    if let Some(handle) = entity_publisher_handle {
+        handle.abort();
+        info!("Entity event publisher stopped");
     }
     info!("Background tasks shutdown complete");
 

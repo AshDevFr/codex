@@ -689,7 +689,6 @@ pub fn spawn_workers(
     pdf_page_cache: Option<Arc<codex_services::PdfPageCache>>,
     pdf_handle_cache: Option<Arc<codex_services::PdfHandleCache>>,
     plugin_manager: Option<Arc<codex_services::plugin::PluginManager>>,
-    oauth_state_manager: Option<Arc<codex_services::user_plugin::OAuthStateManager>>,
     export_storage: Arc<codex_services::ExportStorage>,
     task_progress_notifier: Option<tokio::sync::mpsc::Sender<TaskProgressEvent>>,
 ) -> (
@@ -734,11 +733,6 @@ pub fn spawn_workers(
         // Add plugin manager if available (for plugin auto-match tasks)
         if let Some(ref pm) = plugin_manager {
             task_worker = task_worker.with_plugin_manager(pm.clone());
-        }
-
-        // Add OAuth state manager if available (for cleaning up expired OAuth flows)
-        if let Some(ref osm) = oauth_state_manager {
-            task_worker = task_worker.with_oauth_state_manager(osm.clone());
         }
 
         // Add export storage for series export tasks

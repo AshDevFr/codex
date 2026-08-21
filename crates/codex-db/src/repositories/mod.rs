@@ -62,6 +62,7 @@ pub mod plugin_data;
 
 // User plugin system
 pub mod user_plugin_data;
+pub mod user_plugin_oauth_state;
 pub mod user_plugins;
 
 // Re-export repositories
@@ -149,4 +150,5 @@ pub use plugin_data::PluginDataRepository;
 // User plugin system
 #[allow(unused_imports)]
 pub use user_plugin_data::UserPluginDataRepository;
+pub use user_plugin_oauth_state::{NewUserPluginOAuthState, UserPluginOAuthStateRepository};
 pub use user_plugins::UserPluginsRepository;

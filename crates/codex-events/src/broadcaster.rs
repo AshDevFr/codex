@@ -44,6 +44,14 @@ pub struct EventBroadcaster {
     /// progress is forwarded here (lossy, non-blocking) to be re-published to
     /// the web server via PostgreSQL LISTEN/NOTIFY.
     task_notifier: Option<mpsc::Sender<TaskProgressEvent>>,
+    /// Optional out-of-process sink for entity change events.
+    ///
+    /// A web server replica only sees the entity events its own process
+    /// emitted. Any sibling replica's SSE subscribers would miss them, and any
+    /// sibling's search index would drift from the database. Events forwarded
+    /// here are re-published to the other replicas over PostgreSQL
+    /// LISTEN/NOTIFY.
+    entity_notifier: Option<mpsc::Sender<EntityChangeEvent>>,
     /// Flag to track if the broadcaster has been shut down
     shutdown: Arc<std::sync::atomic::AtomicBool>,
 }
@@ -78,6 +86,7 @@ impl EventBroadcaster {
                 None
             },
             task_notifier: None,
+            entity_notifier: None,
             shutdown: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
     }
@@ -91,6 +100,22 @@ impl EventBroadcaster {
     /// channel is full the event is dropped, which is acceptable for progress.
     pub fn with_task_notifier(mut self, notifier: mpsc::Sender<TaskProgressEvent>) -> Self {
         self.task_notifier = Some(notifier);
+        self
+    }
+
+    /// Set the out-of-process sink for entity change events.
+    ///
+    /// When set, [`Self::emit`] also forwards a clone of the event to
+    /// `notifier`, which the entity-event publisher turns into a
+    /// `pg_notify` so sibling replicas can re-broadcast it locally.
+    /// Forwarding is lossy and non-blocking: a full channel drops the event
+    /// rather than stalling the request that produced it.
+    ///
+    /// Events arriving *from* another replica must be replayed with
+    /// [`Self::emit_local`], never [`Self::emit`], or they would be published
+    /// straight back out and loop.
+    pub fn with_entity_notifier(mut self, notifier: mpsc::Sender<EntityChangeEvent>) -> Self {
+        self.entity_notifier = Some(notifier);
         self
     }
 
@@ -115,6 +140,25 @@ impl EventBroadcaster {
     // by-value already and doesn't justify boxing the error variant.
     #[allow(clippy::result_large_err)]
     pub fn emit(
+        &self,
+        event: EntityChangeEvent,
+    ) -> Result<usize, broadcast::error::SendError<EntityChangeEvent>> {
+        // Forward to sibling replicas first. Lossy by design: a full channel
+        // drops the event rather than blocking the request that emitted it.
+        if let Some(ref notifier) = self.entity_notifier {
+            let _ = notifier.try_send(event.clone());
+        }
+
+        self.emit_local(event)
+    }
+
+    /// Broadcast an entity event to this process's subscribers only.
+    ///
+    /// Used to replay an event that arrived from another replica. Going
+    /// through [`Self::emit`] instead would forward it straight back out and
+    /// bounce the event between replicas forever.
+    #[allow(clippy::result_large_err)]
+    pub fn emit_local(
         &self,
         event: EntityChangeEvent,
     ) -> Result<usize, broadcast::error::SendError<EntityChangeEvent>> {
@@ -409,6 +453,58 @@ mod tests {
         let recorded = broadcaster.take_recorded_events();
         assert!(recorded.is_empty());
         assert_eq!(broadcaster.recorded_event_count(), 0);
+    }
+
+    fn sample_entity_event() -> EntityChangeEvent {
+        EntityChangeEvent::new(
+            EntityEvent::BookCreated {
+                book_id: Uuid::new_v4(),
+                series_id: Uuid::new_v4(),
+                library_id: Uuid::new_v4(),
+            },
+            None,
+        )
+    }
+
+    #[tokio::test]
+    async fn emit_forwards_to_the_entity_notifier() {
+        let (tx, mut rx) = mpsc::channel(10);
+        let broadcaster = EventBroadcaster::new(100).with_entity_notifier(tx);
+        let _subscriber = broadcaster.subscribe();
+
+        let event = sample_entity_event();
+        let _ = broadcaster.emit(event.clone());
+
+        let forwarded = rx.try_recv().expect("emit forwards to sibling replicas");
+        assert_eq!(
+            serde_json::to_value(&forwarded.event).unwrap(),
+            serde_json::to_value(&event.event).unwrap()
+        );
+    }
+
+    /// Replaying an event that arrived from another replica must not send it
+    /// back out. `emit` here instead of `emit_local` would have each replica
+    /// re-publish the other's events, bouncing every change between them
+    /// indefinitely.
+    #[tokio::test]
+    async fn emit_local_does_not_forward_to_the_entity_notifier() {
+        let (tx, mut rx) = mpsc::channel(10);
+        let broadcaster = EventBroadcaster::new(100).with_entity_notifier(tx);
+        let mut subscriber = broadcaster.subscribe();
+
+        let event = sample_entity_event();
+        let _ = broadcaster.emit_local(event.clone());
+
+        assert!(
+            rx.try_recv().is_err(),
+            "a replayed event must not be published back out"
+        );
+        // It still reaches local subscribers, which is the point of replaying.
+        let received = subscriber.try_recv().expect("delivered locally");
+        assert_eq!(
+            serde_json::to_value(&received.event).unwrap(),
+            serde_json::to_value(&event.event).unwrap()
+        );
     }
 
     #[test]

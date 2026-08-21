@@ -36,7 +36,6 @@ use codex_events::{EventBroadcaster, RecordedEvent, TaskProgressEvent};
 use codex_services::PdfPageCache;
 use codex_services::export_storage::ExportStorage;
 use codex_services::plugin::PluginManager;
-use codex_services::user_plugin::OAuthStateManager;
 use codex_services::{SettingsService, TaskMetricsService, ThumbnailService};
 
 /// RAII guard that increments the OTel in-flight task gauge on creation and
@@ -286,18 +285,6 @@ impl TaskWorker {
         notifier: mpsc::Sender<TaskProgressEvent>,
     ) -> Self {
         self.task_progress_notifier = Some(notifier);
-        self
-    }
-
-    /// Set the OAuth state manager for cleaning up expired OAuth flows
-    ///
-    /// This re-registers the `CleanupPluginDataHandler` with the manager so it
-    /// can clean up expired in-memory OAuth state alongside expired storage data.
-    pub fn with_oauth_state_manager(mut self, manager: Arc<OAuthStateManager>) -> Self {
-        self.handlers.insert(
-            "cleanup_plugin_data".to_string(),
-            Arc::new(CleanupPluginDataHandler::new().with_oauth_state_manager(manager)),
-        );
         self
     }
 

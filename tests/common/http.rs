@@ -55,7 +55,7 @@ pub async fn create_test_auth_state(db: DatabaseConnection) -> Arc<AuthState> {
     let plugin_metrics_service = Arc::new(PluginMetricsService::new());
 
     Arc::new(AppState {
-        db,
+        db: db.clone(),
         jwt_service,
         refresh_token_service,
         auth_config,
@@ -80,7 +80,9 @@ pub async fn create_test_auth_state(db: DatabaseConnection) -> Arc<AuthState> {
         plugin_metrics_service,
         oidc_service: None, // Tests disable OIDC by default
         idp_bearer: None,
-        oauth_state_manager: Arc::new(codex::services::user_plugin::OAuthStateManager::new()),
+        oauth_state_manager: Arc::new(codex::services::user_plugin::OAuthStateManager::new(
+            db.clone(),
+        )),
         export_storage: None,
         plugin_file_storage: None,
         scheduler_timezone: "UTC".to_string(),
@@ -123,7 +125,7 @@ pub async fn create_test_app_state(db: DatabaseConnection) -> Arc<AppState> {
     let plugin_metrics_service = Arc::new(PluginMetricsService::new());
 
     Arc::new(AppState {
-        db,
+        db: db.clone(),
         jwt_service,
         refresh_token_service,
         auth_config,
@@ -148,7 +150,9 @@ pub async fn create_test_app_state(db: DatabaseConnection) -> Arc<AppState> {
         plugin_metrics_service,
         oidc_service: None, // Tests disable OIDC by default
         idp_bearer: None,
-        oauth_state_manager: Arc::new(codex::services::user_plugin::OAuthStateManager::new()),
+        oauth_state_manager: Arc::new(codex::services::user_plugin::OAuthStateManager::new(
+            db.clone(),
+        )),
         export_storage: None,
         plugin_file_storage: None,
         scheduler_timezone: "UTC".to_string(),
@@ -241,7 +245,9 @@ pub async fn create_test_router(state: Arc<AuthState>) -> Router {
         plugin_metrics_service,
         oidc_service: None, // Tests disable OIDC by default
         idp_bearer: None,
-        oauth_state_manager: Arc::new(codex::services::user_plugin::OAuthStateManager::new()),
+        oauth_state_manager: Arc::new(codex::services::user_plugin::OAuthStateManager::new(
+            state.db.clone(),
+        )),
         export_storage: None,
         plugin_file_storage: None,
         scheduler_timezone: "UTC".to_string(),

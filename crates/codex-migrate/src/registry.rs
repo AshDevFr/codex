@@ -58,6 +58,7 @@ macro_rules! for_each_entity {
         $op!(oidc_pending_states);
         $op!(plugin_data);
         $op!(user_plugin_data);
+        $op!(user_plugin_oauth_states);
         $op!(user_plugins);
         $op!(filter_presets);
         $op!(genres);
