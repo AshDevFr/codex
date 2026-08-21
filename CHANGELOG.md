@@ -2,6 +2,18 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [2.1.0] - 2026-08-21
+
+### 🐛 Bug Fixes
+
+- *(auth)* Keep OIDC login state in the database so any replica can complete it
+- *(replicas)* Stop plugin OAuth and entity events from being trapped in one process
+
+### 📚 Documentation
+
+- *(config)* Correct the guides and templates that still name 1.x settings
+- *(deployment)* Correct the session-handling claims that assumed any pod could serve any request
+
 ## [2.0.0] - 2026-08-21
 
 ### 🚀 Features
