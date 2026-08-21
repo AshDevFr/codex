@@ -210,12 +210,12 @@ pub async fn callback(
         // Send the refusal wherever the flow was started from. A native client
         // that only ever hears about success hangs on the failure it can do
         // something about.
-        let target = query.state.as_deref().and_then(|state_token| {
-            state
-                .oidc_service
-                .as_ref()
-                .and_then(|service| service.take_pending_redirect_uri(state_token))
-        });
+        let target = match (query.state.as_deref(), state.oidc_service.as_ref()) {
+            (Some(state_token), Some(service)) => {
+                service.take_pending_redirect_uri(state_token).await
+            }
+            _ => None,
+        };
 
         return redirect_response(&build_error_redirect(
             target.as_deref(),

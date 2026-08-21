@@ -345,7 +345,15 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
             config.auth.oidc.auto_create_users
         );
         info!("  Default role: {}", config.auth.oidc.default_role.as_str());
-        let service = codex_services::OidcService::new(config.auth.oidc.clone(), base_url.clone());
+        // Database-backed on purpose: the authorization request and the
+        // callback are separate HTTP requests, so holding this in process
+        // memory breaks every login as soon as more than one instance runs
+        // behind a load balancer without session affinity.
+        let service = codex_services::OidcService::new(
+            config.auth.oidc.clone(),
+            base_url.clone(),
+            codex_services::PendingStateStore::Database(db.sea_orm_connection().clone()),
+        );
         let provider_count = service.get_providers().len();
         info!("  Providers: {}", provider_count);
         for (name, provider_config) in &config.auth.oidc.providers {

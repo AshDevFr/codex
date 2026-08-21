@@ -20249,6 +20249,9 @@ export interface components {
             /** @enum {string} */
             type: "cleanup_refresh_tokens";
         } | {
+            /** @enum {string} */
+            type: "cleanup_oidc_pending_states";
+        } | {
             /** Format: uuid */
             pluginId: string;
             /** @enum {string} */

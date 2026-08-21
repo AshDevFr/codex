@@ -50,7 +50,7 @@ pub use file_cleanup::{CleanupStats, FileCleanupService, OrphanedFileType};
 pub use filter::FilterService;
 pub use idp_bearer::{IdpBearerError, IdpBearerValidator, ValidatedIdpToken};
 pub use inflight_thumbnails::InflightThumbnailTracker;
-pub use oidc::OidcService;
+pub use oidc::{OidcService, PendingStateStore};
 pub use pdf_cache::{CacheStats, CleanupResult, PdfPageCache};
 pub use pdf_handle_cache::{HandleCacheEntrySnapshot, HandleCacheSnapshot, PdfHandleCache};
 pub use pdf_handle_cache_subscriber::PdfHandleCacheSubscriber;

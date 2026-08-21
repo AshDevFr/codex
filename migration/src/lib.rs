@@ -208,6 +208,7 @@ pub mod m20260729_000103_create_read_completions;
 pub mod m20260729_000104_backfill_read_completions;
 pub mod m20260814_000105_create_reading_sessions;
 pub mod m20260814_000106_backfill_reading_sessions;
+mod m20260820_000107_create_oidc_pending_states;
 
 pub struct Migrator;
 
@@ -392,6 +393,10 @@ impl MigratorTrait for Migrator {
             // Seed the log from existing progress rows, so the first write to an
             // already-read book folds over its history rather than over one event.
             Box::new(m20260814_000106_backfill_reading_sessions::Migration),
+            // OIDC login state moves out of process memory, so the
+            // authorization request and the callback no longer have to be
+            // served by the same replica.
+            Box::new(m20260820_000107_create_oidc_pending_states::Migration),
         ]
     }
 }

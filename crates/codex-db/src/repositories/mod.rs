@@ -55,6 +55,7 @@ pub mod access_group;
 
 // OIDC authentication
 pub mod oidc_connection;
+pub mod oidc_pending_state;
 
 // System-scoped plugin KV store (per-plugin, no user context)
 pub mod plugin_data;
@@ -139,6 +140,7 @@ pub use access_group::AccessGroupRepository;
 
 // OIDC authentication
 pub use oidc_connection::OidcConnectionRepository;
+pub use oidc_pending_state::{NewOidcPendingState, OidcPendingStateRepository};
 
 // System-scoped plugin KV store
 #[allow(unused_imports)]

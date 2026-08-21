@@ -6,6 +6,7 @@ mod auth;
 mod book_duplicates;
 mod collections;
 mod migrations;
+mod oidc_pending_state;
 mod postgres;
 mod reading_sessions;
 mod reading_stats;

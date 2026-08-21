@@ -21,8 +21,8 @@ use codex::events::EventBroadcaster;
 use codex::services::email::EmailService;
 use codex::services::{
     AuthTrackingService, FileCleanupService, InflightThumbnailTracker, OidcService, PdfHandleCache,
-    PdfPageCache, PluginMetricsService, ReadProgressService, RefreshTokenService, SettingsService,
-    ThumbnailService, plugin::PluginManager,
+    PdfPageCache, PendingStateStore, PluginMetricsService, ReadProgressService,
+    RefreshTokenService, SettingsService, ThumbnailService, plugin::PluginManager,
 };
 use codex::utils::jwt::JwtService;
 use common::*;
@@ -75,6 +75,7 @@ async fn create_test_state_with_oidc(
         Some(Arc::new(OidcService::new(
             oidc_config,
             "http://localhost:8080".to_string(),
+            PendingStateStore::Database(db.clone()),
         )))
     } else {
         None
@@ -748,20 +749,41 @@ async fn test_callback_unknown_provider() {
 // OidcService Unit Tests (additional coverage)
 // =============================================================================
 
-#[test]
-fn test_oidc_service_disabled_returns_empty_providers() {
+/// These assert on config-derived behaviour and never reach the pending-state
+/// store, but the service still requires one, so they get a scratch database.
+async fn oidc_service_for_config(oidc_config: OidcConfig) -> OidcService {
+    oidc_service_for_config_with_base(oidc_config, "http://localhost:8080").await
+}
+
+async fn oidc_service_for_config_with_base(
+    oidc_config: OidcConfig,
+    redirect_uri_base: &str,
+) -> OidcService {
+    let (db, temp_dir) = setup_test_db().await;
+    // Keep the temp dir alive for the rest of the test, as codex-db's own
+    // `setup_test_db` helper does.
+    std::mem::forget(temp_dir);
+    OidcService::new(
+        oidc_config,
+        redirect_uri_base.to_string(),
+        PendingStateStore::Database(db),
+    )
+}
+
+#[tokio::test]
+async fn test_oidc_service_disabled_returns_empty_providers() {
     let oidc_config = OidcConfig {
         enabled: false,
         ..OidcConfig::default()
     };
-    let service = OidcService::new(oidc_config, "http://localhost:8080".to_string());
+    let service = oidc_service_for_config(oidc_config).await;
 
     assert!(!service.is_enabled());
     assert!(service.get_providers().is_empty());
 }
 
-#[test]
-fn test_oidc_service_no_providers_configured() {
+#[tokio::test]
+async fn test_oidc_service_no_providers_configured() {
     let oidc_config = OidcConfig {
         enabled: true,
         auto_create_users: true,
@@ -770,7 +792,7 @@ fn test_oidc_service_no_providers_configured() {
         allowed_redirect_uris: vec![],
         providers: HashMap::new(),
     };
-    let service = OidcService::new(oidc_config, "http://localhost:8080".to_string());
+    let service = oidc_service_for_config(oidc_config).await;
 
     assert!(service.is_enabled());
     assert!(service.get_providers().is_empty());
@@ -785,10 +807,11 @@ fn test_oidc_config_default_values() {
     assert!(config.providers.is_empty());
 }
 
-#[test]
-fn test_oidc_service_redirect_uri_with_custom_base() {
+#[tokio::test]
+async fn test_oidc_service_redirect_uri_with_custom_base() {
     let oidc_config = create_test_oidc_config();
-    let service = OidcService::new(oidc_config, "https://codex.example.com/myapp".to_string());
+    let service =
+        oidc_service_for_config_with_base(oidc_config, "https://codex.example.com/myapp").await;
 
     let providers = service.get_providers();
     assert_eq!(providers.len(), 1);
@@ -796,17 +819,17 @@ fn test_oidc_service_redirect_uri_with_custom_base() {
     assert!(service.is_enabled());
 }
 
-#[test]
-fn test_oidc_service_auto_create_disabled() {
+#[tokio::test]
+async fn test_oidc_service_auto_create_disabled() {
     let mut oidc_config = create_test_oidc_config();
     oidc_config.auto_create_users = false;
-    let service = OidcService::new(oidc_config, "http://localhost:8080".to_string());
+    let service = oidc_service_for_config(oidc_config).await;
 
     assert!(!service.auto_create_users());
 }
 
-#[test]
-fn test_oidc_role_mapping_empty_role_mapping() {
+#[tokio::test]
+async fn test_oidc_role_mapping_empty_role_mapping() {
     let mut oidc_config = create_test_oidc_config();
     // Provider with empty role mapping
     let provider = OidcProviderConfig {
@@ -825,7 +848,7 @@ fn test_oidc_role_mapping_empty_role_mapping() {
     oidc_config
         .providers
         .insert("empty".to_string(), provider.clone());
-    let service = OidcService::new(oidc_config, "http://localhost:8080".to_string());
+    let service = oidc_service_for_config(oidc_config).await;
 
     // With no role mapping, all groups should fall back to default
     let groups = vec!["any-group".to_string()];
@@ -833,10 +856,10 @@ fn test_oidc_role_mapping_empty_role_mapping() {
     assert_eq!(role, "reader"); // Default role
 }
 
-#[test]
-fn test_oidc_role_mapping_case_sensitive_groups() {
+#[tokio::test]
+async fn test_oidc_role_mapping_case_sensitive_groups() {
     let oidc_config = create_test_oidc_config();
-    let service = OidcService::new(oidc_config.clone(), "http://localhost:8080".to_string());
+    let service = oidc_service_for_config(oidc_config.clone()).await;
     let provider = oidc_config.providers.get("test-provider").unwrap();
 
     // Groups are case-sensitive
@@ -1418,6 +1441,11 @@ mod full_flow {
     /// Everything a test needs to drive one flow.
     struct Harness {
         app: axum::Router,
+        /// A second, independent server over the same database, standing in for
+        /// a second replica. It has its own `AppState`, so its `OidcService`
+        /// and every in-process cache are separate from `app`'s: the only
+        /// thing the two share is the database, exactly as two pods do.
+        other_replica: axum::Router,
         stub: IdpStub,
         _temp_dir: tempfile::TempDir,
     }
@@ -1427,14 +1455,17 @@ mod full_flow {
         let stub = IdpStub::start().await;
         let oidc_config = config_for_stub(&stub.url, allowed_redirect_uris);
 
-        let state = create_test_state_with_oidc(db, oidc_config.clone()).await;
         let mut config = Config::default();
         config.api.cors_enabled = false;
         config.api.enable_api_docs = false;
-        config.auth.oidc = oidc_config;
+        config.auth.oidc = oidc_config.clone();
+
+        let state = create_test_state_with_oidc(db.clone(), oidc_config.clone()).await;
+        let other_state = create_test_state_with_oidc(db, oidc_config).await;
 
         Harness {
             app: create_router(state, &config),
+            other_replica: create_router(other_state, &config),
             stub,
             _temp_dir,
         }
@@ -1508,6 +1539,74 @@ mod full_flow {
         assert_eq!(payload["provider"], "test-provider");
         assert_eq!(payload["user"]["email"], EMAIL);
         assert_eq!(payload["newAccount"], true);
+    }
+
+    /// The whole point of moving pending state into the database: a login
+    /// begun on one replica has to complete on another.
+    ///
+    /// This is the production failure end to end. Codex runs behind a
+    /// round-robin load balancer with no session affinity, and the login POST
+    /// and the callback GET are consecutive requests, so they land on
+    /// different pods essentially every time. Before the pending state moved
+    /// out of process memory this returned `Invalid or expired OIDC state`
+    /// and every single login failed.
+    #[tokio::test]
+    async fn test_login_on_one_replica_completes_on_another() {
+        let harness = harness(vec![NATIVE_TARGET.to_string()]).await;
+
+        // Leg one: the browser starts the flow on the first replica.
+        let state_token = begin_flow(&harness, Some(NATIVE_TARGET)).await;
+
+        // Leg two: the IdP sends the browser back, and the load balancer picks
+        // the other replica.
+        let (status, location) = location_of(
+            harness.other_replica.clone(),
+            &format!(
+                "/api/v1/auth/oidc/test-provider/callback?code=stub-code&state={}",
+                state_token
+            ),
+        )
+        .await;
+
+        assert_eq!(
+            status,
+            StatusCode::SEE_OTHER,
+            "the replica that did not start the flow must still complete it"
+        );
+        let fragment = location
+            .strip_prefix(&format!("{NATIVE_TARGET}#"))
+            .unwrap_or_else(|| panic!("expected a fragment on the native target, got: {location}"));
+        let decoded = URL_SAFE_NO_PAD.decode(fragment).expect("fragment decodes");
+        let payload: serde_json::Value =
+            serde_json::from_slice(&decoded).expect("fragment is JSON");
+        assert!(
+            !payload["accessToken"].as_str().unwrap().is_empty(),
+            "a real session must come out of the cross-replica flow"
+        );
+        assert_eq!(payload["user"]["email"], EMAIL);
+    }
+
+    /// A state token is single-use across replicas too, not just within one.
+    #[tokio::test]
+    async fn test_state_token_cannot_be_replayed_on_another_replica() {
+        let harness = harness(vec![NATIVE_TARGET.to_string()]).await;
+        let state_token = begin_flow(&harness, Some(NATIVE_TARGET)).await;
+        let callback = format!(
+            "/api/v1/auth/oidc/test-provider/callback?code=stub-code&state={}",
+            state_token
+        );
+
+        let (first, _) = location_of(harness.app.clone(), &callback).await;
+        assert_eq!(first, StatusCode::SEE_OTHER);
+
+        // Replaying the same state against the other replica must not mint a
+        // second session: consuming it on one replica consumed it everywhere.
+        let (replayed, location) = location_of(harness.other_replica.clone(), &callback).await;
+        assert_ne!(
+            replayed,
+            StatusCode::SEE_OTHER,
+            "a consumed state token must not be redeemable again, got: {location}"
+        );
     }
 
     #[tokio::test]

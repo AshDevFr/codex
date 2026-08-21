@@ -36,6 +36,8 @@ use std::sync::Arc;
 use tracing::{debug, info, warn};
 
 use codex_config::{OidcConfig, OidcDefaultRole, OidcProviderConfig};
+use codex_db::repositories::{NewOidcPendingState, OidcPendingStateRepository};
+use sea_orm::DatabaseConnection;
 
 /// Duration for discovery document cache (1 hour)
 const DISCOVERY_CACHE_TTL_SECS: i64 = 3600;
@@ -97,6 +99,93 @@ struct CachedDiscovery {
     expires_at: chrono::DateTime<Utc>,
 }
 
+/// Where pending authentication state lives between the authorization request
+/// and the callback.
+///
+/// Those are two separate HTTP requests, and nothing guarantees a load
+/// balancer sends them to the same process. With more than one `codex serve`
+/// and no session affinity, round-robin sends them to different processes
+/// essentially every time, because the two requests are consecutive. That is
+/// why the database variant is the only one a multi-replica deployment can
+/// use, and why `codex serve` always builds one.
+#[derive(Clone)]
+pub enum PendingStateStore {
+    /// Shared across every process that talks to the same database.
+    Database(DatabaseConnection),
+    /// Process-local. Correct only for a single process, so it is confined to
+    /// unit tests that have no database to hand.
+    #[cfg(test)]
+    Memory(Arc<DashMap<String, PendingAuth>>),
+}
+
+impl PendingStateStore {
+    async fn insert(&self, state: String, pending: PendingAuth) -> Result<()> {
+        match self {
+            Self::Database(db) => {
+                OidcPendingStateRepository::create(
+                    db,
+                    NewOidcPendingState {
+                        state,
+                        provider_name: pending.provider_name,
+                        pkce_verifier: pending.pkce_verifier,
+                        nonce: pending.nonce,
+                        redirect_uri: pending.redirect_uri,
+                        created_at: pending.created_at,
+                        expires_at: pending.created_at + Duration::seconds(AUTH_STATE_TTL_SECS),
+                    },
+                )
+                .await
+            }
+            #[cfg(test)]
+            Self::Memory(map) => {
+                map.insert(state, pending);
+                Ok(())
+            }
+        }
+    }
+
+    /// Take the state, removing it. At most one caller can succeed for a given
+    /// token, which is what keeps the CSRF value single-use.
+    async fn consume(&self, state: &str) -> Result<Option<PendingAuth>> {
+        match self {
+            Self::Database(db) => {
+                Ok(OidcPendingStateRepository::consume(db, state)
+                    .await?
+                    .map(|model| PendingAuth {
+                        pkce_verifier: model.pkce_verifier,
+                        nonce: model.nonce,
+                        created_at: model.created_at,
+                        provider_name: model.provider_name,
+                        redirect_uri: model.redirect_uri,
+                    }))
+            }
+            #[cfg(test)]
+            Self::Memory(map) => Ok(map.remove(state).map(|(_, v)| v)),
+        }
+    }
+
+    async fn delete_expired(&self) -> Result<u64> {
+        match self {
+            Self::Database(db) => OidcPendingStateRepository::delete_expired(db).await,
+            #[cfg(test)]
+            Self::Memory(map) => {
+                let cutoff = Utc::now() - Duration::seconds(AUTH_STATE_TTL_SECS);
+                let before = map.len();
+                map.retain(|_, pending| pending.created_at > cutoff);
+                Ok((before - map.len()) as u64)
+            }
+        }
+    }
+
+    #[cfg(test)]
+    async fn count(&self) -> Result<u64> {
+        match self {
+            Self::Database(db) => OidcPendingStateRepository::count(db).await,
+            Self::Memory(map) => Ok(map.len() as u64),
+        }
+    }
+}
+
 /// OIDC Service for handling authentication flows with external identity providers
 ///
 /// This service manages:
@@ -111,8 +200,8 @@ pub struct OidcService {
     config: OidcConfig,
     /// Cached OIDC clients per provider (keyed by provider name)
     clients: Arc<DashMap<String, CachedDiscovery>>,
-    /// Pending authentication states (keyed by CSRF state token)
-    pending_states: Arc<DashMap<String, PendingAuth>>,
+    /// Pending authentication states, keyed by CSRF state token
+    pending_states: PendingStateStore,
     /// Redirect URI for callbacks
     redirect_uri_base: String,
     /// Shared HTTP client for OIDC requests (reused across all providers)
@@ -127,7 +216,14 @@ impl OidcService {
     ///
     /// * `config` - OIDC configuration with provider settings
     /// * `redirect_uri_base` - Base URL for OAuth callbacks (e.g., "http://localhost:8080")
-    pub fn new(config: OidcConfig, redirect_uri_base: String) -> Self {
+    /// * `pending_states` - Where in-flight logins are held. Must be
+    ///   [`PendingStateStore::Database`] outside of tests, or a deployment
+    ///   running more than one process cannot complete a login.
+    pub fn new(
+        config: OidcConfig,
+        redirect_uri_base: String,
+        pending_states: PendingStateStore,
+    ) -> Self {
         // Build HTTP client with redirect disabled (SSRF prevention)
         // Uses the reqwest version re-exported by openidconnect/oauth2
         let http_client = openidconnect::reqwest::Client::builder()
@@ -138,7 +234,7 @@ impl OidcService {
         Self {
             config,
             clients: Arc::new(DashMap::new()),
-            pending_states: Arc::new(DashMap::new()),
+            pending_states,
             redirect_uri_base,
             http_client,
         }
@@ -370,7 +466,8 @@ impl OidcService {
             redirect_uri,
         };
         self.pending_states
-            .insert(csrf_token.secret().clone(), pending);
+            .insert(csrf_token.secret().clone(), pending)
+            .await?;
 
         debug!(
             provider = %provider_name,
@@ -409,8 +506,8 @@ impl OidcService {
         // Validate and consume state
         let pending = self
             .pending_states
-            .remove(state)
-            .map(|(_, v)| v)
+            .consume(state)
+            .await?
             .ok_or_else(|| anyhow!("Invalid or expired OIDC state"))?;
 
         // Verify state hasn't expired
@@ -517,10 +614,16 @@ impl OidcService {
     /// Used by the callback when the IdP reports a failure: there is no code to
     /// exchange, but the browser still has to be sent back to whichever client
     /// began the flow. The entry is removed either way, since the flow is over.
-    pub fn take_pending_redirect_uri(&self, state: &str) -> Option<String> {
-        self.pending_states
-            .remove(state)
-            .and_then(|(_, pending)| pending.redirect_uri)
+    pub async fn take_pending_redirect_uri(&self, state: &str) -> Option<String> {
+        match self.pending_states.consume(state).await {
+            Ok(pending) => pending.and_then(|pending| pending.redirect_uri),
+            Err(e) => {
+                // The browser still has to go somewhere. Falling back to the
+                // built-in completion page is better than failing the response.
+                warn!(error = %e, "Failed to read pending OIDC state for redirect");
+                None
+            }
+        }
     }
 
     /// Extract groups from an ID token's raw claims
@@ -689,25 +792,17 @@ impl OidcService {
         self.config.default_role.as_str().to_string()
     }
 
-    /// Clean up expired pending authentication states
+    /// Delete pending authentication states that have passed their TTL.
     ///
-    /// Should be called periodically to prevent memory leaks.
-    #[allow(dead_code)]
-    pub fn cleanup_expired_states(&self) {
-        let cutoff = Utc::now() - Duration::seconds(AUTH_STATE_TTL_SECS);
-        let mut removed = 0;
-
-        self.pending_states.retain(|_, pending| {
-            let keep = pending.created_at > cutoff;
-            if !keep {
-                removed += 1;
-            }
-            keep
-        });
-
+    /// Abandoned logins are never consumed, so without a periodic sweep the
+    /// store grows for as long as the deployment runs. Driven by the
+    /// `CleanupOidcPendingStates` task.
+    pub async fn cleanup_expired_states(&self) -> Result<u64> {
+        let removed = self.pending_states.delete_expired().await?;
         if removed > 0 {
             debug!(count = removed, "Cleaned up expired OIDC auth states");
         }
+        Ok(removed)
     }
 
     /// Invalidate the cached client for a provider
@@ -730,8 +825,8 @@ impl OidcService {
     ///
     /// Useful for monitoring and debugging.
     #[cfg(test)]
-    pub fn pending_state_count(&self) -> usize {
-        self.pending_states.len()
+    pub async fn pending_state_count(&self) -> usize {
+        self.pending_states.count().await.expect("count states") as usize
     }
 
     /// Get the number of cached clients
@@ -771,6 +866,32 @@ pub struct UserInfoResult {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Most tests exercise flow logic that never reaches the store, so they
+    /// take the process-local variant rather than standing up a database.
+    /// Tests that care about the store being shared build
+    /// [`PendingStateStore::Database`] explicitly.
+    fn test_service(config: OidcConfig) -> OidcService {
+        test_service_with_base(config, "http://localhost:8080")
+    }
+
+    /// A service over a real database, which is the store production uses.
+    async fn db_backed_service(config: OidcConfig) -> OidcService {
+        let db = codex_db::test_helpers::setup_test_db().await;
+        OidcService::new(
+            config,
+            "http://localhost:8080".to_string(),
+            PendingStateStore::Database(db),
+        )
+    }
+
+    fn test_service_with_base(config: OidcConfig, redirect_uri_base: &str) -> OidcService {
+        OidcService::new(
+            config,
+            redirect_uri_base.to_string(),
+            PendingStateStore::Memory(Arc::new(DashMap::new())),
+        )
+    }
 
     /// Serve a minimal OIDC discovery document on an ephemeral port so
     /// `generate_auth_url` can build a client without reaching the network.
@@ -813,6 +934,17 @@ mod tests {
     }
 
     async fn service_against_stub_idp(allowed_redirect_uris: Vec<String>) -> OidcService {
+        service_against_stub_idp_with_store(
+            allowed_redirect_uris,
+            PendingStateStore::Memory(Arc::new(DashMap::new())),
+        )
+        .await
+    }
+
+    async fn service_against_stub_idp_with_store(
+        allowed_redirect_uris: Vec<String>,
+        pending_states: PendingStateStore,
+    ) -> OidcService {
         let issuer = start_stub_idp().await;
         let mut config = create_test_config();
         config.allowed_redirect_uris = allowed_redirect_uris;
@@ -822,7 +954,7 @@ mod tests {
             .expect("test provider exists")
             .issuer_url = issuer;
 
-        OidcService::new(config, "http://localhost:8080".to_string())
+        OidcService::new(config, "http://localhost:8080".to_string(), pending_states)
     }
 
     #[tokio::test]
@@ -836,10 +968,48 @@ mod tests {
 
         let pending = service
             .pending_states
-            .get(&state_token)
+            .consume(&state_token)
+            .await
+            .expect("store readable")
             .expect("pending state stored under the CSRF token");
         assert_eq!(pending.redirect_uri.as_deref(), Some("codexreader://auth"));
         assert!(!pending.pkce_verifier.is_empty());
+    }
+
+    /// A login begun in one process has to be completable in another.
+    ///
+    /// The authorization request and the callback are two separate HTTP
+    /// requests, so any deployment running more than one `codex serve` behind
+    /// a load balancer without session affinity routes them to different
+    /// processes. Two services over one database stand in for two pods over
+    /// one PostgreSQL.
+    #[tokio::test]
+    async fn test_pending_state_is_visible_to_another_process() {
+        let db = codex_db::test_helpers::setup_test_db().await;
+        let starter = service_against_stub_idp_with_store(
+            vec!["codexreader://auth".to_string()],
+            PendingStateStore::Database(db.clone()),
+        )
+        .await;
+        let finisher = OidcService::new(
+            create_test_config(),
+            "http://localhost:8080".to_string(),
+            PendingStateStore::Database(db),
+        );
+
+        let (_url, state_token) = starter
+            .generate_auth_url("test-provider", Some("codexreader://auth".to_string()))
+            .await
+            .expect("auth URL generated");
+
+        assert_eq!(
+            finisher
+                .take_pending_redirect_uri(&state_token)
+                .await
+                .as_deref(),
+            Some("codexreader://auth"),
+            "a state stored by one process must be consumable by another"
+        );
     }
 
     #[tokio::test]
@@ -857,7 +1027,9 @@ mod tests {
 
         let pending = service
             .pending_states
-            .get(&state_token)
+            .consume(&state_token)
+            .await
+            .expect("store readable")
             .expect("pending state stored under the CSRF token");
         assert_eq!(pending.redirect_uri, None);
     }
@@ -910,7 +1082,7 @@ mod tests {
             "codexreader://auth".to_string(),
             "https://app.example.com/callback/".to_string(),
         ];
-        let service = OidcService::new(config, "http://localhost:8080".to_string());
+        let service = test_service(config);
 
         // (candidate, expected, why)
         let cases = [
@@ -956,7 +1128,7 @@ mod tests {
             config.allowed_redirect_uris.is_empty(),
             "test config should start with no allowlist"
         );
-        let service = OidcService::new(config, "http://localhost:8080".to_string());
+        let service = test_service(config);
 
         assert!(!service.is_redirect_uri_allowed("codexreader://auth"));
         assert!(!service.is_redirect_uri_allowed("/login/oidc/complete"));
@@ -966,7 +1138,7 @@ mod tests {
     #[test]
     fn test_service_creation() {
         let config = create_test_config();
-        let service = OidcService::new(config, "http://localhost:8080".to_string());
+        let service = test_service(config);
 
         assert!(service.is_enabled());
         assert!(service.auto_create_users());
@@ -976,7 +1148,7 @@ mod tests {
     #[test]
     fn test_get_providers() {
         let config = create_test_config();
-        let service = OidcService::new(config, "http://localhost:8080".to_string());
+        let service = test_service(config);
 
         let providers = service.get_providers();
         assert_eq!(providers.len(), 1);
@@ -987,7 +1159,7 @@ mod tests {
     #[test]
     fn test_get_provider_config() {
         let config = create_test_config();
-        let service = OidcService::new(config, "http://localhost:8080".to_string());
+        let service = test_service(config);
 
         let provider = service.get_provider_config("test-provider");
         assert!(provider.is_some());
@@ -1000,7 +1172,7 @@ mod tests {
     #[test]
     fn test_resolve_client_secret_direct() {
         let config = create_test_config();
-        let service = OidcService::new(config.clone(), "http://localhost:8080".to_string());
+        let service = test_service(config.clone());
 
         let provider = config.providers.get("test-provider").unwrap();
         let secret = service.resolve_client_secret(provider);
@@ -1025,7 +1197,7 @@ mod tests {
         };
 
         let config = create_test_config();
-        let service = OidcService::new(config, "http://localhost:8080".to_string());
+        let service = test_service(config);
 
         // Without env var set, should return None
         let secret = service.resolve_client_secret(&provider);
@@ -1035,7 +1207,7 @@ mod tests {
     #[test]
     fn test_build_redirect_uri() {
         let config = create_test_config();
-        let service = OidcService::new(config, "http://localhost:8080".to_string());
+        let service = test_service(config);
 
         let uri = service.build_redirect_uri("authentik");
         assert_eq!(
@@ -1044,7 +1216,7 @@ mod tests {
         );
 
         // Test with trailing slash
-        let service2 = OidcService::new(create_test_config(), "http://localhost:8080/".to_string());
+        let service2 = test_service_with_base(create_test_config(), "http://localhost:8080/");
         let uri2 = service2.build_redirect_uri("keycloak");
         assert_eq!(
             uri2,
@@ -1055,7 +1227,7 @@ mod tests {
     #[test]
     fn test_map_groups_to_role_admin() {
         let config = create_test_config();
-        let service = OidcService::new(config.clone(), "http://localhost:8080".to_string());
+        let service = test_service(config.clone());
         let provider = config.providers.get("test-provider").unwrap();
 
         let groups = vec!["codex-admins".to_string(), "some-other-group".to_string()];
@@ -1070,7 +1242,7 @@ mod tests {
     #[test]
     fn test_map_groups_to_role_maintainer() {
         let config = create_test_config();
-        let service = OidcService::new(config.clone(), "http://localhost:8080".to_string());
+        let service = test_service(config.clone());
         let provider = config.providers.get("test-provider").unwrap();
 
         let groups = vec!["codex-editors".to_string(), "some-group".to_string()];
@@ -1081,7 +1253,7 @@ mod tests {
     #[test]
     fn test_map_groups_to_role_reader() {
         let config = create_test_config();
-        let service = OidcService::new(config.clone(), "http://localhost:8080".to_string());
+        let service = test_service(config.clone());
         let provider = config.providers.get("test-provider").unwrap();
 
         let groups = vec!["codex-users".to_string()];
@@ -1096,7 +1268,7 @@ mod tests {
     #[test]
     fn test_map_groups_to_role_default() {
         let config = create_test_config();
-        let service = OidcService::new(config.clone(), "http://localhost:8080".to_string());
+        let service = test_service(config.clone());
         let provider = config.providers.get("test-provider").unwrap();
 
         // No matching groups
@@ -1113,7 +1285,7 @@ mod tests {
     #[test]
     fn test_map_groups_to_role_priority() {
         let config = create_test_config();
-        let service = OidcService::new(config.clone(), "http://localhost:8080".to_string());
+        let service = test_service(config.clone());
         let provider = config.providers.get("test-provider").unwrap();
 
         // User has both admin and reader groups - should get admin
@@ -1130,7 +1302,7 @@ mod tests {
     #[test]
     fn test_extract_groups_from_claims_array() {
         let config = create_test_config();
-        let service = OidcService::new(config, "http://localhost:8080".to_string());
+        let service = test_service(config);
 
         let mut claims = HashMap::new();
         claims.insert(
@@ -1145,7 +1317,7 @@ mod tests {
     #[test]
     fn test_extract_groups_from_claims_string() {
         let config = create_test_config();
-        let service = OidcService::new(config, "http://localhost:8080".to_string());
+        let service = test_service(config);
 
         let mut claims = HashMap::new();
         claims.insert(
@@ -1160,7 +1332,7 @@ mod tests {
     #[test]
     fn test_extract_groups_from_claims_missing() {
         let config = create_test_config();
-        let service = OidcService::new(config, "http://localhost:8080".to_string());
+        let service = test_service(config);
 
         let claims = HashMap::new();
         let groups = service.extract_groups_from_claims(&claims, "groups");
@@ -1170,7 +1342,7 @@ mod tests {
     #[test]
     fn test_extract_groups_custom_claim_name() {
         let config = create_test_config();
-        let service = OidcService::new(config, "http://localhost:8080".to_string());
+        let service = test_service(config);
 
         let mut claims = HashMap::new();
         claims.insert(
@@ -1182,10 +1354,9 @@ mod tests {
         assert_eq!(groups, vec!["custom1", "custom2"]);
     }
 
-    #[test]
-    fn test_cleanup_expired_states() {
-        let config = create_test_config();
-        let service = OidcService::new(config, "http://localhost:8080".to_string());
+    #[tokio::test]
+    async fn test_cleanup_expired_states() {
+        let service = db_backed_service(create_test_config()).await;
 
         // Add an expired state
         let expired_state = PendingAuth {
@@ -1197,7 +1368,9 @@ mod tests {
         };
         service
             .pending_states
-            .insert("expired".to_string(), expired_state);
+            .insert("expired".to_string(), expired_state)
+            .await
+            .expect("state stored");
 
         // Add a valid state
         let valid_state = PendingAuth {
@@ -1209,22 +1382,34 @@ mod tests {
         };
         service
             .pending_states
-            .insert("valid".to_string(), valid_state);
+            .insert("valid".to_string(), valid_state)
+            .await
+            .expect("state stored");
 
-        assert_eq!(service.pending_state_count(), 2);
+        assert_eq!(service.pending_state_count().await, 2);
 
         // Cleanup
-        service.cleanup_expired_states();
+        service
+            .cleanup_expired_states()
+            .await
+            .expect("cleanup succeeds");
 
-        assert_eq!(service.pending_state_count(), 1);
-        assert!(service.pending_states.contains_key("valid"));
-        assert!(!service.pending_states.contains_key("expired"));
+        assert_eq!(service.pending_state_count().await, 1);
+        assert!(
+            service
+                .pending_states
+                .consume("valid")
+                .await
+                .expect("store readable")
+                .is_some(),
+            "an unexpired state must survive the sweep"
+        );
     }
 
     #[test]
     fn test_invalidate_caches() {
         let config = create_test_config();
-        let service = OidcService::new(config, "http://localhost:8080".to_string());
+        let service = test_service(config);
 
         assert_eq!(service.cached_client_count(), 0);
 
@@ -1239,7 +1424,7 @@ mod tests {
         let mut config = create_test_config();
         config.enabled = false;
 
-        let service = OidcService::new(config, "http://localhost:8080".to_string());
+        let service = test_service(config);
 
         assert!(!service.is_enabled());
     }
@@ -1249,7 +1434,7 @@ mod tests {
         // Test with admin default
         let mut config = create_test_config();
         config.default_role = OidcDefaultRole::Admin;
-        let service = OidcService::new(config.clone(), "http://localhost:8080".to_string());
+        let service = test_service(config.clone());
         let provider = config.providers.get("test-provider").unwrap();
 
         let groups: Vec<String> = vec![];
@@ -1259,7 +1444,7 @@ mod tests {
         // Test with maintainer default
         let mut config2 = create_test_config();
         config2.default_role = OidcDefaultRole::Maintainer;
-        let service2 = OidcService::new(config2.clone(), "http://localhost:8080".to_string());
+        let service2 = test_service(config2.clone());
         let provider2 = config2.providers.get("test-provider").unwrap();
 
         let role2 = service2.map_groups_to_role(&groups, provider2);
@@ -1269,7 +1454,7 @@ mod tests {
     #[test]
     fn test_parse_groups_value_array() {
         let config = create_test_config();
-        let service = OidcService::new(config, "http://localhost:8080".to_string());
+        let service = test_service(config);
 
         let value = serde_json::json!(["a", "b", "c"]);
         let groups = service.parse_groups_value(&value);
@@ -1282,7 +1467,7 @@ mod tests {
     #[test]
     fn test_parse_groups_value_string() {
         let config = create_test_config();
-        let service = OidcService::new(config, "http://localhost:8080".to_string());
+        let service = test_service(config);
 
         let value = serde_json::json!("a, b, c");
         let groups = service.parse_groups_value(&value);
@@ -1295,7 +1480,7 @@ mod tests {
     #[test]
     fn test_parse_groups_value_invalid() {
         let config = create_test_config();
-        let service = OidcService::new(config, "http://localhost:8080".to_string());
+        let service = test_service(config);
 
         let value = serde_json::json!(123);
         let groups = service.parse_groups_value(&value);
@@ -1325,7 +1510,7 @@ mod tests {
     #[test]
     fn test_extract_groups_from_claims_nested_objects_ignored() {
         let config = create_test_config();
-        let service = OidcService::new(config, "http://localhost:8080".to_string());
+        let service = test_service(config);
 
         let mut claims = HashMap::new();
         // Groups as nested objects (invalid format)
@@ -1342,7 +1527,7 @@ mod tests {
     #[test]
     fn test_extract_groups_from_claims_mixed_array() {
         let config = create_test_config();
-        let service = OidcService::new(config, "http://localhost:8080".to_string());
+        let service = test_service(config);
 
         let mut claims = HashMap::new();
         // Mix of strings and non-strings
@@ -1358,7 +1543,7 @@ mod tests {
     #[test]
     fn test_parse_groups_value_empty_string() {
         let config = create_test_config();
-        let service = OidcService::new(config, "http://localhost:8080".to_string());
+        let service = test_service(config);
 
         let value = serde_json::json!("");
         let groups = service.parse_groups_value(&value);
@@ -1369,7 +1554,7 @@ mod tests {
     #[test]
     fn test_parse_groups_value_single_group_string() {
         let config = create_test_config();
-        let service = OidcService::new(config, "http://localhost:8080".to_string());
+        let service = test_service(config);
 
         let value = serde_json::json!("single-group");
         let groups = service.parse_groups_value(&value);
@@ -1379,7 +1564,7 @@ mod tests {
     #[test]
     fn test_parse_groups_value_empty_array() {
         let config = create_test_config();
-        let service = OidcService::new(config, "http://localhost:8080".to_string());
+        let service = test_service(config);
 
         let value = serde_json::json!([]);
         let groups = service.parse_groups_value(&value);
@@ -1389,7 +1574,7 @@ mod tests {
     #[test]
     fn test_parse_groups_value_boolean() {
         let config = create_test_config();
-        let service = OidcService::new(config, "http://localhost:8080".to_string());
+        let service = test_service(config);
 
         let value = serde_json::json!(true);
         let groups = service.parse_groups_value(&value);
@@ -1399,7 +1584,7 @@ mod tests {
     #[test]
     fn test_parse_groups_value_null() {
         let config = create_test_config();
-        let service = OidcService::new(config, "http://localhost:8080".to_string());
+        let service = test_service(config);
 
         let value = serde_json::json!(null);
         let groups = service.parse_groups_value(&value);
@@ -1451,7 +1636,7 @@ mod tests {
             providers,
         };
 
-        let service = OidcService::new(config, "http://localhost:8080".to_string());
+        let service = test_service(config);
         let providers = service.get_providers();
         assert_eq!(providers.len(), 2);
 
@@ -1460,10 +1645,9 @@ mod tests {
         assert!(names.contains(&"provider-b"));
     }
 
-    #[test]
-    fn test_cleanup_only_removes_expired_states() {
-        let config = create_test_config();
-        let service = OidcService::new(config, "http://localhost:8080".to_string());
+    #[tokio::test]
+    async fn test_cleanup_only_removes_expired_states() {
+        let service = db_backed_service(create_test_config()).await;
 
         // Add multiple states with different ages
         for i in 0..5 {
@@ -1476,7 +1660,9 @@ mod tests {
             };
             service
                 .pending_states
-                .insert(format!("expired_{}", i), state);
+                .insert(format!("expired_{}", i), state)
+                .await
+                .expect("state stored");
         }
 
         for i in 0..3 {
@@ -1487,24 +1673,38 @@ mod tests {
                 provider_name: "test".to_string(),
                 redirect_uri: None,
             };
-            service.pending_states.insert(format!("valid_{}", i), state);
+            service
+                .pending_states
+                .insert(format!("valid_{}", i), state)
+                .await
+                .expect("state stored");
         }
 
-        assert_eq!(service.pending_state_count(), 8);
+        assert_eq!(service.pending_state_count().await, 8);
 
-        service.cleanup_expired_states();
+        service
+            .cleanup_expired_states()
+            .await
+            .expect("cleanup succeeds");
 
         // Only the 3 valid states should remain
-        assert_eq!(service.pending_state_count(), 3);
+        assert_eq!(service.pending_state_count().await, 3);
         for i in 0..3 {
-            assert!(service.pending_states.contains_key(&format!("valid_{}", i)));
+            assert!(
+                service
+                    .pending_states
+                    .consume(&format!("valid_{}", i))
+                    .await
+                    .expect("store readable")
+                    .is_some()
+            );
         }
     }
 
     #[test]
     fn test_resolve_client_secret_prefers_direct_over_env() {
         let config = create_test_config();
-        let service = OidcService::new(config, "http://localhost:8080".to_string());
+        let service = test_service(config);
 
         // Provider with both direct secret and env var
         let provider = OidcProviderConfig {
@@ -1528,7 +1728,7 @@ mod tests {
     #[test]
     fn test_resolve_client_secret_no_secret() {
         let config = create_test_config();
-        let service = OidcService::new(config, "http://localhost:8080".to_string());
+        let service = test_service(config);
 
         // Provider with no secret at all (public client)
         let provider = OidcProviderConfig {
@@ -1554,28 +1754,28 @@ mod tests {
         let config = create_test_config();
 
         // Standard base
-        let service = OidcService::new(config.clone(), "http://localhost:8080".to_string());
+        let service = test_service(config.clone());
         assert_eq!(
             service.build_redirect_uri("my-provider"),
             "http://localhost:8080/api/v1/auth/oidc/my-provider/callback"
         );
 
         // HTTPS with path prefix
-        let service = OidcService::new(config.clone(), "https://codex.example.com".to_string());
+        let service = test_service_with_base(config.clone(), "https://codex.example.com");
         assert_eq!(
             service.build_redirect_uri("auth0"),
             "https://codex.example.com/api/v1/auth/oidc/auth0/callback"
         );
 
         // With trailing slash (should be stripped)
-        let service = OidcService::new(config.clone(), "https://codex.example.com/".to_string());
+        let service = test_service_with_base(config.clone(), "https://codex.example.com/");
         assert_eq!(
             service.build_redirect_uri("test"),
             "https://codex.example.com/api/v1/auth/oidc/test/callback"
         );
 
         // With port
-        let service = OidcService::new(config, "http://192.168.1.100:3000".to_string());
+        let service = test_service_with_base(config, "http://192.168.1.100:3000");
         assert_eq!(
             service.build_redirect_uri("local"),
             "http://192.168.1.100:3000/api/v1/auth/oidc/local/callback"

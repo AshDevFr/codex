@@ -55,6 +55,7 @@ macro_rules! for_each_entity {
         $op!(tasks);
         $op!(users);
         $op!(oidc_connections);
+        $op!(oidc_pending_states);
         $op!(plugin_data);
         $op!(user_plugin_data);
         $op!(user_plugins);

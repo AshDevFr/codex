@@ -19,14 +19,14 @@ use uuid::Uuid;
 use crate::error::check_rate_limited;
 use crate::handlers::{
     AnalyzeBookHandler, AnalyzeSeriesHandler, BackfillTrackingFromMetadataHandler,
-    BulkTrackForReleasesHandler, CleanupBookFilesHandler, CleanupOrphanedFilesHandler,
-    CleanupPdfCacheHandler, CleanupPluginDataHandler, CleanupRefreshTokensHandler,
-    CleanupSeriesExportsHandler, CleanupSeriesFilesHandler, ExportSeriesHandler,
-    FindDuplicatesHandler, GenerateSeriesThumbnailHandler, GenerateSeriesThumbnailsHandler,
-    GenerateThumbnailHandler, GenerateThumbnailsHandler, PluginAutoMatchHandler,
-    PollReleaseSourceHandler, PurgeDeletedHandler, RefreshLibraryMetadataHandler,
-    RenumberSeriesBatchHandler, RenumberSeriesHandler, ReprocessSeriesTitleHandler,
-    ReprocessSeriesTitlesHandler, ScanLibraryHandler, TaskHandler,
+    BulkTrackForReleasesHandler, CleanupBookFilesHandler, CleanupOidcPendingStatesHandler,
+    CleanupOrphanedFilesHandler, CleanupPdfCacheHandler, CleanupPluginDataHandler,
+    CleanupRefreshTokensHandler, CleanupSeriesExportsHandler, CleanupSeriesFilesHandler,
+    ExportSeriesHandler, FindDuplicatesHandler, GenerateSeriesThumbnailHandler,
+    GenerateSeriesThumbnailsHandler, GenerateThumbnailHandler, GenerateThumbnailsHandler,
+    PluginAutoMatchHandler, PollReleaseSourceHandler, PurgeDeletedHandler,
+    RefreshLibraryMetadataHandler, RenumberSeriesBatchHandler, RenumberSeriesHandler,
+    ReprocessSeriesTitleHandler, ReprocessSeriesTitlesHandler, ScanLibraryHandler, TaskHandler,
     UserPluginRecommendationDismissHandler, UserPluginRecommendationsHandler,
     UserPluginSyncHandler,
 };
@@ -192,6 +192,12 @@ impl TaskWorker {
         handlers.insert(
             "cleanup_refresh_tokens".to_string(),
             Arc::new(CleanupRefreshTokensHandler::new()),
+        );
+        // Expired OIDC pending logins. Works on the table, so it needs no
+        // handle into the process that created the rows.
+        handlers.insert(
+            "cleanup_oidc_pending_states".to_string(),
+            Arc::new(CleanupOidcPendingStatesHandler::new()),
         );
         // Release-tracking maintenance: backfill aliases from metadata.
         handlers.insert(

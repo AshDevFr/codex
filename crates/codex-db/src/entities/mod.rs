@@ -39,6 +39,7 @@ pub mod users;
 
 // OIDC authentication
 pub mod oidc_connections;
+pub mod oidc_pending_states;
 
 // System-scoped plugin KV store (per-plugin, no user context)
 pub mod plugin_data;

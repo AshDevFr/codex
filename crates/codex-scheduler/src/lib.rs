@@ -101,6 +101,9 @@ impl Scheduler {
         // Load refresh-token cleanup schedule
         self.load_refresh_token_cleanup_schedule().await?;
 
+        // Load OIDC pending-state cleanup schedule
+        self.load_oidc_pending_state_cleanup_schedule().await?;
+
         // Load series exports cleanup schedule
         self.load_series_exports_cleanup_schedule().await?;
 
@@ -319,6 +322,43 @@ impl Scheduler {
             .context("Failed to add refresh-token cleanup job to scheduler")?;
 
         info!("Added refresh-token cleanup schedule: {}", cron);
+
+        Ok(())
+    }
+
+    /// Load OIDC pending-state cleanup schedule
+    ///
+    /// Deletes login states that were started and never completed. Always
+    /// enabled: abandoned logins are normal, nothing else removes them, and
+    /// the table would otherwise grow for the life of the deployment.
+    async fn load_oidc_pending_state_cleanup_schedule(&mut self) -> Result<()> {
+        // Every 15 minutes (6-part cron: sec min hour day month weekday).
+        // The states themselves expire after 5 minutes, so a daily sweep would
+        // leave dead rows sitting around for most of a day.
+        let cron = "0 */15 * * * *";
+
+        let db = self.db.clone();
+        let tz = self.default_tz;
+        let job = Job::new_async_tz(cron, tz, move |_uuid, _lock| {
+            let db = db.clone();
+            Box::pin(async move {
+                debug!("Triggering scheduled OIDC pending-state cleanup");
+
+                let task_type = TaskType::CleanupOidcPendingStates;
+                match TaskRepository::enqueue(&db, task_type, None).await {
+                    Ok(_) => debug!("OIDC pending-state cleanup task enqueued"),
+                    Err(e) => error!("Failed to enqueue OIDC pending-state cleanup: {}", e),
+                }
+            })
+        })
+        .context("Failed to create OIDC pending-state cleanup cron job")?;
+
+        self.scheduler
+            .add(job)
+            .await
+            .context("Failed to add OIDC pending-state cleanup job to scheduler")?;
+
+        info!("Added OIDC pending-state cleanup schedule: {}", cron);
 
         Ok(())
     }

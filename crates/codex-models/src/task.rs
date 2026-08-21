@@ -183,6 +183,14 @@ pub enum TaskType {
     /// rows that were revoked more than 30 days ago. Idempotent.
     CleanupRefreshTokens,
 
+    /// Delete OIDC pending-login states that have passed their TTL.
+    ///
+    /// Abandoned logins are never consumed, so without this sweep the
+    /// `oidc_pending_states` table grows for as long as the deployment runs.
+    /// Operates on the table directly, so it does not matter which process
+    /// runs it. Idempotent.
+    CleanupOidcPendingStates,
+
     /// Sync user plugin data with external service
     UserPluginSync {
         #[serde(rename = "pluginId")]
@@ -326,7 +334,8 @@ impl TaskType {
             | TaskType::CleanupPdfCache
             | TaskType::CleanupPluginData
             | TaskType::CleanupSeriesExports
-            | TaskType::CleanupRefreshTokens => 100,
+            | TaskType::CleanupRefreshTokens
+            | TaskType::CleanupOidcPendingStates => 100,
         }
     }
 
@@ -356,6 +365,7 @@ impl TaskType {
             TaskType::CleanupPluginData => "cleanup_plugin_data",
             TaskType::CleanupSeriesExports => "cleanup_series_exports",
             TaskType::CleanupRefreshTokens => "cleanup_refresh_tokens",
+            TaskType::CleanupOidcPendingStates => "cleanup_oidc_pending_states",
             TaskType::ExportSeries { .. } => "export_series",
             TaskType::UserPluginSync { .. } => "user_plugin_sync",
             TaskType::UserPluginRecommendations { .. } => "user_plugin_recommendations",

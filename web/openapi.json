@@ -43917,6 +43917,21 @@
           },
           {
             "type": "object",
+            "description": "Delete OIDC pending-login states that have passed their TTL.\n\nAbandoned logins are never consumed, so without this sweep the\n`oidc_pending_states` table grows for as long as the deployment runs.\nOperates on the table directly, so it does not matter which process\nruns it. Idempotent.",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "cleanup_oidc_pending_states"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "Sync user plugin data with external service",
             "required": [
               "pluginId",
