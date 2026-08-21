@@ -413,15 +413,10 @@ const ACCEPTED_UNREFERENCED_COMPONENTS: &[&str] = &[
     // carried a `#[utoipa::path]` and so nothing could reach them. This check
     // is what surfaced that; the routes are documented now and all fourteen
     // names have left the list.
-    // -- The `full=true` alternate response shape ---------------------------
-    // `list_library_books` and friends answer with these when `full=true`, and
-    // the document describes only the paginated shape. Deferred deliberately:
-    // it needs an API decision about whether one operation may return two
-    // shapes, not an annotation fix.
-    "BookFullMetadata",
-    "FullBookResponse",
-    "FullSeriesResponse",
-    "SeriesFullMetadata",
+    // The `full=true` shapes used to sit here, unreachable because no operation
+    // could name a response whose schema depends on a query parameter.
+    // `GET /books/{book_id}/full` and `GET /series/{series_id}/full` describe
+    // them properly now, so all four have left the list.
     // -- Not on the HTTP surface at all -------------------------------------
     // Scanner and access-control internals that derive `ToSchema` for reasons of
     // their own and get swept into the registry. No handler takes or returns
@@ -448,12 +443,10 @@ const ACCEPTED_UNREFERENCED_COMPONENTS: &[&str] = &[
     "ExternalRatingContextDto",
     "MetadataContextDto",
     "SeriesContextDto",
-    // -- Inlined by its wrapper rather than referenced ----------------------
-    // `PaginatedResponse_SeriesExternalIndexDto` expands this DTO inline in its
-    // `data` array instead of emitting a `$ref`, unlike the other paginated
-    // wrappers. The document is correct for a client, just duplicated, so this
-    // is unreachable without being undocumented.
-    "SeriesExternalIndexDto",
+    // `SeriesExternalIndexDto` used to sit here, unreachable because its
+    // paginated wrapper inlined it rather than emitting a `$ref`. Every generic
+    // wrapper did that; `GenericArgumentReferencer` now collapses the copies
+    // back to references, so it is reachable and has left the list.
     // -- Registered but referenced by no handler ----------------------------
     // Dead DTOs. Each is named in a `components(schemas(...))` list or in
     // `docs.rs`, and no operation returns it. `SharingTagListResponse` is
@@ -563,5 +556,55 @@ fn unreferenced_components_are_all_accounted_for() {
         "ACCEPTED_UNREFERENCED_COMPONENTS names components that are now reachable, or that \
          no longer exist. Remove them so the list keeps describing the document: {:#?}",
         stale
+    );
+}
+
+/// utoipa renders a generic instantiation by expanding its type argument inline
+/// rather than referencing the argument's own component, even when that
+/// component is registered. The document stays correct, but every generator
+/// that names inline schemas produces a distinct nominal type per wrapper:
+/// `swift-openapi-generator` yields
+/// `PaginatedResponseSeriesDto.DataPayloadPayload` where `getSeries` yields
+/// `SeriesDto`, structurally identical and not interchangeable.
+///
+/// The cost lands on the consumer, once per paginated endpoint, which is why
+/// this is asserted rather than left to be rediscovered.
+#[test]
+fn generic_wrappers_reference_their_type_argument() {
+    let spec = spec();
+    let schemas = spec["components"]["schemas"]
+        .as_object()
+        .expect("schemas object");
+
+    let mut inlined: Vec<String> = Vec::new();
+    for (name, schema) in schemas {
+        // `Base_Argument`, the shape utoipa emits for a concrete instantiation.
+        let Some((_, argument)) = name.split_once('_') else {
+            continue;
+        };
+        let Some(argument_schema) = schemas.get(argument) else {
+            continue;
+        };
+
+        // An inlined argument is a subschema byte-identical to the component it
+        // should have referenced.
+        let reference = format!("#/components/schemas/{}", argument);
+        for (pointer, node) in all_nodes(schema) {
+            if node.get("$ref").and_then(Value::as_str) == Some(reference.as_str()) {
+                continue;
+            }
+            if &node == argument_schema {
+                inlined.push(format!("{} at {}", name, pointer));
+            }
+        }
+    }
+    inlined.sort();
+
+    assert!(
+        inlined.is_empty(),
+        "these generic wrappers expand their type argument inline instead of \
+         referencing its component, so a generated client gets a distinct type \
+         per wrapper rather than the shared DTO: {:#?}",
+        inlined
     );
 }
