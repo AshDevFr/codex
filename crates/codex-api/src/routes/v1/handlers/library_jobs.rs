@@ -108,6 +108,28 @@ async fn validate_and_normalise_create(
 // CRUD
 // =============================================================================
 
+/// List the scheduled jobs configured for a library
+///
+/// Jobs are per-library scheduled work; today the only kind is a metadata
+/// refresh. The schedule is a cron expression evaluated in the job's timezone,
+/// or the server's if it declares none.
+#[utoipa::path(
+    get,
+    path = "/api/v1/libraries/{library_id}/jobs",
+    params(
+        ("library_id" = Uuid, Path, description = "Library ID"),
+    ),
+    responses(
+        (status = 200, description = "The library's jobs", body = ListLibraryJobsResponse),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Library not found"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Library Jobs"
+)]
 pub async fn list_jobs(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
@@ -125,6 +147,25 @@ pub async fn list_jobs(
     Ok(Json(ListLibraryJobsResponse { jobs }))
 }
 
+/// Get one scheduled job
+#[utoipa::path(
+    get,
+    path = "/api/v1/libraries/{library_id}/jobs/{job_id}",
+    params(
+        ("library_id" = Uuid, Path, description = "Library ID"),
+        ("job_id" = Uuid, Path, description = "Job ID"),
+    ),
+    responses(
+        (status = 200, description = "The job", body = LibraryJobDto),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Job not found, or it belongs to another library"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Library Jobs"
+)]
 pub async fn get_job(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
@@ -141,6 +182,30 @@ pub async fn get_job(
     Ok(Json(row_to_dto(row)?))
 }
 
+/// Create a scheduled job for a library
+///
+/// The job's type is taken from the `config` variant rather than named
+/// separately, so the two cannot disagree. A blank `name` is generated from the
+/// config.
+#[utoipa::path(
+    post,
+    path = "/api/v1/libraries/{library_id}/jobs",
+    params(
+        ("library_id" = Uuid, Path, description = "Library ID"),
+    ),
+    request_body = CreateLibraryJobRequest,
+    responses(
+        (status = 201, description = "The created job", body = LibraryJobDto),
+        (status = 400, description = "Invalid cron expression, timezone, or config"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Library not found"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Library Jobs"
+)]
 pub async fn create_job(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
@@ -201,6 +266,31 @@ pub async fn create_job(
     Ok((StatusCode::CREATED, Json(row_to_dto(row)?)))
 }
 
+/// Update a scheduled job
+///
+/// Every field is optional. `timezone` is tri-state: absent leaves it, `null`
+/// clears it back to the server default, and a value sets it. A `config` whose
+/// type differs from the job's is rejected rather than migrating the job.
+#[utoipa::path(
+    patch,
+    path = "/api/v1/libraries/{library_id}/jobs/{job_id}",
+    params(
+        ("library_id" = Uuid, Path, description = "Library ID"),
+        ("job_id" = Uuid, Path, description = "Job ID"),
+    ),
+    request_body = PatchLibraryJobRequest,
+    responses(
+        (status = 200, description = "The updated job", body = LibraryJobDto),
+        (status = 400, description = "Empty name, invalid schedule, or a config of the wrong type"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Job not found, or it belongs to another library"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Library Jobs"
+)]
 pub async fn patch_job(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
@@ -279,6 +369,25 @@ pub async fn patch_job(
     Ok(Json(row_to_dto(updated)?))
 }
 
+/// Delete a scheduled job
+#[utoipa::path(
+    delete,
+    path = "/api/v1/libraries/{library_id}/jobs/{job_id}",
+    params(
+        ("library_id" = Uuid, Path, description = "Library ID"),
+        ("job_id" = Uuid, Path, description = "Job ID"),
+    ),
+    responses(
+        (status = 204, description = "Job deleted"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Job not found, or it belongs to another library"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Library Jobs"
+)]
 pub async fn delete_job(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
@@ -309,6 +418,31 @@ pub async fn delete_job(
 // Run-now
 // =============================================================================
 
+/// Run a scheduled job immediately
+///
+/// Enqueues the job's task and returns its id; the run itself is asynchronous
+/// and its progress is followed through the task queue. Refuses if a run for
+/// this job is already in flight, so a double click cannot queue the work
+/// twice.
+#[utoipa::path(
+    post,
+    path = "/api/v1/libraries/{library_id}/jobs/{job_id}/run-now",
+    params(
+        ("library_id" = Uuid, Path, description = "Library ID"),
+        ("job_id" = Uuid, Path, description = "Job ID"),
+    ),
+    responses(
+        (status = 200, description = "The enqueued task", body = RunNowResponse),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Job not found, or it belongs to another library"),
+        (status = 409, description = "A run for this job is already in flight"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Library Jobs"
+)]
 pub async fn run_job_now(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
@@ -350,6 +484,32 @@ pub async fn run_job_now(
 const DRY_RUN_DEFAULT_SAMPLE: u32 = 5;
 const DRY_RUN_MAX_SAMPLE: u32 = 20;
 
+/// Preview what a job would change, without changing anything
+///
+/// Plans the refresh and returns a sample of the per-series field changes it
+/// would make. Nothing is written. `configOverride` plans against a config the
+/// job does not have yet, which is what lets an editor preview an edit before
+/// saving it; it must be of the job's own type.
+#[utoipa::path(
+    post,
+    path = "/api/v1/libraries/{library_id}/jobs/{job_id}/dry-run",
+    params(
+        ("library_id" = Uuid, Path, description = "Library ID"),
+        ("job_id" = Uuid, Path, description = "Job ID"),
+    ),
+    request_body = DryRunRequest,
+    responses(
+        (status = 200, description = "The planned changes", body = DryRunResponse),
+        (status = 400, description = "Override config is of the wrong type, or is invalid"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Job not found, or it belongs to another library"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Library Jobs"
+)]
 pub async fn dry_run_job(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
@@ -470,6 +630,24 @@ pub async fn dry_run_job(
 // Field-groups catalog
 // =============================================================================
 
+/// List the metadata field groups a refresh job can target
+///
+/// A static catalog: the groups and the concrete metadata fields each one
+/// covers. It is what a job editor offers as refreshable fields, so a client
+/// does not have to hardcode the list.
+#[utoipa::path(
+    get,
+    path = "/api/v1/library-jobs/metadata-refresh/field-groups",
+    responses(
+        (status = 200, description = "The field-group catalog", body = Vec<FieldGroupDto>),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Library Jobs"
+)]
 pub async fn list_field_groups(auth: AuthContext) -> Result<Json<Vec<FieldGroupDto>>, ApiError> {
     require_permission!(auth, Permission::LibrariesRead)?;
     let mut out = Vec::with_capacity(FieldGroup::all().len());

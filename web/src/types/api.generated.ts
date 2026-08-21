@@ -2504,6 +2504,104 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/libraries/{library_id}/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the scheduled jobs configured for a library
+         * @description Jobs are per-library scheduled work; today the only kind is a metadata
+         *     refresh. The schedule is a cron expression evaluated in the job's timezone,
+         *     or the server's if it declares none.
+         */
+        get: operations["list_jobs"];
+        put?: never;
+        /**
+         * Create a scheduled job for a library
+         * @description The job's type is taken from the `config` variant rather than named
+         *     separately, so the two cannot disagree. A blank `name` is generated from the
+         *     config.
+         */
+        post: operations["create_job"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/libraries/{library_id}/jobs/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get one scheduled job */
+        get: operations["get_job"];
+        put?: never;
+        post?: never;
+        /** Delete a scheduled job */
+        delete: operations["delete_job"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a scheduled job
+         * @description Every field is optional. `timezone` is tri-state: absent leaves it, `null`
+         *     clears it back to the server default, and a value sets it. A `config` whose
+         *     type differs from the job's is rejected rather than migrating the job.
+         */
+        patch: operations["patch_job"];
+        trace?: never;
+    };
+    "/api/v1/libraries/{library_id}/jobs/{job_id}/dry-run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview what a job would change, without changing anything
+         * @description Plans the refresh and returns a sample of the per-series field changes it
+         *     would make. Nothing is written. `configOverride` plans against a config the
+         *     job does not have yet, which is what lets an editor preview an edit before
+         *     saving it; it must be of the job's own type.
+         */
+        post: operations["dry_run_job"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/libraries/{library_id}/jobs/{job_id}/run-now": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run a scheduled job immediately
+         * @description Enqueues the job's task and returns its id; the run itself is asynchronous
+         *     and its progress is followed through the task queue. Refuses if a run for
+         *     this job is already in flight, so a double click cannot queue the work
+         *     twice.
+         */
+        post: operations["run_job_now"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/libraries/{library_id}/purge-deleted": {
         parameters: {
             query?: never;
@@ -2704,6 +2802,28 @@ export interface paths {
          *     - `libraries:write`
          */
         post: operations["reprocess_library_series_titles"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/library-jobs/metadata-refresh/field-groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the metadata field groups a refresh job can target
+         * @description A static catalog: the groups and the concrete metadata fields each one
+         *     covers. It is what a job editor offers as refreshable fields, so a client
+         *     does not have to hardcode the list.
+         */
+        get: operations["list_field_groups"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -27624,6 +27744,313 @@ export interface operations {
             };
         };
     };
+    list_jobs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Library ID */
+                library_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The library's jobs */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListLibraryJobsResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Library not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_job: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Library ID */
+                library_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateLibraryJobRequest"];
+            };
+        };
+        responses: {
+            /** @description The created job */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryJobDto"];
+                };
+            };
+            /** @description Invalid cron expression, timezone, or config */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Library not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_job: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Library ID */
+                library_id: string;
+                /** @description Job ID */
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The job */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryJobDto"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Job not found, or it belongs to another library */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_job: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Library ID */
+                library_id: string;
+                /** @description Job ID */
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Job deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Job not found, or it belongs to another library */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    patch_job: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Library ID */
+                library_id: string;
+                /** @description Job ID */
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchLibraryJobRequest"];
+            };
+        };
+        responses: {
+            /** @description The updated job */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryJobDto"];
+                };
+            };
+            /** @description Empty name, invalid schedule, or a config of the wrong type */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Job not found, or it belongs to another library */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    dry_run_job: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Library ID */
+                library_id: string;
+                /** @description Job ID */
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DryRunRequest"];
+            };
+        };
+        responses: {
+            /** @description The planned changes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DryRunResponse"];
+                };
+            };
+            /** @description Override config is of the wrong type, or is invalid */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Job not found, or it belongs to another library */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    run_job_now: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Library ID */
+                library_id: string;
+                /** @description Job ID */
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The enqueued task */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunNowResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Job not found, or it belongs to another library */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A run for this job is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     purge_deleted_books: {
         parameters: {
             query?: never;
@@ -28017,6 +28444,33 @@ export interface operations {
             };
             /** @description Library not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_field_groups: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The field-group catalog */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FieldGroupDto"][];
+                };
+            };
+            /** @description Forbidden */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

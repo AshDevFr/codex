@@ -409,25 +409,10 @@ const ACCEPTED_UNREFERENCED_COMPONENTS: &[&str] = &[
     "TaskProgress",
     "TaskProgressEvent",
     "TaskStatus",
-    // -- The library-jobs route set is undocumented -------------------------
-    // `list_jobs` and its siblings in `handlers/library_jobs.rs` carry no
-    // `#[utoipa::path]` at all, so every DTO the routes use is unreachable.
-    // This is a genuine finding, recorded here rather than fixed: the routes
-    // exist and work, and no client in play uses them.
-    "CreateLibraryJobRequest",
-    "DryRunFieldChange",
-    "DryRunRequest",
-    "DryRunResponse",
-    "DryRunSeriesDelta",
-    "DryRunSkippedFieldDto",
-    "FieldGroupDto",
-    "LibraryJobConfigDto",
-    "LibraryJobDto",
-    "ListLibraryJobsResponse",
-    "MetadataRefreshJobConfigDto",
-    "PatchLibraryJobRequest",
-    "RefreshScope",
-    "RunNowResponse",
+    // The library-jobs DTOs used to sit here, because none of their routes
+    // carried a `#[utoipa::path]` and so nothing could reach them. This check
+    // is what surfaced that; the routes are documented now and all fourteen
+    // names have left the list.
     // -- The `full=true` alternate response shape ---------------------------
     // `list_library_books` and friends answer with these when `full=true`, and
     // the document describes only the paginated shape. Deferred deliberately:

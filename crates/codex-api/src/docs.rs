@@ -487,6 +487,17 @@ The following paths are exempt from rate limiting:
         v1::handlers::task_queue::reprocess_series_titles,
         v1::handlers::task_queue::reprocess_library_series_titles,
 
+        // Library jobs: per-library scheduled work, plus the field-group catalog
+        // its editor is built from.
+        v1::handlers::library_jobs::list_jobs,
+        v1::handlers::library_jobs::get_job,
+        v1::handlers::library_jobs::create_job,
+        v1::handlers::library_jobs::patch_job,
+        v1::handlers::library_jobs::delete_job,
+        v1::handlers::library_jobs::run_job_now,
+        v1::handlers::library_jobs::dry_run_job,
+        v1::handlers::library_jobs::list_field_groups,
+
         // Filesystem endpoints
         v1::handlers::browse_filesystem,
         v1::handlers::list_drives,
