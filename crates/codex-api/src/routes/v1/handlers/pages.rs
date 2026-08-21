@@ -54,7 +54,10 @@ const PLACEHOLDER_SVG: &[u8] = include_bytes!("../../../../../../assets/placehol
         ("width" = Option<u32>, Query, description = "Downscale CBZ/CBR pages to at most this width (px); other formats ignore it")
     ),
     responses(
-        (status = 200, description = "Page image", content_type = "image/jpeg"),
+        // Whatever `detect_content_type` finds in the archive: jpeg, png, webp,
+        // gif, bmp or avif. A caller cannot act on the difference, so the
+        // wildcard describes it exactly and renders as a single binary body.
+        (status = 200, description = "Page image", content_type = "image/*"),
         (status = 304, description = "Not modified (client cache is valid)"),
         (status = 404, description = "Book or page not found"),
         (status = 403, description = "Forbidden"),
@@ -424,7 +427,11 @@ async fn serve_pdf_page_with_streaming(
         ("book_id" = Uuid, Path, description = "Book ID"),
     ),
     responses(
-        (status = 200, description = "Thumbnail image", content_type = "image/jpeg"),
+        // `image/jpeg` once generated, `image/svg+xml` for the placeholder that
+        // is served until the generation task finishes. That difference only
+        // encodes "not ready yet", which is not a rendering concern, so the
+        // wildcard spares every caller a switch on it.
+        (status = 200, description = "Thumbnail image", content_type = "image/*"),
         (status = 304, description = "Not modified (client cache is valid)"),
         (status = 404, description = "Book not found"),
         (status = 403, description = "Forbidden"),

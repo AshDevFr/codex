@@ -2030,7 +2030,10 @@ pub async fn set_series_cover_source(
         ("series_id" = Uuid, Path, description = "Series ID"),
     ),
     responses(
-        (status = 200, description = "Thumbnail image", content_type = "image/jpeg"),
+        // `image/jpeg` once generated, `image/svg+xml` for the placeholder this
+        // route returns while it queues the generation task. Every cover in a
+        // freshly scanned library takes the second branch.
+        (status = 200, description = "Thumbnail image", content_type = "image/*"),
         (status = 304, description = "Not modified (client cache is valid)"),
         (status = 404, description = "Series not found"),
         (status = 403, description = "Forbidden"),

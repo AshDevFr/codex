@@ -364,3 +364,219 @@ fn filter_conditions_reference_their_grammar() {
         );
     }
 }
+
+/// Components no operation can reach, transitively, that are known and accepted.
+///
+/// A component nothing references is the signature this codebase's worst OpenAPI
+/// defects have shared: `PaginatedResponse_SeriesDto`, `SeriesCondition` and the
+/// five filter operator types were all correct schemas, generated faithfully,
+/// and wired to nothing, which is precisely why nobody noticed for two releases.
+/// The check below fails on any orphan that is not listed here, so a new one has
+/// to be looked at rather than absorbed.
+///
+/// Every name is a decision, grouped by why it is acceptable. Adding a name is
+/// cheap; adding one without reading which group it belongs in is how this list
+/// stops meaning anything.
+const ACCEPTED_UNREFERENCED_COMPONENTS: &[&str] = &[
+    // -- The generic wrapper's own base -------------------------------------
+    // Rendered from `PaginatedResponse<T>`'s `ToSchema` derive rather than from
+    // any reference. Every operation names a concrete instantiation, so nothing
+    // points here. An operation that *did* reference it would be the generic
+    // alias defect, which `no_operation_references_an_unparameterised_generic_wrapper`
+    // catches separately.
+    "PaginatedResponse",
+    // -- `IntoParams` query structs -----------------------------------------
+    // These render as inline `parameters` entries, never as a `$ref`, so being
+    // an unreferenced schema is their normal state. They are on this list only
+    // because they are also registered in `docs.rs` `schemas()`, which is
+    // unnecessary but harmless.
+    "BooksPaginationQuery",
+    "ListFilterPresetsQuery",
+    "ListSettingsQuery",
+    "OrphanStatsQuery",
+    "SeriesPaginationQuery",
+    "SyncStatusQuery",
+    "TriggerScanQuery",
+    "UserPluginTasksQuery",
+    // -- Server-sent event payloads -----------------------------------------
+    // A `text/event-stream` response body carries no schema, so the types that
+    // describe the events on the wire are unreachable by construction. That the
+    // event shapes are undocumented is a real gap, but it is a gap in how SSE is
+    // described, not an accidentally-unwired schema.
+    "EntityChangeEvent",
+    "EntityEvent",
+    "EntityType",
+    "TaskProgress",
+    "TaskProgressEvent",
+    "TaskStatus",
+    // -- The library-jobs route set is undocumented -------------------------
+    // `list_jobs` and its siblings in `handlers/library_jobs.rs` carry no
+    // `#[utoipa::path]` at all, so every DTO the routes use is unreachable.
+    // This is a genuine finding, recorded here rather than fixed: the routes
+    // exist and work, and no client in play uses them.
+    "CreateLibraryJobRequest",
+    "DryRunFieldChange",
+    "DryRunRequest",
+    "DryRunResponse",
+    "DryRunSeriesDelta",
+    "DryRunSkippedFieldDto",
+    "FieldGroupDto",
+    "LibraryJobConfigDto",
+    "LibraryJobDto",
+    "ListLibraryJobsResponse",
+    "MetadataRefreshJobConfigDto",
+    "PatchLibraryJobRequest",
+    "RefreshScope",
+    "RunNowResponse",
+    // -- The `full=true` alternate response shape ---------------------------
+    // `list_library_books` and friends answer with these when `full=true`, and
+    // the document describes only the paginated shape. Deferred deliberately:
+    // it needs an API decision about whether one operation may return two
+    // shapes, not an annotation fix.
+    "BookFullMetadata",
+    "FullBookResponse",
+    "FullSeriesResponse",
+    "SeriesFullMetadata",
+    // -- Not on the HTTP surface at all -------------------------------------
+    // Scanner and access-control internals that derive `ToSchema` for reasons of
+    // their own and get swept into the registry. No handler takes or returns
+    // them.
+    "AnalysisResult",
+    "CalibreSeriesMode",
+    "CalibreStrategyConfig",
+    "CustomStrategyConfig",
+    "FlatStrategyConfig",
+    "MembershipSource",
+    "PublisherHierarchyConfig",
+    "SmartBookConfig",
+    // -- Metadata preprocessing template context ----------------------------
+    // The context object handed to plugin preprocessing templates. It is a
+    // plugin-facing shape rather than a request or response body, so nothing in
+    // `paths` reaches it.
+    "AlternateTitleContextDto",
+    "AuthorContextDto",
+    "BookAwardContextDto",
+    "BookContextDto",
+    "BookMetadataContextDto",
+    "ExternalIdContextDto",
+    "ExternalLinkContextDto",
+    "ExternalRatingContextDto",
+    "MetadataContextDto",
+    "SeriesContextDto",
+    // -- Inlined by its wrapper rather than referenced ----------------------
+    // `PaginatedResponse_SeriesExternalIndexDto` expands this DTO inline in its
+    // `data` array instead of emitting a `$ref`, unlike the other paginated
+    // wrappers. The document is correct for a client, just duplicated, so this
+    // is unreachable without being undocumented.
+    "SeriesExternalIndexDto",
+    // -- Registered but referenced by no handler ----------------------------
+    // Dead DTOs. Each is named in a `components(schemas(...))` list or in
+    // `docs.rs`, and no operation returns it. `SharingTagListResponse` is
+    // superseded by `PaginatedResponse<SharingTagDto>`; `TokenResponse` is
+    // superseded by `LoginResponse` and `TokenPair`; `ReleaseLedgerListResponse`
+    // is kept alive only by `_opening_api_keepalive()`; the OIDC pair describes
+    // a callback that redirects rather than answering with a body.
+    "OidcCallbackResponse",
+    "OidcErrorResponse",
+    "PluginSearchResponse",
+    "ReleaseLedgerListResponse",
+    "ReprocessLibraryTitlesResponse",
+    "ReprocessTitleResult",
+    "SharingTagListResponse",
+    "TokenResponse",
+];
+
+/// Every schema component reachable from `paths`, following `$ref`s transitively.
+///
+/// Transitivity is the whole point. `SeriesCondition` references itself and the
+/// operator schemas, so a direct-reference count finds them all "used" and
+/// misses that no operation can reach any of them.
+fn components_reachable_from_operations(spec: &Value) -> std::collections::BTreeSet<String> {
+    fn collect_refs(node: &Value, out: &mut std::collections::BTreeSet<String>) {
+        match node {
+            Value::Object(map) => {
+                if let Some(reference) = map.get("$ref").and_then(Value::as_str)
+                    && let Some(name) = reference.strip_prefix("#/components/schemas/")
+                {
+                    out.insert(name.to_string());
+                }
+                for value in map.values() {
+                    collect_refs(value, out);
+                }
+            }
+            Value::Array(items) => {
+                for value in items {
+                    collect_refs(value, out);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let schemas = spec["components"]["schemas"]
+        .as_object()
+        .expect("schemas object");
+
+    let mut queue = std::collections::BTreeSet::new();
+    collect_refs(&spec["paths"], &mut queue);
+
+    let mut reached = std::collections::BTreeSet::new();
+    while let Some(name) = queue.pop_first() {
+        if !reached.insert(name.clone()) {
+            continue;
+        }
+        if let Some(schema) = schemas.get(&name) {
+            let mut next = std::collections::BTreeSet::new();
+            collect_refs(schema, &mut next);
+            queue.extend(next.difference(&reached).cloned());
+        }
+    }
+
+    reached
+}
+
+/// A schema no operation can reach documents nothing. The four defects fixed on
+/// this branch all announced themselves this way and nobody was looking, so this
+/// pins the set: a new orphan fails until someone decides which group above it
+/// belongs to, and an allowlisted name that becomes reachable fails too, so the
+/// list cannot quietly rot into a list of things that used to be true.
+#[test]
+fn unreferenced_components_are_all_accounted_for() {
+    let spec = spec();
+    let reached = components_reachable_from_operations(&spec);
+
+    let all: std::collections::BTreeSet<String> = spec["components"]["schemas"]
+        .as_object()
+        .expect("schemas object")
+        .keys()
+        .cloned()
+        .collect();
+
+    let accepted: std::collections::BTreeSet<String> = ACCEPTED_UNREFERENCED_COMPONENTS
+        .iter()
+        .map(|name| name.to_string())
+        .collect();
+
+    let unexpected: Vec<&String> = all
+        .difference(&reached)
+        .filter(|n| !accepted.contains(*n))
+        .collect();
+    assert!(
+        unexpected.is_empty(),
+        "no operation can reach these components, and they are not in \
+         ACCEPTED_UNREFERENCED_COMPONENTS. Either an operation should reference one and \
+         does not, or the list needs a new entry saying why not: {:#?}",
+        unexpected
+    );
+
+    let stale: Vec<&String> = accepted
+        .iter()
+        .filter(|n| reached.contains(*n) || !all.contains(*n))
+        .collect();
+    assert!(
+        stale.is_empty(),
+        "ACCEPTED_UNREFERENCED_COMPONENTS names components that are now reachable, or that \
+         no longer exist. Remove them so the list keeps describing the document: {:#?}",
+        stale
+    );
+}

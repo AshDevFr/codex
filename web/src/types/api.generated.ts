@@ -25277,6 +25277,10 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    "application/zip": unknown;
+                    "application/x-rar-compressed": unknown;
+                    "application/epub+zip": unknown;
+                    "application/pdf": unknown;
                     "application/octet-stream": unknown;
                 };
             };
@@ -25516,7 +25520,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "image/jpeg": unknown;
+                    "image/*": unknown;
                 };
             };
             /** @description Not modified (client cache is valid) */
@@ -25953,7 +25957,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "image/jpeg": unknown;
+                    "image/*": unknown;
                 };
             };
             /** @description Not modified (client cache is valid) */
@@ -33114,7 +33118,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "image/jpeg": unknown;
+                    "image/*": unknown;
                 };
             };
             /** @description Not modified (client cache is valid) */
@@ -34112,7 +34116,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/octet-stream": unknown;
+                    "text/csv": unknown;
+                    "text/markdown": unknown;
+                    "application/json": unknown;
                 };
             };
             /** @description Export not found or file missing */
@@ -35664,7 +35670,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "image/jpeg": unknown;
+                    "image/*": unknown;
                 };
             };
             /** @description Forbidden */

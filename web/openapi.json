@@ -4757,6 +4757,10 @@
           "200": {
             "description": "Book file",
             "content": {
+              "application/zip": {},
+              "application/x-rar-compressed": {},
+              "application/epub+zip": {},
+              "application/pdf": {},
               "application/octet-stream": {}
             }
           },
@@ -5091,7 +5095,7 @@
           "200": {
             "description": "Page image",
             "content": {
-              "image/jpeg": {}
+              "image/*": {}
             }
           },
           "304": {
@@ -5592,7 +5596,7 @@
           "200": {
             "description": "Thumbnail image",
             "content": {
-              "image/jpeg": {}
+              "image/*": {}
             }
           },
           "304": {
@@ -15251,7 +15255,7 @@
           "200": {
             "description": "Thumbnail image",
             "content": {
-              "image/jpeg": {}
+              "image/*": {}
             }
           },
           "304": {
@@ -16529,7 +16533,9 @@
           "200": {
             "description": "Export file",
             "content": {
-              "application/octet-stream": {}
+              "text/csv": {},
+              "text/markdown": {},
+              "application/json": {}
             }
           },
           "404": {
@@ -18371,7 +18377,7 @@
           "200": {
             "description": "Page image (also records reading progress)",
             "content": {
-              "image/jpeg": {}
+              "image/*": {}
             }
           },
           "403": {
