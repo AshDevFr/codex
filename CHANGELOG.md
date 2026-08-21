@@ -2,6 +2,34 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [2.0.0] - 2026-08-21
+
+### 🚀 Features
+
+- *(config)* [**breaking**] Layer configuration with figment and nest env vars with __
+- *(config)* Accept the environment value shapes the override layer allowed
+- *(config)* [**breaking**] Make the ad-hoc environment reads real configuration keys
+- *(config)* [**breaking**] Refuse to start when the environment names a setting that is no longer read
+- *(config)* [**breaking**] Stop writing a config file at startup, add `codex config init`
+- *(db)* [**breaking**] Make PostgreSQL TLS a real setting and stop corrupting URLs on odd passwords
+
+### 🐛 Bug Fixes
+
+- *(config)* Reject a configuration that names a database section it lacks
+- *(config)* Ignore local overlays and keep the starter template in config/
+
+### 🚜 Refactor
+
+- *(config)* [**breaking**] Require typed environment values and drop the lenient parsers
+
+### 📚 Documentation
+
+- *(config)* [**breaking**] Rewrite the configuration docs for the new environment scheme
+
+### 🧪 Testing
+
+- *(config)* Check every key in the starter template is a real setting
+
 ## [1.44.5] - 2026-08-18
 
 ### 🐛 Bug Fixes
