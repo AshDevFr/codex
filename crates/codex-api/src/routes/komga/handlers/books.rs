@@ -825,14 +825,7 @@ pub async fn download_book_file(
     let stream = ReaderStream::new(file);
     let body = Body::from_stream(stream);
 
-    // Build Content-Disposition header with UTF-8 encoding (RFC 5987)
-    // Format: attachment; filename="quoted-filename"; filename*=UTF-8''encoded-filename
-    let filename_encoded = percent_encode_filename(&book.file_name);
-    let content_disposition = format!(
-        "attachment; filename=\"{}\"; filename*=UTF-8''{}",
-        book.file_name.replace('"', "\\\""),
-        filename_encoded
-    );
+    let content_disposition = crate::ranged_file::content_disposition_attachment(&book.file_name);
 
     // Build response with appropriate headers
     Ok(Response::builder()
@@ -872,29 +865,6 @@ pub(crate) async fn get_series_title(
     }
 }
 
-/// Percent-encode a filename for use in Content-Disposition header (RFC 5987)
-///
-/// Encodes characters that are not allowed in the filename* parameter:
-/// - Unreserved characters (A-Z, a-z, 0-9, -._~) are preserved
-/// - All other characters are percent-encoded
-fn percent_encode_filename(filename: &str) -> String {
-    let mut result = String::with_capacity(filename.len() * 3);
-    for byte in filename.bytes() {
-        match byte {
-            // Unreserved characters per RFC 3986 (safe in filename*)
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
-                result.push(byte as char);
-            }
-            // Everything else gets percent-encoded
-            _ => {
-                result.push('%');
-                result.push_str(&format!("{:02X}", byte));
-            }
-        }
-    }
-    result
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -919,36 +889,6 @@ mod tests {
         assert_eq!(query.page, 1);
         assert_eq!(query.size, 50);
         assert_eq!(query.sort, Some("createdDate,desc".to_string()));
-    }
-
-    #[test]
-    fn test_percent_encode_filename_ascii() {
-        // Simple ASCII filename should be mostly unchanged
-        assert_eq!(percent_encode_filename("test.cbz"), "test.cbz");
-        assert_eq!(
-            percent_encode_filename("my-file_v1.0.epub"),
-            "my-file_v1.0.epub"
-        );
-    }
-
-    #[test]
-    fn test_percent_encode_filename_spaces() {
-        // Spaces should be encoded
-        assert_eq!(percent_encode_filename("My File.cbz"), "My%20File.cbz");
-    }
-
-    #[test]
-    fn test_percent_encode_filename_unicode() {
-        // Japanese characters should be encoded
-        let encoded = percent_encode_filename("漫画 Vol 1.cbz");
-        assert!(encoded.contains("%"));
-        assert!(encoded.ends_with(".cbz"));
-    }
-
-    #[test]
-    fn test_percent_encode_filename_special_chars() {
-        // Special characters should be encoded
-        assert_eq!(percent_encode_filename("file[1].cbz"), "file%5B1%5D.cbz");
     }
 
     #[test]

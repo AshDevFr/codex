@@ -4739,7 +4739,7 @@
           "Books"
         ],
         "summary": "Download book file",
-        "description": "Streams the original book file (CBZ, CBR, EPUB, PDF) for download.\nUsed by OPDS clients for acquisition links.",
+        "description": "Streams the original book file (CBZ, CBR, EPUB, PDF) for download.\nUsed by OPDS clients for acquisition links.\n\nRange-capable and conditional. `Accept-Ranges: bytes` and a strong `ETag`\ngo out on every response, so a download interrupted partway can resume with\n`Range` rather than starting again, and a client that understands the\ncontainer can read part of an archive without fetching all of it — the\nsuffix form `bytes=-65536` reaches a ZIP central directory directly.",
         "operationId": "get_book_file",
         "parameters": [
           {
@@ -4750,6 +4750,42 @@
             "schema": {
               "type": "string",
               "format": "uuid"
+            }
+          },
+          {
+            "name": "Range",
+            "in": "header",
+            "description": "Byte range, e.g. `bytes=0-1023`, `bytes=1024-` or `bytes=-65536`. A single range only; multiple ranges are answered with the whole file.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "If-Range",
+            "in": "header",
+            "description": "Serve the range only if this ETag still matches; otherwise the whole file is returned, so a resume cannot splice bytes from two versions.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "description": "Return 304 if this ETag still matches.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
             }
           }
         ],
@@ -4764,11 +4800,27 @@
               "application/octet-stream": {}
             }
           },
+          "206": {
+            "description": "The requested byte range",
+            "content": {
+              "application/zip": {},
+              "application/x-rar-compressed": {},
+              "application/epub+zip": {},
+              "application/pdf": {},
+              "application/octet-stream": {}
+            }
+          },
+          "304": {
+            "description": "Not modified (client cache is valid)"
+          },
           "403": {
             "description": "Forbidden"
           },
           "404": {
             "description": "Book not found"
+          },
+          "416": {
+            "description": "The requested range names no byte of the file"
           }
         },
         "security": [
