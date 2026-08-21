@@ -7877,6 +7877,419 @@
         ]
       }
     },
+    "/api/v1/libraries/{library_id}/jobs": {
+      "get": {
+        "tags": [
+          "Library Jobs"
+        ],
+        "summary": "List the scheduled jobs configured for a library",
+        "description": "Jobs are per-library scheduled work; today the only kind is a metadata\nrefresh. The schedule is a cron expression evaluated in the job's timezone,\nor the server's if it declares none.",
+        "operationId": "list_jobs",
+        "parameters": [
+          {
+            "name": "library_id",
+            "in": "path",
+            "description": "Library ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The library's jobs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListLibraryJobsResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Library not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Library Jobs"
+        ],
+        "summary": "Create a scheduled job for a library",
+        "description": "The job's type is taken from the `config` variant rather than named\nseparately, so the two cannot disagree. A blank `name` is generated from the\nconfig.",
+        "operationId": "create_job",
+        "parameters": [
+          {
+            "name": "library_id",
+            "in": "path",
+            "description": "Library ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateLibraryJobRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "The created job",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LibraryJobDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid cron expression, timezone, or config"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Library not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/libraries/{library_id}/jobs/{job_id}": {
+      "get": {
+        "tags": [
+          "Library Jobs"
+        ],
+        "summary": "Get one scheduled job",
+        "operationId": "get_job",
+        "parameters": [
+          {
+            "name": "library_id",
+            "in": "path",
+            "description": "Library ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "job_id",
+            "in": "path",
+            "description": "Job ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The job",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LibraryJobDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Job not found, or it belongs to another library"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Library Jobs"
+        ],
+        "summary": "Delete a scheduled job",
+        "operationId": "delete_job",
+        "parameters": [
+          {
+            "name": "library_id",
+            "in": "path",
+            "description": "Library ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "job_id",
+            "in": "path",
+            "description": "Job ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Job deleted"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Job not found, or it belongs to another library"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "Library Jobs"
+        ],
+        "summary": "Update a scheduled job",
+        "description": "Every field is optional. `timezone` is tri-state: absent leaves it, `null`\nclears it back to the server default, and a value sets it. A `config` whose\ntype differs from the job's is rejected rather than migrating the job.",
+        "operationId": "patch_job",
+        "parameters": [
+          {
+            "name": "library_id",
+            "in": "path",
+            "description": "Library ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "job_id",
+            "in": "path",
+            "description": "Job ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchLibraryJobRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The updated job",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LibraryJobDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Empty name, invalid schedule, or a config of the wrong type"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Job not found, or it belongs to another library"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/libraries/{library_id}/jobs/{job_id}/dry-run": {
+      "post": {
+        "tags": [
+          "Library Jobs"
+        ],
+        "summary": "Preview what a job would change, without changing anything",
+        "description": "Plans the refresh and returns a sample of the per-series field changes it\nwould make. Nothing is written. `configOverride` plans against a config the\njob does not have yet, which is what lets an editor preview an edit before\nsaving it; it must be of the job's own type.",
+        "operationId": "dry_run_job",
+        "parameters": [
+          {
+            "name": "library_id",
+            "in": "path",
+            "description": "Library ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "job_id",
+            "in": "path",
+            "description": "Job ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DryRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The planned changes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DryRunResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Override config is of the wrong type, or is invalid"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Job not found, or it belongs to another library"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/libraries/{library_id}/jobs/{job_id}/run-now": {
+      "post": {
+        "tags": [
+          "Library Jobs"
+        ],
+        "summary": "Run a scheduled job immediately",
+        "description": "Enqueues the job's task and returns its id; the run itself is asynchronous\nand its progress is followed through the task queue. Refuses if a run for\nthis job is already in flight, so a double click cannot queue the work\ntwice.",
+        "operationId": "run_job_now",
+        "parameters": [
+          {
+            "name": "library_id",
+            "in": "path",
+            "description": "Library ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "job_id",
+            "in": "path",
+            "description": "Job ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The enqueued task",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunNowResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Job not found, or it belongs to another library"
+          },
+          "409": {
+            "description": "A run for this job is already in flight"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/libraries/{library_id}/purge-deleted": {
       "delete": {
         "tags": [
@@ -8522,6 +8935,42 @@
           },
           "404": {
             "description": "Library not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/library-jobs/metadata-refresh/field-groups": {
+      "get": {
+        "tags": [
+          "Library Jobs"
+        ],
+        "summary": "List the metadata field groups a refresh job can target",
+        "description": "A static catalog: the groups and the concrete metadata fields each one\ncovers. It is what a job editor offers as refreshable fields, so a client\ndoes not have to hardcode the list.",
+        "operationId": "list_field_groups",
+        "responses": {
+          "200": {
+            "description": "The field-group catalog",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FieldGroupDto"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
           }
         },
         "security": [
