@@ -220,7 +220,14 @@ pub async fn get_export(
     path = "/api/v1/user/exports/series/{id}/download",
     params(("id" = Uuid, Path, description = "Export ID")),
     responses(
-        (status = 200, description = "Export file", content_type = "application/octet-stream"),
+        // One entry per arm of the `content_type` match below. The export is
+        // text, never opaque bytes, and the format is the caller's own choice
+        // at creation time.
+        (status = 200, description = "Export file", content(
+            ("text/csv"),
+            ("text/markdown"),
+            ("application/json"),
+        )),
         (status = 404, description = "Export not found or file missing"),
         (status = 409, description = "Export not yet completed"),
     ),

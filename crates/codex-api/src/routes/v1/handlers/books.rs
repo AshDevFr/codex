@@ -2204,7 +2204,16 @@ pub async fn list_library_recently_read_books(
         ("book_id" = Uuid, Path, description = "Book ID")
     ),
     responses(
-        (status = 200, description = "Book file", content_type = "application/octet-stream"),
+        // One entry per arm of the `content_type` match below, including the
+        // catch-all. Declaring a single type here would be a lie a strict
+        // generated client turns into a thrown response rather than a decode.
+        (status = 200, description = "Book file", content(
+            ("application/zip"),
+            ("application/x-rar-compressed"),
+            ("application/epub+zip"),
+            ("application/pdf"),
+            ("application/octet-stream"),
+        )),
         (status = 404, description = "Book not found"),
         (status = 403, description = "Forbidden"),
     ),

@@ -9,6 +9,7 @@ mod alternate_titles;
 mod analyze;
 mod api_keys;
 mod auth;
+mod binary_content_types;
 mod books;
 mod bulk_metadata;
 mod bulk_operations;

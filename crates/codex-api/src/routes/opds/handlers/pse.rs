@@ -135,7 +135,9 @@ pub async fn book_pages(
         ("page_number" = i32, Path, description = "Page number (1-indexed)")
     ),
     responses(
-        (status = 200, description = "Page image (also records reading progress)", content_type = "image/jpeg"),
+        // Delegates to the v1 `get_page_image`, so it answers with the same set
+        // of image types the archive happens to hold.
+        (status = 200, description = "Page image (also records reading progress)", content_type = "image/*"),
         (status = 404, description = "Book or page not found"),
         (status = 403, description = "Forbidden"),
     ),
