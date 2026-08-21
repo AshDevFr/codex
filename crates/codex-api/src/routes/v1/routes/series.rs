@@ -37,8 +37,12 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/series/external-index",
             get(handlers::list_series_external_index),
         )
+        // Describable alternative to the deprecated `?full=true` listing.
+        .route("/series/full", get(handlers::list_series_full))
         .route("/series/{series_id}", get(handlers::get_series))
         .route("/series/{series_id}", patch(handlers::patch_series))
+        // Describable alternative to the deprecated `?full=true`.
+        .route("/series/{series_id}/full", get(handlers::get_series_full))
         .route(
             "/series/{series_id}/read-history",
             get(handlers::get_series_read_history).delete(handlers::clear_series_read_history),

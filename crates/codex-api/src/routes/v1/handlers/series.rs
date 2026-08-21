@@ -78,6 +78,15 @@ pub struct ListBooksQuery {
     /// Return full data including metadata and locks.
     /// Default is false for backward compatibility.
     #[serde(default)]
+    /// **Deprecated.** Prefer `GET /books/{book_id}/full` and
+    /// `GET /series/{series_id}/full`. A response whose schema depends on a
+    /// query parameter cannot be expressed in OpenAPI, so this form is
+    /// invisible to a generated client. Scheduled for removal in 3.0.
+    #[deprecated(
+        since = "2.2.0",
+        note = "use GET /books/{book_id}/full or GET /series/{series_id}/full; \
+a response shape that depends on a query parameter cannot be described in OpenAPI"
+    )]
     pub full: bool,
 }
 
@@ -87,6 +96,40 @@ fn default_page() -> u64 {
 
 fn default_page_size() -> u64 {
     DEFAULT_PAGE_SIZE
+}
+
+/// Query parameters for `GET /api/v1/series/full`.
+///
+/// The same filters and pagination as the plain listing, minus `full` itself:
+/// the route already says so, and repeating it as a parameter would reintroduce
+/// the response-shape-depends-on-a-parameter problem this route exists to avoid.
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[serde(rename_all = "camelCase")]
+#[into_params(rename_all = "camelCase")]
+pub struct SeriesFullListQuery {
+    /// Page number (1-indexed, default 1)
+    #[serde(default = "default_page")]
+    pub page: u64,
+
+    /// Number of items per page (max 100, default 50)
+    #[serde(default = "default_page_size")]
+    pub page_size: u64,
+
+    /// Sort parameter (format: "field,direction" e.g. "name,asc")
+    #[serde(default)]
+    pub sort: Option<String>,
+
+    /// Filter by genres (comma-separated, AND logic - series must have ALL specified genres)
+    #[serde(default)]
+    pub genres: Option<String>,
+
+    /// Filter by tags (comma-separated, AND logic - series must have ALL specified tags)
+    #[serde(default)]
+    pub tags: Option<String>,
+
+    /// Filter by library ID
+    #[serde(default)]
+    pub library_id: Option<Uuid>,
 }
 
 /// Query parameters for listing series
@@ -121,6 +164,15 @@ pub struct SeriesListQuery {
     /// Return full series data including metadata, locks, genres, tags, alternate titles,
     /// external ratings, and external links. Default is false for backward compatibility.
     #[serde(default)]
+    /// **Deprecated.** Prefer `GET /books/{book_id}/full` and
+    /// `GET /series/{series_id}/full`. A response whose schema depends on a
+    /// query parameter cannot be expressed in OpenAPI, so this form is
+    /// invisible to a generated client. Scheduled for removal in 3.0.
+    #[deprecated(
+        since = "2.2.0",
+        note = "use GET /books/{book_id}/full or GET /series/{series_id}/full; \
+a response shape that depends on a query parameter cannot be described in OpenAPI"
+    )]
     pub full: bool,
 }
 
@@ -813,6 +865,49 @@ async fn series_to_full_dtos_batched(
     Ok(results)
 }
 
+/// List series with their metadata, genres, tags and external links
+///
+/// The same page `GET /api/v1/series` returns, with each entry carrying the
+/// related data inline, so a caller that needs metadata for a whole library
+/// pages it once instead of following up per series.
+///
+/// This exists as its own route because the shape is genuinely different, not
+/// merely richer, and because a response whose schema depends on a query
+/// parameter cannot be expressed in OpenAPI — which made the deprecated
+/// `GET /api/v1/series?full=true` invisible to every generated client. Accepts
+/// the same filters and pagination as the plain listing.
+#[utoipa::path(
+    get,
+    path = "/api/v1/series/full",
+    params(SeriesFullListQuery),
+    responses(
+        (status = 200, description = "Paginated series with their related data", body = PaginatedResponse<FullSeriesResponse>),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Series"
+)]
+#[allow(deprecated)] // sets the deprecated `full` flag on the shared implementation
+pub async fn list_series_full(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Query(query): Query<SeriesFullListQuery>,
+) -> Result<Response, ApiError> {
+    let query = SeriesListQuery {
+        page: query.page,
+        page_size: query.page_size,
+        library_id: query.library_id,
+        genres: query.genres,
+        tags: query.tags,
+        sort: query.sort,
+        full: true,
+    };
+    list_series_impl(state, auth, query, "/api/v1/series/full", false).await
+}
+
 /// List series with optional library filter and pagination
 #[utoipa::path(
     get,
@@ -832,6 +927,17 @@ pub async fn list_series(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
     Query(query): Query<SeriesListQuery>,
+) -> Result<Response, ApiError> {
+    list_series_impl(state, auth, query, "/api/v1/series", true).await
+}
+
+#[allow(deprecated)] // still serves the deprecated `full` parameter
+async fn list_series_impl(
+    state: Arc<AuthState>,
+    auth: AuthContext,
+    query: SeriesListQuery,
+    base_path: &str,
+    link_full_param: bool,
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
 
@@ -927,8 +1033,7 @@ pub async fn list_series(
     } else {
         total.div_ceil(page_size)
     };
-    let mut link_builder =
-        PaginationLinkBuilder::new("/api/v1/series", page, page_size, total_pages);
+    let mut link_builder = PaginationLinkBuilder::new(base_path, page, page_size, total_pages);
     if let Some(library_id) = query.library_id {
         link_builder = link_builder.with_param("library_id", &library_id.to_string());
     }
@@ -941,7 +1046,9 @@ pub async fn list_series(
     if let Some(ref sort_str) = query.sort {
         link_builder = link_builder.with_param("sort", sort_str);
     }
-    if query.full {
+    // The dedicated route already means "full"; only the legacy query-parameter
+    // form needs it echoed back in the pagination links.
+    if link_full_param && query.full {
         link_builder = link_builder.with_param("full", "true");
     }
 
@@ -1085,7 +1192,75 @@ pub async fn list_series_external_index(
 pub struct SeriesGetQuery {
     /// Return full series data including metadata, locks, genres, tags, etc.
     #[serde(default)]
+    /// **Deprecated.** Prefer `GET /books/{book_id}/full` and
+    /// `GET /series/{series_id}/full`. A response whose schema depends on a
+    /// query parameter cannot be expressed in OpenAPI, so this form is
+    /// invisible to a generated client. Scheduled for removal in 3.0.
+    #[deprecated(
+        since = "2.2.0",
+        note = "use GET /books/{book_id}/full or GET /series/{series_id}/full; \
+a response shape that depends on a query parameter cannot be described in OpenAPI"
+    )]
     pub full: bool,
+}
+
+/// Get a series with its metadata, genres, tags and external links in one response
+///
+/// The same series `GET /api/v1/series/{series_id}` returns, plus the related
+/// data a detail screen needs, so it does not have to fan out into separate
+/// metadata, genre, tag, external-id, external-link and rating requests.
+///
+/// This exists as its own route because the shape is genuinely different, not
+/// merely richer: it carries `metadata`, `genres`, `tags`, `alternateTitles`,
+/// `externalIds`, `externalLinks`, `externalRatings`, `readCount` and
+/// `lastCompletedAt`, and it moves `title`, `titleSort`, `publisher`, `summary`
+/// and `year` inside `metadata`. A response whose schema depends on a query
+/// parameter cannot be expressed in OpenAPI, so the deprecated `?full=true`
+/// form is undescribable and unusable from a generated client. This route is
+/// describable.
+#[utoipa::path(
+    get,
+    path = "/api/v1/series/{series_id}/full",
+    params(
+        ("series_id" = Uuid, Path, description = "Series ID")
+    ),
+    responses(
+        (status = 200, description = "Series with its related data", body = FullSeriesResponse),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Series not found"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Series"
+)]
+pub async fn get_series_full(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(series_id): Path<Uuid>,
+) -> Result<Json<FullSeriesResponse>, ApiError> {
+    require_permission!(auth, Permission::SeriesRead)?;
+
+    let series = SeriesRepository::get_by_id(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
+
+    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+
+    if !content_filter.is_series_visible(series_id) {
+        return Err(ApiError::NotFound("Series not found".to_string()));
+    }
+
+    let full_dto = series_to_full_dtos_batched(&state.db, vec![series], Some(auth.user_id))
+        .await?
+        .into_iter()
+        .next()
+        .ok_or_else(|| ApiError::Internal("Failed to build full series DTO".to_string()))?;
+    Ok(Json(full_dto))
 }
 
 /// Get series by ID
@@ -1106,6 +1281,7 @@ pub struct SeriesGetQuery {
     ),
     tag = "Series"
 )]
+#[allow(deprecated)] // still serves the deprecated `full` parameter
 pub async fn get_series(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
@@ -1302,6 +1478,7 @@ pub async fn patch_series(
     ),
     tag = "Series"
 )]
+#[allow(deprecated)] // still serves the deprecated `full` parameter
 pub async fn search_series(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
@@ -1398,6 +1575,7 @@ pub async fn search_series(
     ),
     tag = "Series"
 )]
+#[allow(deprecated)] // still serves the deprecated `full` parameter
 pub async fn list_series_filtered(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
@@ -1736,6 +1914,7 @@ pub async fn list_series_alphabetical_groups(
     ),
     tag = "Series"
 )]
+#[allow(deprecated)] // still serves the deprecated `full` parameter
 pub async fn get_series_books(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
@@ -2244,6 +2423,15 @@ pub struct InProgressSeriesQuery {
 
     /// Return full series data including metadata, locks, genres, tags, etc.
     #[serde(default)]
+    /// **Deprecated.** Prefer `GET /books/{book_id}/full` and
+    /// `GET /series/{series_id}/full`. A response whose schema depends on a
+    /// query parameter cannot be expressed in OpenAPI, so this form is
+    /// invisible to a generated client. Scheduled for removal in 3.0.
+    #[deprecated(
+        since = "2.2.0",
+        note = "use GET /books/{book_id}/full or GET /series/{series_id}/full; \
+a response shape that depends on a query parameter cannot be described in OpenAPI"
+    )]
     pub full: bool,
 }
 
@@ -2262,6 +2450,7 @@ pub struct InProgressSeriesQuery {
     ),
     tag = "Series"
 )]
+#[allow(deprecated)] // still serves the deprecated `full` parameter
 pub async fn list_in_progress_series(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
@@ -2317,6 +2506,15 @@ pub struct RecentSeriesQuery {
 
     /// Return full series data including metadata, locks, genres, tags, etc.
     #[serde(default)]
+    /// **Deprecated.** Prefer `GET /books/{book_id}/full` and
+    /// `GET /series/{series_id}/full`. A response whose schema depends on a
+    /// query parameter cannot be expressed in OpenAPI, so this form is
+    /// invisible to a generated client. Scheduled for removal in 3.0.
+    #[deprecated(
+        since = "2.2.0",
+        note = "use GET /books/{book_id}/full or GET /series/{series_id}/full; \
+a response shape that depends on a query parameter cannot be described in OpenAPI"
+    )]
     pub full: bool,
 }
 
@@ -2339,6 +2537,7 @@ fn default_recent_limit() -> u64 {
     ),
     tag = "Series"
 )]
+#[allow(deprecated)] // still serves the deprecated `full` parameter
 pub async fn list_recently_added_series(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
@@ -2396,6 +2595,7 @@ pub async fn list_recently_added_series(
     ),
     tag = "Series"
 )]
+#[allow(deprecated)] // still serves the deprecated `full` parameter
 pub async fn list_library_recently_added_series(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
@@ -2451,6 +2651,7 @@ pub async fn list_library_recently_added_series(
     ),
     tag = "Series"
 )]
+#[allow(deprecated)] // still serves the deprecated `full` parameter
 pub async fn list_recently_updated_series(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
@@ -2507,6 +2708,7 @@ pub async fn list_recently_updated_series(
     ),
     tag = "Series"
 )]
+#[allow(deprecated)] // still serves the deprecated `full` parameter
 pub async fn list_library_recently_updated_series(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
@@ -2564,6 +2766,7 @@ pub async fn list_library_recently_updated_series(
     ),
     tag = "Series"
 )]
+#[allow(deprecated)] // still serves the deprecated `full` parameter
 pub async fn list_library_series(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
@@ -2655,6 +2858,15 @@ pub async fn list_library_series(
 pub struct LibraryInProgressSeriesQuery {
     /// Return full series data including metadata, locks, genres, tags, etc.
     #[serde(default)]
+    /// **Deprecated.** Prefer `GET /books/{book_id}/full` and
+    /// `GET /series/{series_id}/full`. A response whose schema depends on a
+    /// query parameter cannot be expressed in OpenAPI, so this form is
+    /// invisible to a generated client. Scheduled for removal in 3.0.
+    #[deprecated(
+        since = "2.2.0",
+        note = "use GET /books/{book_id}/full or GET /series/{series_id}/full; \
+a response shape that depends on a query parameter cannot be described in OpenAPI"
+    )]
     pub full: bool,
 }
 
@@ -2676,6 +2888,7 @@ pub struct LibraryInProgressSeriesQuery {
     ),
     tag = "Series"
 )]
+#[allow(deprecated)] // still serves the deprecated `full` parameter
 pub async fn list_library_in_progress_series(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,

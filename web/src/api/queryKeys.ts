@@ -13,7 +13,7 @@ export const bookKeys = {
   /** Basic detail shape: `{ book, metadata }` from `getDetail(id)`. */
   detail: (bookId: string | undefined) => ["books", bookId, "detail"] as const,
   /**
-   * Full flat detail shape from `getDetail(id, { full: true })`. Kept as a
+   * Full flat detail shape from `getFull(id)`. Kept as a
    * distinct key: the two shapes must never share a cache entry, or whichever
    * query runs first poisons the other's reads.
    */

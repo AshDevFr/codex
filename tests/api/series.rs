@@ -1045,6 +1045,7 @@ async fn test_get_series_not_found() {
 // ============================================================================
 
 #[tokio::test]
+#[allow(deprecated)] // exercises the deprecated `full` parameter
 async fn test_search_series_by_name() {
     let (db, _temp_dir) = setup_test_db().await;
 
@@ -1083,6 +1084,7 @@ async fn test_search_series_by_name() {
 }
 
 #[tokio::test]
+#[allow(deprecated)] // exercises the deprecated `full` parameter
 async fn test_search_series_no_results() {
     let (db, _temp_dir) = setup_test_db().await;
 
@@ -1114,6 +1116,7 @@ async fn test_search_series_no_results() {
 }
 
 #[tokio::test]
+#[allow(deprecated)] // exercises the deprecated `full` parameter
 async fn test_search_series_without_auth() {
     let (db, _temp_dir) = setup_test_db().await;
     let state = create_test_auth_state(db).await;
@@ -5251,6 +5254,7 @@ async fn test_list_series_filtered_with_full() {
 }
 
 #[tokio::test]
+#[allow(deprecated)] // exercises the deprecated `full` parameter
 async fn test_search_series_with_full() {
     use codex::api::routes::v1::dto::series::FullSeriesResponse;
 
@@ -7961,4 +7965,129 @@ async fn test_list_series_single_library_is_condition_unchanged() {
     let series_list = response.unwrap();
     assert_eq!(series_list.data.len(), 1);
     assert_eq!(series_list.data[0].title, "Lib1 Series");
+}
+
+// ============================================================================
+// GET /api/v1/series/full
+// ============================================================================
+
+/// The dedicated listing must return exactly what `?full=true` returns. Shisho
+/// pages this query across a whole library for its candidate pools, so a
+/// difference here would be a silent data change for it, not just a shape one.
+#[tokio::test]
+async fn full_series_listing_matches_the_deprecated_full_query_parameter() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
+    for name in ["Alpha", "Beta", "Gamma"] {
+        SeriesRepository::create(&db, library.id, name, None)
+            .await
+            .unwrap();
+    }
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    let (route_status, route_body): (StatusCode, Option<serde_json::Value>) = make_json_request(
+        create_test_router(state.clone()).await,
+        get_request_with_auth("/api/v1/series/full?page=1&pageSize=50", &token),
+    )
+    .await;
+    let (query_status, query_body): (StatusCode, Option<serde_json::Value>) = make_json_request(
+        create_test_router(state).await,
+        get_request_with_auth("/api/v1/series?full=true&page=1&pageSize=50", &token),
+    )
+    .await;
+
+    assert_eq!(route_status, StatusCode::OK);
+    assert_eq!(query_status, StatusCode::OK);
+
+    let route = route_body.expect("route body");
+    let query = query_body.expect("query body");
+    assert_eq!(
+        route["data"], query["data"],
+        "the dedicated listing must carry the same series as ?full=true"
+    );
+    assert_eq!(route["total"], query["total"]);
+
+    // The pagination links differ on purpose: the route means "full", so it must
+    // not echo the parameter it replaces.
+    let links = route["links"].as_object().expect("links");
+    for (rel, link) in links {
+        if let Some(href) = link.as_str() {
+            assert!(
+                !href.contains("full=true"),
+                "{rel} link should not carry full=true: {href}"
+            );
+            assert!(
+                href.contains("/api/v1/series/full"),
+                "{rel} link should point at the dedicated route: {href}"
+            );
+        }
+    }
+}
+
+/// Full listing entries must carry the related data that makes the route worth
+/// having, so this cannot pass against the plain `SeriesDto` page.
+#[tokio::test]
+async fn full_series_listing_entries_carry_their_related_data() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
+    SeriesRepository::create(&db, library.id, "Alpha", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let (status, body): (StatusCode, Option<serde_json::Value>) = make_json_request(
+        create_test_router(state).await,
+        get_request_with_auth("/api/v1/series/full", &token),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    let entry = &body.expect("body")["data"][0];
+    for field in [
+        "metadata",
+        "genres",
+        "tags",
+        "externalIds",
+        "externalLinks",
+        "externalRatings",
+        "alternateTitles",
+    ] {
+        assert!(
+            entry.get(field).is_some(),
+            "full series listing entry is missing {field}"
+        );
+    }
+}
+
+/// `/series/full` sits in the same path slot as `/series/{series_id}`, alongside
+/// `/series/external-index` and the other static siblings. This pins that the
+/// literal route wins, so it cannot start being read as a series id.
+#[tokio::test]
+async fn the_full_listing_route_is_not_shadowed_by_the_series_id_route() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    let (status, body): (StatusCode, Option<serde_json::Value>) = make_json_request(
+        create_test_router(state).await,
+        get_request_with_auth("/api/v1/series/full", &token),
+    )
+    .await;
+
+    // A series id lookup for the literal "full" would be a 400 (bad uuid) or a
+    // 404, never a page.
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        body.expect("body").get("data").is_some(),
+        "expected the paginated listing, not a series lookup"
+    );
 }

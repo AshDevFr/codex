@@ -32,6 +32,8 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
         .route("/books/list", post(handlers::list_books_filtered))
         .route("/books/{book_id}", get(handlers::get_book))
         .route("/books/{book_id}", patch(handlers::patch_book))
+        // Describable alternative to the deprecated `?full=true`.
+        .route("/books/{book_id}/full", get(handlers::get_book_full))
         .route(
             "/books/{book_id}/adjacent",
             get(handlers::get_adjacent_books),

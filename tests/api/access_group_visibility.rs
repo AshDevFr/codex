@@ -428,6 +428,7 @@ async fn test_recently_added_series_hides_denied() {
 }
 
 #[tokio::test]
+#[allow(deprecated)] // exercises the deprecated `full` parameter
 async fn test_search_series_endpoint_hides_denied() {
     use codex::api::routes::v1::dto::series::SearchSeriesRequest;
 
