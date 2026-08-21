@@ -168,11 +168,13 @@ The following paths are exempt from rate limiting:
 
         // Series endpoints
         v1::handlers::list_series,
+        v1::handlers::list_series_full,
         v1::handlers::search_series,
         v1::handlers::list_series_filtered,
         v1::handlers::list_series_external_index,
         v1::handlers::list_series_alphabetical_groups,
         v1::handlers::get_series,
+        v1::handlers::get_series_full,
         v1::handlers::patch_series,
         v1::handlers::get_series_books,
         v1::handlers::purge_series_deleted_books,
@@ -303,6 +305,7 @@ The following paths are exempt from rate limiting:
         v1::handlers::list_books,
         v1::handlers::list_books_filtered,
         v1::handlers::get_book,
+        v1::handlers::get_book_full,
         v1::handlers::patch_book,
         v1::handlers::get_adjacent_books,
         v1::handlers::get_book_file,
@@ -963,6 +966,7 @@ The following paths are exempt from rate limiting:
             v1::dto::CreateApiKeyResponse,
             v1::dto::UpdateApiKeyRequest,
             v1::dto::PaginatedResponse<v1::dto::SeriesDto>,
+            v1::dto::PaginatedResponse<v1::dto::FullSeriesResponse>,
             v1::dto::PaginatedResponse<v1::dto::BookDto>,
             v1::dto::PaginatedResponse<v1::dto::UserDto>,
             v1::dto::PaginatedResponse<v1::dto::SeriesExternalIndexDto>,
@@ -1313,7 +1317,13 @@ The following paths are exempt from rate limiting:
         // Third-Party Compatibility
         (name = "Komga", description = "Komga-compatible API for third-party apps (Komic, etc.)"),
     ),
-    modifiers(&SecurityAddon, &OperationIdPrefixer, &TagGroupsModifier, &NullableRefFlattener),
+    modifiers(
+        &SecurityAddon,
+        &OperationIdPrefixer,
+        &TagGroupsModifier,
+        &NullableRefFlattener,
+        &GenericArgumentReferencer,
+    ),
 )]
 pub struct ApiDoc;
 
@@ -1367,6 +1377,120 @@ impl utoipa::Modify for SecurityAddon {
 /// is left in place: that is an API design problem (the endpoint should answer
 /// `204 No Content`) and hiding it here would make the document claim a body
 /// that the server may not send.
+/// Make a generic instantiation reference its type argument instead of
+/// expanding it inline.
+///
+/// utoipa renders `PaginatedResponse<SeriesDto>` by inlining `SeriesDto`'s
+/// schema into `data.items`, even though `SeriesDto` is registered as its own
+/// component. The document is correct either way, but every generator that has
+/// to name an inline schema invents a fresh type for it:
+/// `swift-openapi-generator` produces
+/// `PaginatedResponseSeriesDto.DataPayloadPayload` where `getSeries` produces
+/// `SeriesDto`. The two are structurally identical and not interchangeable, so
+/// a client needs a hand-written conversion for every paginated endpoint.
+///
+/// This walks each `Base_Argument` component and replaces any subschema that is
+/// byte-identical to `Argument`'s own component with a `$ref` to it. Requiring
+/// an exact match is what makes the rewrite safe: it can only ever collapse a
+/// copy of a schema the document already contains under that name, so nothing
+/// about the described wire format changes.
+///
+/// It is not specific to pagination — `KomgaPage<T>` and any future generic get
+/// the same treatment.
+struct GenericArgumentReferencer;
+
+impl utoipa::Modify for GenericArgumentReferencer {
+    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        let Some(components) = openapi.components.as_mut() else {
+            return;
+        };
+
+        let known: std::collections::BTreeMap<String, serde_json::Value> = components
+            .schemas
+            .iter()
+            .filter_map(|(name, schema)| {
+                serde_json::to_value(schema).ok().map(|v| (name.clone(), v))
+            })
+            .collect();
+
+        for (name, schema) in components.schemas.iter_mut() {
+            // `Base_Argument` is the shape utoipa emits for a concrete
+            // instantiation of a generic.
+            let Some((_, argument)) = name.split_once('_') else {
+                continue;
+            };
+            if argument == name {
+                continue;
+            }
+            let Some(target) = known.get(argument) else {
+                continue;
+            };
+            reference_argument(schema, argument, target);
+        }
+    }
+}
+
+fn reference_argument(
+    schema: &mut utoipa::openapi::RefOr<utoipa::openapi::Schema>,
+    argument: &str,
+    target: &serde_json::Value,
+) {
+    use utoipa::openapi::{Ref, RefOr};
+
+    if matches!(schema, RefOr::T(_)) && serde_json::to_value(&*schema).ok().as_ref() == Some(target)
+    {
+        *schema = RefOr::Ref(Ref::from_schema_name(argument));
+        return;
+    }
+    reference_argument_children(schema, argument, target);
+}
+
+fn reference_argument_children(
+    schema: &mut utoipa::openapi::RefOr<utoipa::openapi::Schema>,
+    argument: &str,
+    target: &serde_json::Value,
+) {
+    use utoipa::openapi::{RefOr, Schema, schema::AdditionalProperties};
+
+    let RefOr::T(schema) = schema else {
+        return;
+    };
+
+    match schema {
+        Schema::Object(object) => {
+            for (_, property) in object.properties.iter_mut() {
+                reference_argument(property, argument, target);
+            }
+            if let Some(additional) = object.additional_properties.as_deref_mut()
+                && let AdditionalProperties::RefOr(value) = additional
+            {
+                reference_argument(value, argument, target);
+            }
+        }
+        Schema::Array(array) => {
+            if let utoipa::openapi::schema::ArrayItems::RefOrSchema(items) = &mut array.items {
+                reference_argument(items, argument, target);
+            }
+        }
+        Schema::OneOf(one_of) => {
+            for item in one_of.items.iter_mut() {
+                reference_argument(item, argument, target);
+            }
+        }
+        Schema::AllOf(all_of) => {
+            for item in all_of.items.iter_mut() {
+                reference_argument(item, argument, target);
+            }
+        }
+        Schema::AnyOf(any_of) => {
+            for item in any_of.items.iter_mut() {
+                reference_argument(item, argument, target);
+            }
+        }
+        _ => {}
+    }
+}
+
 struct NullableRefFlattener;
 
 impl utoipa::Modify for NullableRefFlattener {
