@@ -11,7 +11,7 @@
 //! Default allowed commands: `node`, `npx`, `python`, `python3`, `uv`, `uvx`
 //!
 //! Custom commands can be added via:
-//! - `CODEX_PLUGIN_ALLOWED_COMMANDS` env var (comma-separated list)
+//! - the `plugins.allowed_commands` setting (`CODEX_PLUGINS__ALLOWED_COMMANDS='[deno, bun]'`)
 //! - Absolute paths starting with `/opt/codex/plugins/` are always allowed
 //!
 //! Note: Some builder methods and error variants are part of the complete API

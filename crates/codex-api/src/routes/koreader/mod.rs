@@ -15,7 +15,7 @@
 //! Or via environment variable:
 //!
 //! ```bash
-//! CODEX_KOREADER_API_ENABLED=true
+//! CODEX_KOREADER_API__ENABLED=true
 //! ```
 //!
 //! ## Endpoints

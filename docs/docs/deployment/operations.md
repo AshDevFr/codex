@@ -243,16 +243,33 @@ git push -u origin main
 ```
 
 :::danger Secrets in Configuration
-Never commit secrets (JWT secret, database passwords) to version control. Use environment variables for sensitive values:
+Never commit secrets (JWT secret, database passwords) to version control.
+
+Config files are **not** interpolated: `jwt_secret: ${JWT_SECRET}` stores that
+literal string as the secret. Keep secrets out of the committed file and supply
+them one of two ways.
+
+From the environment, which overrides the file:
+
+```bash
+CODEX_AUTH__JWT_SECRET=...
+CODEX_DATABASE__POSTGRES__PASSWORD=...
+CODEX_ENCRYPTION_KEY=...
+```
+
+Or from a local overlay beside the config file, merged on top of it and left
+out of version control:
 
 ```yaml
-# codex.yaml - reference environment variables
+# codex.local.yaml - never committed
 auth:
-  jwt_secret: ${JWT_SECRET}
+  jwt_secret: "the-real-secret"
 database:
   postgres:
-    password: ${DB_PASSWORD}
+    password: "the-real-password"
 ```
+
+Add `codex.local.yaml` to the backup repository's `.gitignore`.
 :::
 
 ### Automated Backups

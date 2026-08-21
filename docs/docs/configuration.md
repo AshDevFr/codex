@@ -7,28 +7,102 @@ Codex uses YAML configuration files with environment variable overrides. This gu
 
 ## Configuration File
 
-Codex looks for configuration in the following order:
-
-1. Path specified via `--config` flag
-2. `codex.yaml` in the current directory
-3. Default values
+Every subcommand reads `config/codex.yaml` unless `--config` points somewhere
+else:
 
 ```bash
-codex serve --config /path/to/codex.yaml
+codex serve                              # config/codex.yaml
+codex serve --config /etc/codex/codex.yaml
 ```
+
+The file may be YAML or TOML; the format is chosen from the extension, and
+anything that is not `.toml` is read as YAML.
+
+A missing file is not an error. Defaults plus environment variables are a
+complete configuration on their own, which is what a container with no mounted
+file relies on.
+
+Codex does **not** write a config file at startup. To get a commented starter:
+
+```bash
+codex config init                        # writes config/codex.yaml
+codex config init -c /etc/codex/codex.yaml
+codex config init --force                # replace an existing file
+```
+
+### Local overlay
+
+A sibling `<stem>.local.<ext>` file is merged on top of the base file when it
+exists: `codex.yaml` picks up `codex.local.yaml`, `codex.toml` picks up
+`codex.local.toml`. Use it to pin secrets and per-host tweaks without editing
+the file you commit.
+
+The merge is key by key, so the overlay only needs the keys it changes. One
+exception: a list in the overlay **replaces** the base list rather than
+extending it.
+
+```yaml
+# config/codex.local.yaml
+auth:
+  jwt_secret: "the-real-secret"
+database:
+  postgres:
+    password: "the-real-password"
+```
+
+:::note No variable interpolation
+Config files are read literally. `${JWT_SECRET}` in a YAML value is the
+literal string `${JWT_SECRET}`, not the environment variable. To pull a
+value from the environment, set the matching `CODEX_*` variable (see
+[Environment Variables](#environment-variables)) or use a local overlay
+rendered by your deployment tooling.
+:::
 
 ## Configuration Priority
 
-Settings can come from multiple sources, with this priority (highest to lowest):
+Settings are layered, with later sources overriding earlier ones:
 
-1. **Environment variables** (override everything)
-2. **Configuration file** (YAML)
-3. **Database settings** (runtime-configurable options)
-4. **Hardcoded defaults** (fallback)
+1. **Built-in defaults**
+2. **Configuration file** (`config/codex.yaml` or `--config`)
+3. **Local overlay** (`config/codex.local.yaml`)
+4. **Environment variables** (`CODEX_*`, highest priority)
+
+A handful of settings live in the database instead and are changed through the
+admin UI or the settings API without a restart. See [Runtime vs Startup
+Settings](#runtime-vs-startup-settings).
 
 ## Database Configuration
 
 Codex supports both SQLite and PostgreSQL databases.
+
+### Migration control
+
+```yaml
+database:
+  run_migrations: true              # Apply pending migrations at startup
+  migration_wait_timeout_secs: 300  # When false, how long to wait for them
+  migration_wait_interval_secs: 2   # How often to re-check
+```
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `run_migrations` | `true` | Apply pending migrations when the process starts |
+| `migration_wait_timeout_secs` | `300` | With `run_migrations: false`, how long to wait for the schema to become current before giving up |
+| `migration_wait_interval_secs` | `2` | Poll interval while waiting |
+
+A single-process deployment can leave these alone. Run more than one process
+against the same database and they race on a version bump: one applies a
+migration, the rest abort on the object it just created. Set
+`run_migrations: false` on every `serve` and `worker` process, and apply the
+schema once from a dedicated `codex migrate` job. `codex migrate` applies
+migrations unconditionally and ignores this setting, so it can share the same
+environment.
+
+:::warning Renamed in Codex 2.0
+This replaces `CODEX_SKIP_MIGRATIONS`, with the **opposite** sense:
+`SKIP_MIGRATIONS=true` becomes `CODEX_DATABASE__RUN_MIGRATIONS=false`. The old
+name is no longer read. See the [upgrade guide](./migration/v2-config.md).
+:::
 
 :::tip
 For detailed database setup instructions including installation, user creation, and troubleshooting, see the [Database Setup guide](./deployment/database).
@@ -91,6 +165,7 @@ database:
 | `max_lifetime_seconds` | `1800` | Maximum connection lifetime (30 min) |
 | `batch_fan_out` | `4` | Max related-table queries one request runs at once |
 | `background_max_connections` | `4` | Connections for the in-process background pool |
+| `operation_deadline_seconds` | `30` | Maximum time one operation may hold a connection before timing out |
 
 :::tip SQLite Pool Sizing
 SQLite with WAL mode handles concurrent reads well, but writes are serialized. Connections are cheap file handles under WAL, so the default of 64 gives headroom for many concurrent readers (e.g. multiple browser tabs).
@@ -119,6 +194,7 @@ database:
     max_lifetime_seconds: 3600   # Max connection lifetime (default: 3600 = 1 hour)
     batch_fan_out: 8           # Per-request query fan-out bound (default: 8)
     background_max_connections: 16  # Background-work pool size (default: 16)
+    operation_deadline_seconds: 30  # Max time one operation may hold a connection
 ```
 
 :::warning PostgreSQL connection budget
@@ -178,11 +254,25 @@ variables they carry no `CODEX_` prefix and do not appear in `codex config
 check`.
 :::
 
+## Data Directory
+
+```yaml
+data_dir: data
+```
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `data_dir` | `data` | Base directory for Codex's own state |
+
+`database.sqlite.path`, `files.thumbnail_dir`, `files.uploads_dir`,
+`files.plugins_dir` and `pdf.cache_dir` default to subdirectories of
+`data_dir`, so pointing `data_dir` at a mounted volume moves all of them at
+once. Setting any of those keys yourself wins and is used exactly as written.
+
 ## Application Configuration
 
 ```yaml
 application:
-  name: Codex           # Server name (displayed in UI)
   host: 0.0.0.0         # Bind address (0.0.0.0 for all interfaces)
   port: 8080            # Server port
   base_url: https://codex.example.com  # Public-facing URL (optional)
@@ -190,10 +280,15 @@ application:
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `name` | `Codex` | Server display name |
-| `host` | `127.0.0.1` | Bind address |
+| `host` | `0.0.0.0` | Bind address |
 | `port` | `8080` | HTTP port |
 | `base_url` | *(none)* | Public-facing URL (e.g., `https://codex.example.com`). Used as fallback for OIDC redirect URIs and email verification links. If not set, falls back to `http://{host}:{port}`. |
+
+:::note The server display name is not a config key
+The name shown in the UI is a database setting, changed through the admin
+settings UI or `/api/v1/admin/settings`. An `application.name` key in the
+config file is not a setting and is ignored.
+:::
 
 ## Authentication Configuration
 
@@ -207,6 +302,7 @@ auth:
   argon2_memory_cost: 19456
   argon2_time_cost: 2
   argon2_parallelism: 1
+  # cookie_secure: true   # Send `Secure` on auth cookies (set this behind TLS)
 ```
 
 | Setting | Default | Description |
@@ -219,6 +315,7 @@ auth:
 | `argon2_memory_cost` | `19456` | Argon2 memory cost (KiB) |
 | `argon2_time_cost` | `2` | Argon2 iterations |
 | `argon2_parallelism` | `1` | Argon2 parallelism |
+| `cookie_secure` | `false` | Send the `Secure` attribute on auth cookies. Off by default so plain-HTTP development works; **set it to `true` on any deployment that terminates TLS**, or the session cookie is also sent over a plaintext downgrade. |
 
 :::danger JWT Secret
 **Always change the JWT secret in production!** Generate a secure random string:
@@ -280,6 +377,8 @@ auth:
 | `oidc.auto_create_users` | `true` | Create users on first OIDC login |
 | `oidc.default_role` | `reader` | Default role when no groups match |
 | `oidc.redirect_uri_base` | auto-detected | Override base URL for OAuth callbacks. Falls back to `application.base_url`. |
+| `oidc.allowed_redirect_uris` | `[]` | Exact post-login redirect targets to accept (e.g. `codexreader://auth`), for native and desktop clients. Compared as whole strings, and an empty list permits none. |
+| `oidc.providers` | `{}` | Provider blocks, keyed by the name used in the callback URL. |
 
 See [OIDC / Single Sign-On](./users/oidc) for full setup instructions and provider guides.
 
@@ -287,17 +386,22 @@ See [OIDC / Single Sign-On](./users/oidc) for full setup instructions and provid
 
 ```yaml
 api:
+  base_path: /api/v1
   enable_api_docs: false
   api_docs_path: "/docs"
   cors_enabled: true
+  cors_origins:
+    - "*"
   max_page_size: 100
 ```
 
 | Setting | Default | Description |
 |---------|---------|-------------|
+| `base_path` | `/api/v1` | Path prefix reported for the native API. Informational: the routes are mounted at `/api/v1` regardless. |
 | `enable_api_docs` | `false` | Enable API documentation (Scalar) |
 | `api_docs_path` | `/docs` | API documentation URL path |
 | `cors_enabled` | `true` | Enable CORS |
+| `cors_origins` | `["*"]` | Allowed origins when CORS is enabled. Narrow this in production. |
 | `max_page_size` | `100` | Maximum items per page |
 
 ## Logging Configuration
@@ -305,12 +409,14 @@ api:
 ```yaml
 logging:
   level: info
+  console: true
   # file: ./logs/codex.log  # Uncomment to enable file logging
 ```
 
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `level` | `info` | Log level: `error`, `warn`, `info`, `debug`, `trace` |
+| `console` | `true` | Write logs to stdout. Set to `false` when only the log file matters. |
 | `file` | None | Optional log file path |
 
 ## Task Worker Configuration
@@ -319,12 +425,24 @@ These settings require a restart to take effect.
 
 ```yaml
 task:
-  worker_count: 4
+  run_in_process: true
+  worker_count: 2
 ```
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `worker_count` | `4` | Number of parallel background workers |
+| `run_in_process` | `true` | Run background task workers inside this process |
+| `worker_count` | `2` | Number of parallel background workers |
+
+:::tip Splitting web from workers
+A multi-pod deployment runs the web server with `run_in_process: false` (or
+`CODEX_TASK__RUN_IN_PROCESS=false`) and puts the workers in their own
+`codex worker` pods, so a scan burst cannot slow down interactive requests.
+The scheduler still runs in every `serve` process regardless of this setting.
+
+This replaces the `CODEX_DISABLE_WORKERS` variable from 1.x, with the **opposite**
+sense. See the [2.0 upgrade guide](./migration/v2-config.md).
+:::
 
 ## Scanner Configuration
 
@@ -338,6 +456,21 @@ scanner:
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `max_concurrent_scans` | `2` | Maximum concurrent library scans |
+
+## Image Decoding
+
+```yaml
+images:
+  decode_concurrency: 3
+```
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `decode_concurrency` | `3` | Maximum image decodes running at once |
+
+Decoding is CPU- and memory-hungry, so this caps how many pages or covers are
+decoded in parallel across the whole process. Raise it on a machine with cores
+to spare; lower it if thumbnail generation is crowding out request handling.
 
 ## Scheduler Configuration
 
@@ -372,12 +505,14 @@ Configuration for file storage directories (thumbnails and uploads).
 files:
   thumbnail_dir: data/thumbnails
   uploads_dir: data/uploads
+  plugins_dir: data/plugins
 ```
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `thumbnail_dir` | `data/thumbnails` | Directory for thumbnail cache |
-| `uploads_dir` | `data/uploads` | Directory for user-uploaded files (covers, etc.) |
+| `thumbnail_dir` | `{data_dir}/thumbnails` | Directory for thumbnail cache |
+| `uploads_dir` | `{data_dir}/uploads` | Directory for user-uploaded files (covers, etc.) |
+| `plugins_dir` | `{data_dir}/plugins` | Directory installed plugins are unpacked into |
 
 Additional thumbnail settings are stored in the database and can be changed via the Settings API without restart:
 - `thumbnail_max_dimension` - Maximum width/height (default: 400px)
@@ -385,10 +520,32 @@ Additional thumbnail settings are stored in the database and can be changed via 
 
 ## Plugins Configuration
 
-Plugins run with the log level the host is using. There is no separate
-`plugins` section: the level comes from [`logging.level`](#logging-configuration),
-and `trace` is delivered to plugins as `debug` (the plugin SDK logger has no
-`trace` level).
+```yaml
+plugins:
+  allowed_commands:
+    - deno
+```
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `allowed_commands` | `[]` | Extra commands a plugin may be launched with, on top of the built-in allowlist |
+
+Plugin processes are only started via an allowlisted command, so a compromised
+admin account cannot turn plugin installation into arbitrary command execution.
+`node`, `npx`, `python`, `python3`, `uv` and `uvx` are always allowed, as are
+absolute paths under the plugins directory. `allowed_commands` adds to that
+list; it does not replace it.
+
+Set it in the config file, or as
+`CODEX_PLUGINS__ALLOWED_COMMANDS='[deno, bun]'`. In 1.x this was
+`CODEX_PLUGIN_ALLOWED_COMMANDS` (singular, comma-separated), which is no longer
+read.
+
+### Plugin log level
+
+Plugins run with the log level the host is using. It comes from
+[`logging.level`](#logging-configuration), and `trace` is delivered to plugins
+as `debug` (the plugin SDK logger has no `trace` level).
 
 The host sends the level to every plugin in the `initialize` message; the
 plugin SDK applies it to its own logger and exposes it so each plugin can adopt
@@ -587,6 +744,22 @@ You can change the URL prefix to avoid conflicts or for preference. For example,
 - **No oneshot detection**: The `oneshot` field is always omitted from responses
 
 For more details, see the [Third-Party Apps documentation](./third-party-apps).
+
+## KOReader Sync API (Optional)
+
+Codex can serve the KOReader progress-sync endpoints, so a KOReader device
+syncs reading position against Codex instead of a separate sync server.
+
+```yaml
+koreader_api:
+  enabled: true
+```
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `enabled` | `false` | Expose the KOReader sync endpoints |
+
+See [Third-Party Apps](./third-party-apps) for device-side setup.
 
 ## Rate Limiting
 
@@ -791,7 +964,7 @@ observability:
 |---------|---------|--------------|-------------|
 | `endpoint` | `""` | `CODEX_OBSERVABILITY__OTLP__ENDPOINT` | Collector URL. Required when `enabled: true`. |
 | `protocol` | `grpc` | `CODEX_OBSERVABILITY__OTLP__PROTOCOL` | One of `grpc`, `http/protobuf`, `http/json`. |
-| `headers` | `{}` | `CODEX_OBSERVABILITY__OTLP__HEADERS` | Map of arbitrary headers. Env format: `k1=v1,k2=v2`. |
+| `headers` | `{}` | `CODEX_OBSERVABILITY__OTLP__HEADERS` | Map of arbitrary headers. Env format: `'{k1=v1, k2=v2}'`; quote any value containing a space or comma. |
 | `timeout_ms` | `5000` | `CODEX_OBSERVABILITY__OTLP__TIMEOUT_MS` | Per-export request timeout. |
 
 :::tip Endpoint format
@@ -856,6 +1029,15 @@ the [upgrade guide](./migration/v2-config.md).
 | `auth.jwt_secret` | `CODEX_AUTH__JWT_SECRET` |
 | `logging.level` | `CODEX_LOGGING__LEVEL` |
 | `scheduler.timezone` | `CODEX_SCHEDULER__TIMEZONE` |
+| `pdf_handle_cache.capacity` | `CODEX_PDF_HANDLE_CACHE__CAPACITY` |
+| `auth.oidc.providers.authentik.issuer_url` | `CODEX_AUTH__OIDC__PROVIDERS__AUTHENTIK__ISSUER_URL` |
+
+Note the last two: `pdf_handle_cache` and `issuer_url` are single keys whose
+names contain `_`, so only the level boundaries double up.
+
+A variable that does not name a real setting is ignored, which is silent and
+hard to spot. Run [`codex config check`](#checking-your-configuration) to have
+every `CODEX_*` variable classified against the real key list.
 
 ### Common Environment Variables
 
@@ -868,32 +1050,56 @@ CODEX_DATABASE__POSTGRES__USERNAME=codex
 CODEX_DATABASE__POSTGRES__PASSWORD=secret
 CODEX_DATABASE__POSTGRES__DATABASE_NAME=codex
 
+CODEX_DATABASE__POSTGRES__SSL_MODE=verify-full
+CODEX_DATABASE__POSTGRES__SSL_ROOT_CERT=/etc/ssl/certs/postgres-ca.crt
+
+# Migrations (false = wait for a separate `codex migrate` job)
+CODEX_DATABASE__RUN_MIGRATIONS=false
+CODEX_DATABASE__MIGRATION_WAIT_TIMEOUT_SECS=300
+CODEX_DATABASE__MIGRATION_WAIT_INTERVAL_SECS=2
+
+# Data directory (thumbnails, uploads, plugins, caches default under it)
+CODEX_DATA_DIR=/var/lib/codex
+
 # Application
 CODEX_APPLICATION__HOST=0.0.0.0
 CODEX_APPLICATION__PORT=8080
+CODEX_APPLICATION__BASE_URL=https://library.example.com
 
 # Authentication
 CODEX_AUTH__JWT_SECRET=your-secure-secret-key
+CODEX_AUTH__COOKIE_SECURE=true
 
 # Logging
 CODEX_LOGGING__LEVEL=debug
+CODEX_LOGGING__CONSOLE=true
 CODEX_LOGGING__FILE=/var/log/codex/codex.log
 
 # API
 CODEX_API__ENABLE_API_DOCS=true
+CODEX_API__CORS_ENABLED=true
+CODEX_API__CORS_ORIGINS='[https://library.example.com]'
 
-# Task Workers
+# Task Workers (RUN_IN_PROCESS=false for a web pod with separate workers)
+CODEX_TASK__RUN_IN_PROCESS=true
 CODEX_TASK__WORKER_COUNT=4
 
 # Scanner
 CODEX_SCANNER__MAX_CONCURRENT_SCANS=2
 
+# Image decoding
+CODEX_IMAGES__DECODE_CONCURRENCY=3
+
+# Plugins
+CODEX_PLUGINS__ALLOWED_COMMANDS='[deno, bun]'
+
 # Scheduler
 CODEX_SCHEDULER__TIMEZONE=America/Los_Angeles
 
-# Files (thumbnails and uploads)
+# Files (thumbnails, uploads and plugins)
 CODEX_FILES__THUMBNAIL_DIR=data/thumbnails
 CODEX_FILES__UPLOADS_DIR=data/uploads
+CODEX_FILES__PLUGINS_DIR=data/plugins
 
 # PDF Rendering
 # CODEX_PDF__PDFIUM_LIBRARY_PATH=/usr/local/lib/libpdfium.so  # Optional, auto-detected
@@ -911,6 +1117,9 @@ CODEX_PDF_HANDLE_CACHE__SWEEP_INTERVAL_SECONDS=60
 # Komga-Compatible API
 CODEX_KOMGA_API__ENABLED=true
 CODEX_KOMGA_API__PREFIX=komga
+
+# KOReader Sync API
+CODEX_KOREADER_API__ENABLED=true
 
 # Plugin Credential Encryption
 CODEX_ENCRYPTION_KEY=your-base64-encoded-32-byte-key
@@ -951,7 +1160,7 @@ These settings are stored in the database and can be changed via `/api/v1/admin/
 
 - Thumbnail max dimension
 - Thumbnail JPEG quality
-- Application name
+- Application name (the display name in the UI; not a config-file key)
 - Logging level
 - Fuzzy search rollout flag (`search.fuzzy.enabled`)
 
@@ -968,17 +1177,20 @@ rebuild.
 
 ### Startup-Time (Restart Required)
 
-These settings are read from the config file at startup:
+Everything in the config file and the `CODEX_*` environment is read once, at
+startup. That includes:
 
-- Database connection settings
-- Task worker count
+- Database connection and pool settings, and migration behaviour
+- Task worker count and whether workers run in-process
 - Scanner concurrent scan limit
-- Thumbnail cache directory
-- JWT secret
-- Server host/port
+- Data directory and the thumbnail / uploads / plugins directories
+- JWT secret and cookie flags
+- Server host/port and base URL
+- OIDC providers
 - PDF rendering settings (DPI, cache directory, PDFium library path)
 - Rate limiting settings
-- Plugin encryption key (`CODEX_ENCRYPTION_KEY`)
+- Observability settings
+- Plugin allowlist and encryption key (`CODEX_ENCRYPTION_KEY`)
 
 ## Example Configurations
 
@@ -1007,11 +1219,11 @@ database:
     host: db.example.com
     port: 5432
     username: codex
-    password: ${DB_PASSWORD}
     database_name: codex
+    ssl_mode: verify-full
+    ssl_root_cert: /etc/ssl/certs/postgres-ca.crt
 
 application:
-  name: My Library
   host: 0.0.0.0
   port: 8080
   base_url: https://library.example.com
@@ -1021,12 +1233,14 @@ logging:
   file: /var/log/codex/codex.log
 
 auth:
-  jwt_secret: ${JWT_SECRET}
   jwt_expiry_hours: 12
+  cookie_secure: true
 
 api:
   enable_api_docs: false
   cors_enabled: true
+  cors_origins:
+    - https://library.example.com
 
 task:
   worker_count: 8
@@ -1039,35 +1253,64 @@ files:
   uploads_dir: /var/lib/codex/uploads
 ```
 
+The secrets are deliberately absent. Supply them from the environment:
+
+```bash
+CODEX_AUTH__JWT_SECRET=...
+CODEX_DATABASE__POSTGRES__PASSWORD=...
+CODEX_ENCRYPTION_KEY=...
+```
+
+or from a `codex.local.yaml` beside this file that your deployment tooling
+renders and your version control ignores. Config files are **not** interpolated,
+so `password: ${DB_PASSWORD}` stores that literal string as the password.
+
 ### Kubernetes Configuration
 
 For Kubernetes deployments, use environment variables for all sensitive data:
 
+Mount a config file only for the nested shapes that are awkward as environment
+variables, such as OIDC providers and rate-limit exempt paths, and set
+everything else from a ConfigMap and a Secret:
+
 ```yaml
-# Minimal config file - most settings come from environment
-task:
-  worker_count: 4
+# Minimal config file - most settings come from the environment
+data_dir: /data
 
 scanner:
   max_concurrent_scans: 2
-
-files:
-  thumbnail_dir: data/thumbnails
-  uploads_dir: data/uploads
 ```
 
-Set these via Kubernetes ConfigMaps and Secrets:
+From a ConfigMap:
 
 ```bash
 CODEX_DATABASE__DB_TYPE=postgres
 CODEX_DATABASE__POSTGRES__HOST=postgres-service
 CODEX_DATABASE__POSTGRES__PORT=5432
-CODEX_DATABASE__POSTGRES__USERNAME=<from secret>
-CODEX_DATABASE__POSTGRES__PASSWORD=<from secret>
 CODEX_DATABASE__POSTGRES__DATABASE_NAME=codex
-CODEX_AUTH__JWT_SECRET=<from secret>
-CODEX_ENCRYPTION_KEY=<from secret>
+CODEX_APPLICATION__BASE_URL=https://library.example.com
+CODEX_AUTH__COOKIE_SECURE=true
+# Migrations belong to one `codex migrate` Job, not to every pod
+CODEX_DATABASE__RUN_MIGRATIONS=false
+# Web pods; the worker Deployment runs `codex worker` instead
+CODEX_TASK__RUN_IN_PROCESS=false
 ```
+
+From a Secret:
+
+```bash
+CODEX_DATABASE__POSTGRES__USERNAME=...
+CODEX_DATABASE__POSTGRES__PASSWORD=...
+CODEX_AUTH__JWT_SECRET=...
+CODEX_ENCRYPTION_KEY=...
+```
+
+:::tip Fail the pod, not the request
+Run `codex config check --strict --quiet` as an initContainer with the same
+environment. It opens no database connection, so it catches a misspelled
+variable before the app container starts. See [Kubernetes
+deployment](./deployment/kubernetes.md).
+:::
 
 ## Checking Your Configuration
 
@@ -1083,13 +1326,17 @@ codex config check --strict              # exit 1 if anything was reported
 codex config check -c /etc/codex.yaml    # a specific config file
 ```
 
-It reports three things:
+It reports four things:
 
-| Reported | Meaning |
-|----------|---------|
-| Changes name in Codex 2.0 | Correct today. The next major version spells it differently. |
-| Not being read right now | Set, but this version does not read it, so the setting is being ignored. |
-| Unrecognized | Not a Codex setting. Usually a typo; a suggestion is offered when there is a near match. |
+| Reported | Severity | Meaning |
+|----------|----------|---------|
+| A value could not be parsed | error | A variable holds a value of the wrong type. Parsing stops at the first one, so fix it and run again. |
+| Environment variables that are no longer read | error | The old flat spelling from 1.x. Each is listed with its `__` replacement. |
+| Environment variables that were replaced | error | Removed in favour of a config key that is not a re-spelling, such as `CODEX_SKIP_MIGRATIONS`. The note says whether the meaning inverts. |
+| Unrecognized environment variables | warning | Not a Codex setting. Usually a typo; a suggestion is offered when there is a near match. Never fatal, since another tool may legitimately use the `CODEX_` prefix. |
+
+The first three fail the check and stop the server. The last only fails under
+`--strict`.
 
 The resolved configuration is printed with every secret replaced by
 `<redacted>` (set) or `<unset>` (empty), so the output is safe in logs.
@@ -1191,9 +1438,12 @@ For detailed configuration, see the [Preprocessing Rules Guide](./preprocessing-
 1. **Use strong JWT secrets** - Generate with `openssl rand -base64 32`
 2. **Set a plugin encryption key** - Required for sync/recommendation plugins; generate with `openssl rand -base64 32`
 3. **Never commit secrets** - Use environment variables or secret managers
-4. **Require verified TLS to PostgreSQL** - The default mode encrypts opportunistically but accepts any certificate and falls back to plaintext without warning. Set `PGSSLMODE=verify-full` and `PGSSLROOTCERT=/path/to/ca.crt` (see [PostgreSQL TLS](#postgresql-tls)). These are driver environment variables, not `codex.yaml` settings.
-5. **Restrict bind address** - Use `127.0.0.1` unless needed externally
+4. **Require verified TLS to PostgreSQL** - The default mode encrypts opportunistically but accepts any certificate and falls back to plaintext without warning. Set `database.postgres.ssl_mode: verify-full` and `database.postgres.ssl_root_cert: /path/to/ca.crt` (see [PostgreSQL TLS](#postgresql-tls)). The libpq variables `PGSSLMODE` and `PGSSLROOTCERT` still work when the Codex setting is unset.
+5. **Restrict bind address** - The default is `0.0.0.0`; use `127.0.0.1` unless the server must be reachable from other hosts
 6. **Disable API docs in production** - Set `enable_api_docs: false`
+7. **Narrow CORS** - The default `api.cors_origins` is `["*"]`; list your real origins instead
+8. **Set `auth.cookie_secure: true`** behind TLS, so the session cookie is never sent over a plaintext downgrade
+9. **Validate before you deploy** - Run `codex config check --strict` against the config and environment a release will actually use
 
 ## Next Steps
 

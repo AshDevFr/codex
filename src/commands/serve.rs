@@ -110,8 +110,8 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     //
     // NOTE: on Postgres this pool is additive to the API pool, so the server's
     // max_connections must accommodate the total. The common multi-pod Postgres
-    // deployment runs serve with CODEX_DISABLE_WORKERS=true, so no extra pool is
-    // created there.
+    // deployment runs serve with `task.run_in_process: false`, so no extra pool
+    // is created there.
     let background_max = if disable_workers {
         0
     } else {
@@ -554,7 +554,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         // handle to it so schedule edits (plugin sync cron, library scans,
         // release sources) take effect live via `reload_schedules()`. Gating
         // this on `disable_workers` previously made those reloads silent no-ops
-        // in the standard split deployment (web pod with CODEX_DISABLE_WORKERS),
+        // in the standard split deployment (web pod with `run_in_process: false`),
         // so an admin-set cron was written to the DB but never registered until
         // the pod restarted.
         scheduler: Some(scheduler.clone()),

@@ -51,7 +51,7 @@
 #   CODEX_AUTH__OIDC__PROVIDERS__AUTHENTIK__ISSUER_URL=https://authentik.example.com/application/o/codex/
 #   CODEX_AUTH__OIDC__PROVIDERS__AUTHENTIK__CLIENT_ID=<from secret>
 #   CODEX_AUTH__OIDC__PROVIDERS__AUTHENTIK__CLIENT_SECRET=<from secret>
-#   CODEX_AUTH__OIDC__PROVIDERS__AUTHENTIK__SCOPES=profile,email
+#   CODEX_AUTH__OIDC__PROVIDERS__AUTHENTIK__SCOPES='[profile, email]'
 #   CODEX_AUTH__OIDC__PROVIDERS__AUTHENTIK__GROUPS_CLAIM=groups
 #   CODEX_AUTH__OIDC__PROVIDERS__AUTHENTIK__USERNAME_CLAIM=preferred_username
 #   CODEX_AUTH__OIDC__PROVIDERS__AUTHENTIK__EMAIL_CLAIM=email
@@ -62,7 +62,7 @@
 #   CODEX_RATE_LIMIT__ANONYMOUS_BURST=50
 #   CODEX_RATE_LIMIT__AUTHENTICATED_RPS=50
 #   CODEX_RATE_LIMIT__AUTHENTICATED_BURST=200
-#   CODEX_RATE_LIMIT__EXEMPT_PATHS=/health,/api/v1/events
+#   CODEX_RATE_LIMIT__EXEMPT_PATHS='[/health, /api/v1/events]'
 #   CODEX_RATE_LIMIT__CLEANUP_INTERVAL_SECS=60
 #   CODEX_RATE_LIMIT__BUCKET_TTL_SECS=300
 
@@ -170,11 +170,11 @@ files:
 # docs/docs/observability.md for the schema, backend matrix, and sampling
 # guidance.
 #
-# Most fields can also be set via env (CODEX_OBSERVABILITY_*) so secrets
+# Most fields can also be set via env (CODEX_OBSERVABILITY__*) so secrets
 # (auth tokens) can come from Kubernetes Secrets:
 #   CODEX_OBSERVABILITY__ENABLED=true
 #   CODEX_OBSERVABILITY__OTLP__ENDPOINT=http://otel-collector.observability:4317
-#   CODEX_OBSERVABILITY__OTLP__HEADERS=signoz-access-token=$(cat /secrets/signoz-token)
+#   CODEX_OBSERVABILITY__OTLP__HEADERS="{signoz-access-token=$(cat /secrets/signoz-token)}"
 # observability:
 #   enabled: true
 #   service_name: codex

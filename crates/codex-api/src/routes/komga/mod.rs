@@ -23,8 +23,8 @@
 //! Or via environment variables:
 //!
 //! ```bash
-//! CODEX_KOMGA_API_ENABLED=true
-//! CODEX_KOMGA_API_PREFIX=komga
+//! CODEX_KOMGA_API__ENABLED=true
+//! CODEX_KOMGA_API__PREFIX=komga
 //! ```
 //!
 //! ## Endpoints

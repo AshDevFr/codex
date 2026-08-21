@@ -50,19 +50,41 @@ codex wait-for-migrations --config /path/to/config.yaml [--timeout 300] [--inter
 - Kubernetes Init Container: Wait for migrations before starting the main container
 - Docker Compose: Use as a dependency service
 
-## Environment Variables
+## Migration Settings
 
-### `CODEX_SKIP_MIGRATIONS`
+### `database.run_migrations`
 
-Set to `"true"` or `"1"` to skip automatic migrations on startup. When set, the application will:
-1. Skip running migrations automatically
-2. Verify that migrations are complete
-3. Fail to start if migrations are not complete
+Set to `false` to stop a process applying migrations on startup. It then:
+1. Skips running migrations automatically
+2. Waits for the schema to become current
+3. Fails to start if migrations are not complete within the wait timeout
 
-**Example:**
-```bash
-CODEX_SKIP_MIGRATIONS=true codex serve --config /path/to/config.yaml
+In YAML:
+
+```yaml
+database:
+  run_migrations: false
 ```
+
+Or as an environment variable:
+
+```bash
+CODEX_DATABASE__RUN_MIGRATIONS=false codex serve --config /path/to/config.yaml
+```
+
+:::warning Renamed in Codex 2.0
+This used to be `CODEX_SKIP_MIGRATIONS`, and the sense is **inverted**:
+`SKIP_MIGRATIONS=true` becomes `RUN_MIGRATIONS=false`. The old name is no
+longer read and Codex refuses to start when it sees it. See the
+[2.0 upgrade guide](/docs/migration/v2-config).
+:::
+
+The wait is bounded by `database.migration_wait_timeout_secs` (default `300`)
+and polled every `database.migration_wait_interval_secs` (default `2`).
+
+`codex migrate` applies migrations unconditionally and ignores this setting, so
+a migration Job can share the same environment as the deployments it runs
+ahead of.
 
 ## Docker Compose Strategy
 
@@ -87,7 +109,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      CODEX_SKIP_MIGRATIONS: "true"
+      CODEX_DATABASE__RUN_MIGRATIONS: "false"
     command: ["codex", "serve", "--config", "/app/config/config.docker.yaml"]
 ```
 
@@ -119,15 +141,15 @@ spec:
         image: codex:latest
         command: ["codex", "wait-for-migrations", "--config", "/app/config/config.yaml"]
         env:
-        - name: CODEX_DATABASE_POSTGRES_HOST
+        - name: CODEX_DATABASE__POSTGRES__HOST
           value: "postgres"
         # ... other database config
       containers:
       - name: codex
         image: codex:latest
         env:
-        - name: CODEX_SKIP_MIGRATIONS
-          value: "true"
+        - name: CODEX_DATABASE__RUN_MIGRATIONS
+          value: "false"
         # ... other config
 ```
 
@@ -148,7 +170,7 @@ spec:
         image: codex:latest
         command: ["codex", "migrate", "--config", "/app/config/config.yaml"]
         env:
-        - name: CODEX_DATABASE_POSTGRES_HOST
+        - name: CODEX_DATABASE__POSTGRES__HOST
           value: "postgres"
         # ... other database config
       restartPolicy: Never
@@ -165,8 +187,8 @@ spec:
       - name: codex
         image: codex:latest
         env:
-        - name: CODEX_SKIP_MIGRATIONS
-          value: "true"
+        - name: CODEX_DATABASE__RUN_MIGRATIONS
+          value: "false"
         # ... other config
 ```
 
@@ -178,7 +200,7 @@ spec:
 ## Best Practices
 
 1. **Always run migrations before application starts** - Use a job or init container
-2. **Set `CODEX_SKIP_MIGRATIONS=true`** in application containers to prevent conflicts
+2. **Set `CODEX_DATABASE__RUN_MIGRATIONS=false`** in application containers to prevent conflicts
 3. **Use health checks** - Ensure database is ready before running migrations
 4. **Monitor migration jobs** - Set appropriate timeouts and retry limits
 5. **Test migrations** - Test migration strategy in staging before production
@@ -193,7 +215,7 @@ This is normal when multiple containers try to run migrations. Use the migration
 
 - Ensure migration job/init container completed successfully
 - Check database connectivity
-- Verify `CODEX_SKIP_MIGRATIONS` is set correctly
+- Verify `CODEX_DATABASE__RUN_MIGRATIONS` is set correctly
 
 ### Migration job hangs
 

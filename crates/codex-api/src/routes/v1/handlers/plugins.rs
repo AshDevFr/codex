@@ -174,7 +174,7 @@ pub async fn create_plugin(
     if !is_command_allowed(&request.command) {
         return Err(ApiError::BadRequest(format!(
             "Command '{}' is not in the plugin allowlist. Allowed commands: {}. \
-             To add custom commands, set the CODEX_PLUGIN_ALLOWED_COMMANDS environment variable.",
+             To add custom commands, set `plugins.allowed_commands` in the Codex config.",
             request.command,
             allowed_commands_description()
         )));
@@ -449,7 +449,7 @@ pub async fn update_plugin(
     {
         return Err(ApiError::BadRequest(format!(
             "Command '{}' is not in the plugin allowlist. Allowed commands: {}. \
-                 To add custom commands, set the CODEX_PLUGIN_ALLOWED_COMMANDS environment variable.",
+                 To add custom commands, set `plugins.allowed_commands` in the Codex config.",
             command,
             allowed_commands_description()
         )));

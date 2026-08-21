@@ -27,14 +27,17 @@ Once installed, start the server:
 codex serve
 ```
 
-On first run, Codex creates a default `codex.yaml` configuration file with SQLite database settings.
+With no config file present, Codex runs on its built-in defaults: a SQLite
+database under `data/`, listening on port 8080.
 
 Access Codex at `http://localhost:8080`. On first launch, you'll be guided through a setup wizard to create your admin account.
 
 :::tip Custom Configuration
-To customize your configuration, edit the generated `codex.yaml` file or specify a custom path:
+Codex does not write a config file for you. When you want one, generate a commented starter and edit it:
 ```bash
+codex config init                  # writes config/codex.yaml
+codex serve                        # reads config/codex.yaml
 codex serve --config /path/to/codex.yaml
 ```
-See the [Configuration guide](/docs/configuration) for all available options.
+Run `codex config check` to validate it. See the [Configuration guide](/docs/configuration) for all available options.
 :::

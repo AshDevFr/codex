@@ -39,7 +39,7 @@ logging:
   console: true
   # file: ./logs/codex.log  # Uncomment to enable file logging
 
-# Auth config - uses defaults, override with CODEX_AUTH_* env vars
+# Auth config - uses defaults, override with CODEX_AUTH__* env vars
 # Defaults: JWT 24h expiry, Argon2 (19456, 2, 1)
 auth:
   jwt_secret: "CHANGE_ME_IN_PRODUCTION" # Override with CODEX_AUTH__JWT_SECRET env var
