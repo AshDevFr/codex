@@ -954,6 +954,7 @@ The following paths are exempt from rate limiting:
             v1::dto::PaginatedResponse<v1::dto::SeriesDto>,
             v1::dto::PaginatedResponse<v1::dto::BookDto>,
             v1::dto::PaginatedResponse<v1::dto::UserDto>,
+            v1::dto::PaginatedResponse<v1::dto::SeriesExternalIndexDto>,
 
             // Metrics DTOs
             v1::dto::MetricsDto,

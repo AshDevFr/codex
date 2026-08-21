@@ -1,13 +1,13 @@
 use super::super::dto::{
     AdjacentBooksResponse, BookDetailResponse, BookDto, BookFullMetadata, BookListRequest,
     BookListResponse, BookMetadataDto, BookMetadataLocks, FullBookListResponse, FullBookResponse,
-    PaginationParams,
     book::{
         AddBookGenreRequest, AddBookTagRequest, BookAuthorDto, BookAwardDto, BookSortParam,
         BookType, BookTypeDto, SetBookGenresRequest, SetBookTagsRequest,
     },
     common::{
-        DEFAULT_PAGE, DEFAULT_PAGE_SIZE, ListPaginationParams, MAX_PAGE_SIZE, PaginationLinkBuilder,
+        DEFAULT_PAGE, DEFAULT_PAGE_SIZE, ListPaginationParams, MAX_PAGE_SIZE, PaginatedResponse,
+        PaginationLinkBuilder,
     },
     page::PageDto,
     series::{GenreDto, GenreListResponse, TagDto, TagListResponse},
@@ -147,6 +147,41 @@ pub struct BookListQuery {
     #[serde(default)]
     pub series_id: Option<Uuid>,
 
+    /// Page number (1-indexed, minimum 1)
+    #[serde(default = "default_page")]
+    pub page: u64,
+
+    /// Number of items per page (max 100, default 50)
+    #[serde(default = "default_page_size")]
+    pub page_size: u64,
+
+    /// Sort parameter (format: "field,direction" e.g. "title,asc")
+    #[serde(default)]
+    pub sort: Option<String>,
+
+    /// Return full data including metadata and locks.
+    /// Default is false for backward compatibility.
+    #[serde(default)]
+    pub full: bool,
+}
+
+/// Query parameters for the library-scoped book listings.
+///
+/// These routes carry the library in the path, so they deliberately do not
+/// advertise `libraryId` or `seriesId`: the handlers extract the wider
+/// `BookListQuery` and ignore both. Documenting this narrower set describes
+/// exactly the parameters these four routes honour.
+///
+/// `parameter_in = Query` is mandatory here and not merely tidy. utoipa infers a
+/// parameter's location from the handler's extractor, and this struct is named in
+/// the annotation without ever being extracted, so there is nothing to infer from
+/// and the derive falls back to `Path`. That fallback is what documented `page`
+/// and `pageSize` as path parameters of a path with no such segments, producing
+/// an operation no client could construct.
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[serde(rename_all = "camelCase")]
+#[into_params(rename_all = "camelCase", parameter_in = Query)]
+pub struct LibraryBookListQuery {
     /// Page number (1-indexed, minimum 1)
     #[serde(default = "default_page")]
     pub page: u64,
@@ -763,7 +798,7 @@ pub async fn books_to_full_dtos_batched(
     path = "/api/v1/books",
     params(BookListQuery),
     responses(
-        (status = 200, description = "Paginated list of books (returns FullBookListResponse when full=true)", body = BookListResponse),
+        (status = 200, description = "Paginated list of books (returns FullBookListResponse when full=true)", body = PaginatedResponse<BookDto>),
         (status = 403, description = "Forbidden"),
     ),
     security(
@@ -883,7 +918,7 @@ pub async fn list_books(
     params(ListPaginationParams),
     request_body = BookListRequest,
     responses(
-        (status = 200, description = "Paginated list of filtered books (returns FullBookListResponse when full=true)", body = BookListResponse),
+        (status = 200, description = "Paginated list of filtered books (returns FullBookListResponse when full=true)", body = PaginatedResponse<BookDto>),
         (status = 403, description = "Forbidden"),
     ),
     security(
@@ -1532,10 +1567,10 @@ pub async fn get_adjacent_books(
     path = "/api/v1/libraries/{library_id}/books",
     params(
         ("library_id" = Uuid, Path, description = "Library ID"),
-        PaginationParams,
+        LibraryBookListQuery,
     ),
     responses(
-        (status = 200, description = "Paginated list of books in library", body = BookListResponse),
+        (status = 200, description = "Paginated list of books in library", body = PaginatedResponse<BookDto>),
         (status = 403, description = "Forbidden"),
     ),
     security(
@@ -1621,7 +1656,7 @@ pub async fn list_library_books(
     path = "/api/v1/books/in-progress",
     params(BookListQuery),
     responses(
-        (status = 200, description = "Paginated list of in-progress books", body = BookListResponse),
+        (status = 200, description = "Paginated list of in-progress books", body = PaginatedResponse<BookDto>),
         (status = 403, description = "Forbidden"),
     ),
     security(
@@ -1698,10 +1733,10 @@ pub async fn list_in_progress_books(
     path = "/api/v1/libraries/{library_id}/books/in-progress",
     params(
         ("library_id" = Uuid, Path, description = "Library ID"),
-        PaginationParams,
+        LibraryBookListQuery,
     ),
     responses(
-        (status = 200, description = "Paginated list of in-progress books in library", body = BookListResponse),
+        (status = 200, description = "Paginated list of in-progress books in library", body = PaginatedResponse<BookDto>),
         (status = 403, description = "Forbidden"),
     ),
     security(
@@ -1771,7 +1806,7 @@ pub async fn list_library_in_progress_books(
     path = "/api/v1/books/on-deck",
     params(BookListQuery),
     responses(
-        (status = 200, description = "Paginated list of on-deck books", body = BookListResponse),
+        (status = 200, description = "Paginated list of on-deck books", body = PaginatedResponse<BookDto>),
         (status = 403, description = "Forbidden"),
     ),
     security(
@@ -1838,10 +1873,10 @@ pub async fn list_on_deck_books(
     path = "/api/v1/libraries/{library_id}/books/on-deck",
     params(
         ("library_id" = Uuid, Path, description = "Library ID"),
-        PaginationParams,
+        LibraryBookListQuery,
     ),
     responses(
-        (status = 200, description = "Paginated list of on-deck books in library", body = BookListResponse),
+        (status = 200, description = "Paginated list of on-deck books in library", body = PaginatedResponse<BookDto>),
         (status = 403, description = "Forbidden"),
     ),
     security(
@@ -1910,7 +1945,7 @@ pub async fn list_library_on_deck_books(
     path = "/api/v1/books/recently-added",
     params(BookListQuery),
     responses(
-        (status = 200, description = "Paginated list of recently added books", body = BookListResponse),
+        (status = 200, description = "Paginated list of recently added books", body = PaginatedResponse<BookDto>),
         (status = 403, description = "Forbidden"),
     ),
     security(
@@ -1986,10 +2021,10 @@ pub async fn list_recently_added_books(
     path = "/api/v1/libraries/{library_id}/books/recently-added",
     params(
         ("library_id" = Uuid, Path, description = "Library ID"),
-        PaginationParams,
+        LibraryBookListQuery,
     ),
     responses(
-        (status = 200, description = "Paginated list of recently added books in library", body = BookListResponse),
+        (status = 200, description = "Paginated list of recently added books in library", body = PaginatedResponse<BookDto>),
         (status = 403, description = "Forbidden"),
     ),
     security(

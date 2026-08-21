@@ -48,60 +48,6 @@ pub struct CoverUploadForm {
 // Pagination Parameters
 // =============================================================================
 
-/// Pagination parameters for list endpoints
-#[derive(Debug, Deserialize, IntoParams)]
-#[serde(rename_all = "camelCase")]
-#[into_params(rename_all = "camelCase")]
-#[allow(dead_code)] // Public API - fields read by serde deserialization
-pub struct PaginationParams {
-    /// Page number (1-indexed, minimum 1)
-    #[serde(default = "default_page")]
-    pub page: u64,
-
-    /// Number of items per page (max 100, default 50)
-    #[serde(default = "default_page_size")]
-    pub page_size: u64,
-}
-
-impl Default for PaginationParams {
-    fn default() -> Self {
-        Self {
-            page: DEFAULT_PAGE,
-            page_size: DEFAULT_PAGE_SIZE,
-        }
-    }
-}
-
-#[allow(dead_code)] // Public API - used for pagination in list endpoints
-impl PaginationParams {
-    /// Validate and clamp pagination parameters
-    /// - If page is 0, treats it as page 1 (backward compatibility)
-    /// - Clamps page_size to max_page_size
-    pub fn validate(mut self, max_page_size: u64) -> Self {
-        // Treat page 0 as page 1 for backward compatibility
-        if self.page == 0 {
-            self.page = 1;
-        }
-        if self.page_size == 0 {
-            self.page_size = DEFAULT_PAGE_SIZE;
-        }
-        if self.page_size > max_page_size {
-            self.page_size = max_page_size;
-        }
-        self
-    }
-
-    /// Calculate offset for database queries (converts 1-indexed page to 0-indexed offset)
-    pub fn offset(&self) -> u64 {
-        self.page.saturating_sub(1) * self.page_size
-    }
-
-    /// Get limit for database queries
-    pub fn limit(&self) -> u64 {
-        self.page_size
-    }
-}
-
 // =============================================================================
 // List Pagination Parameters (for POST endpoints with query params)
 // =============================================================================
@@ -677,68 +623,6 @@ impl<T> CursorPaginatedResponse<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_pagination_params_defaults() {
-        let params = PaginationParams::default();
-        assert_eq!(params.page, 1);
-        assert_eq!(params.page_size, 50);
-    }
-
-    #[test]
-    fn test_pagination_params_offset_calculation() {
-        // Page 1 should have offset 0
-        let params = PaginationParams {
-            page: 1,
-            page_size: 50,
-        };
-        assert_eq!(params.offset(), 0);
-
-        // Page 2 should have offset 50
-        let params = PaginationParams {
-            page: 2,
-            page_size: 50,
-        };
-        assert_eq!(params.offset(), 50);
-
-        // Page 3 with page_size 20 should have offset 40
-        let params = PaginationParams {
-            page: 3,
-            page_size: 20,
-        };
-        assert_eq!(params.offset(), 40);
-    }
-
-    #[test]
-    fn test_pagination_params_validate_page_zero() {
-        // Page 0 should be treated as page 1
-        let params = PaginationParams {
-            page: 0,
-            page_size: 50,
-        };
-        let validated = params.validate(100);
-        assert_eq!(validated.page, 1);
-    }
-
-    #[test]
-    fn test_pagination_params_validate_page_size_zero() {
-        let params = PaginationParams {
-            page: 1,
-            page_size: 0,
-        };
-        let validated = params.validate(100);
-        assert_eq!(validated.page_size, DEFAULT_PAGE_SIZE);
-    }
-
-    #[test]
-    fn test_pagination_params_validate_max_page_size() {
-        let params = PaginationParams {
-            page: 1,
-            page_size: 500,
-        };
-        let validated = params.validate(100);
-        assert_eq!(validated.page_size, 100);
-    }
 
     #[test]
     fn test_pagination_link_builder_first_page() {
