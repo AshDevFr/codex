@@ -150,7 +150,7 @@ export function SeriesDetail() {
     error: seriesError,
   } = useQuery({
     queryKey: ["series", seriesId, "full"],
-    queryFn: () => seriesApi.getById(seriesId!, { full: true }),
+    queryFn: () => seriesApi.getFull(seriesId!),
     enabled: !!seriesId,
   });
 

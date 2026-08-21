@@ -86,18 +86,20 @@ export const booksApi = {
     return response.data.book;
   },
 
-  // Get a single book with full details including metadata
-  getDetail: async <T extends boolean = false>(
-    id: string,
-    options?: { full?: T },
-  ): Promise<T extends true ? FullBook : BookDetailResponse> => {
-    const params = new URLSearchParams();
-    if (options?.full) params.set("full", "true");
-    const queryString = params.toString();
-    const url = `/books/${id}${queryString ? `?${queryString}` : ""}`;
+  // Get a single book with its `{ book, metadata }` detail shape.
+  getDetail: async (id: string): Promise<BookDetailResponse> => {
+    const response = await api.get<BookDetailResponse>(`/books/${id}`);
+    return response.data;
+  },
 
-    const response =
-      await api.get<T extends true ? FullBook : BookDetailResponse>(url);
+  // Get a book with its metadata, genres and tags in one response.
+  //
+  // Uses the dedicated route rather than the deprecated `?full=true`. The query
+  // parameter form returns a different schema depending on its value, which
+  // cannot be described in OpenAPI, so it forced the conditional return type
+  // this pair replaces. `full` is removed in 3.0.
+  getFull: async (id: string): Promise<FullBook> => {
+    const response = await api.get<FullBook>(`/books/${id}/full`);
     return response.data;
   },
 

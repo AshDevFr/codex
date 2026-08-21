@@ -114,6 +114,7 @@ async fn seed_series(
 }
 
 #[tokio::test]
+#[allow(deprecated)] // exercises the deprecated `full` parameter
 async fn fuzzy_search_matches_gap_skipped_query() {
     let (db, _temp_dir) = setup_test_db().await;
     let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
@@ -151,6 +152,7 @@ async fn fuzzy_search_matches_gap_skipped_query() {
 }
 
 #[tokio::test]
+#[allow(deprecated)] // exercises the deprecated `full` parameter
 async fn fuzzy_search_ignores_punctuation_between_words() {
     let (db, _temp_dir) = setup_test_db().await;
     let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
@@ -186,6 +188,7 @@ async fn fuzzy_search_ignores_punctuation_between_words() {
 }
 
 #[tokio::test]
+#[allow(deprecated)] // exercises the deprecated `full` parameter
 async fn fuzzy_search_empty_query_returns_no_results() {
     let (db, _temp_dir) = setup_test_db().await;
     let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
@@ -217,6 +220,7 @@ async fn fuzzy_search_empty_query_returns_no_results() {
 }
 
 #[tokio::test]
+#[allow(deprecated)] // exercises the deprecated `full` parameter
 async fn fuzzy_search_respects_library_filter() {
     let (db, _temp_dir) = setup_test_db().await;
     let library_a = LibraryRepository::create(&db, "Manga", "/manga", ScanningStrategy::Default)
@@ -263,6 +267,7 @@ async fn fuzzy_search_respects_library_filter() {
 }
 
 #[tokio::test]
+#[allow(deprecated)] // exercises the deprecated `full` parameter
 async fn fuzzy_flag_off_falls_back_to_like_path() {
     let (db, _temp_dir) = setup_test_db().await;
     let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)

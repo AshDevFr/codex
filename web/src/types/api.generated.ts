@@ -1587,6 +1587,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/books/{book_id}/full": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a book with its metadata, genres and tags in one response
+         * @description The same book `GET /api/v1/books/{book_id}` returns, plus the related data a
+         *     detail screen needs, so it does not have to fan out into separate metadata,
+         *     genre and tag requests.
+         *
+         *     This exists as its own route because the shape is genuinely different, not
+         *     merely richer: it carries `metadata`, `genres`, `tags`, `readCount` and
+         *     `lastCompletedAt`, and it moves `chapter`, `summary` and `volume` inside
+         *     `metadata`. A response whose schema depends on a query parameter cannot be
+         *     expressed in OpenAPI, so the deprecated `?full=true` form is undescribable
+         *     and unusable from a generated client. This route is describable.
+         */
+        get: operations["get_book_full"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/books/{book_id}/metadata": {
         parameters: {
             query?: never;
@@ -3972,6 +4001,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/series/full": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List series with their metadata, genres, tags and external links
+         * @description The same page `GET /api/v1/series` returns, with each entry carrying the
+         *     related data inline, so a caller that needs metadata for a whole library
+         *     pages it once instead of following up per series.
+         *
+         *     This exists as its own route because the shape is genuinely different, not
+         *     merely richer, and because a response whose schema depends on a query
+         *     parameter cannot be expressed in OpenAPI — which made the deprecated
+         *     `GET /api/v1/series?full=true` invisible to every generated client. Accepts
+         *     the same filters and pagination as the plain listing.
+         */
+        get: operations["list_series_full"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/series/in-progress": {
         parameters: {
             query?: never;
@@ -4711,6 +4768,37 @@ export interface paths {
         post?: never;
         /** Delete an external rating by source name */
         delete: operations["delete_external_rating"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/series/{series_id}/full": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a series with its metadata, genres, tags and external links in one response
+         * @description The same series `GET /api/v1/series/{series_id}` returns, plus the related
+         *     data a detail screen needs, so it does not have to fan out into separate
+         *     metadata, genre, tag, external-id, external-link and rating requests.
+         *
+         *     This exists as its own route because the shape is genuinely different, not
+         *     merely richer: it carries `metadata`, `genres`, `tags`, `alternateTitles`,
+         *     `externalIds`, `externalLinks`, `externalRatings`, `readCount` and
+         *     `lastCompletedAt`, and it moves `title`, `titleSort`, `publisher`, `summary`
+         *     and `year` inside `metadata`. A response whose schema depends on a query
+         *     parameter cannot be expressed in OpenAPI, so the deprecated `?full=true`
+         *     form is undescribable and unusable from a generated client. This route is
+         *     describable.
+         */
+        get: operations["get_series_full"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -13025,50 +13113,7 @@ export interface components {
          */
         KomgaPage_KomgaBookDto: {
             /** @description The content items for this page */
-            content: {
-                /** @description Created timestamp (ISO 8601) */
-                created: string;
-                /** @description Whether book is deleted (soft delete) */
-                deleted?: boolean;
-                /** @description File hash */
-                fileHash?: string;
-                /** @description File last modified timestamp (ISO 8601) */
-                fileLastModified: string;
-                /** @description Book unique identifier (UUID as string) */
-                id: string;
-                /** @description Last modified timestamp (ISO 8601) */
-                lastModified: string;
-                /** @description Library ID */
-                libraryId: string;
-                /** @description Media information */
-                media: components["schemas"]["KomgaMediaDto"];
-                /** @description Book metadata */
-                metadata: components["schemas"]["KomgaBookMetadataDto"];
-                /** @description Book filename/name */
-                name: string;
-                /**
-                 * Format: int32
-                 * @description Book number in series
-                 */
-                number: number;
-                /** @description Whether this is a oneshot */
-                oneshot?: boolean;
-                /** @description User's read progress (null if not started) */
-                readProgress?: components["schemas"]["KomgaReadProgressDto"];
-                /** @description Series ID */
-                seriesId: string;
-                /** @description Series title (required by Komic for display) */
-                seriesTitle: string;
-                /** @description Human-readable file size (e.g., "869.9 MiB") */
-                size: string;
-                /**
-                 * Format: int64
-                 * @description File size in bytes
-                 */
-                sizeBytes: number;
-                /** @description File URL/path */
-                url: string;
-            }[];
+            content: components["schemas"]["KomgaBookDto"][];
             /** @description Whether the page is empty */
             empty: boolean;
             /** @description Whether this is the first page */
@@ -13112,22 +13157,7 @@ export interface components {
          */
         KomgaPage_KomgaCollectionDto: {
             /** @description The content items for this page */
-            content: {
-                /** @description Created timestamp (ISO 8601) */
-                createdDate: string;
-                /** @description Whether this collection is filtered from the user's view */
-                filtered: boolean;
-                /** @description Collection unique identifier */
-                id: string;
-                /** @description Last modified timestamp (ISO 8601) */
-                lastModifiedDate: string;
-                /** @description Collection name */
-                name: string;
-                /** @description Whether the collection is ordered */
-                ordered: boolean;
-                /** @description Series IDs in the collection */
-                seriesIds: string[];
-            }[];
+            content: components["schemas"]["KomgaCollectionDto"][];
             /** @description Whether the page is empty */
             empty: boolean;
             /** @description Whether this is the first page */
@@ -13171,24 +13201,7 @@ export interface components {
          */
         KomgaPage_KomgaReadListDto: {
             /** @description The content items for this page */
-            content: {
-                /** @description Book IDs in the read list */
-                bookIds: string[];
-                /** @description Created timestamp (ISO 8601) */
-                createdDate: string;
-                /** @description Whether this read list is filtered from the user's view */
-                filtered: boolean;
-                /** @description Read list unique identifier */
-                id: string;
-                /** @description Last modified timestamp (ISO 8601) */
-                lastModifiedDate: string;
-                /** @description Read list name */
-                name: string;
-                /** @description Whether the read list is ordered */
-                ordered: boolean;
-                /** @description Read list summary/description */
-                summary: string;
-            }[];
+            content: components["schemas"]["KomgaReadListDto"][];
             /** @description Whether the page is empty */
             empty: boolean;
             /** @description Whether this is the first page */
@@ -13232,50 +13245,7 @@ export interface components {
          */
         KomgaPage_KomgaSeriesDto: {
             /** @description The content items for this page */
-            content: {
-                /**
-                 * Format: int32
-                 * @description Total books count
-                 */
-                booksCount: number;
-                /**
-                 * Format: int32
-                 * @description In-progress books count
-                 */
-                booksInProgressCount: number;
-                /** @description Aggregated books metadata */
-                booksMetadata: components["schemas"]["KomgaBooksMetadataAggregationDto"];
-                /**
-                 * Format: int32
-                 * @description Read books count
-                 */
-                booksReadCount: number;
-                /**
-                 * Format: int32
-                 * @description Unread books count
-                 */
-                booksUnreadCount: number;
-                /** @description Created timestamp (ISO 8601) */
-                created: string;
-                /** @description Whether series is deleted (soft delete) */
-                deleted?: boolean;
-                /** @description File last modified timestamp (ISO 8601) */
-                fileLastModified: string;
-                /** @description Series unique identifier (UUID as string) */
-                id: string;
-                /** @description Last modified timestamp (ISO 8601) */
-                lastModified: string;
-                /** @description Library ID */
-                libraryId: string;
-                /** @description Series metadata */
-                metadata: components["schemas"]["KomgaSeriesMetadataDto"];
-                /** @description Series name */
-                name: string;
-                /** @description Whether this is a oneshot (single book) */
-                oneshot?: boolean;
-                /** @description File URL/path */
-                url: string;
-            }[];
+            content: components["schemas"]["KomgaSeriesDto"][];
             /** @description Whether the page is empty */
             empty: boolean;
             /** @description Whether this is the first page */
@@ -14711,61 +14681,7 @@ export interface components {
         /** @description Generic paginated response wrapper with HATEOAS links */
         PaginatedResponse_ApiKeyDto: {
             /** @description The data items for this page */
-            data: {
-                /**
-                 * Format: date-time
-                 * @description When the key was created
-                 * @example 2024-01-01T00:00:00Z
-                 */
-                createdAt: string;
-                /**
-                 * Format: date-time
-                 * @description When the key expires (if set)
-                 * @example 2025-12-31T23:59:59Z
-                 */
-                expiresAt?: string | null;
-                /**
-                 * Format: uuid
-                 * @description Unique API key identifier
-                 * @example 550e8400-e29b-41d4-a716-446655440000
-                 */
-                id: string;
-                /**
-                 * @description Whether the key is currently active
-                 * @example true
-                 */
-                isActive: boolean;
-                /**
-                 * @description Prefix of the key for identification
-                 * @example cdx_a1b2c3
-                 */
-                keyPrefix: string;
-                /**
-                 * Format: date-time
-                 * @description When the key was last used
-                 * @example 2024-01-15T10:30:00Z
-                 */
-                lastUsedAt?: string | null;
-                /**
-                 * @description Human-readable name for the key
-                 * @example Mobile App Key
-                 */
-                name: string;
-                /** @description Permissions granted to this key */
-                permissions: unknown;
-                /**
-                 * Format: date-time
-                 * @description When the key was last updated
-                 * @example 2024-01-15T10:30:00Z
-                 */
-                updatedAt: string;
-                /**
-                 * Format: uuid
-                 * @description Owner user ID
-                 * @example 550e8400-e29b-41d4-a716-446655440001
-                 */
-                userId: string;
-            }[];
+            data: components["schemas"]["ApiKeyDto"][];
             /** @description HATEOAS navigation links */
             links: components["schemas"]["PaginationLinks"];
             /**
@@ -14796,143 +14712,38 @@ export interface components {
         /** @description Generic paginated response wrapper with HATEOAS links */
         PaginatedResponse_BookDto: {
             /** @description The data items for this page */
-            data: {
-                /**
-                 * @description Error message if book analysis failed
-                 * @example Failed to parse CBZ: invalid archive
-                 */
-                analysisError?: string | null;
-                /**
-                 * @description Whether the book has been analyzed (page dimensions available)
-                 * @example true
-                 */
-                analyzed: boolean;
-                /**
-                 * Format: float
-                 * @description Chapter number from book metadata (may be fractional)
-                 * @example 42.5
-                 */
-                chapter?: number | null;
-                /**
-                 * Format: date-time
-                 * @description When the book was added to the library
-                 * @example 2024-01-01T00:00:00Z
-                 */
-                createdAt: string;
-                /**
-                 * @description Whether the book has been soft-deleted
-                 * @example false
-                 */
-                deleted: boolean;
-                /**
-                 * @description File format (cbz, cbr, epub, pdf)
-                 * @example cbz
-                 */
-                fileFormat: string;
-                /**
-                 * @description File hash for deduplication
-                 * @example a1b2c3d4e5f6g7h8i9j0
-                 */
-                fileHash: string;
-                /**
-                 * Format: int64
-                 * @description File size in bytes
-                 * @example 52428800
-                 */
-                fileSize: number;
-                /**
-                 * Format: uuid
-                 * @description Book unique identifier
-                 * @example 550e8400-e29b-41d4-a716-446655440001
-                 */
-                id: string;
-                /** @description KOReader-compatible partial MD5 hash for sync */
-                koreaderHash?: string | null;
-                /**
-                 * Format: uuid
-                 * @description Library this book belongs to
-                 * @example 550e8400-e29b-41d4-a716-446655440000
-                 */
-                libraryId: string;
-                /**
-                 * @description Name of the library
-                 * @example Comics
-                 */
-                libraryName: string;
-                /**
-                 * Format: int32
-                 * @description Book number within the series
-                 * @example 1
-                 */
-                number?: number | null;
-                /**
-                 * Format: int32
-                 * @description Number of pages in the book
-                 * @example 32
-                 */
-                pageCount: number;
-                /**
-                 * @description Filesystem path to the book file
-                 * @example /media/comics/Batman/Batman - Year One 001.cbz
-                 */
-                path: string;
-                /** @description User's read progress for this book */
-                readProgress?: components["schemas"]["ReadProgressResponse"];
-                /**
-                 * @description Effective reading direction (from series metadata, or library default if not set)
-                 *     Values: ltr, rtl, ttb or webtoon
-                 * @example ltr
-                 */
-                readingDirection?: string | null;
-                /**
-                 * Format: uuid
-                 * @description Series this book belongs to
-                 * @example 550e8400-e29b-41d4-a716-446655440002
-                 */
-                seriesId: string;
-                /**
-                 * @description Name of the series
-                 * @example Batman: Year One
-                 */
-                seriesName: string;
-                /**
-                 * @description Book summary/description from book_metadata (ComicInfo `<Summary>` or
-                 *     EPUB description). Surfaced on the list response so cards can show it on
-                 *     hover without fetching the full detail payload.
-                 * @example Bruce Wayne returns to Gotham to begin his war on crime.
-                 */
-                summary?: string | null;
-                /**
-                 * @description Book title
-                 * @example Batman: Year One #1
-                 */
-                title: string;
-                /**
-                 * @description Title used for sorting (title_sort field)
-                 * @example batman year one 001
-                 */
-                titleSort?: string | null;
-                /**
-                 * Format: date-time
-                 * @description When the book was last updated
-                 * @example 2024-01-15T10:30:00Z
-                 */
-                updatedAt: string;
-                /**
-                 * Format: int32
-                 * @description Volume number from book metadata
-                 * @example 1
-                 */
-                volume?: number | null;
-                /**
-                 * @description Whether the requesting user has this book in their want-to-read queue.
-                 *
-                 *     `None` when not computed for this response; populated on book list and
-                 *     detail endpoints that have a user context.
-                 * @example false
-                 */
-                wantToRead?: boolean | null;
-            }[];
+            data: components["schemas"]["BookDto"][];
+            /** @description HATEOAS navigation links */
+            links: components["schemas"]["PaginationLinks"];
+            /**
+             * Format: int64
+             * @description Current page number (1-indexed)
+             * @example 1
+             */
+            page: number;
+            /**
+             * Format: int64
+             * @description Number of items per page
+             * @example 50
+             */
+            pageSize: number;
+            /**
+             * Format: int64
+             * @description Total number of items across all pages
+             * @example 150
+             */
+            total: number;
+            /**
+             * Format: int64
+             * @description Total number of pages
+             * @example 3
+             */
+            totalPages: number;
+        };
+        /** @description Generic paginated response wrapper with HATEOAS links */
+        PaginatedResponse_FullSeriesResponse: {
+            /** @description The data items for this page */
+            data: components["schemas"]["FullSeriesResponse"][];
             /** @description HATEOAS navigation links */
             links: components["schemas"]["PaginationLinks"];
             /**
@@ -14963,31 +14774,7 @@ export interface components {
         /** @description Generic paginated response wrapper with HATEOAS links */
         PaginatedResponse_GenreDto: {
             /** @description The data items for this page */
-            data: {
-                /**
-                 * Format: date-time
-                 * @description When the genre was created
-                 * @example 2024-01-01T00:00:00Z
-                 */
-                createdAt: string;
-                /**
-                 * Format: uuid
-                 * @description Genre ID
-                 * @example 550e8400-e29b-41d4-a716-446655440010
-                 */
-                id: string;
-                /**
-                 * @description Genre name
-                 * @example Action
-                 */
-                name: string;
-                /**
-                 * Format: int64
-                 * @description Number of series with this genre
-                 * @example 42
-                 */
-                seriesCount?: number | null;
-            }[];
+            data: components["schemas"]["GenreDto"][];
             /** @description HATEOAS navigation links */
             links: components["schemas"]["PaginationLinks"];
             /**
@@ -15018,108 +14805,7 @@ export interface components {
         /** @description Generic paginated response wrapper with HATEOAS links */
         PaginatedResponse_LibraryDto: {
             /** @description The data items for this page */
-            data: {
-                /**
-                 * @description Allowed file formats (e.g., ["CBZ", "CBR", "EPUB"])
-                 * @example [
-                 *       "CBZ",
-                 *       "CBR",
-                 *       "PDF"
-                 *     ]
-                 */
-                allowedFormats?: string[] | null;
-                /**
-                 * @description Auto-match conditions (JSON object with mode and rules)
-                 *     Controls when auto-matching runs for this library
-                 */
-                autoMatchConditions?: unknown;
-                /** @description Book strategy-specific configuration (JSON) */
-                bookConfig?: unknown;
-                /**
-                 * Format: int64
-                 * @description Total number of books in this library
-                 * @example 1250
-                 */
-                bookCount?: number | null;
-                /** @description Book naming strategy (filename, metadata_first, smart, series_name) */
-                bookStrategy: components["schemas"]["BookStrategy"];
-                /**
-                 * Format: date-time
-                 * @description When the library was created
-                 * @example 2024-01-01T00:00:00Z
-                 */
-                createdAt: string;
-                /**
-                 * @description Default reading direction for books in this library (ltr, rtl, ttb or webtoon)
-                 * @example ltr
-                 */
-                defaultReadingDirection: string;
-                /**
-                 * @description Optional description
-                 * @example My comic book collection
-                 */
-                description?: string | null;
-                /**
-                 * @description Excluded path patterns (newline-separated, e.g., ".DS_Store\nThumbs.db")
-                 * @example .DS_Store
-                 *     Thumbs.db
-                 */
-                excludedPatterns?: string | null;
-                /**
-                 * Format: uuid
-                 * @description Library unique identifier
-                 * @example 550e8400-e29b-41d4-a716-446655440000
-                 */
-                id: string;
-                /**
-                 * @description Whether the library is active
-                 * @example true
-                 */
-                isActive: boolean;
-                /**
-                 * Format: date-time
-                 * @description When the library was last scanned
-                 * @example 2024-01-15T10:30:00Z
-                 */
-                lastScannedAt?: string | null;
-                /**
-                 * @description Library name
-                 * @example Comics
-                 */
-                name: string;
-                /** @description Number strategy-specific configuration (JSON) */
-                numberConfig?: unknown;
-                /** @description Book number strategy (file_order, metadata, filename, smart) */
-                numberStrategy: components["schemas"]["NumberStrategy"];
-                /**
-                 * @description Filesystem path to the library root
-                 * @example /media/comics
-                 */
-                path: string;
-                /** @description Scanning configuration for scheduled scans */
-                scanningConfig?: components["schemas"]["ScanningConfigDto"];
-                /** @description Strategy-specific configuration (JSON) */
-                seriesConfig?: unknown;
-                /**
-                 * Format: int64
-                 * @description Total number of series in this library
-                 * @example 85
-                 */
-                seriesCount?: number | null;
-                /** @description Series detection strategy (series_volume, series_volume_chapter, flat, etc.) */
-                seriesStrategy: components["schemas"]["SeriesStrategy"];
-                /**
-                 * @description Title preprocessing rules (JSON array of regex rules)
-                 *     Applied during scan to clean series titles before metadata search
-                 */
-                titlePreprocessingRules?: unknown;
-                /**
-                 * Format: date-time
-                 * @description When the library was last updated
-                 * @example 2024-01-15T10:30:00Z
-                 */
-                updatedAt: string;
-            }[];
+            data: components["schemas"]["LibraryDto"][];
             /** @description HATEOAS navigation links */
             links: components["schemas"]["PaginationLinks"];
             /**
@@ -15150,88 +14836,7 @@ export interface components {
         /** @description Generic paginated response wrapper with HATEOAS links */
         PaginatedResponse_ReleaseLedgerEntryDto: {
             /** @description The data items for this page */
-            data: {
-                /**
-                 * @description Full chapter coverage as a normalized span list. Decimals supported
-                 *     (`c12.5` → `[{start: 12.5, end: 12.5}]`). `null` when the upstream
-                 *     title carried no chapter info.
-                 */
-                chapters?: components["schemas"]["ReleaseSpanDto"][] | null;
-                /** Format: double */
-                confidence: number;
-                /** Format: date-time */
-                createdAt: string;
-                /**
-                 * @description Plugin-stable identity for the release (used for dedup).
-                 * @example nyaa:1234567
-                 */
-                externalReleaseId: string;
-                /** @description Sparse `{ "jxl": true, "container": "cbz", ... }`. */
-                formatHints?: unknown;
-                /** @description Group/scanlator/uploader attribution. */
-                groupOrUploader?: string | null;
-                /**
-                 * Format: uuid
-                 * @example 550e8400-e29b-41d4-a716-446655440a00
-                 */
-                id: string;
-                /** @description Torrent info_hash, if applicable. */
-                infoHash?: string | null;
-                language?: string | null;
-                /**
-                 * @description Optional second URL for direct fetch (`.torrent`, `magnet:`, DDL
-                 *     link). Travels paired with [`Self::media_url_kind`].
-                 */
-                mediaUrl?: string | null;
-                /**
-                 * @description Classifies what `media_url` points at: `torrent` | `magnet` |
-                 *     `direct` | `other`. The frontend uses this to pick a kind-specific
-                 *     icon next to the standard external-link icon.
-                 */
-                mediaUrlKind?: string | null;
-                /** @description Source-specific extras (free-form). */
-                metadata?: unknown;
-                /**
-                 * Format: date-time
-                 * @description When Codex detected this release.
-                 */
-                observedAt: string;
-                /**
-                 * @description Where to acquire the release. Conventionally a human-readable
-                 *     landing page (Nyaa view page, MangaUpdates release page).
-                 */
-                payloadUrl: string;
-                /**
-                 * Format: date-time
-                 * @description Upstream publish date from the source feed. `null` when unavailable.
-                 */
-                releasedAt?: string | null;
-                /**
-                 * Format: uuid
-                 * @example 550e8400-e29b-41d4-a716-446655440002
-                 */
-                seriesId: string;
-                /**
-                 * @description Series title at the time of the response. Joined from the `series`
-                 *     table so the inbox UI can render a human-readable label without a
-                 *     follow-up fetch. Falls back to the empty string only if the series
-                 *     row was hard-deleted between the join and the read.
-                 * @example Chainsaw Man
-                 */
-                seriesTitle: string;
-                /**
-                 * Format: uuid
-                 * @example 550e8400-e29b-41d4-a716-446655440b00
-                 */
-                sourceId: string;
-                /** @description `announced` | `dismissed` | `marked_acquired` | `hidden`. */
-                state: string;
-                /**
-                 * @description Full volume coverage as a normalized span list. `null` semantics
-                 *     mirror [`Self::chapters`].
-                 */
-                volumes?: components["schemas"]["ReleaseSpanDto"][] | null;
-            }[];
+            data: components["schemas"]["ReleaseLedgerEntryDto"][];
             /** @description HATEOAS navigation links */
             links: components["schemas"]["PaginationLinks"];
             /**
@@ -15262,171 +14867,7 @@ export interface components {
         /** @description Generic paginated response wrapper with HATEOAS links */
         PaginatedResponse_SeriesDto: {
             /** @description The data items for this page */
-            data: {
-                /**
-                 * Format: int64
-                 * @description Total number of books in this series
-                 * @example 4
-                 */
-                bookCount: number;
-                /**
-                 * Format: date-time
-                 * @description When the series was created
-                 * @example 2024-01-01T00:00:00Z
-                 */
-                createdAt: string;
-                /**
-                 * @description Whether the series has a custom cover uploaded
-                 * @example false
-                 */
-                hasCustomCover?: boolean | null;
-                /**
-                 * Format: uuid
-                 * @description Series unique identifier
-                 * @example 550e8400-e29b-41d4-a716-446655440002
-                 */
-                id: string;
-                /**
-                 * Format: uuid
-                 * @description Library unique identifier
-                 * @example 550e8400-e29b-41d4-a716-446655440000
-                 */
-                libraryId: string;
-                /**
-                 * @description Name of the library this series belongs to
-                 * @example Comics
-                 */
-                libraryName: string;
-                /**
-                 * Format: float
-                 * @description Highest `book_metadata.chapter` across the books in this series.
-                 *
-                 *     `None` when no book in the series has `chapter` populated. When
-                 *     non-null and `metadata.totalChapterCount` is also known, the UI renders
-                 *     `<localMaxChapter>/<totalChapterCount> ch`.
-                 * @example 137.5
-                 */
-                localMaxChapter?: number | null;
-                /**
-                 * Format: int32
-                 * @description Highest `book_metadata.volume` across the books in this series.
-                 *
-                 *     `None` when no book in the series has `volume` populated. When
-                 *     non-null and `metadata.totalVolumeCount` is also known, the UI renders
-                 *     `<localMaxVolume>/<totalVolumeCount> vol` instead of the legacy
-                 *     `<bookCount>/<totalVolumeCount> vol`.
-                 * @example 14
-                 */
-                localMaxVolume?: number | null;
-                /**
-                 * @description Filesystem path to the series directory
-                 * @example /media/comics/Batman - Year One
-                 */
-                path?: string | null;
-                /**
-                 * @description Publisher name
-                 * @example DC Comics
-                 */
-                publisher?: string | null;
-                /**
-                 * @description Selected cover source (e.g., "first_book", "custom")
-                 * @example first_book
-                 */
-                selectedCoverSource?: string | null;
-                /**
-                 * @description Summary/description from series_metadata
-                 * @example The definitive origin story of Batman, following Bruce Wayne's first year as a vigilante.
-                 */
-                summary?: string | null;
-                /**
-                 * @description Series title from series_metadata
-                 * @example Batman: Year One
-                 */
-                title: string;
-                /**
-                 * @description Sort title from series_metadata (for ordering)
-                 * @example batman year one
-                 */
-                titleSort?: string | null;
-                /**
-                 * @description Whether release tracking is enabled for this series.
-                 *
-                 *     Mirrors `series_tracking.tracked`. `false` when no tracking row exists.
-                 *     Exposed so list views can surface a tracking indicator without an extra
-                 *     per-card request.
-                 * @example false
-                 */
-                tracked: boolean;
-                /**
-                 * Format: int64
-                 * @description Number of unread books in this series (user-specific)
-                 * @example 2
-                 */
-                unreadCount?: number | null;
-                /**
-                 * Format: date-time
-                 * @description When the series was last updated
-                 * @example 2024-01-15T10:30:00Z
-                 */
-                updatedAt: string;
-                /**
-                 * Format: float
-                 * @description Difference between the upstream original-language chapter count
-                 *     (`series_metadata.total_chapter_count`, supplied by metadata
-                 *     providers like MangaBaka or AniList) and the highest locally-owned
-                 *     chapter (`local_max_chapter`).
-                 *
-                 *     Always `None` unless the series is tracked AND `track_chapters` is
-                 *     enabled AND the provider count is populated AND the rounded-to-1-
-                 *     decimal gap is positive. **This is an informational signal, not a
-                 *     release announcement**; the MangaUpdates plugin owns the
-                 *     translation-release feed.
-                 * @example 3
-                 */
-                upstreamChapterGap?: number | null;
-                /**
-                 * @description Display name of the metadata provider that supplied the upstream
-                 *     counts (e.g., "MangaBaka", "AniList"). Set whenever at least one of
-                 *     `upstream_chapter_gap` / `upstream_volume_gap` is populated. Used by
-                 *     the gap badge tooltip.
-                 * @example MangaBaka
-                 */
-                upstreamGapProvider?: string | null;
-                /**
-                 * Format: int32
-                 * @description Difference between the upstream original-language volume count
-                 *     (`series_metadata.total_volume_count`) and the highest locally-owned
-                 *     volume (`local_max_volume`). Same suppression rules as
-                 *     `upstream_chapter_gap`, gated on `track_volumes`.
-                 * @example 1
-                 */
-                upstreamVolumeGap?: number | null;
-                /**
-                 * Format: int64
-                 * @description Number of books in this series classified as a complete volume
-                 *     (`volume IS NOT NULL AND chapter IS NULL`).
-                 *
-                 *     Distinct from `bookCount`: a chapter inside a volume (`v15 c126`)
-                 *     counts as a chapter, not a volume. `None` when no books exist;
-                 *     `Some(0)` when books exist but none are complete volumes.
-                 * @example 14
-                 */
-                volumesOwned?: number | null;
-                /**
-                 * @description Whether the requesting user has this series in their want-to-read queue.
-                 *
-                 *     `None` when not computed for this response (e.g. list endpoints that
-                 *     don't enrich it); populated on the series detail endpoint.
-                 * @example false
-                 */
-                wantToRead?: boolean | null;
-                /**
-                 * Format: int32
-                 * @description Release year
-                 * @example 1987
-                 */
-                year?: number | null;
-            }[];
+            data: components["schemas"]["SeriesDto"][];
             /** @description HATEOAS navigation links */
             links: components["schemas"]["PaginationLinks"];
             /**
@@ -15457,37 +14898,7 @@ export interface components {
         /** @description Generic paginated response wrapper with HATEOAS links */
         PaginatedResponse_SeriesExternalIndexDto: {
             /** @description The data items for this page */
-            data: {
-                /** @description External IDs linked to this series (empty if none have been linked yet) */
-                externalIds: components["schemas"]["SeriesExternalIdRefDto"][];
-                /**
-                 * Format: uuid
-                 * @description Series ID (build the Codex web deep link `/series/{id}` consumer-side)
-                 * @example 550e8400-e29b-41d4-a716-446655440002
-                 */
-                id: string;
-                /**
-                 * Format: float
-                 * @description Highest `book_metadata.chapter` across non-deleted books, or null if
-                 *     no book in the series has a parsed chapter.
-                 * @example 130.5
-                 */
-                localMaxChapter?: number | null;
-                /**
-                 * Format: int32
-                 * @description Highest `book_metadata.volume` across non-deleted books, or null if
-                 *     no book in the series has a parsed volume.
-                 * @example 12
-                 */
-                localMaxVolume?: number | null;
-                /**
-                 * Format: int64
-                 * @description Count of complete-volume files (volume set, chapter null). A soft,
-                 *     display-only signal; not authoritative for "how far along".
-                 * @example 12
-                 */
-                volumesOwned?: number | null;
-            }[];
+            data: components["schemas"]["SeriesExternalIndexDto"][];
             /** @description HATEOAS navigation links */
             links: components["schemas"]["PaginationLinks"];
             /**
@@ -15518,48 +14929,7 @@ export interface components {
         /** @description Generic paginated response wrapper with HATEOAS links */
         PaginatedResponse_SharingTagDto: {
             /** @description The data items for this page */
-            data: {
-                /**
-                 * Format: date-time
-                 * @description Creation timestamp
-                 * @example 2024-01-01T00:00:00Z
-                 */
-                createdAt: string;
-                /**
-                 * @description Optional description
-                 * @example Content appropriate for children
-                 */
-                description?: string | null;
-                /**
-                 * Format: uuid
-                 * @description Unique sharing tag identifier
-                 * @example 550e8400-e29b-41d4-a716-446655440000
-                 */
-                id: string;
-                /**
-                 * @description Display name of the sharing tag
-                 * @example Kids Content
-                 */
-                name: string;
-                /**
-                 * Format: int64
-                 * @description Number of series tagged with this sharing tag
-                 * @example 42
-                 */
-                seriesCount: number;
-                /**
-                 * Format: date-time
-                 * @description Last update timestamp
-                 * @example 2024-01-15T10:30:00Z
-                 */
-                updatedAt: string;
-                /**
-                 * Format: int64
-                 * @description Number of users with grants for this sharing tag
-                 * @example 5
-                 */
-                userCount: number;
-            }[];
+            data: components["schemas"]["SharingTagDto"][];
             /** @description HATEOAS navigation links */
             links: components["schemas"]["PaginationLinks"];
             /**
@@ -15590,31 +14960,7 @@ export interface components {
         /** @description Generic paginated response wrapper with HATEOAS links */
         PaginatedResponse_TagDto: {
             /** @description The data items for this page */
-            data: {
-                /**
-                 * Format: date-time
-                 * @description When the tag was created
-                 * @example 2024-01-01T00:00:00Z
-                 */
-                createdAt: string;
-                /**
-                 * Format: uuid
-                 * @description Tag ID
-                 * @example 550e8400-e29b-41d4-a716-446655440020
-                 */
-                id: string;
-                /**
-                 * @description Tag name
-                 * @example Completed
-                 */
-                name: string;
-                /**
-                 * Format: int64
-                 * @description Number of series with this tag
-                 * @example 15
-                 */
-                seriesCount?: number | null;
-            }[];
+            data: components["schemas"]["TagDto"][];
             /** @description HATEOAS navigation links */
             links: components["schemas"]["PaginationLinks"];
             /**
@@ -15645,51 +14991,7 @@ export interface components {
         /** @description Generic paginated response wrapper with HATEOAS links */
         PaginatedResponse_UserDto: {
             /** @description The data items for this page */
-            data: {
-                /**
-                 * Format: date-time
-                 * @description Account creation timestamp
-                 * @example 2024-01-01T00:00:00Z
-                 */
-                createdAt: string;
-                /**
-                 * @description User email address
-                 * @example john.doe@example.com
-                 */
-                email: string;
-                /**
-                 * Format: uuid
-                 * @description Unique user identifier
-                 * @example 550e8400-e29b-41d4-a716-446655440000
-                 */
-                id: string;
-                /**
-                 * @description Whether the account is active
-                 * @example true
-                 */
-                isActive: boolean;
-                /**
-                 * Format: date-time
-                 * @description Timestamp of last login
-                 * @example 2024-01-15T10:30:00Z
-                 */
-                lastLoginAt?: string | null;
-                /** @description Custom permissions that extend the role's base permissions */
-                permissions: string[];
-                /** @description User role (reader, maintainer, admin) */
-                role: components["schemas"]["UserRole"];
-                /**
-                 * Format: date-time
-                 * @description Last account update timestamp
-                 * @example 2024-01-15T10:30:00Z
-                 */
-                updatedAt: string;
-                /**
-                 * @description Username for login
-                 * @example johndoe
-                 */
-                username: string;
-            }[];
+            data: components["schemas"]["UserDto"][];
             /** @description HATEOAS navigation links */
             links: components["schemas"]["PaginationLinks"];
             /**
@@ -18586,7 +17888,14 @@ export interface components {
         };
         /** @description Search series request */
         SearchSeriesRequest: {
-            /** @description Return full series data including metadata, locks, genres, tags, etc. */
+            /**
+             * @deprecated
+             * @description Return full series data including metadata, locks, genres, tags, etc.
+             *     **Deprecated.** Prefer `GET /books/{book_id}/full` and
+             *     `GET /series/{series_id}/full`. A response whose schema depends on a
+             *     query parameter cannot be expressed in OpenAPI, so this form is
+             *     invisible to a generated client. Scheduled for removal in 3.0.
+             */
             full?: boolean;
             /**
              * Format: uuid
@@ -24029,8 +23338,13 @@ export interface operations {
                 /** @description Sort parameter (format: "field,direction" e.g. "title,asc") */
                 sort?: string | null;
                 /**
+                 * @deprecated
                  * @description Return full data including metadata and locks.
                  *     Default is false for backward compatibility.
+                 *     **Deprecated.** Prefer `GET /books/{book_id}/full` and
+                 *     `GET /series/{series_id}/full`. A response whose schema depends on a
+                 *     query parameter cannot be expressed in OpenAPI, so this form is
+                 *     invisible to a generated client. Scheduled for removal in 3.0.
                  */
                 full?: boolean;
             };
@@ -24462,8 +23776,13 @@ export interface operations {
                 /** @description Sort parameter (format: "field,direction" e.g. "title,asc") */
                 sort?: string | null;
                 /**
+                 * @deprecated
                  * @description Return full data including metadata and locks.
                  *     Default is false for backward compatibility.
+                 *     **Deprecated.** Prefer `GET /books/{book_id}/full` and
+                 *     `GET /series/{series_id}/full`. A response whose schema depends on a
+                 *     query parameter cannot be expressed in OpenAPI, so this form is
+                 *     invisible to a generated client. Scheduled for removal in 3.0.
                  */
                 full?: boolean;
             };
@@ -24501,8 +23820,13 @@ export interface operations {
                 /** @description Sort field and direction (e.g., "name,asc" or "createdAt,desc") */
                 sort?: string | null;
                 /**
+                 * @deprecated
                  * @description Return full data including metadata, locks, and related entities.
                  *     Default is false for backward compatibility.
+                 *     **Deprecated.** Prefer `GET /books/{book_id}/full` and
+                 *     `GET /series/{series_id}/full`. A response whose schema depends on a
+                 *     query parameter cannot be expressed in OpenAPI, so this form is
+                 *     invisible to a generated client. Scheduled for removal in 3.0.
                  */
                 full?: boolean;
             };
@@ -24548,8 +23872,13 @@ export interface operations {
                 /** @description Sort parameter (format: "field,direction" e.g. "title,asc") */
                 sort?: string | null;
                 /**
+                 * @deprecated
                  * @description Return full data including metadata and locks.
                  *     Default is false for backward compatibility.
+                 *     **Deprecated.** Prefer `GET /books/{book_id}/full` and
+                 *     `GET /series/{series_id}/full`. A response whose schema depends on a
+                 *     query parameter cannot be expressed in OpenAPI, so this form is
+                 *     invisible to a generated client. Scheduled for removal in 3.0.
                  */
                 full?: boolean;
             };
@@ -24591,8 +23920,13 @@ export interface operations {
                 /** @description Sort parameter (format: "field,direction" e.g. "title,asc") */
                 sort?: string | null;
                 /**
+                 * @deprecated
                  * @description Return full data including metadata and locks.
                  *     Default is false for backward compatibility.
+                 *     **Deprecated.** Prefer `GET /books/{book_id}/full` and
+                 *     `GET /series/{series_id}/full`. A response whose schema depends on a
+                 *     query parameter cannot be expressed in OpenAPI, so this form is
+                 *     invisible to a generated client. Scheduled for removal in 3.0.
                  */
                 full?: boolean;
             };
@@ -24730,8 +24064,13 @@ export interface operations {
         parameters: {
             query?: {
                 /**
+                 * @deprecated
                  * @description Return full data including metadata and locks.
                  *     Default is false for backward compatibility.
+                 *     **Deprecated.** Prefer `GET /books/{book_id}/full` and
+                 *     `GET /series/{series_id}/full`. A response whose schema depends on a
+                 *     query parameter cannot be expressed in OpenAPI, so this form is
+                 *     invisible to a generated client. Scheduled for removal in 3.0.
                  */
                 full?: boolean;
             };
@@ -25453,6 +24792,43 @@ export interface operations {
             };
             /** @description The requested range names no byte of the file */
             416: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_book_full: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Book ID */
+                book_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Book with its related data */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FullBookResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Book not found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -27512,8 +26888,13 @@ export interface operations {
                 /** @description Sort parameter (format: "field,direction" e.g. "title,asc") */
                 sort?: string;
                 /**
+                 * @deprecated
                  * @description Return full data including metadata and locks.
                  *     Default is false for backward compatibility.
+                 *     **Deprecated.** Prefer `GET /books/{book_id}/full` and
+                 *     `GET /series/{series_id}/full`. A response whose schema depends on a
+                 *     query parameter cannot be expressed in OpenAPI, so this form is
+                 *     invisible to a generated client. Scheduled for removal in 3.0.
                  */
                 full?: boolean;
             };
@@ -27554,8 +26935,13 @@ export interface operations {
                 /** @description Sort parameter (format: "field,direction" e.g. "title,asc") */
                 sort?: string;
                 /**
+                 * @deprecated
                  * @description Return full data including metadata and locks.
                  *     Default is false for backward compatibility.
+                 *     **Deprecated.** Prefer `GET /books/{book_id}/full` and
+                 *     `GET /series/{series_id}/full`. A response whose schema depends on a
+                 *     query parameter cannot be expressed in OpenAPI, so this form is
+                 *     invisible to a generated client. Scheduled for removal in 3.0.
                  */
                 full?: boolean;
             };
@@ -27596,8 +26982,13 @@ export interface operations {
                 /** @description Sort parameter (format: "field,direction" e.g. "title,asc") */
                 sort?: string;
                 /**
+                 * @deprecated
                  * @description Return full data including metadata and locks.
                  *     Default is false for backward compatibility.
+                 *     **Deprecated.** Prefer `GET /books/{book_id}/full` and
+                 *     `GET /series/{series_id}/full`. A response whose schema depends on a
+                 *     query parameter cannot be expressed in OpenAPI, so this form is
+                 *     invisible to a generated client. Scheduled for removal in 3.0.
                  */
                 full?: boolean;
             };
@@ -27638,8 +27029,13 @@ export interface operations {
                 /** @description Sort parameter (format: "field,direction" e.g. "title,asc") */
                 sort?: string;
                 /**
+                 * @deprecated
                  * @description Return full data including metadata and locks.
                  *     Default is false for backward compatibility.
+                 *     **Deprecated.** Prefer `GET /books/{book_id}/full` and
+                 *     `GET /series/{series_id}/full`. A response whose schema depends on a
+                 *     query parameter cannot be expressed in OpenAPI, so this form is
+                 *     invisible to a generated client. Scheduled for removal in 3.0.
                  */
                 full?: boolean;
             };
@@ -28230,8 +27626,13 @@ export interface operations {
                 /** @description Filter by library ID */
                 libraryId?: string | null;
                 /**
+                 * @deprecated
                  * @description Return full series data including metadata, locks, genres, tags, alternate titles,
                  *     external ratings, and external links. Default is false for backward compatibility.
+                 *     **Deprecated.** Prefer `GET /books/{book_id}/full` and
+                 *     `GET /series/{series_id}/full`. A response whose schema depends on a
+                 *     query parameter cannot be expressed in OpenAPI, so this form is
+                 *     invisible to a generated client. Scheduled for removal in 3.0.
                  */
                 full?: boolean;
             };
@@ -28265,7 +27666,14 @@ export interface operations {
     list_library_in_progress_series: {
         parameters: {
             query?: {
-                /** @description Return full series data including metadata, locks, genres, tags, etc. */
+                /**
+                 * @deprecated
+                 * @description Return full series data including metadata, locks, genres, tags, etc.
+                 *     **Deprecated.** Prefer `GET /books/{book_id}/full` and
+                 *     `GET /series/{series_id}/full`. A response whose schema depends on a
+                 *     query parameter cannot be expressed in OpenAPI, so this form is
+                 *     invisible to a generated client. Scheduled for removal in 3.0.
+                 */
                 full?: boolean;
             };
             header?: never;
@@ -28302,7 +27710,14 @@ export interface operations {
                 limit?: number;
                 /** @description Filter by library ID (optional) */
                 libraryId?: string | null;
-                /** @description Return full series data including metadata, locks, genres, tags, etc. */
+                /**
+                 * @deprecated
+                 * @description Return full series data including metadata, locks, genres, tags, etc.
+                 *     **Deprecated.** Prefer `GET /books/{book_id}/full` and
+                 *     `GET /series/{series_id}/full`. A response whose schema depends on a
+                 *     query parameter cannot be expressed in OpenAPI, so this form is
+                 *     invisible to a generated client. Scheduled for removal in 3.0.
+                 */
                 full?: boolean;
             };
             header?: never;
@@ -28339,7 +27754,14 @@ export interface operations {
                 limit?: number;
                 /** @description Filter by library ID (optional) */
                 libraryId?: string | null;
-                /** @description Return full series data including metadata, locks, genres, tags, etc. */
+                /**
+                 * @deprecated
+                 * @description Return full series data including metadata, locks, genres, tags, etc.
+                 *     **Deprecated.** Prefer `GET /books/{book_id}/full` and
+                 *     `GET /series/{series_id}/full`. A response whose schema depends on a
+                 *     query parameter cannot be expressed in OpenAPI, so this form is
+                 *     invisible to a generated client. Scheduled for removal in 3.0.
+                 */
                 full?: boolean;
             };
             header?: never;
@@ -30088,8 +29510,13 @@ export interface operations {
                 /** @description Filter by library ID */
                 libraryId?: string | null;
                 /**
+                 * @deprecated
                  * @description Return full series data including metadata, locks, genres, tags, alternate titles,
                  *     external ratings, and external links. Default is false for backward compatibility.
+                 *     **Deprecated.** Prefer `GET /books/{book_id}/full` and
+                 *     `GET /series/{series_id}/full`. A response whose schema depends on a
+                 *     query parameter cannot be expressed in OpenAPI, so this form is
+                 *     invisible to a generated client. Scheduled for removal in 3.0.
                  */
                 full?: boolean;
             };
@@ -30701,8 +30128,13 @@ export interface operations {
                 /** @description Sort field and direction (e.g., "name,asc" or "createdAt,desc") */
                 sort?: string | null;
                 /**
+                 * @deprecated
                  * @description Return full data including metadata, locks, and related entities.
                  *     Default is false for backward compatibility.
+                 *     **Deprecated.** Prefer `GET /books/{book_id}/full` and
+                 *     `GET /series/{series_id}/full`. A response whose schema depends on a
+                 *     query parameter cannot be expressed in OpenAPI, so this form is
+                 *     invisible to a generated client. Scheduled for removal in 3.0.
                  */
                 full?: boolean;
             };
@@ -30730,12 +30162,59 @@ export interface operations {
             };
         };
     };
+    list_series_full: {
+        parameters: {
+            query?: {
+                /** @description Page number (1-indexed, default 1) */
+                page?: number;
+                /** @description Number of items per page (max 100, default 50) */
+                pageSize?: number;
+                /** @description Sort parameter (format: "field,direction" e.g. "name,asc") */
+                sort?: string | null;
+                /** @description Filter by genres (comma-separated, AND logic - series must have ALL specified genres) */
+                genres?: string | null;
+                /** @description Filter by tags (comma-separated, AND logic - series must have ALL specified tags) */
+                tags?: string | null;
+                /** @description Filter by library ID */
+                libraryId?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated series with their related data */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedResponse_FullSeriesResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     list_in_progress_series: {
         parameters: {
             query?: {
                 /** @description Filter by library ID (optional) */
                 libraryId?: string | null;
-                /** @description Return full series data including metadata, locks, genres, tags, etc. */
+                /**
+                 * @deprecated
+                 * @description Return full series data including metadata, locks, genres, tags, etc.
+                 *     **Deprecated.** Prefer `GET /books/{book_id}/full` and
+                 *     `GET /series/{series_id}/full`. A response whose schema depends on a
+                 *     query parameter cannot be expressed in OpenAPI, so this form is
+                 *     invisible to a generated client. Scheduled for removal in 3.0.
+                 */
                 full?: boolean;
             };
             header?: never;
@@ -30772,8 +30251,13 @@ export interface operations {
                 /** @description Sort field and direction (e.g., "name,asc" or "createdAt,desc") */
                 sort?: string | null;
                 /**
+                 * @deprecated
                  * @description Return full data including metadata, locks, and related entities.
                  *     Default is false for backward compatibility.
+                 *     **Deprecated.** Prefer `GET /books/{book_id}/full` and
+                 *     `GET /series/{series_id}/full`. A response whose schema depends on a
+                 *     query parameter cannot be expressed in OpenAPI, so this form is
+                 *     invisible to a generated client. Scheduled for removal in 3.0.
                  */
                 full?: boolean;
             };
@@ -30895,7 +30379,14 @@ export interface operations {
                 limit?: number;
                 /** @description Filter by library ID (optional) */
                 libraryId?: string | null;
-                /** @description Return full series data including metadata, locks, genres, tags, etc. */
+                /**
+                 * @deprecated
+                 * @description Return full series data including metadata, locks, genres, tags, etc.
+                 *     **Deprecated.** Prefer `GET /books/{book_id}/full` and
+                 *     `GET /series/{series_id}/full`. A response whose schema depends on a
+                 *     query parameter cannot be expressed in OpenAPI, so this form is
+                 *     invisible to a generated client. Scheduled for removal in 3.0.
+                 */
                 full?: boolean;
             };
             header?: never;
@@ -30929,7 +30420,14 @@ export interface operations {
                 limit?: number;
                 /** @description Filter by library ID (optional) */
                 libraryId?: string | null;
-                /** @description Return full series data including metadata, locks, genres, tags, etc. */
+                /**
+                 * @deprecated
+                 * @description Return full series data including metadata, locks, genres, tags, etc.
+                 *     **Deprecated.** Prefer `GET /books/{book_id}/full` and
+                 *     `GET /series/{series_id}/full`. A response whose schema depends on a
+                 *     query parameter cannot be expressed in OpenAPI, so this form is
+                 *     invisible to a generated client. Scheduled for removal in 3.0.
+                 */
                 full?: boolean;
             };
             header?: never;
@@ -31319,7 +30817,14 @@ export interface operations {
     get_series: {
         parameters: {
             query?: {
-                /** @description Return full series data including metadata, locks, genres, tags, etc. */
+                /**
+                 * @deprecated
+                 * @description Return full series data including metadata, locks, genres, tags, etc.
+                 *     **Deprecated.** Prefer `GET /books/{book_id}/full` and
+                 *     `GET /series/{series_id}/full`. A response whose schema depends on a
+                 *     query parameter cannot be expressed in OpenAPI, so this form is
+                 *     invisible to a generated client. Scheduled for removal in 3.0.
+                 */
                 full?: boolean;
             };
             header?: never;
@@ -31759,8 +31264,13 @@ export interface operations {
                 /** @description Include deleted books in the result */
                 includeDeleted?: boolean;
                 /**
+                 * @deprecated
                  * @description Return full data including metadata and locks.
                  *     Default is false for backward compatibility.
+                 *     **Deprecated.** Prefer `GET /books/{book_id}/full` and
+                 *     `GET /series/{series_id}/full`. A response whose schema depends on a
+                 *     query parameter cannot be expressed in OpenAPI, so this form is
+                 *     invisible to a generated client. Scheduled for removal in 3.0.
                  */
                 full?: boolean;
             };
@@ -32488,6 +31998,43 @@ export interface operations {
                 content?: never;
             };
             /** @description Series or rating not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_series_full: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                series_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Series with its related data */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FullSeriesResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
             404: {
                 headers: {
                     [name: string]: unknown;

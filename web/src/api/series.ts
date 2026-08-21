@@ -66,17 +66,20 @@ export const seriesApi = {
     return response.data;
   },
 
-  // Get a single series by ID
-  getById: async <T extends boolean = false>(
-    id: string,
-    options?: { full?: T },
-  ): Promise<T extends true ? FullSeries : Series> => {
-    const params = new URLSearchParams();
-    if (options?.full) params.set("full", "true");
-    const queryString = params.toString();
-    const url = `/series/${id}${queryString ? `?${queryString}` : ""}`;
+  // Get a single series by ID.
+  getById: async (id: string): Promise<Series> => {
+    const response = await api.get<Series>(`/series/${id}`);
+    return response.data;
+  },
 
-    const response = await api.get<T extends true ? FullSeries : Series>(url);
+  // Get a series with its metadata, genres, tags and external links in one
+  // response.
+  //
+  // Uses the dedicated route rather than the deprecated `?full=true`, which
+  // returns a different schema depending on its value and so cannot be
+  // described in OpenAPI. `full` is removed in 3.0.
+  getFull: async (id: string): Promise<FullSeries> => {
+    const response = await api.get<FullSeries>(`/series/${id}/full`);
     return response.data;
   },
 

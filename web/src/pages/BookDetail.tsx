@@ -153,7 +153,7 @@ export function BookDetail() {
     error,
   } = useQuery({
     queryKey: bookKeys.detailFull(bookId),
-    queryFn: () => booksApi.getDetail(bookId!, { full: true }),
+    queryFn: () => booksApi.getFull(bookId!),
     enabled: !!bookId,
   });
 
@@ -192,7 +192,7 @@ export function BookDetail() {
   // Fetch parent series (full) for building the book context's embedded series context
   const { data: parentSeries } = useQuery({
     queryKey: ["series", bookDetail?.seriesId, "full"],
-    queryFn: () => seriesApi.getById(bookDetail!.seriesId, { full: true }),
+    queryFn: () => seriesApi.getFull(bookDetail!.seriesId),
     enabled: !!bookDetail?.seriesId,
     staleTime: 5 * 60 * 1000,
   });

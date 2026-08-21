@@ -78,10 +78,20 @@ pub struct ListPaginationParams {
     /// Return full data including metadata, locks, and related entities.
     /// Default is false for backward compatibility.
     #[serde(default)]
+    /// **Deprecated.** Prefer `GET /books/{book_id}/full` and
+    /// `GET /series/{series_id}/full`. A response whose schema depends on a
+    /// query parameter cannot be expressed in OpenAPI, so this form is
+    /// invisible to a generated client. Scheduled for removal in 3.0.
+    #[deprecated(
+        since = "2.2.0",
+        note = "use GET /books/{book_id}/full or GET /series/{series_id}/full; \
+a response shape that depends on a query parameter cannot be described in OpenAPI"
+    )]
     pub full: bool,
 }
 
 impl Default for ListPaginationParams {
+    #[allow(deprecated)] // still constructs the deprecated `full` parameter
     fn default() -> Self {
         Self {
             page: DEFAULT_PAGE,

@@ -189,6 +189,15 @@ pub struct SearchSeriesRequest {
 
     /// Return full series data including metadata, locks, genres, tags, etc.
     #[serde(default)]
+    /// **Deprecated.** Prefer `GET /books/{book_id}/full` and
+    /// `GET /series/{series_id}/full`. A response whose schema depends on a
+    /// query parameter cannot be expressed in OpenAPI, so this form is
+    /// invisible to a generated client. Scheduled for removal in 3.0.
+    #[deprecated(
+        since = "2.2.0",
+        note = "use GET /books/{book_id}/full or GET /series/{series_id}/full; \
+a response shape that depends on a query parameter cannot be described in OpenAPI"
+    )]
     pub full: bool,
 }
 

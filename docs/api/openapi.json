@@ -2796,8 +2796,9 @@
           {
             "name": "full",
             "in": "query",
-            "description": "Return full data including metadata and locks.\nDefault is false for backward compatibility.",
+            "description": "Return full data including metadata and locks.\nDefault is false for backward compatibility.\n**Deprecated.** Prefer `GET /books/{book_id}/full` and\n`GET /series/{series_id}/full`. A response whose schema depends on a\nquery parameter cannot be expressed in OpenAPI, so this form is\ninvisible to a generated client. Scheduled for removal in 3.0.",
             "required": false,
+            "deprecated": true,
             "schema": {
               "type": "boolean"
             }
@@ -3386,8 +3387,9 @@
           {
             "name": "full",
             "in": "query",
-            "description": "Return full data including metadata and locks.\nDefault is false for backward compatibility.",
+            "description": "Return full data including metadata and locks.\nDefault is false for backward compatibility.\n**Deprecated.** Prefer `GET /books/{book_id}/full` and\n`GET /series/{series_id}/full`. A response whose schema depends on a\nquery parameter cannot be expressed in OpenAPI, so this form is\ninvisible to a generated client. Scheduled for removal in 3.0.",
             "required": false,
+            "deprecated": true,
             "schema": {
               "type": "boolean"
             }
@@ -3467,8 +3469,9 @@
           {
             "name": "full",
             "in": "query",
-            "description": "Return full data including metadata, locks, and related entities.\nDefault is false for backward compatibility.",
+            "description": "Return full data including metadata, locks, and related entities.\nDefault is false for backward compatibility.\n**Deprecated.** Prefer `GET /books/{book_id}/full` and\n`GET /series/{series_id}/full`. A response whose schema depends on a\nquery parameter cannot be expressed in OpenAPI, so this form is\ninvisible to a generated client. Scheduled for removal in 3.0.",
             "required": false,
+            "deprecated": true,
             "schema": {
               "type": "boolean"
             }
@@ -3580,8 +3583,9 @@
           {
             "name": "full",
             "in": "query",
-            "description": "Return full data including metadata and locks.\nDefault is false for backward compatibility.",
+            "description": "Return full data including metadata and locks.\nDefault is false for backward compatibility.\n**Deprecated.** Prefer `GET /books/{book_id}/full` and\n`GET /series/{series_id}/full`. A response whose schema depends on a\nquery parameter cannot be expressed in OpenAPI, so this form is\ninvisible to a generated client. Scheduled for removal in 3.0.",
             "required": false,
+            "deprecated": true,
             "schema": {
               "type": "boolean"
             }
@@ -3683,8 +3687,9 @@
           {
             "name": "full",
             "in": "query",
-            "description": "Return full data including metadata and locks.\nDefault is false for backward compatibility.",
+            "description": "Return full data including metadata and locks.\nDefault is false for backward compatibility.\n**Deprecated.** Prefer `GET /books/{book_id}/full` and\n`GET /series/{series_id}/full`. A response whose schema depends on a\nquery parameter cannot be expressed in OpenAPI, so this form is\ninvisible to a generated client. Scheduled for removal in 3.0.",
             "required": false,
+            "deprecated": true,
             "schema": {
               "type": "boolean"
             }
@@ -3891,8 +3896,9 @@
           {
             "name": "full",
             "in": "query",
-            "description": "Return full data including metadata and locks.\nDefault is false for backward compatibility.",
+            "description": "Return full data including metadata and locks.\nDefault is false for backward compatibility.\n**Deprecated.** Prefer `GET /books/{book_id}/full` and\n`GET /series/{series_id}/full`. A response whose schema depends on a\nquery parameter cannot be expressed in OpenAPI, so this form is\ninvisible to a generated client. Scheduled for removal in 3.0.",
             "required": false,
+            "deprecated": true,
             "schema": {
               "type": "boolean"
             }
@@ -4821,6 +4827,54 @@
           },
           "416": {
             "description": "The requested range names no byte of the file"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/books/{book_id}/full": {
+      "get": {
+        "tags": [
+          "Books"
+        ],
+        "summary": "Get a book with its metadata, genres and tags in one response",
+        "description": "The same book `GET /api/v1/books/{book_id}` returns, plus the related data a\ndetail screen needs, so it does not have to fan out into separate metadata,\ngenre and tag requests.\n\nThis exists as its own route because the shape is genuinely different, not\nmerely richer: it carries `metadata`, `genres`, `tags`, `readCount` and\n`lastCompletedAt`, and it moves `chapter`, `summary` and `volume` inside\n`metadata`. A response whose schema depends on a query parameter cannot be\nexpressed in OpenAPI, so the deprecated `?full=true` form is undescribable\nand unusable from a generated client. This route is describable.",
+        "operationId": "get_book_full",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "description": "Book ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Book with its related data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FullBookResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Book not found"
           }
         },
         "security": [
@@ -7477,8 +7531,9 @@
           {
             "name": "full",
             "in": "query",
-            "description": "Return full data including metadata and locks.\nDefault is false for backward compatibility.",
+            "description": "Return full data including metadata and locks.\nDefault is false for backward compatibility.\n**Deprecated.** Prefer `GET /books/{book_id}/full` and\n`GET /series/{series_id}/full`. A response whose schema depends on a\nquery parameter cannot be expressed in OpenAPI, so this form is\ninvisible to a generated client. Scheduled for removal in 3.0.",
             "required": false,
+            "deprecated": true,
             "schema": {
               "type": "boolean"
             }
@@ -7561,8 +7616,9 @@
           {
             "name": "full",
             "in": "query",
-            "description": "Return full data including metadata and locks.\nDefault is false for backward compatibility.",
+            "description": "Return full data including metadata and locks.\nDefault is false for backward compatibility.\n**Deprecated.** Prefer `GET /books/{book_id}/full` and\n`GET /series/{series_id}/full`. A response whose schema depends on a\nquery parameter cannot be expressed in OpenAPI, so this form is\ninvisible to a generated client. Scheduled for removal in 3.0.",
             "required": false,
+            "deprecated": true,
             "schema": {
               "type": "boolean"
             }
@@ -7645,8 +7701,9 @@
           {
             "name": "full",
             "in": "query",
-            "description": "Return full data including metadata and locks.\nDefault is false for backward compatibility.",
+            "description": "Return full data including metadata and locks.\nDefault is false for backward compatibility.\n**Deprecated.** Prefer `GET /books/{book_id}/full` and\n`GET /series/{series_id}/full`. A response whose schema depends on a\nquery parameter cannot be expressed in OpenAPI, so this form is\ninvisible to a generated client. Scheduled for removal in 3.0.",
             "required": false,
+            "deprecated": true,
             "schema": {
               "type": "boolean"
             }
@@ -7729,8 +7786,9 @@
           {
             "name": "full",
             "in": "query",
-            "description": "Return full data including metadata and locks.\nDefault is false for backward compatibility.",
+            "description": "Return full data including metadata and locks.\nDefault is false for backward compatibility.\n**Deprecated.** Prefer `GET /books/{book_id}/full` and\n`GET /series/{series_id}/full`. A response whose schema depends on a\nquery parameter cannot be expressed in OpenAPI, so this form is\ninvisible to a generated client. Scheduled for removal in 3.0.",
             "required": false,
+            "deprecated": true,
             "schema": {
               "type": "boolean"
             }
@@ -8583,8 +8641,9 @@
           {
             "name": "full",
             "in": "query",
-            "description": "Return full series data including metadata, locks, genres, tags, alternate titles,\nexternal ratings, and external links. Default is false for backward compatibility.",
+            "description": "Return full series data including metadata, locks, genres, tags, alternate titles,\nexternal ratings, and external links. Default is false for backward compatibility.\n**Deprecated.** Prefer `GET /books/{book_id}/full` and\n`GET /series/{series_id}/full`. A response whose schema depends on a\nquery parameter cannot be expressed in OpenAPI, so this form is\ninvisible to a generated client. Scheduled for removal in 3.0.",
             "required": false,
+            "deprecated": true,
             "schema": {
               "type": "boolean"
             }
@@ -8636,8 +8695,9 @@
           {
             "name": "full",
             "in": "query",
-            "description": "Return full series data including metadata, locks, genres, tags, etc.",
+            "description": "Return full series data including metadata, locks, genres, tags, etc.\n**Deprecated.** Prefer `GET /books/{book_id}/full` and\n`GET /series/{series_id}/full`. A response whose schema depends on a\nquery parameter cannot be expressed in OpenAPI, so this form is\ninvisible to a generated client. Scheduled for removal in 3.0.",
             "required": false,
+            "deprecated": true,
             "schema": {
               "type": "boolean"
             }
@@ -8716,8 +8776,9 @@
           {
             "name": "full",
             "in": "query",
-            "description": "Return full series data including metadata, locks, genres, tags, etc.",
+            "description": "Return full series data including metadata, locks, genres, tags, etc.\n**Deprecated.** Prefer `GET /books/{book_id}/full` and\n`GET /series/{series_id}/full`. A response whose schema depends on a\nquery parameter cannot be expressed in OpenAPI, so this form is\ninvisible to a generated client. Scheduled for removal in 3.0.",
             "required": false,
+            "deprecated": true,
             "schema": {
               "type": "boolean"
             }
@@ -8796,8 +8857,9 @@
           {
             "name": "full",
             "in": "query",
-            "description": "Return full series data including metadata, locks, genres, tags, etc.",
+            "description": "Return full series data including metadata, locks, genres, tags, etc.\n**Deprecated.** Prefer `GET /books/{book_id}/full` and\n`GET /series/{series_id}/full`. A response whose schema depends on a\nquery parameter cannot be expressed in OpenAPI, so this form is\ninvisible to a generated client. Scheduled for removal in 3.0.",
             "required": false,
+            "deprecated": true,
             "schema": {
               "type": "boolean"
             }
@@ -11130,8 +11192,9 @@
           {
             "name": "full",
             "in": "query",
-            "description": "Return full series data including metadata, locks, genres, tags, alternate titles,\nexternal ratings, and external links. Default is false for backward compatibility.",
+            "description": "Return full series data including metadata, locks, genres, tags, alternate titles,\nexternal ratings, and external links. Default is false for backward compatibility.\n**Deprecated.** Prefer `GET /books/{book_id}/full` and\n`GET /series/{series_id}/full`. A response whose schema depends on a\nquery parameter cannot be expressed in OpenAPI, so this form is\ninvisible to a generated client. Scheduled for removal in 3.0.",
             "required": false,
+            "deprecated": true,
             "schema": {
               "type": "boolean"
             }
@@ -11870,8 +11933,9 @@
           {
             "name": "full",
             "in": "query",
-            "description": "Return full data including metadata, locks, and related entities.\nDefault is false for backward compatibility.",
+            "description": "Return full data including metadata, locks, and related entities.\nDefault is false for backward compatibility.\n**Deprecated.** Prefer `GET /books/{book_id}/full` and\n`GET /series/{series_id}/full`. A response whose schema depends on a\nquery parameter cannot be expressed in OpenAPI, so this form is\ninvisible to a generated client. Scheduled for removal in 3.0.",
             "required": false,
+            "deprecated": true,
             "schema": {
               "type": "boolean"
             }
@@ -11884,6 +11948,112 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/PaginatedResponse_SeriesExternalIndexDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/series/full": {
+      "get": {
+        "tags": [
+          "Series"
+        ],
+        "summary": "List series with their metadata, genres, tags and external links",
+        "description": "The same page `GET /api/v1/series` returns, with each entry carrying the\nrelated data inline, so a caller that needs metadata for a whole library\npages it once instead of following up per series.\n\nThis exists as its own route because the shape is genuinely different, not\nmerely richer, and because a response whose schema depends on a query\nparameter cannot be expressed in OpenAPI — which made the deprecated\n`GET /api/v1/series?full=true` invisible to every generated client. Accepts\nthe same filters and pagination as the plain listing.",
+        "operationId": "list_series_full",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number (1-indexed, default 1)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "Number of items per page (max 100, default 50)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "Sort parameter (format: \"field,direction\" e.g. \"name,asc\")",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "genres",
+            "in": "query",
+            "description": "Filter by genres (comma-separated, AND logic - series must have ALL specified genres)",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "tags",
+            "in": "query",
+            "description": "Filter by tags (comma-separated, AND logic - series must have ALL specified tags)",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "libraryId",
+            "in": "query",
+            "description": "Filter by library ID",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated series with their related data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedResponse_FullSeriesResponse"
                 }
               }
             }
@@ -11926,8 +12096,9 @@
           {
             "name": "full",
             "in": "query",
-            "description": "Return full series data including metadata, locks, genres, tags, etc.",
+            "description": "Return full series data including metadata, locks, genres, tags, etc.\n**Deprecated.** Prefer `GET /books/{book_id}/full` and\n`GET /series/{series_id}/full`. A response whose schema depends on a\nquery parameter cannot be expressed in OpenAPI, so this form is\ninvisible to a generated client. Scheduled for removal in 3.0.",
             "required": false,
+            "deprecated": true,
             "schema": {
               "type": "boolean"
             }
@@ -12010,8 +12181,9 @@
           {
             "name": "full",
             "in": "query",
-            "description": "Return full data including metadata, locks, and related entities.\nDefault is false for backward compatibility.",
+            "description": "Return full data including metadata, locks, and related entities.\nDefault is false for backward compatibility.\n**Deprecated.** Prefer `GET /books/{book_id}/full` and\n`GET /series/{series_id}/full`. A response whose schema depends on a\nquery parameter cannot be expressed in OpenAPI, so this form is\ninvisible to a generated client. Scheduled for removal in 3.0.",
             "required": false,
+            "deprecated": true,
             "schema": {
               "type": "boolean"
             }
@@ -12185,8 +12357,9 @@
           {
             "name": "full",
             "in": "query",
-            "description": "Return full series data including metadata, locks, genres, tags, etc.",
+            "description": "Return full series data including metadata, locks, genres, tags, etc.\n**Deprecated.** Prefer `GET /books/{book_id}/full` and\n`GET /series/{series_id}/full`. A response whose schema depends on a\nquery parameter cannot be expressed in OpenAPI, so this form is\ninvisible to a generated client. Scheduled for removal in 3.0.",
             "required": false,
+            "deprecated": true,
             "schema": {
               "type": "boolean"
             }
@@ -12255,8 +12428,9 @@
           {
             "name": "full",
             "in": "query",
-            "description": "Return full series data including metadata, locks, genres, tags, etc.",
+            "description": "Return full series data including metadata, locks, genres, tags, etc.\n**Deprecated.** Prefer `GET /books/{book_id}/full` and\n`GET /series/{series_id}/full`. A response whose schema depends on a\nquery parameter cannot be expressed in OpenAPI, so this form is\ninvisible to a generated client. Scheduled for removal in 3.0.",
             "required": false,
+            "deprecated": true,
             "schema": {
               "type": "boolean"
             }
@@ -12759,8 +12933,9 @@
           {
             "name": "full",
             "in": "query",
-            "description": "Return full series data including metadata, locks, genres, tags, etc.",
+            "description": "Return full series data including metadata, locks, genres, tags, etc.\n**Deprecated.** Prefer `GET /books/{book_id}/full` and\n`GET /series/{series_id}/full`. A response whose schema depends on a\nquery parameter cannot be expressed in OpenAPI, so this form is\ninvisible to a generated client. Scheduled for removal in 3.0.",
             "required": false,
+            "deprecated": true,
             "schema": {
               "type": "boolean"
             }
@@ -13356,8 +13531,9 @@
           {
             "name": "full",
             "in": "query",
-            "description": "Return full data including metadata and locks.\nDefault is false for backward compatibility.",
+            "description": "Return full data including metadata and locks.\nDefault is false for backward compatibility.\n**Deprecated.** Prefer `GET /books/{book_id}/full` and\n`GET /series/{series_id}/full`. A response whose schema depends on a\nquery parameter cannot be expressed in OpenAPI, so this form is\ninvisible to a generated client. Scheduled for removal in 3.0.",
             "required": false,
+            "deprecated": true,
             "schema": {
               "type": "boolean"
             }
@@ -14283,6 +14459,54 @@
           },
           "404": {
             "description": "Series or rating not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/series/{series_id}/full": {
+      "get": {
+        "tags": [
+          "Series"
+        ],
+        "summary": "Get a series with its metadata, genres, tags and external links in one response",
+        "description": "The same series `GET /api/v1/series/{series_id}` returns, plus the related\ndata a detail screen needs, so it does not have to fan out into separate\nmetadata, genre, tag, external-id, external-link and rating requests.\n\nThis exists as its own route because the shape is genuinely different, not\nmerely richer: it carries `metadata`, `genres`, `tags`, `alternateTitles`,\n`externalIds`, `externalLinks`, `externalRatings`, `readCount` and\n`lastCompletedAt`, and it moves `title`, `titleSort`, `publisher`, `summary`\nand `year` inside `metadata`. A response whose schema depends on a query\nparameter cannot be expressed in OpenAPI, so the deprecated `?full=true`\nform is undescribable and unusable from a generated client. This route is\ndescribable.",
+        "operationId": "get_series_full",
+        "parameters": [
+          {
+            "name": "series_id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Series with its related data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FullSeriesResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Series not found"
           }
         },
         "security": [
@@ -31717,100 +31941,7 @@
           "content": {
             "type": "array",
             "items": {
-              "type": "object",
-              "description": "Komga book DTO\n\nBased on actual Komic traffic analysis. This is the main book representation.",
-              "required": [
-                "id",
-                "seriesId",
-                "seriesTitle",
-                "libraryId",
-                "name",
-                "url",
-                "number",
-                "created",
-                "lastModified",
-                "fileLastModified",
-                "sizeBytes",
-                "size",
-                "media",
-                "metadata"
-              ],
-              "properties": {
-                "created": {
-                  "type": "string",
-                  "description": "Created timestamp (ISO 8601)"
-                },
-                "deleted": {
-                  "type": "boolean",
-                  "description": "Whether book is deleted (soft delete)"
-                },
-                "fileHash": {
-                  "type": "string",
-                  "description": "File hash"
-                },
-                "fileLastModified": {
-                  "type": "string",
-                  "description": "File last modified timestamp (ISO 8601)"
-                },
-                "id": {
-                  "type": "string",
-                  "description": "Book unique identifier (UUID as string)"
-                },
-                "lastModified": {
-                  "type": "string",
-                  "description": "Last modified timestamp (ISO 8601)"
-                },
-                "libraryId": {
-                  "type": "string",
-                  "description": "Library ID"
-                },
-                "media": {
-                  "$ref": "#/components/schemas/KomgaMediaDto",
-                  "description": "Media information"
-                },
-                "metadata": {
-                  "$ref": "#/components/schemas/KomgaBookMetadataDto",
-                  "description": "Book metadata"
-                },
-                "name": {
-                  "type": "string",
-                  "description": "Book filename/name"
-                },
-                "number": {
-                  "type": "integer",
-                  "format": "int32",
-                  "description": "Book number in series"
-                },
-                "oneshot": {
-                  "type": "boolean",
-                  "description": "Whether this is a oneshot"
-                },
-                "readProgress": {
-                  "$ref": "#/components/schemas/KomgaReadProgressDto",
-                  "description": "User's read progress (null if not started)"
-                },
-                "seriesId": {
-                  "type": "string",
-                  "description": "Series ID"
-                },
-                "seriesTitle": {
-                  "type": "string",
-                  "description": "Series title (required by Komic for display)"
-                },
-                "size": {
-                  "type": "string",
-                  "description": "Human-readable file size (e.g., \"869.9 MiB\")"
-                },
-                "sizeBytes": {
-                  "type": "integer",
-                  "format": "int64",
-                  "description": "File size in bytes"
-                },
-                "url": {
-                  "type": "string",
-                  "description": "File URL/path"
-                }
-              }
+              "$ref": "#/components/schemas/KomgaBookDto"
             },
             "description": "The content items for this page"
           },
@@ -31881,50 +32012,7 @@
           "content": {
             "type": "array",
             "items": {
-              "type": "object",
-              "description": "Minimal collection DTO (stub)\n\nKomga collections are user-created groupings of series.\nCodex doesn't support this feature, so we return empty results.",
-              "required": [
-                "id",
-                "name",
-                "ordered",
-                "seriesIds",
-                "createdDate",
-                "lastModifiedDate",
-                "filtered"
-              ],
-              "properties": {
-                "createdDate": {
-                  "type": "string",
-                  "description": "Created timestamp (ISO 8601)"
-                },
-                "filtered": {
-                  "type": "boolean",
-                  "description": "Whether this collection is filtered from the user's view"
-                },
-                "id": {
-                  "type": "string",
-                  "description": "Collection unique identifier"
-                },
-                "lastModifiedDate": {
-                  "type": "string",
-                  "description": "Last modified timestamp (ISO 8601)"
-                },
-                "name": {
-                  "type": "string",
-                  "description": "Collection name"
-                },
-                "ordered": {
-                  "type": "boolean",
-                  "description": "Whether the collection is ordered"
-                },
-                "seriesIds": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  },
-                  "description": "Series IDs in the collection"
-                }
-              }
+              "$ref": "#/components/schemas/KomgaCollectionDto"
             },
             "description": "The content items for this page"
           },
@@ -31995,55 +32083,7 @@
           "content": {
             "type": "array",
             "items": {
-              "type": "object",
-              "description": "Minimal read list DTO (stub)\n\nKomga read lists are user-created lists of books to read.\nCodex doesn't support this feature, so we return empty results.",
-              "required": [
-                "id",
-                "name",
-                "summary",
-                "ordered",
-                "bookIds",
-                "createdDate",
-                "lastModifiedDate",
-                "filtered"
-              ],
-              "properties": {
-                "bookIds": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  },
-                  "description": "Book IDs in the read list"
-                },
-                "createdDate": {
-                  "type": "string",
-                  "description": "Created timestamp (ISO 8601)"
-                },
-                "filtered": {
-                  "type": "boolean",
-                  "description": "Whether this read list is filtered from the user's view"
-                },
-                "id": {
-                  "type": "string",
-                  "description": "Read list unique identifier"
-                },
-                "lastModifiedDate": {
-                  "type": "string",
-                  "description": "Last modified timestamp (ISO 8601)"
-                },
-                "name": {
-                  "type": "string",
-                  "description": "Read list name"
-                },
-                "ordered": {
-                  "type": "boolean",
-                  "description": "Whether the read list is ordered"
-                },
-                "summary": {
-                  "type": "string",
-                  "description": "Read list summary/description"
-                }
-              }
+              "$ref": "#/components/schemas/KomgaReadListDto"
             },
             "description": "The content items for this page"
           },
@@ -32114,89 +32154,7 @@
           "content": {
             "type": "array",
             "items": {
-              "type": "object",
-              "description": "Komga series DTO\n\nBased on actual Komic traffic analysis.",
-              "required": [
-                "id",
-                "libraryId",
-                "name",
-                "url",
-                "created",
-                "lastModified",
-                "fileLastModified",
-                "booksCount",
-                "booksReadCount",
-                "booksUnreadCount",
-                "booksInProgressCount",
-                "metadata",
-                "booksMetadata"
-              ],
-              "properties": {
-                "booksCount": {
-                  "type": "integer",
-                  "format": "int32",
-                  "description": "Total books count"
-                },
-                "booksInProgressCount": {
-                  "type": "integer",
-                  "format": "int32",
-                  "description": "In-progress books count"
-                },
-                "booksMetadata": {
-                  "$ref": "#/components/schemas/KomgaBooksMetadataAggregationDto",
-                  "description": "Aggregated books metadata"
-                },
-                "booksReadCount": {
-                  "type": "integer",
-                  "format": "int32",
-                  "description": "Read books count"
-                },
-                "booksUnreadCount": {
-                  "type": "integer",
-                  "format": "int32",
-                  "description": "Unread books count"
-                },
-                "created": {
-                  "type": "string",
-                  "description": "Created timestamp (ISO 8601)"
-                },
-                "deleted": {
-                  "type": "boolean",
-                  "description": "Whether series is deleted (soft delete)"
-                },
-                "fileLastModified": {
-                  "type": "string",
-                  "description": "File last modified timestamp (ISO 8601)"
-                },
-                "id": {
-                  "type": "string",
-                  "description": "Series unique identifier (UUID as string)"
-                },
-                "lastModified": {
-                  "type": "string",
-                  "description": "Last modified timestamp (ISO 8601)"
-                },
-                "libraryId": {
-                  "type": "string",
-                  "description": "Library ID"
-                },
-                "metadata": {
-                  "$ref": "#/components/schemas/KomgaSeriesMetadataDto",
-                  "description": "Series metadata"
-                },
-                "name": {
-                  "type": "string",
-                  "description": "Series name"
-                },
-                "oneshot": {
-                  "type": "boolean",
-                  "description": "Whether this is a oneshot (single book)"
-                },
-                "url": {
-                  "type": "string",
-                  "description": "File URL/path"
-                }
-              }
+              "$ref": "#/components/schemas/KomgaSeriesDto"
             },
             "description": "The content items for this page"
           },
@@ -34890,80 +34848,7 @@
           "data": {
             "type": "array",
             "items": {
-              "type": "object",
-              "description": "API key data transfer object",
-              "required": [
-                "id",
-                "userId",
-                "name",
-                "keyPrefix",
-                "permissions",
-                "isActive",
-                "createdAt",
-                "updatedAt"
-              ],
-              "properties": {
-                "createdAt": {
-                  "type": "string",
-                  "format": "date-time",
-                  "description": "When the key was created",
-                  "example": "2024-01-01T00:00:00Z"
-                },
-                "expiresAt": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
-                  "format": "date-time",
-                  "description": "When the key expires (if set)",
-                  "example": "2025-12-31T23:59:59Z"
-                },
-                "id": {
-                  "type": "string",
-                  "format": "uuid",
-                  "description": "Unique API key identifier",
-                  "example": "550e8400-e29b-41d4-a716-446655440000"
-                },
-                "isActive": {
-                  "type": "boolean",
-                  "description": "Whether the key is currently active",
-                  "example": true
-                },
-                "keyPrefix": {
-                  "type": "string",
-                  "description": "Prefix of the key for identification",
-                  "example": "cdx_a1b2c3"
-                },
-                "lastUsedAt": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
-                  "format": "date-time",
-                  "description": "When the key was last used",
-                  "example": "2024-01-15T10:30:00Z"
-                },
-                "name": {
-                  "type": "string",
-                  "description": "Human-readable name for the key",
-                  "example": "Mobile App Key"
-                },
-                "permissions": {
-                  "description": "Permissions granted to this key"
-                },
-                "updatedAt": {
-                  "type": "string",
-                  "format": "date-time",
-                  "description": "When the key was last updated",
-                  "example": "2024-01-15T10:30:00Z"
-                },
-                "userId": {
-                  "type": "string",
-                  "format": "uuid",
-                  "description": "Owner user ID",
-                  "example": "550e8400-e29b-41d4-a716-446655440001"
-                }
-              }
+              "$ref": "#/components/schemas/ApiKeyDto"
             },
             "description": "The data items for this page"
           },
@@ -35016,187 +34901,60 @@
           "data": {
             "type": "array",
             "items": {
-              "type": "object",
-              "description": "Book data transfer object",
-              "required": [
-                "id",
-                "libraryId",
-                "libraryName",
-                "seriesId",
-                "seriesName",
-                "title",
-                "path",
-                "fileFormat",
-                "fileSize",
-                "fileHash",
-                "pageCount",
-                "createdAt",
-                "updatedAt",
-                "deleted",
-                "analyzed"
-              ],
-              "properties": {
-                "analysisError": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
-                  "description": "Error message if book analysis failed",
-                  "example": "Failed to parse CBZ: invalid archive"
-                },
-                "analyzed": {
-                  "type": "boolean",
-                  "description": "Whether the book has been analyzed (page dimensions available)",
-                  "example": true
-                },
-                "chapter": {
-                  "type": [
-                    "number",
-                    "null"
-                  ],
-                  "format": "float",
-                  "description": "Chapter number from book metadata (may be fractional)",
-                  "example": 42.5
-                },
-                "createdAt": {
-                  "type": "string",
-                  "format": "date-time",
-                  "description": "When the book was added to the library",
-                  "example": "2024-01-01T00:00:00Z"
-                },
-                "deleted": {
-                  "type": "boolean",
-                  "description": "Whether the book has been soft-deleted",
-                  "example": false
-                },
-                "fileFormat": {
-                  "type": "string",
-                  "description": "File format (cbz, cbr, epub, pdf)",
-                  "example": "cbz"
-                },
-                "fileHash": {
-                  "type": "string",
-                  "description": "File hash for deduplication",
-                  "example": "a1b2c3d4e5f6g7h8i9j0"
-                },
-                "fileSize": {
-                  "type": "integer",
-                  "format": "int64",
-                  "description": "File size in bytes",
-                  "example": 52428800
-                },
-                "id": {
-                  "type": "string",
-                  "format": "uuid",
-                  "description": "Book unique identifier",
-                  "example": "550e8400-e29b-41d4-a716-446655440001"
-                },
-                "koreaderHash": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
-                  "description": "KOReader-compatible partial MD5 hash for sync"
-                },
-                "libraryId": {
-                  "type": "string",
-                  "format": "uuid",
-                  "description": "Library this book belongs to",
-                  "example": "550e8400-e29b-41d4-a716-446655440000"
-                },
-                "libraryName": {
-                  "type": "string",
-                  "description": "Name of the library",
-                  "example": "Comics"
-                },
-                "number": {
-                  "type": [
-                    "integer",
-                    "null"
-                  ],
-                  "format": "int32",
-                  "description": "Book number within the series",
-                  "example": 1
-                },
-                "pageCount": {
-                  "type": "integer",
-                  "format": "int32",
-                  "description": "Number of pages in the book",
-                  "example": 32
-                },
-                "path": {
-                  "type": "string",
-                  "description": "Filesystem path to the book file",
-                  "example": "/media/comics/Batman/Batman - Year One 001.cbz"
-                },
-                "readProgress": {
-                  "$ref": "#/components/schemas/ReadProgressResponse",
-                  "description": "User's read progress for this book"
-                },
-                "readingDirection": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
-                  "description": "Effective reading direction (from series metadata, or library default if not set)\nValues: ltr, rtl, ttb or webtoon",
-                  "example": "ltr"
-                },
-                "seriesId": {
-                  "type": "string",
-                  "format": "uuid",
-                  "description": "Series this book belongs to",
-                  "example": "550e8400-e29b-41d4-a716-446655440002"
-                },
-                "seriesName": {
-                  "type": "string",
-                  "description": "Name of the series",
-                  "example": "Batman: Year One"
-                },
-                "summary": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
-                  "description": "Book summary/description from book_metadata (ComicInfo `<Summary>` or\nEPUB description). Surfaced on the list response so cards can show it on\nhover without fetching the full detail payload.",
-                  "example": "Bruce Wayne returns to Gotham to begin his war on crime."
-                },
-                "title": {
-                  "type": "string",
-                  "description": "Book title",
-                  "example": "Batman: Year One #1"
-                },
-                "titleSort": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
-                  "description": "Title used for sorting (title_sort field)",
-                  "example": "batman year one 001"
-                },
-                "updatedAt": {
-                  "type": "string",
-                  "format": "date-time",
-                  "description": "When the book was last updated",
-                  "example": "2024-01-15T10:30:00Z"
-                },
-                "volume": {
-                  "type": [
-                    "integer",
-                    "null"
-                  ],
-                  "format": "int32",
-                  "description": "Volume number from book metadata",
-                  "example": 1
-                },
-                "wantToRead": {
-                  "type": [
-                    "boolean",
-                    "null"
-                  ],
-                  "description": "Whether the requesting user has this book in their want-to-read queue.\n\n`None` when not computed for this response; populated on book list and\ndetail endpoints that have a user context.",
-                  "example": false
-                }
-              }
+              "$ref": "#/components/schemas/BookDto"
+            },
+            "description": "The data items for this page"
+          },
+          "links": {
+            "$ref": "#/components/schemas/PaginationLinks",
+            "description": "HATEOAS navigation links"
+          },
+          "page": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Current page number (1-indexed)",
+            "example": 1,
+            "minimum": 0
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of items per page",
+            "example": 50,
+            "minimum": 0
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total number of items across all pages",
+            "example": 150,
+            "minimum": 0
+          },
+          "totalPages": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total number of pages",
+            "example": 3,
+            "minimum": 0
+          }
+        }
+      },
+      "PaginatedResponse_FullSeriesResponse": {
+        "type": "object",
+        "description": "Generic paginated response wrapper with HATEOAS links",
+        "required": [
+          "data",
+          "page",
+          "pageSize",
+          "total",
+          "totalPages",
+          "links"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FullSeriesResponse"
             },
             "description": "The data items for this page"
           },
@@ -35249,42 +35007,7 @@
           "data": {
             "type": "array",
             "items": {
-              "type": "object",
-              "description": "Genre data transfer object",
-              "required": [
-                "id",
-                "name",
-                "createdAt"
-              ],
-              "properties": {
-                "createdAt": {
-                  "type": "string",
-                  "format": "date-time",
-                  "description": "When the genre was created",
-                  "example": "2024-01-01T00:00:00Z"
-                },
-                "id": {
-                  "type": "string",
-                  "format": "uuid",
-                  "description": "Genre ID",
-                  "example": "550e8400-e29b-41d4-a716-446655440010"
-                },
-                "name": {
-                  "type": "string",
-                  "description": "Genre name",
-                  "example": "Action"
-                },
-                "seriesCount": {
-                  "type": [
-                    "integer",
-                    "null"
-                  ],
-                  "format": "int64",
-                  "description": "Number of series with this genre",
-                  "example": 42,
-                  "minimum": 0
-                }
-              }
+              "$ref": "#/components/schemas/GenreDto"
             },
             "description": "The data items for this page"
           },
@@ -35337,149 +35060,7 @@
           "data": {
             "type": "array",
             "items": {
-              "type": "object",
-              "description": "Library data transfer object",
-              "required": [
-                "id",
-                "name",
-                "path",
-                "isActive",
-                "seriesStrategy",
-                "bookStrategy",
-                "numberStrategy",
-                "createdAt",
-                "updatedAt",
-                "defaultReadingDirection"
-              ],
-              "properties": {
-                "allowedFormats": {
-                  "type": [
-                    "array",
-                    "null"
-                  ],
-                  "items": {
-                    "type": "string"
-                  },
-                  "description": "Allowed file formats (e.g., [\"CBZ\", \"CBR\", \"EPUB\"])",
-                  "example": [
-                    "CBZ",
-                    "CBR",
-                    "PDF"
-                  ]
-                },
-                "autoMatchConditions": {
-                  "description": "Auto-match conditions (JSON object with mode and rules)\nControls when auto-matching runs for this library"
-                },
-                "bookConfig": {
-                  "description": "Book strategy-specific configuration (JSON)"
-                },
-                "bookCount": {
-                  "type": [
-                    "integer",
-                    "null"
-                  ],
-                  "format": "int64",
-                  "description": "Total number of books in this library",
-                  "example": 1250
-                },
-                "bookStrategy": {
-                  "$ref": "#/components/schemas/BookStrategy",
-                  "description": "Book naming strategy (filename, metadata_first, smart, series_name)"
-                },
-                "createdAt": {
-                  "type": "string",
-                  "format": "date-time",
-                  "description": "When the library was created",
-                  "example": "2024-01-01T00:00:00Z"
-                },
-                "defaultReadingDirection": {
-                  "type": "string",
-                  "description": "Default reading direction for books in this library (ltr, rtl, ttb or webtoon)",
-                  "example": "ltr"
-                },
-                "description": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
-                  "description": "Optional description",
-                  "example": "My comic book collection"
-                },
-                "excludedPatterns": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
-                  "description": "Excluded path patterns (newline-separated, e.g., \".DS_Store\\nThumbs.db\")",
-                  "example": ".DS_Store\nThumbs.db"
-                },
-                "id": {
-                  "type": "string",
-                  "format": "uuid",
-                  "description": "Library unique identifier",
-                  "example": "550e8400-e29b-41d4-a716-446655440000"
-                },
-                "isActive": {
-                  "type": "boolean",
-                  "description": "Whether the library is active",
-                  "example": true
-                },
-                "lastScannedAt": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
-                  "format": "date-time",
-                  "description": "When the library was last scanned",
-                  "example": "2024-01-15T10:30:00Z"
-                },
-                "name": {
-                  "type": "string",
-                  "description": "Library name",
-                  "example": "Comics"
-                },
-                "numberConfig": {
-                  "description": "Number strategy-specific configuration (JSON)"
-                },
-                "numberStrategy": {
-                  "$ref": "#/components/schemas/NumberStrategy",
-                  "description": "Book number strategy (file_order, metadata, filename, smart)"
-                },
-                "path": {
-                  "type": "string",
-                  "description": "Filesystem path to the library root",
-                  "example": "/media/comics"
-                },
-                "scanningConfig": {
-                  "$ref": "#/components/schemas/ScanningConfigDto",
-                  "description": "Scanning configuration for scheduled scans"
-                },
-                "seriesConfig": {
-                  "description": "Strategy-specific configuration (JSON)"
-                },
-                "seriesCount": {
-                  "type": [
-                    "integer",
-                    "null"
-                  ],
-                  "format": "int64",
-                  "description": "Total number of series in this library",
-                  "example": 85
-                },
-                "seriesStrategy": {
-                  "$ref": "#/components/schemas/SeriesStrategy",
-                  "description": "Series detection strategy (series_volume, series_volume_chapter, flat, etc.)"
-                },
-                "titlePreprocessingRules": {
-                  "description": "Title preprocessing rules (JSON array of regex rules)\nApplied during scan to clean series titles before metadata search"
-                },
-                "updatedAt": {
-                  "type": "string",
-                  "format": "date-time",
-                  "description": "When the library was last updated",
-                  "example": "2024-01-15T10:30:00Z"
-                }
-              }
+              "$ref": "#/components/schemas/LibraryDto"
             },
             "description": "The data items for this page"
           },
@@ -35532,136 +35113,7 @@
           "data": {
             "type": "array",
             "items": {
-              "type": "object",
-              "description": "A single release announcement. Sources write these; the inbox reads them.",
-              "required": [
-                "id",
-                "seriesId",
-                "seriesTitle",
-                "sourceId",
-                "externalReleaseId",
-                "payloadUrl",
-                "confidence",
-                "state",
-                "observedAt",
-                "createdAt"
-              ],
-              "properties": {
-                "chapters": {
-                  "type": [
-                    "array",
-                    "null"
-                  ],
-                  "items": {
-                    "$ref": "#/components/schemas/ReleaseSpanDto"
-                  },
-                  "description": "Full chapter coverage as a normalized span list. Decimals supported\n(`c12.5` → `[{start: 12.5, end: 12.5}]`). `null` when the upstream\ntitle carried no chapter info."
-                },
-                "confidence": {
-                  "type": "number",
-                  "format": "double"
-                },
-                "createdAt": {
-                  "type": "string",
-                  "format": "date-time"
-                },
-                "externalReleaseId": {
-                  "type": "string",
-                  "description": "Plugin-stable identity for the release (used for dedup).",
-                  "example": "nyaa:1234567"
-                },
-                "formatHints": {
-                  "description": "Sparse `{ \"jxl\": true, \"container\": \"cbz\", ... }`."
-                },
-                "groupOrUploader": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
-                  "description": "Group/scanlator/uploader attribution."
-                },
-                "id": {
-                  "type": "string",
-                  "format": "uuid",
-                  "example": "550e8400-e29b-41d4-a716-446655440a00"
-                },
-                "infoHash": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
-                  "description": "Torrent info_hash, if applicable."
-                },
-                "language": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "mediaUrl": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
-                  "description": "Optional second URL for direct fetch (`.torrent`, `magnet:`, DDL\nlink). Travels paired with [`Self::media_url_kind`]."
-                },
-                "mediaUrlKind": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
-                  "description": "Classifies what `media_url` points at: `torrent` | `magnet` |\n`direct` | `other`. The frontend uses this to pick a kind-specific\nicon next to the standard external-link icon."
-                },
-                "metadata": {
-                  "description": "Source-specific extras (free-form)."
-                },
-                "observedAt": {
-                  "type": "string",
-                  "format": "date-time",
-                  "description": "When Codex detected this release."
-                },
-                "payloadUrl": {
-                  "type": "string",
-                  "description": "Where to acquire the release. Conventionally a human-readable\nlanding page (Nyaa view page, MangaUpdates release page)."
-                },
-                "releasedAt": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
-                  "format": "date-time",
-                  "description": "Upstream publish date from the source feed. `null` when unavailable."
-                },
-                "seriesId": {
-                  "type": "string",
-                  "format": "uuid",
-                  "example": "550e8400-e29b-41d4-a716-446655440002"
-                },
-                "seriesTitle": {
-                  "type": "string",
-                  "description": "Series title at the time of the response. Joined from the `series`\ntable so the inbox UI can render a human-readable label without a\nfollow-up fetch. Falls back to the empty string only if the series\nrow was hard-deleted between the join and the read.",
-                  "example": "Chainsaw Man"
-                },
-                "sourceId": {
-                  "type": "string",
-                  "format": "uuid",
-                  "example": "550e8400-e29b-41d4-a716-446655440b00"
-                },
-                "state": {
-                  "type": "string",
-                  "description": "`announced` | `dismissed` | `marked_acquired` | `hidden`."
-                },
-                "volumes": {
-                  "type": [
-                    "array",
-                    "null"
-                  ],
-                  "items": {
-                    "$ref": "#/components/schemas/ReleaseSpanDto"
-                  },
-                  "description": "Full volume coverage as a normalized span list. `null` semantics\nmirror [`Self::chapters`]."
-                }
-              }
+              "$ref": "#/components/schemas/ReleaseLedgerEntryDto"
             },
             "description": "The data items for this page"
           },
@@ -35714,192 +35166,7 @@
           "data": {
             "type": "array",
             "items": {
-              "type": "object",
-              "description": "Series data transfer object",
-              "required": [
-                "id",
-                "libraryId",
-                "libraryName",
-                "title",
-                "bookCount",
-                "tracked",
-                "createdAt",
-                "updatedAt"
-              ],
-              "properties": {
-                "bookCount": {
-                  "type": "integer",
-                  "format": "int64",
-                  "description": "Total number of books in this series",
-                  "example": 4
-                },
-                "createdAt": {
-                  "type": "string",
-                  "format": "date-time",
-                  "description": "When the series was created",
-                  "example": "2024-01-01T00:00:00Z"
-                },
-                "hasCustomCover": {
-                  "type": [
-                    "boolean",
-                    "null"
-                  ],
-                  "description": "Whether the series has a custom cover uploaded",
-                  "example": false
-                },
-                "id": {
-                  "type": "string",
-                  "format": "uuid",
-                  "description": "Series unique identifier",
-                  "example": "550e8400-e29b-41d4-a716-446655440002"
-                },
-                "libraryId": {
-                  "type": "string",
-                  "format": "uuid",
-                  "description": "Library unique identifier",
-                  "example": "550e8400-e29b-41d4-a716-446655440000"
-                },
-                "libraryName": {
-                  "type": "string",
-                  "description": "Name of the library this series belongs to",
-                  "example": "Comics"
-                },
-                "localMaxChapter": {
-                  "type": [
-                    "number",
-                    "null"
-                  ],
-                  "format": "float",
-                  "description": "Highest `book_metadata.chapter` across the books in this series.\n\n`None` when no book in the series has `chapter` populated. When\nnon-null and `metadata.totalChapterCount` is also known, the UI renders\n`<localMaxChapter>/<totalChapterCount> ch`.",
-                  "example": 137.5
-                },
-                "localMaxVolume": {
-                  "type": [
-                    "integer",
-                    "null"
-                  ],
-                  "format": "int32",
-                  "description": "Highest `book_metadata.volume` across the books in this series.\n\n`None` when no book in the series has `volume` populated. When\nnon-null and `metadata.totalVolumeCount` is also known, the UI renders\n`<localMaxVolume>/<totalVolumeCount> vol` instead of the legacy\n`<bookCount>/<totalVolumeCount> vol`.",
-                  "example": 14
-                },
-                "path": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
-                  "description": "Filesystem path to the series directory",
-                  "example": "/media/comics/Batman - Year One"
-                },
-                "publisher": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
-                  "description": "Publisher name",
-                  "example": "DC Comics"
-                },
-                "selectedCoverSource": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
-                  "description": "Selected cover source (e.g., \"first_book\", \"custom\")",
-                  "example": "first_book"
-                },
-                "summary": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
-                  "description": "Summary/description from series_metadata",
-                  "example": "The definitive origin story of Batman, following Bruce Wayne's first year as a vigilante."
-                },
-                "title": {
-                  "type": "string",
-                  "description": "Series title from series_metadata",
-                  "example": "Batman: Year One"
-                },
-                "titleSort": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
-                  "description": "Sort title from series_metadata (for ordering)",
-                  "example": "batman year one"
-                },
-                "tracked": {
-                  "type": "boolean",
-                  "description": "Whether release tracking is enabled for this series.\n\nMirrors `series_tracking.tracked`. `false` when no tracking row exists.\nExposed so list views can surface a tracking indicator without an extra\nper-card request.",
-                  "example": false
-                },
-                "unreadCount": {
-                  "type": [
-                    "integer",
-                    "null"
-                  ],
-                  "format": "int64",
-                  "description": "Number of unread books in this series (user-specific)",
-                  "example": 2
-                },
-                "updatedAt": {
-                  "type": "string",
-                  "format": "date-time",
-                  "description": "When the series was last updated",
-                  "example": "2024-01-15T10:30:00Z"
-                },
-                "upstreamChapterGap": {
-                  "type": [
-                    "number",
-                    "null"
-                  ],
-                  "format": "float",
-                  "description": "Difference between the upstream original-language chapter count\n(`series_metadata.total_chapter_count`, supplied by metadata\nproviders like MangaBaka or AniList) and the highest locally-owned\nchapter (`local_max_chapter`).\n\nAlways `None` unless the series is tracked AND `track_chapters` is\nenabled AND the provider count is populated AND the rounded-to-1-\ndecimal gap is positive. **This is an informational signal, not a\nrelease announcement**; the MangaUpdates plugin owns the\ntranslation-release feed.",
-                  "example": 3.0
-                },
-                "upstreamGapProvider": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
-                  "description": "Display name of the metadata provider that supplied the upstream\ncounts (e.g., \"MangaBaka\", \"AniList\"). Set whenever at least one of\n`upstream_chapter_gap` / `upstream_volume_gap` is populated. Used by\nthe gap badge tooltip.",
-                  "example": "MangaBaka"
-                },
-                "upstreamVolumeGap": {
-                  "type": [
-                    "integer",
-                    "null"
-                  ],
-                  "format": "int32",
-                  "description": "Difference between the upstream original-language volume count\n(`series_metadata.total_volume_count`) and the highest locally-owned\nvolume (`local_max_volume`). Same suppression rules as\n`upstream_chapter_gap`, gated on `track_volumes`.",
-                  "example": 1
-                },
-                "volumesOwned": {
-                  "type": [
-                    "integer",
-                    "null"
-                  ],
-                  "format": "int64",
-                  "description": "Number of books in this series classified as a complete volume\n(`volume IS NOT NULL AND chapter IS NULL`).\n\nDistinct from `bookCount`: a chapter inside a volume (`v15 c126`)\ncounts as a chapter, not a volume. `None` when no books exist;\n`Some(0)` when books exist but none are complete volumes.",
-                  "example": 14
-                },
-                "wantToRead": {
-                  "type": [
-                    "boolean",
-                    "null"
-                  ],
-                  "description": "Whether the requesting user has this series in their want-to-read queue.\n\n`None` when not computed for this response (e.g. list endpoints that\ndon't enrich it); populated on the series detail endpoint.",
-                  "example": false
-                },
-                "year": {
-                  "type": [
-                    "integer",
-                    "null"
-                  ],
-                  "format": "int32",
-                  "description": "Release year",
-                  "example": 1987
-                }
-              }
+              "$ref": "#/components/schemas/SeriesDto"
             },
             "description": "The data items for this page"
           },
@@ -35952,54 +35219,7 @@
           "data": {
             "type": "array",
             "items": {
-              "type": "object",
-              "description": "Slim per-series projection for external discovery tools.\n\nReturned by `GET /api/v1/series/external-index`. It carries just the\nseries UUID, its linked external IDs, and the locally-owned\nvolume/chapter signals, deliberately omitting the heavy metadata,\ngenres, tags, covers, ratings, and links of [`FullSeriesResponse`].",
-              "required": [
-                "id",
-                "externalIds"
-              ],
-              "properties": {
-                "externalIds": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/SeriesExternalIdRefDto"
-                  },
-                  "description": "External IDs linked to this series (empty if none have been linked yet)"
-                },
-                "id": {
-                  "type": "string",
-                  "format": "uuid",
-                  "description": "Series ID (build the Codex web deep link `/series/{id}` consumer-side)",
-                  "example": "550e8400-e29b-41d4-a716-446655440002"
-                },
-                "localMaxChapter": {
-                  "type": [
-                    "number",
-                    "null"
-                  ],
-                  "format": "float",
-                  "description": "Highest `book_metadata.chapter` across non-deleted books, or null if\nno book in the series has a parsed chapter.",
-                  "example": 130.5
-                },
-                "localMaxVolume": {
-                  "type": [
-                    "integer",
-                    "null"
-                  ],
-                  "format": "int32",
-                  "description": "Highest `book_metadata.volume` across non-deleted books, or null if\nno book in the series has a parsed volume.",
-                  "example": 12
-                },
-                "volumesOwned": {
-                  "type": [
-                    "integer",
-                    "null"
-                  ],
-                  "format": "int64",
-                  "description": "Count of complete-volume files (volume set, chapter null). A soft,\ndisplay-only signal; not authoritative for \"how far along\".",
-                  "example": 12
-                }
-              }
+              "$ref": "#/components/schemas/SeriesExternalIndexDto"
             },
             "description": "The data items for this page"
           },
@@ -36052,63 +35272,7 @@
           "data": {
             "type": "array",
             "items": {
-              "type": "object",
-              "description": "Sharing tag data transfer object",
-              "required": [
-                "id",
-                "name",
-                "seriesCount",
-                "userCount",
-                "createdAt",
-                "updatedAt"
-              ],
-              "properties": {
-                "createdAt": {
-                  "type": "string",
-                  "format": "date-time",
-                  "description": "Creation timestamp",
-                  "example": "2024-01-01T00:00:00Z"
-                },
-                "description": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
-                  "description": "Optional description",
-                  "example": "Content appropriate for children"
-                },
-                "id": {
-                  "type": "string",
-                  "format": "uuid",
-                  "description": "Unique sharing tag identifier",
-                  "example": "550e8400-e29b-41d4-a716-446655440000"
-                },
-                "name": {
-                  "type": "string",
-                  "description": "Display name of the sharing tag",
-                  "example": "Kids Content"
-                },
-                "seriesCount": {
-                  "type": "integer",
-                  "format": "int64",
-                  "description": "Number of series tagged with this sharing tag",
-                  "example": 42,
-                  "minimum": 0
-                },
-                "updatedAt": {
-                  "type": "string",
-                  "format": "date-time",
-                  "description": "Last update timestamp",
-                  "example": "2024-01-15T10:30:00Z"
-                },
-                "userCount": {
-                  "type": "integer",
-                  "format": "int64",
-                  "description": "Number of users with grants for this sharing tag",
-                  "example": 5,
-                  "minimum": 0
-                }
-              }
+              "$ref": "#/components/schemas/SharingTagDto"
             },
             "description": "The data items for this page"
           },
@@ -36161,42 +35325,7 @@
           "data": {
             "type": "array",
             "items": {
-              "type": "object",
-              "description": "Tag data transfer object",
-              "required": [
-                "id",
-                "name",
-                "createdAt"
-              ],
-              "properties": {
-                "createdAt": {
-                  "type": "string",
-                  "format": "date-time",
-                  "description": "When the tag was created",
-                  "example": "2024-01-01T00:00:00Z"
-                },
-                "id": {
-                  "type": "string",
-                  "format": "uuid",
-                  "description": "Tag ID",
-                  "example": "550e8400-e29b-41d4-a716-446655440020"
-                },
-                "name": {
-                  "type": "string",
-                  "description": "Tag name",
-                  "example": "Completed"
-                },
-                "seriesCount": {
-                  "type": [
-                    "integer",
-                    "null"
-                  ],
-                  "format": "int64",
-                  "description": "Number of series with this tag",
-                  "example": 15,
-                  "minimum": 0
-                }
-              }
+              "$ref": "#/components/schemas/TagDto"
             },
             "description": "The data items for this page"
           },
@@ -36249,73 +35378,7 @@
           "data": {
             "type": "array",
             "items": {
-              "type": "object",
-              "description": "User data transfer object",
-              "required": [
-                "id",
-                "username",
-                "email",
-                "role",
-                "permissions",
-                "isActive",
-                "createdAt",
-                "updatedAt"
-              ],
-              "properties": {
-                "createdAt": {
-                  "type": "string",
-                  "format": "date-time",
-                  "description": "Account creation timestamp",
-                  "example": "2024-01-01T00:00:00Z"
-                },
-                "email": {
-                  "type": "string",
-                  "description": "User email address",
-                  "example": "john.doe@example.com"
-                },
-                "id": {
-                  "type": "string",
-                  "format": "uuid",
-                  "description": "Unique user identifier",
-                  "example": "550e8400-e29b-41d4-a716-446655440000"
-                },
-                "isActive": {
-                  "type": "boolean",
-                  "description": "Whether the account is active",
-                  "example": true
-                },
-                "lastLoginAt": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
-                  "format": "date-time",
-                  "description": "Timestamp of last login",
-                  "example": "2024-01-15T10:30:00Z"
-                },
-                "permissions": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  },
-                  "description": "Custom permissions that extend the role's base permissions"
-                },
-                "role": {
-                  "$ref": "#/components/schemas/UserRole",
-                  "description": "User role (reader, maintainer, admin)"
-                },
-                "updatedAt": {
-                  "type": "string",
-                  "format": "date-time",
-                  "description": "Last account update timestamp",
-                  "example": "2024-01-15T10:30:00Z"
-                },
-                "username": {
-                  "type": "string",
-                  "description": "Username for login",
-                  "example": "johndoe"
-                }
-              }
+              "$ref": "#/components/schemas/UserDto"
             },
             "description": "The data items for this page"
           },
@@ -41198,7 +40261,8 @@
         "properties": {
           "full": {
             "type": "boolean",
-            "description": "Return full series data including metadata, locks, genres, tags, etc."
+            "description": "Return full series data including metadata, locks, genres, tags, etc.\n**Deprecated.** Prefer `GET /books/{book_id}/full` and\n`GET /series/{series_id}/full`. A response whose schema depends on a\nquery parameter cannot be expressed in OpenAPI, so this form is\ninvisible to a generated client. Scheduled for removal in 3.0.",
+            "deprecated": true
           },
           "libraryId": {
             "type": [

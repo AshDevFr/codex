@@ -5091,3 +5091,136 @@ async fn test_delete_book_external_link_book_not_found() {
 
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
+
+// ============================================================================
+// GET /api/v1/books/{book_id}/full and /api/v1/series/{series_id}/full
+// ============================================================================
+//
+// These exist because a response whose schema depends on a query parameter
+// cannot be expressed in OpenAPI, so `?full=true` is invisible to a generated
+// client. The tests below pin the two properties that matter: the route returns
+// the full shape, and it is the *same* shape `?full=true` returns, so the
+// deprecated parameter can be removed later without changing any payload.
+
+/// Drop the metadata row's own timestamps before comparing two responses.
+///
+/// A book with no metadata row gets one created on read, so two requests
+/// produce two different `createdAt`/`updatedAt` values. That is a per-request
+/// timestamp rather than a difference in shape, and comparing it would make the
+/// test fail for a reason it is not about.
+fn strip_metadata_timestamps(body: Option<serde_json::Value>) -> Option<serde_json::Value> {
+    let mut body = body?;
+    if let Some(metadata) = body.get_mut("metadata").and_then(|m| m.as_object_mut()) {
+        metadata.remove("createdAt");
+        metadata.remove("updatedAt");
+    }
+    Some(body)
+}
+
+#[tokio::test]
+async fn full_book_route_matches_the_deprecated_full_query_parameter() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+    let book = create_test_book_model(
+        series.id,
+        library.id,
+        "/test/book1.cbz",
+        "book1.cbz",
+        Some("Book 1".to_string()),
+    );
+    let book = BookRepository::create(&db, &book, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    let (route_status, route_body): (StatusCode, Option<serde_json::Value>) = make_json_request(
+        create_test_router(state.clone()).await,
+        get_request_with_auth(&format!("/api/v1/books/{}/full", book.id), &token),
+    )
+    .await;
+    let (query_status, query_body): (StatusCode, Option<serde_json::Value>) = make_json_request(
+        create_test_router(state).await,
+        get_request_with_auth(&format!("/api/v1/books/{}?full=true", book.id), &token),
+    )
+    .await;
+
+    assert_eq!(route_status, StatusCode::OK);
+    assert_eq!(query_status, StatusCode::OK);
+    assert_eq!(
+        strip_metadata_timestamps(route_body.clone()),
+        strip_metadata_timestamps(query_body),
+        "the dedicated route must return exactly what ?full=true returns, or \
+         removing the parameter in 3.0 would be a payload change"
+    );
+
+    // Fields that only exist on the full shape, so this cannot pass against the
+    // plain BookDto.
+    let body = route_body.unwrap();
+    for field in ["metadata", "genres", "tags", "readCount"] {
+        assert!(body.get(field).is_some(), "full book is missing {field}");
+    }
+}
+
+#[tokio::test]
+async fn full_series_route_matches_the_deprecated_full_query_parameter() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    let (route_status, route_body): (StatusCode, Option<serde_json::Value>) = make_json_request(
+        create_test_router(state.clone()).await,
+        get_request_with_auth(&format!("/api/v1/series/{}/full", series.id), &token),
+    )
+    .await;
+    let (query_status, query_body): (StatusCode, Option<serde_json::Value>) = make_json_request(
+        create_test_router(state).await,
+        get_request_with_auth(&format!("/api/v1/series/{}?full=true", series.id), &token),
+    )
+    .await;
+
+    assert_eq!(route_status, StatusCode::OK);
+    assert_eq!(query_status, StatusCode::OK);
+    assert_eq!(
+        route_body, query_body,
+        "the dedicated route must return exactly what ?full=true returns"
+    );
+
+    let body = route_body.unwrap();
+    for field in ["metadata", "genres", "tags", "externalIds", "externalLinks"] {
+        assert!(body.get(field).is_some(), "full series is missing {field}");
+    }
+}
+
+#[tokio::test]
+async fn full_routes_404_on_a_missing_entity() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let missing = uuid::Uuid::new_v4();
+
+    for path in [
+        format!("/api/v1/books/{missing}/full"),
+        format!("/api/v1/series/{missing}/full"),
+    ] {
+        let (status, _) = make_request(
+            create_test_router(state.clone()).await,
+            get_request_with_auth(&path, &token),
+        )
+        .await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{path}");
+    }
+}

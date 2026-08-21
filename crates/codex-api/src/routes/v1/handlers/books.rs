@@ -162,6 +162,15 @@ pub struct BookListQuery {
     /// Return full data including metadata and locks.
     /// Default is false for backward compatibility.
     #[serde(default)]
+    /// **Deprecated.** Prefer `GET /books/{book_id}/full` and
+    /// `GET /series/{series_id}/full`. A response whose schema depends on a
+    /// query parameter cannot be expressed in OpenAPI, so this form is
+    /// invisible to a generated client. Scheduled for removal in 3.0.
+    #[deprecated(
+        since = "2.2.0",
+        note = "use GET /books/{book_id}/full or GET /series/{series_id}/full; \
+a response shape that depends on a query parameter cannot be described in OpenAPI"
+    )]
     pub full: bool,
 }
 
@@ -197,6 +206,15 @@ pub struct LibraryBookListQuery {
     /// Return full data including metadata and locks.
     /// Default is false for backward compatibility.
     #[serde(default)]
+    /// **Deprecated.** Prefer `GET /books/{book_id}/full` and
+    /// `GET /series/{series_id}/full`. A response whose schema depends on a
+    /// query parameter cannot be expressed in OpenAPI, so this form is
+    /// invisible to a generated client. Scheduled for removal in 3.0.
+    #[deprecated(
+        since = "2.2.0",
+        note = "use GET /books/{book_id}/full or GET /series/{series_id}/full; \
+a response shape that depends on a query parameter cannot be described in OpenAPI"
+    )]
     pub full: bool,
 }
 
@@ -208,6 +226,15 @@ pub struct BookGetQuery {
     /// Return full data including metadata and locks.
     /// Default is false for backward compatibility.
     #[serde(default)]
+    /// **Deprecated.** Prefer `GET /books/{book_id}/full` and
+    /// `GET /series/{series_id}/full`. A response whose schema depends on a
+    /// query parameter cannot be expressed in OpenAPI, so this form is
+    /// invisible to a generated client. Scheduled for removal in 3.0.
+    #[deprecated(
+        since = "2.2.0",
+        note = "use GET /books/{book_id}/full or GET /series/{series_id}/full; \
+a response shape that depends on a query parameter cannot be described in OpenAPI"
+    )]
     pub full: bool,
 }
 
@@ -807,6 +834,7 @@ pub async fn books_to_full_dtos_batched(
     ),
     tag = "Books"
 )]
+#[allow(deprecated)] // still serves the deprecated `full` parameter
 pub async fn list_books(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
@@ -927,6 +955,7 @@ pub async fn list_books(
     ),
     tag = "Books"
 )]
+#[allow(deprecated)] // still serves the deprecated `full` parameter
 pub async fn list_books_filtered(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
@@ -1164,6 +1193,62 @@ pub async fn list_books_filtered(
     }
 }
 
+/// Get a book with its metadata, genres and tags in one response
+///
+/// The same book `GET /api/v1/books/{book_id}` returns, plus the related data a
+/// detail screen needs, so it does not have to fan out into separate metadata,
+/// genre and tag requests.
+///
+/// This exists as its own route because the shape is genuinely different, not
+/// merely richer: it carries `metadata`, `genres`, `tags`, `readCount` and
+/// `lastCompletedAt`, and it moves `chapter`, `summary` and `volume` inside
+/// `metadata`. A response whose schema depends on a query parameter cannot be
+/// expressed in OpenAPI, so the deprecated `?full=true` form is undescribable
+/// and unusable from a generated client. This route is describable.
+#[utoipa::path(
+    get,
+    path = "/api/v1/books/{book_id}/full",
+    params(
+        ("book_id" = Uuid, Path, description = "Book ID")
+    ),
+    responses(
+        (status = 200, description = "Book with its related data", body = FullBookResponse),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Book not found"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Books"
+)]
+pub async fn get_book_full(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(book_id): Path<Uuid>,
+) -> Result<Json<FullBookResponse>, ApiError> {
+    require_permission!(auth, Permission::BooksRead)?;
+
+    let book = BookRepository::get_by_id(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch book: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
+
+    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+
+    if !content_filter.is_book_visible(book.series_id) {
+        return Err(ApiError::NotFound("Book not found".to_string()));
+    }
+
+    let mut full_dtos = books_to_full_dtos_batched(&state.db, auth.user_id, vec![book]).await?;
+    let full_book = full_dtos
+        .pop()
+        .ok_or_else(|| ApiError::Internal("Failed to build full book DTO".to_string()))?;
+    Ok(Json(full_book))
+}
+
 /// Get book by ID
 #[utoipa::path(
     get,
@@ -1182,6 +1267,7 @@ pub async fn list_books_filtered(
     ),
     tag = "Books"
 )]
+#[allow(deprecated)] // still serves the deprecated `full` parameter
 pub async fn get_book(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
@@ -1579,6 +1665,7 @@ pub async fn get_adjacent_books(
     ),
     tag = "Books"
 )]
+#[allow(deprecated)] // still serves the deprecated `full` parameter
 pub async fn list_library_books(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
@@ -1665,6 +1752,7 @@ pub async fn list_library_books(
     ),
     tag = "Books"
 )]
+#[allow(deprecated)] // still serves the deprecated `full` parameter
 pub async fn list_in_progress_books(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
@@ -1954,6 +2042,7 @@ pub async fn list_library_on_deck_books(
     ),
     tag = "Books"
 )]
+#[allow(deprecated)] // still serves the deprecated `full` parameter
 pub async fn list_recently_added_books(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
