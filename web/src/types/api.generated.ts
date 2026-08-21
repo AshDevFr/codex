@@ -1571,6 +1571,12 @@ export interface paths {
          * Download book file
          * @description Streams the original book file (CBZ, CBR, EPUB, PDF) for download.
          *     Used by OPDS clients for acquisition links.
+         *
+         *     Range-capable and conditional. `Accept-Ranges: bytes` and a strong `ETag`
+         *     go out on every response, so a download interrupted partway can resume with
+         *     `Range` rather than starting again, and a client that understands the
+         *     container can read part of an archive without fetching all of it — the
+         *     suffix form `bytes=-65536` reaches a ZIP central directory directly.
          */
         get: operations["get_book_file"];
         put?: never;
@@ -25262,7 +25268,14 @@ export interface operations {
     get_book_file: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Byte range, e.g. `bytes=0-1023`, `bytes=1024-` or `bytes=-65536`. A single range only; multiple ranges are answered with the whole file. */
+                Range?: string | null;
+                /** @description Serve the range only if this ETag still matches; otherwise the whole file is returned, so a resume cannot splice bytes from two versions. */
+                "If-Range"?: string | null;
+                /** @description Return 304 if this ETag still matches. */
+                "If-None-Match"?: string | null;
+            };
             path: {
                 /** @description Book ID */
                 book_id: string;
@@ -25284,6 +25297,26 @@ export interface operations {
                     "application/octet-stream": unknown;
                 };
             };
+            /** @description The requested byte range */
+            206: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/zip": unknown;
+                    "application/x-rar-compressed": unknown;
+                    "application/epub+zip": unknown;
+                    "application/pdf": unknown;
+                    "application/octet-stream": unknown;
+                };
+            };
+            /** @description Not modified (client cache is valid) */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Forbidden */
             403: {
                 headers: {
@@ -25293,6 +25326,13 @@ export interface operations {
             };
             /** @description Book not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The requested range names no byte of the file */
+            416: {
                 headers: {
                     [name: string]: unknown;
                 };

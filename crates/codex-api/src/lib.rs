@@ -6,6 +6,7 @@ pub mod image_limit;
 pub mod middleware;
 pub mod observability;
 pub mod permissions;
+pub mod ranged_file;
 pub mod routes;
 pub mod web;
 

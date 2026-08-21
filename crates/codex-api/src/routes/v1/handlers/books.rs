@@ -2197,11 +2197,27 @@ pub async fn list_library_recently_read_books(
 ///
 /// Streams the original book file (CBZ, CBR, EPUB, PDF) for download.
 /// Used by OPDS clients for acquisition links.
+///
+/// Range-capable and conditional. `Accept-Ranges: bytes` and a strong `ETag`
+/// go out on every response, so a download interrupted partway can resume with
+/// `Range` rather than starting again, and a client that understands the
+/// container can read part of an archive without fetching all of it — the
+/// suffix form `bytes=-65536` reaches a ZIP central directory directly.
 #[utoipa::path(
     get,
     path = "/api/v1/books/{book_id}/file",
     params(
-        ("book_id" = Uuid, Path, description = "Book ID")
+        ("book_id" = Uuid, Path, description = "Book ID"),
+        // Declared so a generated client can construct a resumable download
+        // without dropping to a raw request.
+        ("Range" = Option<String>, Header,
+            description = "Byte range, e.g. `bytes=0-1023`, `bytes=1024-` or `bytes=-65536`. \
+                           A single range only; multiple ranges are answered with the whole file."),
+        ("If-Range" = Option<String>, Header,
+            description = "Serve the range only if this ETag still matches; otherwise the whole \
+                           file is returned, so a resume cannot splice bytes from two versions."),
+        ("If-None-Match" = Option<String>, Header,
+            description = "Return 304 if this ETag still matches."),
     ),
     responses(
         // One entry per arm of the `content_type` match below, including the
@@ -2214,8 +2230,17 @@ pub async fn list_library_recently_read_books(
             ("application/pdf"),
             ("application/octet-stream"),
         )),
+        (status = 206, description = "The requested byte range", content(
+            ("application/zip"),
+            ("application/x-rar-compressed"),
+            ("application/epub+zip"),
+            ("application/pdf"),
+            ("application/octet-stream"),
+        )),
+        (status = 304, description = "Not modified (client cache is valid)"),
         (status = 404, description = "Book not found"),
         (status = 403, description = "Forbidden"),
+        (status = 416, description = "The requested range names no byte of the file"),
     ),
     security(
         ("jwt_bearer" = []),
@@ -2226,6 +2251,7 @@ pub async fn list_library_recently_read_books(
 pub async fn get_book_file(
     State(state): State<Arc<AuthState>>,
     FlexibleAuthContext(auth): FlexibleAuthContext,
+    headers: axum::http::HeaderMap,
     Path(book_id): Path<Uuid>,
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
@@ -2236,7 +2262,8 @@ pub async fn get_book_file(
         .map_err(|e| ApiError::Internal(format!("Failed to fetch book: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
 
-    // Check sharing tag access for the book's series
+    // Check sharing tag access for the book's series. This runs before the file
+    // is touched, so a 206 is never a way around a check a 200 has to pass.
     let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
@@ -2267,26 +2294,22 @@ pub async fn get_book_file(
         _ => "application/octet-stream",
     };
 
-    // Open file for streaming
-    let file = tokio::fs::File::open(&book.path)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to open book file: {}", e)))?;
+    // `file_hash` is a non-null column the scanner already computes, so the
+    // validator costs no I/O, survives a rescan, and survives the file being
+    // moved on disk. An mtime validator would invalidate every client's cache
+    // on any rescan that touches timestamps.
+    let etag = format!("\"{}\"", book.file_hash);
 
-    // Create a stream from the file
-    let stream = ReaderStream::new(file);
-    let body = Body::from_stream(stream);
-
-    // Build response with appropriate headers
-    Ok(Response::builder()
-        .status(StatusCode::OK)
-        .header(header::CONTENT_TYPE, content_type)
-        .header(header::CONTENT_LENGTH, metadata.len())
-        .header(
-            header::CONTENT_DISPOSITION,
-            format!("attachment; filename=\"{}\"", book.file_name),
-        )
-        .body(body)
-        .unwrap())
+    crate::ranged_file::ranged_file_response(
+        &headers,
+        path,
+        metadata.len(),
+        &etag,
+        book.modified_at,
+        content_type,
+        &crate::ranged_file::content_disposition_attachment(&book.file_name),
+    )
+    .await
 }
 
 // ============================================================================
