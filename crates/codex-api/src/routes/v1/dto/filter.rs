@@ -22,7 +22,6 @@ pub use codex_models::filter::{
 pub struct SeriesListRequest {
     /// Filter condition (optional - no condition returns all)
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[schema(value_type = Option<Object>)]
     pub condition: Option<SeriesCondition>,
 
     /// Full-text search query (case-insensitive search on series name)
@@ -39,7 +38,6 @@ pub struct SeriesListRequest {
 pub struct BookListRequest {
     /// Filter condition (optional - no condition returns all)
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[schema(value_type = Option<Object>)]
     pub condition: Option<BookCondition>,
 
     /// Full-text search query (case-insensitive search on book title)

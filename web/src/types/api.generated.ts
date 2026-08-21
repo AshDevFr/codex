@@ -8929,7 +8929,7 @@ export interface components {
          */
         BookListRequest: {
             /** @description Filter condition (optional - no condition returns all) */
-            condition?: Record<string, never> | null;
+            condition?: components["schemas"]["BookCondition"];
             /** @description Full-text search query (case-insensitive search on book title) */
             fullTextSearch?: string | null;
             /** @description Include soft-deleted books in results (default: false) */
@@ -14554,7 +14554,7 @@ export interface components {
         /** @description Generic paginated response wrapper with HATEOAS links */
         PaginatedResponse: {
             /** @description The data items for this page */
-            data: components["schemas"]["BookDto"][];
+            data: components["schemas"]["FullBookResponse"][];
             /** @description HATEOAS navigation links */
             links: components["schemas"]["PaginationLinks"];
             /**
@@ -15300,6 +15300,67 @@ export interface components {
                  * @example 1987
                  */
                 year?: number | null;
+            }[];
+            /** @description HATEOAS navigation links */
+            links: components["schemas"]["PaginationLinks"];
+            /**
+             * Format: int64
+             * @description Current page number (1-indexed)
+             * @example 1
+             */
+            page: number;
+            /**
+             * Format: int64
+             * @description Number of items per page
+             * @example 50
+             */
+            pageSize: number;
+            /**
+             * Format: int64
+             * @description Total number of items across all pages
+             * @example 150
+             */
+            total: number;
+            /**
+             * Format: int64
+             * @description Total number of pages
+             * @example 3
+             */
+            totalPages: number;
+        };
+        /** @description Generic paginated response wrapper with HATEOAS links */
+        PaginatedResponse_SeriesExternalIndexDto: {
+            /** @description The data items for this page */
+            data: {
+                /** @description External IDs linked to this series (empty if none have been linked yet) */
+                externalIds: components["schemas"]["SeriesExternalIdRefDto"][];
+                /**
+                 * Format: uuid
+                 * @description Series ID (build the Codex web deep link `/series/{id}` consumer-side)
+                 * @example 550e8400-e29b-41d4-a716-446655440002
+                 */
+                id: string;
+                /**
+                 * Format: float
+                 * @description Highest `book_metadata.chapter` across non-deleted books, or null if
+                 *     no book in the series has a parsed chapter.
+                 * @example 130.5
+                 */
+                localMaxChapter?: number | null;
+                /**
+                 * Format: int32
+                 * @description Highest `book_metadata.volume` across non-deleted books, or null if
+                 *     no book in the series has a parsed volume.
+                 * @example 12
+                 */
+                localMaxVolume?: number | null;
+                /**
+                 * Format: int64
+                 * @description Count of complete-volume files (volume set, chapter null). A soft,
+                 *     display-only signal; not authoritative for "how far along".
+                 * @example 12
+                 */
+                volumesOwned?: number | null;
             }[];
             /** @description HATEOAS navigation links */
             links: components["schemas"]["PaginationLinks"];
@@ -19177,7 +19238,7 @@ export interface components {
          */
         SeriesListRequest: {
             /** @description Filter condition (optional - no condition returns all) */
-            condition?: Record<string, never> | null;
+            condition?: components["schemas"]["SeriesCondition"];
             /** @description Full-text search query (case-insensitive search on series name) */
             fullTextSearch?: string | null;
         };
@@ -23859,7 +23920,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PaginatedResponse"];
+                    "application/json": components["schemas"]["PaginatedResponse_BookDto"];
                 };
             };
             /** @description Forbidden */
@@ -24292,7 +24353,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PaginatedResponse"];
+                    "application/json": components["schemas"]["PaginatedResponse_BookDto"];
                 };
             };
             /** @description Forbidden */
@@ -24335,7 +24396,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PaginatedResponse"];
+                    "application/json": components["schemas"]["PaginatedResponse_BookDto"];
                 };
             };
             /** @description Forbidden */
@@ -24378,7 +24439,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PaginatedResponse"];
+                    "application/json": components["schemas"]["PaginatedResponse_BookDto"];
                 };
             };
             /** @description Forbidden */
@@ -24421,7 +24482,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PaginatedResponse"];
+                    "application/json": components["schemas"]["PaginatedResponse_BookDto"];
                 };
             };
             /** @description Forbidden */
@@ -27279,15 +27340,23 @@ export interface operations {
     };
     list_library_books: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Page number (1-indexed, minimum 1) */
+                page?: number;
+                /** @description Number of items per page (max 100, default 50) */
+                pageSize?: number;
+                /** @description Sort parameter (format: "field,direction" e.g. "title,asc") */
+                sort?: string;
+                /**
+                 * @description Return full data including metadata and locks.
+                 *     Default is false for backward compatibility.
+                 */
+                full?: boolean;
+            };
             header?: never;
             path: {
                 /** @description Library ID */
                 library_id: string;
-                /** @description Page number (1-indexed, minimum 1) */
-                page: number;
-                /** @description Number of items per page (max 100, default 50) */
-                pageSize: number;
             };
             cookie?: never;
         };
@@ -27299,7 +27368,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PaginatedResponse"];
+                    "application/json": components["schemas"]["PaginatedResponse_BookDto"];
                 };
             };
             /** @description Forbidden */
@@ -27313,15 +27382,23 @@ export interface operations {
     };
     list_library_in_progress_books: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Page number (1-indexed, minimum 1) */
+                page?: number;
+                /** @description Number of items per page (max 100, default 50) */
+                pageSize?: number;
+                /** @description Sort parameter (format: "field,direction" e.g. "title,asc") */
+                sort?: string;
+                /**
+                 * @description Return full data including metadata and locks.
+                 *     Default is false for backward compatibility.
+                 */
+                full?: boolean;
+            };
             header?: never;
             path: {
                 /** @description Library ID */
                 library_id: string;
-                /** @description Page number (1-indexed, minimum 1) */
-                page: number;
-                /** @description Number of items per page (max 100, default 50) */
-                pageSize: number;
             };
             cookie?: never;
         };
@@ -27333,7 +27410,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PaginatedResponse"];
+                    "application/json": components["schemas"]["PaginatedResponse_BookDto"];
                 };
             };
             /** @description Forbidden */
@@ -27347,15 +27424,23 @@ export interface operations {
     };
     list_library_on_deck_books: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Page number (1-indexed, minimum 1) */
+                page?: number;
+                /** @description Number of items per page (max 100, default 50) */
+                pageSize?: number;
+                /** @description Sort parameter (format: "field,direction" e.g. "title,asc") */
+                sort?: string;
+                /**
+                 * @description Return full data including metadata and locks.
+                 *     Default is false for backward compatibility.
+                 */
+                full?: boolean;
+            };
             header?: never;
             path: {
                 /** @description Library ID */
                 library_id: string;
-                /** @description Page number (1-indexed, minimum 1) */
-                page: number;
-                /** @description Number of items per page (max 100, default 50) */
-                pageSize: number;
             };
             cookie?: never;
         };
@@ -27367,7 +27452,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PaginatedResponse"];
+                    "application/json": components["schemas"]["PaginatedResponse_BookDto"];
                 };
             };
             /** @description Forbidden */
@@ -27381,15 +27466,23 @@ export interface operations {
     };
     list_library_recently_added_books: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Page number (1-indexed, minimum 1) */
+                page?: number;
+                /** @description Number of items per page (max 100, default 50) */
+                pageSize?: number;
+                /** @description Sort parameter (format: "field,direction" e.g. "title,asc") */
+                sort?: string;
+                /**
+                 * @description Return full data including metadata and locks.
+                 *     Default is false for backward compatibility.
+                 */
+                full?: boolean;
+            };
             header?: never;
             path: {
                 /** @description Library ID */
                 library_id: string;
-                /** @description Page number (1-indexed, minimum 1) */
-                page: number;
-                /** @description Number of items per page (max 100, default 50) */
-                pageSize: number;
             };
             cookie?: never;
         };
@@ -27401,7 +27494,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PaginatedResponse"];
+                    "application/json": components["schemas"]["PaginatedResponse_BookDto"];
                 };
             };
             /** @description Forbidden */
@@ -27686,7 +27779,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PaginatedResponse"];
+                    "application/json": components["schemas"]["PaginatedResponse_SeriesDto"];
                 };
             };
             /** @description Forbidden */
@@ -29514,7 +29607,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PaginatedResponse"];
+                    "application/json": components["schemas"]["PaginatedResponse_SeriesDto"];
                 };
             };
             /** @description Forbidden */
@@ -30127,7 +30220,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PaginatedResponse"];
+                    "application/json": components["schemas"]["PaginatedResponse_SeriesExternalIndexDto"];
                 };
             };
             /** @description Forbidden */
@@ -30202,7 +30295,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PaginatedResponse"];
+                    "application/json": components["schemas"]["PaginatedResponse_SeriesDto"];
                 };
             };
             /** @description Forbidden */

@@ -2809,7 +2809,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PaginatedResponse"
+                  "$ref": "#/components/schemas/PaginatedResponse_BookDto"
                 }
               }
             }
@@ -3399,7 +3399,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PaginatedResponse"
+                  "$ref": "#/components/schemas/PaginatedResponse_BookDto"
                 }
               }
             }
@@ -3490,7 +3490,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PaginatedResponse"
+                  "$ref": "#/components/schemas/PaginatedResponse_BookDto"
                 }
               }
             }
@@ -3593,7 +3593,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PaginatedResponse"
+                  "$ref": "#/components/schemas/PaginatedResponse_BookDto"
                 }
               }
             }
@@ -3696,7 +3696,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PaginatedResponse"
+                  "$ref": "#/components/schemas/PaginatedResponse_BookDto"
                 }
               }
             }
@@ -7389,9 +7389,9 @@
           },
           {
             "name": "page",
-            "in": "path",
+            "in": "query",
             "description": "Page number (1-indexed, minimum 1)",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "integer",
               "format": "int64",
@@ -7400,13 +7400,31 @@
           },
           {
             "name": "pageSize",
-            "in": "path",
+            "in": "query",
             "description": "Number of items per page (max 100, default 50)",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "integer",
               "format": "int64",
               "minimum": 0
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "Sort parameter (format: \"field,direction\" e.g. \"title,asc\")",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "full",
+            "in": "query",
+            "description": "Return full data including metadata and locks.\nDefault is false for backward compatibility.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
             }
           }
         ],
@@ -7416,7 +7434,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PaginatedResponse"
+                  "$ref": "#/components/schemas/PaginatedResponse_BookDto"
                 }
               }
             }
@@ -7455,9 +7473,9 @@
           },
           {
             "name": "page",
-            "in": "path",
+            "in": "query",
             "description": "Page number (1-indexed, minimum 1)",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "integer",
               "format": "int64",
@@ -7466,13 +7484,31 @@
           },
           {
             "name": "pageSize",
-            "in": "path",
+            "in": "query",
             "description": "Number of items per page (max 100, default 50)",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "integer",
               "format": "int64",
               "minimum": 0
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "Sort parameter (format: \"field,direction\" e.g. \"title,asc\")",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "full",
+            "in": "query",
+            "description": "Return full data including metadata and locks.\nDefault is false for backward compatibility.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
             }
           }
         ],
@@ -7482,7 +7518,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PaginatedResponse"
+                  "$ref": "#/components/schemas/PaginatedResponse_BookDto"
                 }
               }
             }
@@ -7521,9 +7557,9 @@
           },
           {
             "name": "page",
-            "in": "path",
+            "in": "query",
             "description": "Page number (1-indexed, minimum 1)",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "integer",
               "format": "int64",
@@ -7532,13 +7568,31 @@
           },
           {
             "name": "pageSize",
-            "in": "path",
+            "in": "query",
             "description": "Number of items per page (max 100, default 50)",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "integer",
               "format": "int64",
               "minimum": 0
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "Sort parameter (format: \"field,direction\" e.g. \"title,asc\")",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "full",
+            "in": "query",
+            "description": "Return full data including metadata and locks.\nDefault is false for backward compatibility.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
             }
           }
         ],
@@ -7548,7 +7602,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PaginatedResponse"
+                  "$ref": "#/components/schemas/PaginatedResponse_BookDto"
                 }
               }
             }
@@ -7587,9 +7641,9 @@
           },
           {
             "name": "page",
-            "in": "path",
+            "in": "query",
             "description": "Page number (1-indexed, minimum 1)",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "integer",
               "format": "int64",
@@ -7598,13 +7652,31 @@
           },
           {
             "name": "pageSize",
-            "in": "path",
+            "in": "query",
             "description": "Number of items per page (max 100, default 50)",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "integer",
               "format": "int64",
               "minimum": 0
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "Sort parameter (format: \"field,direction\" e.g. \"title,asc\")",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "full",
+            "in": "query",
+            "description": "Return full data including metadata and locks.\nDefault is false for backward compatibility.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
             }
           }
         ],
@@ -7614,7 +7686,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PaginatedResponse"
+                  "$ref": "#/components/schemas/PaginatedResponse_BookDto"
                 }
               }
             }
@@ -8055,7 +8127,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PaginatedResponse"
+                  "$ref": "#/components/schemas/PaginatedResponse_SeriesDto"
                 }
               }
             }
@@ -10566,7 +10638,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PaginatedResponse"
+                  "$ref": "#/components/schemas/PaginatedResponse_SeriesDto"
                 }
               }
             }
@@ -11306,7 +11378,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PaginatedResponse"
+                  "$ref": "#/components/schemas/PaginatedResponse_SeriesExternalIndexDto"
                 }
               }
             }
@@ -11456,7 +11528,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PaginatedResponse"
+                  "$ref": "#/components/schemas/PaginatedResponse_SeriesDto"
                 }
               }
             }
@@ -23766,10 +23838,7 @@
         "description": "Request body for POST /books/list\n\nPagination parameters (page, pageSize, sort) are passed as query parameters,\nnot in the request body. This enables proper HATEOAS links.",
         "properties": {
           "condition": {
-            "type": [
-              "object",
-              "null"
-            ],
+            "$ref": "#/components/schemas/BookCondition",
             "description": "Filter condition (optional - no condition returns all)"
           },
           "fullTextSearch": {
@@ -34261,7 +34330,7 @@
           "data": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/BookDto"
+              "$ref": "#/components/schemas/FullBookResponse"
             },
             "description": "The data items for this page"
           },
@@ -35322,6 +35391,106 @@
                   "format": "int32",
                   "description": "Release year",
                   "example": 1987
+                }
+              }
+            },
+            "description": "The data items for this page"
+          },
+          "links": {
+            "$ref": "#/components/schemas/PaginationLinks",
+            "description": "HATEOAS navigation links"
+          },
+          "page": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Current page number (1-indexed)",
+            "example": 1,
+            "minimum": 0
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of items per page",
+            "example": 50,
+            "minimum": 0
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total number of items across all pages",
+            "example": 150,
+            "minimum": 0
+          },
+          "totalPages": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total number of pages",
+            "example": 3,
+            "minimum": 0
+          }
+        }
+      },
+      "PaginatedResponse_SeriesExternalIndexDto": {
+        "type": "object",
+        "description": "Generic paginated response wrapper with HATEOAS links",
+        "required": [
+          "data",
+          "page",
+          "pageSize",
+          "total",
+          "totalPages",
+          "links"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "description": "Slim per-series projection for external discovery tools.\n\nReturned by `GET /api/v1/series/external-index`. It carries just the\nseries UUID, its linked external IDs, and the locally-owned\nvolume/chapter signals, deliberately omitting the heavy metadata,\ngenres, tags, covers, ratings, and links of [`FullSeriesResponse`].",
+              "required": [
+                "id",
+                "externalIds"
+              ],
+              "properties": {
+                "externalIds": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SeriesExternalIdRefDto"
+                  },
+                  "description": "External IDs linked to this series (empty if none have been linked yet)"
+                },
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "description": "Series ID (build the Codex web deep link `/series/{id}` consumer-side)",
+                  "example": "550e8400-e29b-41d4-a716-446655440002"
+                },
+                "localMaxChapter": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "format": "float",
+                  "description": "Highest `book_metadata.chapter` across non-deleted books, or null if\nno book in the series has a parsed chapter.",
+                  "example": 130.5
+                },
+                "localMaxVolume": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "format": "int32",
+                  "description": "Highest `book_metadata.volume` across non-deleted books, or null if\nno book in the series has a parsed volume.",
+                  "example": 12
+                },
+                "volumesOwned": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "format": "int64",
+                  "description": "Count of complete-volume files (volume set, chapter null). A soft,\ndisplay-only signal; not authoritative for \"how far along\".",
+                  "example": 12
                 }
               }
             },
@@ -41835,10 +42004,7 @@
         "description": "Request body for POST /series/list\n\nPagination parameters (page, pageSize, sort) are passed as query parameters,\nnot in the request body. This enables proper HATEOAS links.",
         "properties": {
           "condition": {
-            "type": [
-              "object",
-              "null"
-            ],
+            "$ref": "#/components/schemas/SeriesCondition",
             "description": "Filter condition (optional - no condition returns all)"
           },
           "fullTextSearch": {

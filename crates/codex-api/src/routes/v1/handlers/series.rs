@@ -819,7 +819,7 @@ async fn series_to_full_dtos_batched(
     path = "/api/v1/series",
     params(SeriesListQuery),
     responses(
-        (status = 200, description = "Paginated list of series (returns FullSeriesListResponse when full=true)", body = SeriesListResponse),
+        (status = 200, description = "Paginated list of series (returns FullSeriesListResponse when full=true)", body = PaginatedResponse<SeriesDto>),
         (status = 403, description = "Forbidden"),
     ),
     security(
@@ -982,7 +982,7 @@ pub async fn list_series(
     path = "/api/v1/series/external-index",
     params(ListPaginationParams),
     responses(
-        (status = 200, description = "Paginated slim per-series external-index entries", body = SeriesExternalIndexListResponse),
+        (status = 200, description = "Paginated slim per-series external-index entries", body = PaginatedResponse<SeriesExternalIndexDto>),
         (status = 403, description = "Forbidden"),
     ),
     security(
@@ -1389,7 +1389,7 @@ pub async fn search_series(
     params(ListPaginationParams),
     request_body = SeriesListRequest,
     responses(
-        (status = 200, description = "Paginated list of filtered series (returns FullSeriesListResponse when full=true)", body = SeriesListResponse),
+        (status = 200, description = "Paginated list of filtered series (returns FullSeriesListResponse when full=true)", body = PaginatedResponse<SeriesDto>),
         (status = 403, description = "Forbidden"),
     ),
     security(
@@ -2552,7 +2552,7 @@ pub async fn list_library_recently_updated_series(
         SeriesListQuery
     ),
     responses(
-        (status = 200, description = "Paginated list of series in library (returns FullSeriesListResponse when full=true)", body = SeriesListResponse),
+        (status = 200, description = "Paginated list of series in library (returns FullSeriesListResponse when full=true)", body = PaginatedResponse<SeriesDto>),
         (status = 403, description = "Forbidden"),
     ),
     security(

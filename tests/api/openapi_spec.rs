@@ -213,3 +213,154 @@ fn absent_value_endpoints_document_204() {
         );
     }
 }
+
+/// A generic DTO named through a `pub type` alias loses its type argument and
+/// collapses to the base component, which then holds whichever instantiation the
+/// schema registry happened to render into that slot. Four series endpoints were
+/// documented as returning books this way, and the document generated without a
+/// warning: the alias `SeriesListResponse` emitted `$ref: PaginatedResponse`, and
+/// the bare `PaginatedResponse` carried `data: [BookDto]`.
+///
+/// The signature is a component whose name is the bare prefix of one or more
+/// `Base_Argument` components in the same document. Referencing the bare form is
+/// never what the handler means, so a `body =` position must name the generic
+/// inline (`PaginatedResponse<SeriesDto>`) rather than through an alias.
+#[test]
+fn no_operation_references_an_unparameterised_generic_wrapper() {
+    let spec = spec();
+    let schemas = spec["components"]["schemas"]
+        .as_object()
+        .expect("schemas object");
+
+    // Bases that the registry has rendered at least one concrete instantiation for.
+    let parameterised: Vec<&str> = schemas
+        .keys()
+        .filter_map(|name| name.split_once('_').map(|(base, _)| base))
+        .collect();
+
+    let mut collapsed: Vec<String> = Vec::new();
+    for (operation, op) in operations(&spec) {
+        for (_, node) in all_nodes(op) {
+            let Some(reference) = node.get("$ref").and_then(Value::as_str) else {
+                continue;
+            };
+            let Some(name) = reference.strip_prefix("#/components/schemas/") else {
+                continue;
+            };
+            if parameterised.contains(&name) {
+                collapsed.push(format!("{} -> {}", operation, name));
+            }
+        }
+    }
+    collapsed.sort();
+    collapsed.dedup();
+
+    assert!(
+        collapsed.is_empty(),
+        "operations reference a generic wrapper with its type argument discarded, \
+         so they document whichever instantiation the registry rendered rather than \
+         their own: {:#?}",
+        collapsed
+    );
+}
+
+/// A parameter documented as `in: path` but absent from the path template
+/// describes a call that cannot be constructed, and a `{placeholder}` with no
+/// declared parameter describes one that cannot be filled in. Both halves broke
+/// when four handlers annotated an `IntoParams` struct they never extracted:
+/// `page` and `pageSize` rendered as path parameters of a path that has no such
+/// segments.
+#[test]
+fn path_parameters_match_their_path_template() {
+    let spec = spec();
+    let mut mismatches: Vec<String> = Vec::new();
+
+    for (path, item) in spec["paths"].as_object().expect("paths object") {
+        let template: Vec<&str> = path
+            .split('/')
+            .filter_map(|segment| segment.strip_prefix('{')?.strip_suffix('}'))
+            .collect();
+
+        for (method, op) in item.as_object().expect("path item object") {
+            if !matches!(
+                method.as_str(),
+                "get" | "put" | "post" | "delete" | "options" | "head" | "patch" | "trace"
+            ) {
+                continue;
+            }
+            let declared: Vec<&str> = op
+                .get("parameters")
+                .and_then(Value::as_array)
+                .map(|params| {
+                    params
+                        .iter()
+                        .filter(|p| p.get("in").and_then(Value::as_str) == Some("path"))
+                        .filter_map(|p| p.get("name").and_then(Value::as_str))
+                        .collect()
+                })
+                .unwrap_or_default();
+
+            let operation = format!("{} {}", method.to_uppercase(), path);
+            for name in &declared {
+                if !template.contains(name) {
+                    mismatches.push(format!(
+                        "{}: declares path parameter `{}` that the template does not contain",
+                        operation, name
+                    ));
+                }
+            }
+            for name in &template {
+                if !declared.contains(name) {
+                    mismatches.push(format!(
+                        "{}: template contains `{{{}}}` with no declared path parameter",
+                        operation, name
+                    ));
+                }
+            }
+        }
+    }
+    mismatches.sort();
+
+    assert!(
+        mismatches.is_empty(),
+        "path parameters and path templates disagree: {:#?}",
+        mismatches
+    );
+}
+
+/// The filter grammar is the primary query interface: `POST /series/list` and
+/// `POST /books/list` route all filtering through `condition`. Both fields once
+/// carried `#[schema(value_type = Option<Object>)]`, which erased a fully
+/// modelled recursive grammar to a bare untyped object, so a generated client got
+/// a freeform dictionary for the one field that carries the actual query and the
+/// grammar was discoverable only by reading the Rust source.
+///
+/// The condition schemas are recursive, which is legal OpenAPI and is what the
+/// override was presumably working around. Asserting the `$ref` keeps that
+/// workaround from being reintroduced quietly.
+#[test]
+fn filter_conditions_reference_their_grammar() {
+    let spec = spec();
+
+    for (request, condition) in [
+        ("SeriesListRequest", "SeriesCondition"),
+        ("BookListRequest", "BookCondition"),
+    ] {
+        let property = &spec["components"]["schemas"][request]["properties"]["condition"];
+        assert_eq!(
+            property.get("$ref").and_then(Value::as_str),
+            Some(format!("#/components/schemas/{}", condition).as_str()),
+            "{}.condition should reference {} rather than erasing the grammar, got {}",
+            request,
+            condition,
+            property
+        );
+        assert!(
+            spec["components"]["schemas"]
+                .get(condition)
+                .is_some_and(|schema| schema.get("oneOf").is_some()),
+            "{} should be modelled as a oneOf over its combinators and predicates",
+            condition
+        );
+    }
+}
