@@ -892,6 +892,17 @@ export const bookHandlers = [
     });
   }),
 
+  // A single book with its related data — the dedicated route replacing
+  // `GET /api/v1/books/:id?full=true`.
+  http.get("/api/v1/books/:id/full", async ({ params }) => {
+    await delay(100);
+    const book = mockBooks.find((b) => b.id === params.id);
+    if (!book) {
+      return HttpResponse.json({ error: "Book not found" }, { status: 404 });
+    }
+    return HttpResponse.json(toFullBookResponse(book));
+  }),
+
   // Get book thumbnail
   http.get("/api/v1/books/:id/thumbnail", async () => {
     await delay(50);

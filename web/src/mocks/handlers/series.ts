@@ -1388,6 +1388,41 @@ export const seriesHandlers = [
     },
   ),
 
+  // Paginated series with their related data.
+  //
+  // The dedicated route that replaces the deprecated `?full=true` listing. It
+  // must be declared before `/series/:id`, since `full` would otherwise be read
+  // as a series id — the same ordering constraint `/in-progress` and friends
+  // have.
+  http.get("/api/v1/series/full", async ({ request }) => {
+    await delay(200);
+    const url = new URL(request.url);
+    const page = Math.max(
+      1,
+      Number.parseInt(url.searchParams.get("page") || "1", 10),
+    );
+    const pageSize = Number.parseInt(
+      url.searchParams.get("pageSize") || "50",
+      10,
+    );
+    const libraryId = url.searchParams.get("libraryId");
+
+    const filteredSeries = libraryId
+      ? getSeriesByLibrary(libraryId)
+      : mockSeries;
+    const start = (page - 1) * pageSize;
+    const items = filteredSeries.slice(start, start + pageSize);
+
+    return HttpResponse.json(
+      createPaginatedResponse(items.map(toFullSeriesResponse), {
+        page,
+        pageSize,
+        total: filteredSeries.length,
+        basePath: "/api/v1/series/full",
+      }),
+    );
+  }),
+
   // Get series by ID (must come AFTER specific routes like /in-progress, /recently-added, etc.)
   // Supports ?full=true for full series response with metadata
   http.get("/api/v1/series/:id", async ({ params, request }) => {
@@ -1404,6 +1439,17 @@ export const seriesHandlers = [
       return HttpResponse.json(toFullSeriesResponse(seriesItem));
     }
     return HttpResponse.json(seriesItem);
+  }),
+
+  // A single series with its related data — the dedicated route replacing
+  // `GET /api/v1/series/:id?full=true`.
+  http.get("/api/v1/series/:id/full", async ({ params }) => {
+    await delay(100);
+    const seriesItem = mockSeries.find((s) => s.id === params.id);
+    if (!seriesItem) {
+      return HttpResponse.json({ error: "Series not found" }, { status: 404 });
+    }
+    return HttpResponse.json(toFullSeriesResponse(seriesItem));
   }),
 
   // Get series thumbnail
