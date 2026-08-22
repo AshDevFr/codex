@@ -21,6 +21,16 @@ export default defineConfig({
     // test now takes 20s to report rather than 5s.
     testTimeout: 20000,
     hookTimeout: 20000,
+    // Cap the worker pool at half the logical cores. Vitest defaults to one
+    // worker per core, and each runs a full jsdom + React + Mantine portal
+    // pipeline, so on a 12-thread machine twelve of them starve each other and
+    // the heavier interaction tests miss their deadline. The failures were
+    // spread across whichever tests happened to lose the race — InstallNudgeModal,
+    // TemplateSelector, MediaCard, AddLibraryModal — rather than concentrated in
+    // one broken test, which is the signature of contention rather than a bug.
+    //
+    // Fewer workers with real CPU each finish sooner than more workers thrashing.
+    maxWorkers: "50%",
     coverage: {
       provider: "v8",
       reporter: ["text", "json", "html"],
