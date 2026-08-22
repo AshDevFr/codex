@@ -604,14 +604,44 @@ jobs:
           jq --arg v "^$SDK_VERSION" '.dependencies["@ashdev/codex-plugin-sdk"] = $v' package.json > tmp.json
           mv tmp.json package.json
           cat package.json | grep -A2 '"dependencies"'
-      # The step above rewrites the SDK dependency (file: -> published version),
-      # which desyncs the committed lockfile. npm ci would fail here, so this
-      # publish-only step must use npm install to regenerate the lockfile.
+          echo "SDK_VERSION=$SDK_VERSION" >> "$GITHUB_ENV"
+      # npm's registry is eventually consistent: the version `publish-sdk` just
+      # pushed can take a minute to appear on every CDN edge, so installing it
+      # immediately fails with "no matching version" and a manual re-run fixes
+      # it. Wait for the version to become visible before asking for it.
+      - name: Wait for the published SDK to be resolvable
+        run: |
+          for attempt in $(seq 1 30); do
+            if [ -n "$(npm view "@ashdev/codex-plugin-sdk@$SDK_VERSION" version 2>/dev/null)" ]; then
+              echo "SDK $SDK_VERSION resolvable after attempt $attempt"
+              exit 0
+            fi
+            echo "attempt $attempt/30: $SDK_VERSION not visible yet, retrying in 10s"
+            sleep 10
+          done
+          echo "::error::@ashdev/codex-plugin-sdk@$SDK_VERSION never became resolvable"
+          exit 1
+      # The rewrite above desyncs the committed lockfile, so `npm ci` would fail
+      # and this publish-only step must regenerate it with `npm install`.
+      #
+      # Retried even though the step above waited: `npm view` and `npm install`
+      # do not necessarily hit the same CDN edge, so one seeing the version does
+      # not guarantee the other does. `--prefer-online` revalidates rather than
+      # trusting a cached 404 from the failed attempt.
       - name: Install plugin dependencies
         working-directory: plugins/${{ matrix.plugin }}
         run: |
-          rm -rf node_modules package-lock.json
-          npm install
+          for attempt in 1 2 3 4 5; do
+            rm -rf node_modules package-lock.json
+            if npm install --prefer-online; then
+              echo "npm install succeeded on attempt $attempt"
+              exit 0
+            fi
+            echo "npm install failed on attempt $attempt/5, retrying in 15s"
+            sleep 15
+          done
+          echo "::error::npm install failed after 5 attempts"
+          exit 1
       - name: Build plugin
         working-directory: plugins/${{ matrix.plugin }}
         run: npm run build
