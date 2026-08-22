@@ -1,6 +1,6 @@
 {
   "name": "@ashdev/codex-plugin-recommendations-echo",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Echo recommendations plugin for testing and debugging the Codex plugin recommendations protocol",
   "main": "dist/index.js",
   "bin": "dist/index.js",

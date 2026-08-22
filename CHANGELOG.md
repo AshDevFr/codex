@@ -2,6 +2,32 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [2.2.0] - 2026-08-22
+
+### 🚀 Features
+
+- *(api)* Make the book file endpoint range-capable and conditional
+- *(api)* Describe the full response shapes as their own routes
+
+### 🐛 Bug Fixes
+
+- *(api)* Describe series pages, library book params, and the filter grammar correctly
+- *(api)* Declare the media types the binary endpoints actually send
+- *(api)* Reference generic type arguments instead of inlining them
+- *(web)* Serve the new full routes from the mocks and drop the dead full plumbing
+
+### 💼 Other
+
+- *(docs)* Upgrade Docusaurus and the OpenAPI plugin so the site builds again
+
+### 📚 Documentation
+
+- *(api)* Document the library-jobs routes, which had no annotations at all
+
+### 🧪 Testing
+
+- *(web)* Give interaction tests a budget the runner can actually meet
+
 ## [2.1.0] - 2026-08-21
 
 ### 🐛 Bug Fixes
