@@ -10,6 +10,11 @@ header = """
 
 All notable changes to Codex will be documented in this file.
 
+**API compatibility.** API features ship in minor releases and are never backported into a patch
+release. A patch release may fix an API bug; it may not add an operation, a parameter, a response
+field, or a new behaviour on an existing route. A client may therefore treat the release a feature
+first appears under in the 🔌 API sections below as a floor it can rely on.
+
 """
 body = """
 {% if version %}\
@@ -67,22 +72,34 @@ protect_breaking_commits = false
 # An array of regex based parsers for extracting data from the commit message.
 # Assigns commits to groups.
 # Optionally sets the commit's scope and can decide to exclude commits from further processing.
+# Ordering keys are zero-padded because groups sort as strings: an unpadded
+# "<!-- 10 -->" sorts between 1 and 2, which is why "Other" used to appear third.
+#
+# The API parsers come first, and therefore win over the type-based groups below,
+# because the audience for an API change is a client author regenerating against
+# openapi.json, and they need it separated from web and config work rather than
+# interleaved with it. Scoped to the types that can move the wire: a `test(api)`
+# or `style(api)` commit changes nothing a client can observe. The scope pattern
+# matches `api` as a whole element of a comma-separated scope list, so
+# `feat(api, db)` counts and `feat(komga-api)` does not.
 commit_parsers = [
-    { message = "^feat", group = "<!-- 0 -->🚀 Features" },
-    { message = "^fix", group = "<!-- 1 -->🐛 Bug Fixes" },
-    { message = "^doc", group = "<!-- 3 -->📚 Documentation" },
-    { message = "^perf", group = "<!-- 4 -->⚡ Performance" },
-    { message = "^refactor", group = "<!-- 2 -->🚜 Refactor" },
-    { message = "^style", group = "<!-- 5 -->🎨 Styling" },
-    { message = "^test", group = "<!-- 6 -->🧪 Testing" },
+    { message = "^(feat|fix|docs?|perf|refactor)\\((?:[a-z0-9_-]+, *)*api(?:, *[a-z0-9_-]+)*\\)!", group = "<!-- 00 -->🔌 API (breaking)" },
+    { message = "^(feat|fix|docs?|perf|refactor)\\((?:[a-z0-9_-]+, *)*api(?:, *[a-z0-9_-]+)*\\)", group = "<!-- 01 -->🔌 API" },
+    { message = "^feat", group = "<!-- 02 -->🚀 Features" },
+    { message = "^fix", group = "<!-- 03 -->🐛 Bug Fixes" },
+    { message = "^refactor", group = "<!-- 04 -->🚜 Refactor" },
+    { message = "^doc", group = "<!-- 05 -->📚 Documentation" },
+    { message = "^perf", group = "<!-- 06 -->⚡ Performance" },
+    { message = "^style", group = "<!-- 07 -->🎨 Styling" },
+    { message = "^test", group = "<!-- 08 -->🧪 Testing" },
     { message = "^chore\\(release\\): prepare for", skip = true },
     { message = "^chore\\(deps.*\\)", skip = true },
     { message = "^chore\\(pr\\)", skip = true },
     { message = "^chore\\(pull\\)", skip = true },
-    { message = "^chore|^ci", group = "<!-- 7 -->⚙️ Miscellaneous Tasks" },
-    { body = ".*security", group = "<!-- 8 -->🛡️ Security" },
-    { message = "^revert", group = "<!-- 9 -->◀️ Revert" },
-    { message = ".*", group = "<!-- 10 -->💼 Other" },
+    { message = "^chore|^ci|^build", group = "<!-- 09 -->⚙️ Miscellaneous Tasks" },
+    { body = ".*security", group = "<!-- 10 -->🛡️ Security" },
+    { message = "^revert", group = "<!-- 11 -->◀️ Revert" },
+    { message = ".*", group = "<!-- 12 -->💼 Other" },
 ]
 # Exclude commits that are not matched by any commit parser.
 filter_commits = false
