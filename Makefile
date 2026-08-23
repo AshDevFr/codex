@@ -597,6 +597,10 @@ release-prepare: ## Prepare a release (usage: make release-prepare VERSION=1.0.0
 	@$(MAKE) openapi-all
 	@echo "$(GREEN)✓$(NC) Regenerated OpenAPI spec and TypeScript types"
 
+	@# Check the bump against what actually changed in the API
+	@echo "$(YELLOW)Checking the version bump against the API contract...$(NC)";
+	@./scripts/check-release-bump.sh $(VERSION) || true
+
 	@# Generate changelog (skip if already modified)
 	@echo "$(YELLOW)Generating CHANGELOG.md...$(NC)";
 	@if git diff --quiet CHANGELOG.md 2>/dev/null && git diff --cached --quiet CHANGELOG.md 2>/dev/null; then \
