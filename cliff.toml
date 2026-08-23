@@ -5,6 +5,13 @@
 [changelog]
 # A Tera template to be rendered for each release in the changelog.
 # See https://keats.github.io/tera/docs/#introduction
+# `--prepend` strips this header from the existing CHANGELOG.md and re-adds it,
+# which works only while the two match exactly. Editing the text below therefore
+# duplicates it once: the new header lands on top and the old one stays where it
+# was, which is how v2.2.1 shipped with two `# Changelog` headings.
+#
+# If you change this, delete the stale copy from CHANGELOG.md in the same commit.
+# It is a one-time fixup, not a recurring one.
 header = """
 # Changelog
 

@@ -24,10 +24,6 @@ first appears under in the 🔌 API sections below as a floor it can rely on.
 - Fail a PR that breaks the API contract, and check the spec is current first
 - Report API contract changes on the PR instead of failing the job
 
-# Changelog
-
-All notable changes to Codex will be documented in this file.
-
 ## [2.2.0] - 2026-08-22
 
 ### 🚀 Features
