@@ -5956,7 +5956,30 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get all preferences for the authenticated user */
+        /**
+         * Get all preferences for the authenticated user
+         * @description The store is an open `key -> JSON` map: any syntactically valid key is
+         *     accepted, and this endpoint returns whatever the user has set. The list
+         *     below is not a whitelist, it is the set Codex's own clients read and write.
+         *     A client that wants a user's settings to follow them between devices has to
+         *     use these exact keys and value shapes.
+         *
+         *     | Key | Value |
+         *     | --- | --- |
+         *     | `ui.theme` | `"light"`, `"dark"`, or `"system"` (default `"system"`) |
+         *     | `library.show_deleted_books` | boolean (default `false`) |
+         *     | `want_to_read.sort` | `"newest"`, `"oldest"`, or `"custom"` (default `"newest"`) |
+         *     | `release_tracking.muted_series_ids` | array of series id strings (default `[]`) |
+         *
+         *     Keys are `snake_case`, matching the server settings store rather than the
+         *     camelCase of the JSON fields around them: a key is a value in a database
+         *     column, not a field name.
+         *
+         *     Reader settings are deliberately not here. Fit mode, reading direction,
+         *     zoom, and per-series reader overrides are device-local state, held by each
+         *     client and never synced, because a phone and a desktop legitimately want
+         *     different ones.
+         */
         get: operations["get_all_preferences"];
         /** Set multiple preferences at once */
         put: operations["set_bulk_preferences"];
@@ -10596,7 +10619,7 @@ export interface components {
             /**
              * @description Map of preference keys to values
              * @example {
-             *       "reader.zoom": 150,
+             *       "library.show_deleted_books": true,
              *       "ui.theme": "dark"
              *     }
              */
@@ -20871,7 +20894,7 @@ export interface components {
         /** @description A single user preference */
         UserPreferenceDto: {
             /**
-             * @description The preference key (e.g., "ui.theme", "reader.zoom")
+             * @description The preference key (e.g., "ui.theme", "library.show_deleted_books")
              * @example ui.theme
              */
             key: string;

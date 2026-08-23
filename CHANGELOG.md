@@ -2,6 +2,32 @@
 
 All notable changes to Codex will be documented in this file.
 
+**API compatibility.** API features ship in minor releases and are never backported into a patch
+release. A patch release may fix an API bug; it may not add an operation, a parameter, a response
+field, or a new behaviour on an existing route. A client may therefore treat the release a feature
+first appears under in the 🔌 API sections below as a floor it can rely on.
+
+## [2.2.1] - 2026-08-23
+
+### 🔌 API
+
+- *(api)* Document the preference keys that exist and stop mocking ones that don't
+
+### 🚀 Features
+
+- *(contracts)* Make the reading-session rules a shared file instead of test code
+
+### ⚙️ Miscellaneous Tasks
+
+- Wait out npm's registry propagation before installing the published SDK
+- *(changelog)* Give API changes their own group and fix the group ordering
+- Fail a PR that breaks the API contract, and check the spec is current first
+- Report API contract changes on the PR instead of failing the job
+
+# Changelog
+
+All notable changes to Codex will be documented in this file.
+
 ## [2.2.0] - 2026-08-22
 
 ### 🚀 Features
