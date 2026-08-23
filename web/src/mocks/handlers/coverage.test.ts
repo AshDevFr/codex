@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { PREFERENCE_DEFAULTS } from "@/types/preferences";
 import { handlers } from "./index";
+import { mockUserPreferences } from "./users";
 
 /**
  * The mock handlers back `make frontend-mock`, the dev workflow that runs the
@@ -42,5 +44,22 @@ describe("mock handler coverage", () => {
     expect(literal).toBeGreaterThanOrEqual(0);
     expect(pattern).toBeGreaterThanOrEqual(0);
     expect(literal).toBeLessThan(pattern);
+  });
+
+  /**
+   * The mocks used to serve `reader.fitMode`, `reader.readingDirection`,
+   * `library.defaultView`, `library.itemsPerPage`, `notifications.enabled`, and
+   * a bare `theme`. Not one of those keys exists. They read as documentation of
+   * what the preference store holds, and a server-side plan was written from
+   * them describing a reader-settings sync feature that does not exist.
+   *
+   * The preference keys are a cross-client contract: the PWA and the native
+   * client have to write the same ones or a user's settings stop following them
+   * between devices. `PREFERENCE_DEFAULTS` is where that set is declared, so the
+   * mocks answer to it rather than inventing their own.
+   */
+  it("mocks exactly the preference keys the app actually uses", () => {
+    const mocked = mockUserPreferences.map((pref) => pref.key).sort();
+    expect(mocked).toEqual(Object.keys(PREFERENCE_DEFAULTS).sort());
   });
 });

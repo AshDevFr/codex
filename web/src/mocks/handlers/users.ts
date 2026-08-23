@@ -28,28 +28,40 @@ const mockUsers = [
   ...createList(() => createUser(), 7),
 ];
 
-// Mock user preferences
-const mockUserPreferences: Array<{
+/**
+ * Mock user preferences.
+ *
+ * The keys must be exactly those in `PREFERENCE_DEFAULTS`, and a test in
+ * `coverage.test.ts` enforces it. Preference keys are a cross-client contract:
+ * the PWA and the native client have to write the same ones or a user's
+ * settings stop following them between devices, and a fixture serving invented
+ * keys reads as documentation of a store that holds something it does not.
+ *
+ * Reader settings are deliberately absent. They are device-local state in
+ * `readerStore`, persisted to localStorage and never synced, so they are not
+ * preferences and never reach this endpoint.
+ *
+ * Values are chosen to exercise the UI rather than to match the defaults.
+ */
+export const mockUserPreferences: Array<{
   key: string;
   value: unknown;
   updatedAt: string;
 }> = [
-  { key: "theme", value: "system", updatedAt: "2024-01-01T00:00:00Z" },
+  { key: "ui.theme", value: "dark", updatedAt: "2024-01-01T00:00:00Z" },
   {
-    key: "library.defaultView",
-    value: "grid",
+    key: "library.show_deleted_books",
+    value: false,
     updatedAt: "2024-01-01T00:00:00Z",
   },
-  { key: "library.itemsPerPage", value: 20, updatedAt: "2024-01-01T00:00:00Z" },
   {
-    key: "reader.readingDirection",
-    value: "ltr",
+    key: "want_to_read.sort",
+    value: "custom",
     updatedAt: "2024-01-01T00:00:00Z",
   },
-  { key: "reader.fitMode", value: "width", updatedAt: "2024-01-01T00:00:00Z" },
   {
-    key: "notifications.enabled",
-    value: true,
+    key: "release_tracking.muted_series_ids",
+    value: ["series-3"],
     updatedAt: "2024-01-01T00:00:00Z",
   },
 ];

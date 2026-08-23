@@ -12,7 +12,7 @@ use codex_db::repositories::UserPreferencesRepository;
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UserPreferenceDto {
-    /// The preference key (e.g., "ui.theme", "reader.zoom")
+    /// The preference key (e.g., "ui.theme", "library.show_deleted_books")
     #[schema(example = "ui.theme")]
     pub key: String,
 
@@ -65,7 +65,7 @@ pub struct SetPreferenceRequest {
 #[serde(rename_all = "camelCase")]
 pub struct BulkSetPreferencesRequest {
     /// Map of preference keys to values
-    #[schema(example = json!({"ui.theme": "dark", "reader.zoom": 150}))]
+    #[schema(example = json!({"ui.theme": "dark", "library.show_deleted_books": true}))]
     pub preferences: HashMap<String, serde_json::Value>,
 }
 

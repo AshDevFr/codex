@@ -38,6 +38,28 @@ use utoipa::OpenApi;
 pub struct UserPreferencesApi;
 
 /// Get all preferences for the authenticated user
+///
+/// The store is an open `key -> JSON` map: any syntactically valid key is
+/// accepted, and this endpoint returns whatever the user has set. The list
+/// below is not a whitelist, it is the set Codex's own clients read and write.
+/// A client that wants a user's settings to follow them between devices has to
+/// use these exact keys and value shapes.
+///
+/// | Key | Value |
+/// | --- | --- |
+/// | `ui.theme` | `"light"`, `"dark"`, or `"system"` (default `"system"`) |
+/// | `library.show_deleted_books` | boolean (default `false`) |
+/// | `want_to_read.sort` | `"newest"`, `"oldest"`, or `"custom"` (default `"newest"`) |
+/// | `release_tracking.muted_series_ids` | array of series id strings (default `[]`) |
+///
+/// Keys are `snake_case`, matching the server settings store rather than the
+/// camelCase of the JSON fields around them: a key is a value in a database
+/// column, not a field name.
+///
+/// Reader settings are deliberately not here. Fit mode, reading direction,
+/// zoom, and per-series reader overrides are device-local state, held by each
+/// client and never synced, because a phone and a desktop legitimately want
+/// different ones.
 #[utoipa::path(
     get,
     path = "/api/v1/user/preferences",
@@ -236,7 +258,7 @@ pub async fn delete_preference(
 }
 
 /// Validate a preference key format
-/// Valid: "ui.theme", "reader.default_zoom", "library.view_mode"
+/// Valid: "ui.theme", "library.show_deleted_books", "release_tracking.muted_series_ids"
 /// Invalid: ".theme", "ui.", "ui..theme", "ui/theme", "ui theme"
 fn is_valid_preference_key(key: &str) -> bool {
     if key.is_empty() || key.len() > 255 {
@@ -270,8 +292,8 @@ mod tests {
     #[test]
     fn test_valid_preference_keys() {
         assert!(is_valid_preference_key("ui.theme"));
-        assert!(is_valid_preference_key("reader.default_zoom"));
-        assert!(is_valid_preference_key("library.view_mode"));
+        assert!(is_valid_preference_key("library.show_deleted_books"));
+        assert!(is_valid_preference_key("release_tracking.muted_series_ids"));
         assert!(is_valid_preference_key("single_key"));
         assert!(is_valid_preference_key("deep.nested.key.value"));
         assert!(is_valid_preference_key("with_underscore.another_one"));
