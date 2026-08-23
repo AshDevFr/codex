@@ -88,13 +88,13 @@ export function Login() {
       : null);
 
   return (
-    <Box bg="dark.7" mih="100vh">
+    <Box bg="var(--surface-1)" mih="100vh">
       <Container size={420} py={100}>
         <Title ta="center" mb="xl">
           Welcome to {appName}
         </Title>
 
-        <Paper shadow="md" p={30} radius="md" bg="dark.6">
+        <Paper shadow="md" p={30} radius="md" bg="var(--surface-2)">
           {hasOidcProviders && (
             <>
               <Stack>

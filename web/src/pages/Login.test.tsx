@@ -333,4 +333,23 @@ describe("Login Component", () => {
       ).toBeInTheDocument();
     });
   });
+  it("paints its surfaces with scheme-aware colors, not the fixed dark palette", () => {
+    const { container } = renderWithProviders(<Login />);
+
+    // `dark.6` / `dark.7` resolve to `--mantine-color-dark-*`, which live in
+    // the shared `:root` block and stay dark in both color schemes. Text and
+    // inputs do follow the scheme, so hardcoding them here produces near-black
+    // text on a near-black card whenever the user (or a headless browser)
+    // is in light mode.
+    const backgrounds = Array.from(
+      container.querySelectorAll<HTMLElement>("[style]"),
+    )
+      .map((el) => el.style.background || el.style.backgroundColor)
+      .filter(Boolean);
+
+    expect(backgrounds.length).toBeGreaterThan(0);
+    for (const background of backgrounds) {
+      expect(background).not.toMatch(/--mantine-color-dark-/);
+    }
+  });
 });

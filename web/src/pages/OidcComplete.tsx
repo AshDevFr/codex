@@ -60,7 +60,7 @@ export function OidcComplete() {
   }, [navigate, setAuth]);
 
   return (
-    <Box bg="dark.7" mih="100vh">
+    <Box bg="var(--surface-1)" mih="100vh">
       <Center mih="100vh">
         <div>
           <Center>
