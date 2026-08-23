@@ -1,0 +1,575 @@
+{
+  "$comment": "The shared behavioural contract for reading-session measurement. See contracts/README.md.",
+  "version": 1,
+  "subject": {
+    "bookId": "book-1",
+    "deviceId": "device-1",
+    "deviceName": "Test Device"
+  },
+  "thresholds": {
+    "idleTimeoutMs": 300000,
+    "checkpointIntervalMs": 30000
+  },
+  "invariants": [
+    {
+      "name": "active time never exceeds the session span",
+      "rule": "For every session a case produces, activeDurationMs <= clientEndedAt - clientStartedAt."
+    },
+    {
+      "name": "timestamps are ordered",
+      "rule": "For every session a case produces, clientEndedAt >= clientStartedAt."
+    },
+    {
+      "name": "session ids are distinct",
+      "rule": "Within a single case, no two produced sessions share an id."
+    }
+  ],
+  "cases": [
+    {
+      "name": "accumulates time between activity events",
+      "group": "measuring active time",
+      "events": [
+        { "kind": "start", "atMs": 0, "page": 1 },
+        { "kind": "activity", "atMs": 60000, "page": 2 },
+        { "kind": "activity", "atMs": 120000, "page": 3 },
+        { "kind": "stop", "atMs": 120000 }
+      ],
+      "expect": {
+        "sessions": [
+          {
+            "kind": "progress",
+            "activeDurationMs": 120000,
+            "toPage": 3,
+            "pagesRead": 3
+          }
+        ]
+      }
+    },
+    {
+      "name": "a gap longer than the idle timeout contributes no active time",
+      "group": "measuring active time",
+      "why": "A book left open on the nightstand must not read as an hour of reading.",
+      "events": [
+        { "kind": "start", "atMs": 0, "page": 1 },
+        { "kind": "activity", "atMs": 60000, "page": 2 },
+        { "kind": "activity", "atMs": 3660000, "page": 3 },
+        { "kind": "stop", "atMs": 3660000 }
+      ],
+      "expect": {
+        "totalActiveDurationMs": 60000,
+        "sessions": [
+          {
+            "kind": "progress",
+            "activeDurationMs": 60000,
+            "toPage": 2,
+            "pagesRead": 2
+          },
+          {
+            "kind": "progress",
+            "activeDurationMs": null,
+            "toPage": 3,
+            "pagesRead": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "an idle gap splits one sitting into separate sessions",
+      "group": "measuring active time",
+      "events": [
+        { "kind": "start", "atMs": 0, "page": 1 },
+        { "kind": "activity", "atMs": 60000, "page": 2 },
+        { "kind": "activity", "atMs": 420000, "page": 3 },
+        { "kind": "activity", "atMs": 540000, "page": 4 },
+        { "kind": "stop", "atMs": 540000 }
+      ],
+      "expect": {
+        "sessions": [
+          {
+            "kind": "progress",
+            "activeDurationMs": 60000,
+            "toPage": 2,
+            "pagesRead": 2
+          },
+          {
+            "kind": "progress",
+            "activeDurationMs": 120000,
+            "toPage": 4,
+            "pagesRead": 2
+          }
+        ]
+      }
+    },
+    {
+      "name": "a long but sub-timeout dwell on one page is reading",
+      "group": "measuring active time",
+      "why": "Four minutes on a dense page is reading, not idling.",
+      "events": [
+        { "kind": "start", "atMs": 0, "page": 1 },
+        { "kind": "activity", "atMs": 240000, "page": 2 },
+        { "kind": "stop", "atMs": 240000 }
+      ],
+      "expect": {
+        "sessions": [
+          {
+            "kind": "progress",
+            "activeDurationMs": 240000,
+            "toPage": 2,
+            "pagesRead": 2
+          }
+        ]
+      }
+    },
+    {
+      "name": "the clock stops while paused",
+      "group": "measuring active time",
+      "events": [
+        { "kind": "start", "atMs": 0, "page": 1 },
+        { "kind": "pause", "atMs": 60000 },
+        { "kind": "resume", "atMs": 240000 },
+        { "kind": "activity", "atMs": 300000, "page": 2 },
+        { "kind": "stop", "atMs": 300000 }
+      ],
+      "expect": {
+        "sessions": [
+          {
+            "kind": "progress",
+            "activeDurationMs": 120000,
+            "toPage": 2,
+            "pagesRead": 2
+          }
+        ]
+      }
+    },
+    {
+      "name": "a pause outlasting the idle timeout closes the session",
+      "group": "measuring active time",
+      "events": [
+        { "kind": "start", "atMs": 0, "page": 1 },
+        { "kind": "pause", "atMs": 60000 },
+        { "kind": "resume", "atMs": 420000 }
+      ],
+      "expect": {
+        "tracking": false,
+        "sessions": [
+          {
+            "kind": "progress",
+            "activeDurationMs": 60000,
+            "toPage": 1,
+            "pagesRead": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "a stop after the session already closed is a no-op",
+      "group": "measuring active time",
+      "why": "Pins the span invariant against the longest gap a session can carry.",
+      "events": [
+        { "kind": "start", "atMs": 0, "page": 1 },
+        { "kind": "pause", "atMs": 60000 },
+        { "kind": "resume", "atMs": 660000 },
+        { "kind": "stop", "atMs": 720000 }
+      ],
+      "expect": {
+        "tracking": false,
+        "sessions": [
+          {
+            "kind": "progress",
+            "activeDurationMs": 60000,
+            "toPage": 1,
+            "pagesRead": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "the last position reached is reported",
+      "group": "position and pages",
+      "events": [
+        { "kind": "start", "atMs": 0, "page": 1 },
+        { "kind": "activity", "atMs": 60000, "page": 40 },
+        { "kind": "stop", "atMs": 60000 }
+      ],
+      "expect": {
+        "sessions": [
+          {
+            "kind": "progress",
+            "activeDurationMs": 60000,
+            "toPage": 40,
+            "pagesRead": 2
+          }
+        ]
+      }
+    },
+    {
+      "name": "a deliberate rewind is the final position",
+      "group": "position and pages",
+      "events": [
+        { "kind": "start", "atMs": 0, "page": 50 },
+        { "kind": "activity", "atMs": 60000, "page": 49 },
+        { "kind": "stop", "atMs": 60000 }
+      ],
+      "expect": {
+        "sessions": [
+          {
+            "kind": "progress",
+            "activeDurationMs": 60000,
+            "toPage": 49,
+            "pagesRead": 2
+          }
+        ]
+      }
+    },
+    {
+      "name": "distinct pages are counted, not page events",
+      "group": "position and pages",
+      "events": [
+        { "kind": "start", "atMs": 0, "page": 1 },
+        { "kind": "activity", "atMs": 60000, "page": 2 },
+        { "kind": "activity", "atMs": 60000, "page": 3 },
+        { "kind": "activity", "atMs": 60000, "page": 2 },
+        { "kind": "activity", "atMs": 60000, "page": 3 },
+        { "kind": "stop", "atMs": 60000 }
+      ],
+      "expect": {
+        "sessions": [
+          {
+            "kind": "progress",
+            "activeDurationMs": 60000,
+            "toPage": 3,
+            "pagesRead": 3
+          }
+        ]
+      }
+    },
+    {
+      "name": "a reflowable position is a percentage rather than a page",
+      "group": "position and pages",
+      "events": [
+        { "kind": "start", "atMs": 0, "percentage": 0.1 },
+        { "kind": "activity", "atMs": 60000, "percentage": 0.42 },
+        { "kind": "stop", "atMs": 60000 }
+      ],
+      "expect": {
+        "sessions": [
+          {
+            "kind": "progress",
+            "activeDurationMs": 60000,
+            "toPercentage": 0.42,
+            "toPage": null,
+            "pagesRead": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "completion is its own session kind and closes tracking",
+      "group": "completion and reset",
+      "events": [
+        { "kind": "start", "atMs": 0, "page": 1 },
+        { "kind": "complete", "atMs": 60000, "page": 100 }
+      ],
+      "expect": {
+        "tracking": false,
+        "sessions": [
+          {
+            "kind": "completed",
+            "activeDurationMs": 60000,
+            "toPage": 100,
+            "pagesRead": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "a reset is emitted as its own event after the running session",
+      "group": "completion and reset",
+      "why": "Sent as an event rather than a deletion so the server can order it against a completion made on another device.",
+      "events": [
+        { "kind": "start", "atMs": 0, "page": 20 },
+        { "kind": "reset", "atMs": 60000 }
+      ],
+      "expect": {
+        "tracking": false,
+        "sessions": [
+          {
+            "kind": "progress",
+            "activeDurationMs": 60000,
+            "toPage": 20,
+            "pagesRead": 1
+          },
+          {
+            "kind": "reset",
+            "activeDurationMs": null,
+            "toPage": null,
+            "pagesRead": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "a session with nothing to report is not emitted",
+      "group": "session hygiene",
+      "events": [
+        { "kind": "start", "atMs": 0 },
+        { "kind": "stop", "atMs": 0 }
+      ],
+      "expect": {
+        "tracking": false,
+        "sessions": []
+      }
+    },
+    {
+      "name": "a repeated start does not open a second session",
+      "group": "session hygiene",
+      "why": "A re-render must not fragment a sitting.",
+      "events": [
+        { "kind": "start", "atMs": 0, "page": 1 },
+        { "kind": "start", "atMs": 0, "page": 1 },
+        { "kind": "stop", "atMs": 60000 }
+      ],
+      "expect": {
+        "sessions": [
+          {
+            "kind": "progress",
+            "activeDurationMs": 60000,
+            "toPage": 1,
+            "pagesRead": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "a resume without a preceding pause is ignored",
+      "group": "session hygiene",
+      "events": [
+        { "kind": "start", "atMs": 0, "page": 1 },
+        { "kind": "resume", "atMs": 60000 },
+        { "kind": "stop", "atMs": 120000 }
+      ],
+      "expect": {
+        "sessions": [
+          {
+            "kind": "progress",
+            "activeDurationMs": 120000,
+            "toPage": 1,
+            "pagesRead": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "consecutive sessions get distinct ids",
+      "group": "session hygiene",
+      "events": [
+        { "kind": "start", "atMs": 0, "page": 1 },
+        { "kind": "stop", "atMs": 60000 },
+        { "kind": "start", "atMs": 60000, "page": 2 },
+        { "kind": "stop", "atMs": 120000 }
+      ],
+      "expect": {
+        "sessions": [
+          {
+            "kind": "progress",
+            "activeDurationMs": 60000,
+            "toPage": 1,
+            "pagesRead": 1
+          },
+          {
+            "kind": "progress",
+            "activeDurationMs": 60000,
+            "toPage": 2,
+            "pagesRead": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "a plain session is bracketed by its own timestamps",
+      "group": "session hygiene",
+      "events": [
+        { "kind": "start", "atMs": 0, "page": 1 },
+        { "kind": "stop", "atMs": 60000 }
+      ],
+      "expect": {
+        "sessions": [
+          {
+            "kind": "progress",
+            "activeDurationMs": 60000,
+            "toPage": 1,
+            "pagesRead": 1,
+            "spanMs": 60000
+          }
+        ]
+      }
+    },
+    {
+      "name": "a checkpoint exists once an interval of active time has passed",
+      "group": "checkpointing and crash recovery",
+      "events": [
+        { "kind": "start", "atMs": 0, "page": 1 },
+        { "kind": "activity", "atMs": 31000, "page": 2 }
+      ],
+      "expect": {
+        "tracking": true,
+        "checkpointedBookIds": ["book-1"],
+        "sessions": []
+      }
+    },
+    {
+      "name": "a session left behind by a crash is recovered",
+      "group": "checkpointing and crash recovery",
+      "events": [
+        { "kind": "start", "atMs": 0, "page": 1 },
+        { "kind": "activity", "atMs": 120000, "page": 12 },
+        { "kind": "checkpoint", "atMs": 120000 },
+        { "kind": "crash", "atMs": 120000 },
+        { "kind": "recover", "atMs": 900000 }
+      ],
+      "expect": {
+        "sessions": [],
+        "recoveries": [
+          [
+            {
+              "kind": "progress",
+              "activeDurationMs": 120000,
+              "toPage": 12,
+              "pagesRead": 2
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "name": "a recovered session ends at its checkpoint, not at recovery time",
+      "group": "checkpointing and crash recovery",
+      "why": "Counting the time the app was shut would inflate reading time by however long that was.",
+      "events": [
+        { "kind": "start", "atMs": 0, "page": 5 },
+        { "kind": "activity", "atMs": 60000, "page": 5 },
+        { "kind": "checkpoint", "atMs": 60000 },
+        { "kind": "crash", "atMs": 60000 },
+        { "kind": "recover", "atMs": 86400000 }
+      ],
+      "expect": {
+        "sessions": [],
+        "recoveries": [
+          [
+            {
+              "kind": "progress",
+              "activeDurationMs": 60000,
+              "toPage": 5,
+              "pagesRead": 1,
+              "spanMs": 60000
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "name": "a crash loses at most one checkpoint interval of active time",
+      "group": "checkpointing and crash recovery",
+      "events": [
+        { "kind": "start", "atMs": 0, "page": 1 },
+        { "kind": "activity", "atMs": 30000, "page": 2 },
+        { "kind": "crash", "atMs": 40000 },
+        { "kind": "recover", "atMs": 40000 }
+      ],
+      "expect": {
+        "sessions": [],
+        "recoveries": [
+          [
+            {
+              "kind": "progress",
+              "activeDurationMs": 30000,
+              "toPage": 2,
+              "pagesRead": 2
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "name": "a clean close clears the checkpoint so nothing is double-counted",
+      "group": "checkpointing and crash recovery",
+      "events": [
+        { "kind": "start", "atMs": 0, "page": 1 },
+        { "kind": "stop", "atMs": 60000 },
+        { "kind": "recover", "atMs": 60000 }
+      ],
+      "expect": {
+        "checkpointedBookIds": [],
+        "recoveries": [[]],
+        "sessions": [
+          {
+            "kind": "progress",
+            "activeDurationMs": 60000,
+            "toPage": 1,
+            "pagesRead": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "a recovered checkpoint is consumed so it cannot be recovered twice",
+      "group": "checkpointing and crash recovery",
+      "events": [
+        { "kind": "start", "atMs": 0, "page": 1 },
+        { "kind": "checkpoint", "atMs": 60000 },
+        { "kind": "crash", "atMs": 60000 },
+        { "kind": "recover", "atMs": 60000 },
+        { "kind": "recover", "atMs": 60000 }
+      ],
+      "expect": {
+        "sessions": [],
+        "checkpointedBookIds": [],
+        "recoveries": [
+          [
+            {
+              "kind": "progress",
+              "activeDurationMs": 60000,
+              "toPage": 1,
+              "pagesRead": 1,
+              "spanMs": 60000
+            }
+          ],
+          []
+        ]
+      }
+    },
+    {
+      "name": "an unreadable checkpoint is discarded rather than retried forever",
+      "group": "checkpointing and crash recovery",
+      "bookId": "book-9",
+      "seedCheckpoints": [{ "bookId": "book-9", "raw": "{not json" }],
+      "events": [{ "kind": "recover", "atMs": 0 }],
+      "expect": {
+        "sessions": [],
+        "checkpointedBookIds": [],
+        "recoveries": [[]]
+      }
+    },
+    {
+      "name": "measurement is unaffected when persistence is unavailable",
+      "group": "degraded environments",
+      "why": "Losing crash recovery is acceptable. Losing the session in front of the reader is not.",
+      "persistence": "unavailable",
+      "events": [
+        { "kind": "start", "atMs": 0, "page": 1 },
+        { "kind": "stop", "atMs": 60000 }
+      ],
+      "expect": {
+        "checkpointedBookIds": [],
+        "sessions": [
+          {
+            "kind": "progress",
+            "activeDurationMs": 60000,
+            "toPage": 1,
+            "pagesRead": 1
+          }
+        ]
+      }
+    }
+  ]
+}

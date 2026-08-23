@@ -436,8 +436,12 @@ function toPayload(
     deviceId: checkpoint.deviceId,
     kind,
     clientStartedAt: new Date(checkpoint.startedAt).toISOString(),
+    // A session cannot end before the time it accrued. Recovery ends a session
+    // at its last recorded activity, and `checkpointNow` writes time that no
+    // activity followed, so without this floor a session rescued from a crash
+    // can report minutes of reading inside a zero-length span.
     clientEndedAt: new Date(
-      Math.max(endedAt, checkpoint.startedAt),
+      Math.max(endedAt, checkpoint.startedAt + checkpoint.activeMs),
     ).toISOString(),
   };
   if (checkpoint.deviceName) payload.deviceName = checkpoint.deviceName;
