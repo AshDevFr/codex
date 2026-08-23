@@ -17853,6 +17853,7 @@
           "User Preferences"
         ],
         "summary": "Get all preferences for the authenticated user",
+        "description": "The store is an open `key -> JSON` map: any syntactically valid key is\naccepted, and this endpoint returns whatever the user has set. The list\nbelow is not a whitelist, it is the set Codex's own clients read and write.\nA client that wants a user's settings to follow them between devices has to\nuse these exact keys and value shapes.\n\n| Key | Value |\n| --- | --- |\n| `ui.theme` | `\"light\"`, `\"dark\"`, or `\"system\"` (default `\"system\"`) |\n| `library.show_deleted_books` | boolean (default `false`) |\n| `want_to_read.sort` | `\"newest\"`, `\"oldest\"`, or `\"custom\"` (default `\"newest\"`) |\n| `release_tracking.muted_series_ids` | array of series id strings (default `[]`) |\n\nKeys are `snake_case`, matching the server settings store rather than the\ncamelCase of the JSON fields around them: a key is a value in a database\ncolumn, not a field name.\n\nReader settings are deliberately not here. Fit mode, reading direction,\nzoom, and per-series reader overrides are device-local state, held by each\nclient and never synced, because a phone and a desktop legitimately want\ndifferent ones.",
         "operationId": "get_all_preferences",
         "responses": {
           "200": {
@@ -26985,7 +26986,7 @@
               "type": "string"
             },
             "example": {
-              "reader.zoom": 150,
+              "library.show_deleted_books": true,
               "ui.theme": "dark"
             }
           }
@@ -45777,7 +45778,7 @@
         "properties": {
           "key": {
             "type": "string",
-            "description": "The preference key (e.g., \"ui.theme\", \"reader.zoom\")",
+            "description": "The preference key (e.g., \"ui.theme\", \"library.show_deleted_books\")",
             "example": "ui.theme"
           },
           "updatedAt": {
