@@ -1,7 +1,7 @@
 import { Stack, Text } from "@mantine/core";
 import {
   formatChapterCount,
-  formatLocalSeriesCounts,
+  formatSeriesCounts,
 } from "@/components/series/seriesCounts";
 import type { Book, Series } from "@/types";
 
@@ -35,7 +35,7 @@ export function MediaCardHoverPanel(props: MediaCardHoverPanelProps) {
 }
 
 function renderSeries(series: Series) {
-  const counts = formatLocalSeriesCounts({
+  const counts = formatSeriesCounts({
     bookCount: series.bookCount,
     localMaxVolume: series.localMaxVolume,
     localMaxChapter: series.localMaxChapter,

@@ -19,7 +19,9 @@ describe("MediaCardHoverPanel", () => {
       );
 
       expect(screen.getByText("Berserk")).toBeInTheDocument();
-      expect(screen.getByText("41 vol · 364.5 ch")).toBeInTheDocument();
+      expect(
+        screen.getByText("41 books · 41 vol · 364.5 ch"),
+      ).toBeInTheDocument();
       expect(screen.getByText(/Guts, a lone mercenary/)).toBeInTheDocument();
     });
 

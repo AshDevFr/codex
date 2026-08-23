@@ -805,7 +805,7 @@ export function SeriesDetail() {
 
           const countsText = (() => {
             const counts = formatSeriesCounts({
-              localCount: series.bookCount ?? null,
+              bookCount: series.bookCount ?? null,
               totalVolumeCount: metadata?.totalVolumeCount ?? null,
               totalChapterCount: metadata?.totalChapterCount ?? null,
               localMaxVolume: series.localMaxVolume ?? null,

@@ -1,168 +1,115 @@
 /**
- * Pure helpers that format series count strings for the detail header.
+ * Pure helper that formats the series count string shown on the detail header
+ * and the library card hover panel.
  *
- * Inputs come from `series.bookCount` (local count) and `series.metadata`
- * (`totalVolumeCount`, `totalChapterCount`). Either total may be null/undefined
- * when the metadata provider didn't expose it.
+ * The line is built from up to three independent segments:
  *
- * `localMaxVolume` and `localMaxChapter` are per-series aggregates derived
- * from `book_metadata.volume` / `book_metadata.chapter`. When present,
- * the numerator switches from "files on disk" to "highest known unit number"
- * so a series with `v01..v14 + v15-c126` correctly displays `14/17 vol` rather
- * than `15/17 vol`.
+ *     <bookCount> books · <localMaxVolume>/<totalVolumeCount> vol · <localMaxChapter>/<totalChapterCount> ch
+ *
+ * They measure three different things and are deliberately never reconciled:
+ * `bookCount` counts files on disk, while the volume and chapter segments
+ * report the highest unit number owned on that axis against the provider's
+ * expected total. A series with 14 volumes plus 25 loose chapters is
+ * `39 books · 14/17 vol · 150/223 ch` — the segments do not sum.
+ *
+ * Two rules keep the line honest for every library shape:
+ *
+ *  - `bookCount` is never borrowed as a numerator. A chapter-organized series
+ *    with 225 files is not "225 volumes", so an axis whose books carry no
+ *    `book_metadata.volume` / `.chapter` shows its total alone (`8 vol total`)
+ *    rather than a position that was never measured.
+ *  - No axis is inferred from the other. Owning 2 volumes says nothing about
+ *    how many of the 169 upstream chapters are on disk, so that stays
+ *    `2 vol · 169 ch total`.
+ *
+ * An axis with neither a local maximum nor a total is dropped entirely.
  */
 
 export interface SeriesCountInputs {
   /** Local count of books on disk (i.e., `series.bookCount`). */
-  localCount: number | null | undefined;
-  /** Provider's expected volume total. */
-  totalVolumeCount: number | null | undefined;
-  /** Provider's expected chapter total (may be fractional). */
-  totalChapterCount: number | null | undefined;
+  bookCount: number | null | undefined;
   /**
    * Highest `book_metadata.volume` across the series's books, or null when
-   * none of the books have `volume` populated. When present, replaces
-   * `localCount` as the numerator on the volume axis.
+   * none of the books have `volume` populated.
    */
   localMaxVolume?: number | null | undefined;
   /**
-   * Highest `book_metadata.chapter` across the series's books, or null when
-   * none of the books have `chapter` populated. When present, replaces the
-   * unconditional `<total> ch` chapter part with `<localMaxChapter>/<total> ch`.
+   * Highest `book_metadata.chapter` across the series's books (may be
+   * fractional), or null when none of the books have `chapter` populated.
    */
   localMaxChapter?: number | null | undefined;
+  /** Provider's expected volume total. Null when it didn't expose one. */
+  totalVolumeCount?: number | null | undefined;
+  /** Provider's expected chapter total (may be fractional). */
+  totalChapterCount?: number | null | undefined;
 }
 
 /**
- * Format a chapter count: drop trailing `.0` so `109` shows as `109` and
- * `109.5` shows as `109.5`.
+ * Format a chapter count: `109` stays `109`, `109.5` stays `109.5`.
+ *
+ * JavaScript's number formatting already drops a trailing `.0`, so this is a
+ * named seam for the intent rather than a conversion.
  */
 export function formatChapterCount(value: number): string {
-  if (Number.isInteger(value)) {
-    return value.toString();
-  }
   return value.toString();
 }
 
 /**
- * Build the human-readable count string for the series detail header.
+ * Build one axis segment: `<max>/<total> unit`, `<max> unit`, or
+ * `<total> unit total` when nothing local was measured. Returns null when the
+ * axis is silent on both counts.
+ */
+function formatAxis(
+  localMax: number | null | undefined,
+  total: number | null | undefined,
+  unit: "vol" | "ch",
+): string | null {
+  const hasMax = typeof localMax === "number";
+  const hasTotal = typeof total === "number";
+
+  if (hasMax) {
+    return hasTotal
+      ? `${formatChapterCount(localMax)}/${formatChapterCount(total)} ${unit}`
+      : `${formatChapterCount(localMax)} ${unit}`;
+  }
+  if (hasTotal) {
+    return `${formatChapterCount(total)} ${unit} total`;
+  }
+  return null;
+}
+
+/**
+ * Build the human-readable count string for the series detail header and the
+ * card hover panel, or null when no segment applies (caller hides the line).
  *
- * Rules (per the metadata-count-split plan, Phases 6 + 13):
- *  - Both totals known: `<local>/<vol> vol · <chap> ch` (chapter part gains a
- *    numerator only when `localMaxChapter` is provided)
- *  - Volume total only: `<local>/<vol> vol` (or `<local> vol` if local missing).
- *    `localMaxVolume` overrides the local-file-count numerator when present.
- *  - Chapter total only: `<local>/<chap> ch`. `localMaxChapter` overrides the
- *    local-file-count numerator when present.
- *  - Neither total known: `<local> books` (legacy display)
- *  - No local + no totals: `null` (caller can hide the line)
+ * Callers without upstream totals (the hover panel reads the series *list*
+ * response, which doesn't carry them) simply omit `totalVolumeCount` /
+ * `totalChapterCount` and get the local-only form: `20 books · 14 vol · 109.5 ch`.
  */
 export function formatSeriesCounts(inputs: SeriesCountInputs): string | null {
   const {
-    localCount,
-    totalVolumeCount,
-    totalChapterCount,
+    bookCount,
     localMaxVolume,
     localMaxChapter,
+    totalVolumeCount,
+    totalChapterCount,
   } = inputs;
 
-  const hasLocal = typeof localCount === "number";
-  const hasVolume = typeof totalVolumeCount === "number";
-  const hasChapter = typeof totalChapterCount === "number";
-  const hasMaxVolume = typeof localMaxVolume === "number";
-  const hasMaxChapter = typeof localMaxChapter === "number";
+  const segments: string[] = [];
 
-  // Choose the volume numerator: prefer the structured max-volume aggregate
-  // over the file count. Falls back to "no numerator" when neither is known.
-  const volumeNumerator: number | null = hasMaxVolume
-    ? (localMaxVolume as number)
-    : hasLocal
-      ? (localCount as number)
-      : null;
-
-  if (hasVolume && hasChapter) {
-    const volumePart =
-      volumeNumerator !== null
-        ? `${volumeNumerator}/${totalVolumeCount} vol`
-        : `${totalVolumeCount} vol`;
-    const chapterPart = hasMaxChapter
-      ? `${formatChapterCount(localMaxChapter as number)}/${formatChapterCount(totalChapterCount)} ch`
-      : `${formatChapterCount(totalChapterCount)} ch`;
-    return `${volumePart} · ${chapterPart}`;
-  }
-
-  if (hasVolume) {
-    return volumeNumerator !== null
-      ? `${volumeNumerator}/${totalVolumeCount} vol`
-      : `${totalVolumeCount} vol`;
-  }
-
-  if (hasChapter) {
-    // Chapter-only branch: the bug-fix case for chapter-organized libraries.
-    // Prefer the structured max-chapter aggregate; otherwise fall back to the
-    // local file count (legacy) so the line is not entirely numerator-less.
-    const chapterNumerator: number | null = hasMaxChapter
-      ? (localMaxChapter as number)
-      : hasLocal
-        ? (localCount as number)
-        : null;
-    return chapterNumerator !== null
-      ? `${formatChapterCount(chapterNumerator)}/${formatChapterCount(totalChapterCount)} ch`
-      : `${formatChapterCount(totalChapterCount)} ch`;
-  }
-
-  if (hasLocal) {
-    return `${localCount} books`;
-  }
-
-  return null;
-}
-
-/**
- * Inputs for {@link formatLocalSeriesCounts} — only the fields the series
- * *list* response carries (no upstream totals).
- */
-export interface LocalSeriesCountInputs {
-  /** `series.bookCount` — files on disk for this series. */
-  bookCount: number | null | undefined;
-  /** Highest `book_metadata.volume`, or null when none is populated. */
-  localMaxVolume?: number | null | undefined;
-  /** Highest `book_metadata.chapter` (may be fractional), or null. */
-  localMaxChapter?: number | null | undefined;
-}
-
-/**
- * Build a compact count string from list-only series fields, for the card
- * hover panel where upstream totals (`totalVolumeCount`/`totalChapterCount`)
- * aren't fetched.
- *
- * Unlike {@link formatSeriesCounts}, the local maxima drive the display
- * directly (there is no `/total` denominator to anchor them to):
- *  - both maxima:  `14 vol · 109.5 ch`
- *  - volume only:  `14 vol`
- *  - chapter only: `109.5 ch` (trailing `.0` dropped)
- *  - neither:      `15 books` / `1 book`
- *  - nothing:      `null` (caller hides the line)
- */
-export function formatLocalSeriesCounts(
-  inputs: LocalSeriesCountInputs,
-): string | null {
-  const { bookCount, localMaxVolume, localMaxChapter } = inputs;
-
-  const hasVolume = typeof localMaxVolume === "number";
-  const hasChapter = typeof localMaxChapter === "number";
-
-  if (hasVolume && hasChapter) {
-    return `${localMaxVolume} vol · ${formatChapterCount(localMaxChapter as number)} ch`;
-  }
-  if (hasVolume) {
-    return `${localMaxVolume} vol`;
-  }
-  if (hasChapter) {
-    return `${formatChapterCount(localMaxChapter as number)} ch`;
-  }
   if (typeof bookCount === "number") {
-    return `${bookCount} book${bookCount === 1 ? "" : "s"}`;
+    segments.push(`${bookCount} book${bookCount === 1 ? "" : "s"}`);
   }
-  return null;
+
+  const volumePart = formatAxis(localMaxVolume, totalVolumeCount, "vol");
+  if (volumePart) {
+    segments.push(volumePart);
+  }
+
+  const chapterPart = formatAxis(localMaxChapter, totalChapterCount, "ch");
+  if (chapterPart) {
+    segments.push(chapterPart);
+  }
+
+  return segments.length > 0 ? segments.join(" · ") : null;
 }

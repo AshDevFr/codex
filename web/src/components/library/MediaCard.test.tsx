@@ -633,7 +633,9 @@ describe("MediaCard", () => {
       expect(
         await screen.findByText(/Guts, a lone mercenary/),
       ).toBeInTheDocument();
-      expect(await screen.findByText("41 vol · 364.5 ch")).toBeInTheDocument();
+      expect(
+        await screen.findByText("41 books · 41 vol · 364.5 ch"),
+      ).toBeInTheDocument();
     });
 
     it("reveals a panel with book metadata on hover", async () => {
