@@ -164,10 +164,11 @@ export function ContinuousScrollReader({
   // fixed 100vh placeholder that rarely matches their real height.
   const pageHeightsRef = useRef<Map<number, number>>(new Map());
   // Pages whose image just loaded, awaiting post-commit height measurement.
-  // We measure after React commits (the img is display:none at onLoad time) to
-  // record a fallback height for un-analyzed pages and to re-pin an in-progress
-  // external sync.  We no longer adjust scrollTop here — native scroll
-  // anchoring keeps the view steady (see the container's overflow-anchor).
+  // We measure after React commits (the img is still parked out of flow at
+  // onLoad time) to record a fallback height for un-analyzed pages and to
+  // re-pin an in-progress external sync.  We no longer adjust scrollTop here —
+  // native scroll anchoring keeps the view steady (see the container's
+  // overflow-anchor).
   const pendingLoadsRef = useRef<number[]>([]);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const hasScrolledToInitialRef = useRef(false);
@@ -484,8 +485,9 @@ export function ContinuousScrollReader({
     }
   }, [initialPage, hasLeadingSlot]);
 
-  // Handle image load.  The img is still display:none here (loadedPages hasn't
-  // flushed yet), so just queue the page; measurement happens after commit.
+  // Handle image load.  The img is still parked out of flow here (loadedPages
+  // hasn't flushed yet), so just queue the page; measurement happens after
+  // commit.
   const handleImageLoad = useCallback((pageNumber: number) => {
     pendingLoadsRef.current.push(pageNumber);
     setLoadedPages((prev) => new Set([...prev, pageNumber]));
@@ -727,10 +729,35 @@ export function ContinuousScrollReader({
                 // preload setting still governs how far ahead work happens.
                 loading="lazy"
                 decoding="async"
-                style={{
-                  ...getImageStyles(),
-                  display: page.isLoaded ? "block" : "none",
-                }}
+                style={
+                  // A lazy image is only fetched once the browser sees it
+                  // approach the viewport, and it can only see an element that
+                  // generates a layout box.  Hiding an unloaded page with
+                  // `display: none` therefore deadlocks it: no box means it
+                  // never loads, so `onLoad` never fires, so it is never
+                  // revealed, and it spins forever while its bytes sit unused
+                  // in the HTTP cache.
+                  //
+                  // Park it as a transparent overlay filling the reserved box
+                  // instead.  Absolute positioning keeps it out of the parent's
+                  // size calculation, so the reserved height alone still
+                  // governs the layout exactly as it did under `display: none`
+                  // -- which matters because the fit-mode styles set a height
+                  // in `height` mode and would otherwise inflate every unloaded
+                  // page to a full viewport.  Filling the box (rather than
+                  // sitting at its top-left) means a tall webtoon strip
+                  // triggers its own load from anywhere in its height.
+                  page.isLoaded
+                    ? getImageStyles()
+                    : {
+                        position: "absolute",
+                        top: 0,
+                        left: 0,
+                        width: "100%",
+                        height: "100%",
+                        opacity: 0,
+                      }
+                }
                 onLoad={() => handleImageLoad(page.pageNumber)}
                 onError={() => {
                   if (page.pageNumber > 1) {

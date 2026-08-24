@@ -191,8 +191,13 @@ describe("ContinuousScrollReader", () => {
         ]);
       });
 
+      // Fit-mode styles land once the image has loaded; until then it is
+      // parked out of flow so it cannot inflate the reserved page height.
       const image = screen.queryByTestId("page-image-1");
       if (image) {
+        act(() => {
+          image.dispatchEvent(new Event("load"));
+        });
         expect(image).toHaveStyle({ maxWidth: "100%", maxHeight: "100vh" });
       }
     });
@@ -212,8 +217,13 @@ describe("ContinuousScrollReader", () => {
         ]);
       });
 
+      // Fit-mode styles land once the image has loaded; until then it is
+      // parked out of flow so it cannot inflate the reserved page height.
       const image = screen.queryByTestId("page-image-1");
       if (image) {
+        act(() => {
+          image.dispatchEvent(new Event("load"));
+        });
         expect(image).toHaveStyle({ width: "100%" });
       }
     });
@@ -233,8 +243,13 @@ describe("ContinuousScrollReader", () => {
         ]);
       });
 
+      // Fit-mode styles land once the image has loaded; until then it is
+      // parked out of flow so it cannot inflate the reserved page height.
       const image = screen.queryByTestId("page-image-1");
       if (image) {
+        act(() => {
+          image.dispatchEvent(new Event("load"));
+        });
         expect(image).toHaveStyle({ maxWidth: "100%" });
       }
     });
@@ -254,8 +269,13 @@ describe("ContinuousScrollReader", () => {
         ]);
       });
 
+      // Fit-mode styles land once the image has loaded; until then it is
+      // parked out of flow so it cannot inflate the reserved page height.
       const image = screen.queryByTestId("page-image-1");
       if (image) {
+        act(() => {
+          image.dispatchEvent(new Event("load"));
+        });
         expect(image).toHaveStyle({ height: "100vh" });
       }
     });
@@ -755,11 +775,27 @@ describe("ContinuousScrollReader", () => {
       });
 
       // Initially, loader should be visible (image not loaded yet)
-      // The image is hidden until loaded
+      // The image is parked as a transparent, out-of-flow box until loaded
       const image = screen.queryByTestId("page-image-1");
       if (image) {
-        expect(image).toHaveStyle({ display: "none" });
+        expect(image).toHaveStyle({ opacity: "0", position: "absolute" });
       }
+    });
+
+    // A `loading="lazy"` image is only fetched once the browser sees it
+    // approach the viewport, and it can only see an element that generates a
+    // layout box. Hiding an unloaded page with `display: none` therefore
+    // deadlocks it: no box means it never loads, so `onLoad` never fires, so it
+    // is never revealed -- the page spins forever while its bytes sit unused in
+    // the HTTP cache. Reveal with opacity, which keeps the box.
+    it("should keep an unloaded image in the layout so lazy loading can fire", () => {
+      renderWithProviders(
+        <ContinuousScrollReader {...defaultProps} initialPage={1} />,
+      );
+
+      const image = screen.getByTestId("page-image-1");
+      expect(image).toHaveAttribute("loading", "lazy");
+      expect(image).not.toHaveStyle({ display: "none" });
     });
 
     it("should hide loader and show image after load", async () => {
@@ -785,6 +821,7 @@ describe("ContinuousScrollReader", () => {
         });
 
         expect(image).toHaveStyle({ display: "block" });
+        expect(image).not.toHaveStyle({ position: "absolute" });
       }
     });
   });
