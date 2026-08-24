@@ -7,6 +7,12 @@ release. A patch release may fix an API bug; it may not add an operation, a para
 field, or a new behaviour on an existing route. A client may therefore treat the release a feature
 first appears under in the 🔌 API sections below as a floor it can rely on.
 
+## [2.2.4] - 2026-08-24
+
+### 🐛 Bug Fixes
+
+- *(scanner)* Stop per-book analysis racing on positional book numbers
+
 ## [2.2.3] - 2026-08-24
 
 ### 🔌 API
