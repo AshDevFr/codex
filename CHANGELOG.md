@@ -7,6 +7,26 @@ release. A patch release may fix an API bug; it may not add an operation, a para
 field, or a new behaviour on an existing route. A client may therefore treat the release a feature
 first appears under in the 🔌 API sections below as a floor it can rely on.
 
+## [2.2.3] - 2026-08-24
+
+### 🔌 API
+
+- *(api)* Serve the archive entry the page row names, not the one at that index
+
+### 🐛 Bug Fixes
+
+- *(parsers)* Stop dropping AVIF pages at the extension gate
+- *(reader)* Stop webtoon pages deadlocking on their own lazy load
+
+### 📚 Documentation
+
+- Document AVIF page support and what the server cannot do with it
+
+### ⚙️ Miscellaneous Tasks
+
+- Lint the crate without default features, which nothing else builds
+- Apply the no-default-features lint to main and tag builds too
+
 ## [2.2.2] - 2026-08-23
 
 ### 🐛 Bug Fixes
