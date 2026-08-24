@@ -391,3 +391,95 @@ fn test_extract_page_with_fallback_fails_when_all_images_corrupted() {
     assert!(result.is_err(), "Should fail when all images are corrupted");
     assert!(result.unwrap_err().to_string().contains("No valid images"));
 }
+
+// ============================================================================
+// Extraction by entry name
+// ============================================================================
+
+/// Build a CBZ whose middle entry has an image extension and valid magic bytes
+/// but is truncated before its dimensions can be read.
+///
+/// This is the shape that desynchronises the two page lists: the metadata pass
+/// drops the middle entry (no dimensions), while the extraction pass keeps it,
+/// so positional indexing disagrees about which entry page 2 is.
+fn create_cbz_with_undimensionable_entry(temp_dir: &TempDir) -> std::path::PathBuf {
+    use std::fs::File;
+    use std::io::Write;
+    use zip::ZipWriter;
+    use zip::write::FileOptions;
+
+    let cbz_path = temp_dir.path().join("undimensionable.cbz");
+    let file = File::create(&cbz_path).unwrap();
+    let mut zip = ZipWriter::new(file);
+
+    let options: FileOptions<'_, ()> =
+        FileOptions::default().compression_method(zip::CompressionMethod::Stored);
+
+    zip.start_file("page001.png", options).unwrap();
+    zip.write_all(&common::create_test_png(10, 10)).unwrap();
+
+    // Valid PNG signature, truncated before the IHDR dimensions.
+    zip.start_file("page002.png", options).unwrap();
+    zip.write_all(&common::create_test_png(10, 10)[..16])
+        .unwrap();
+
+    zip.start_file("page003.png", options).unwrap();
+    zip.write_all(&common::create_test_png(20, 20)).unwrap();
+
+    zip.finish().unwrap();
+    cbz_path
+}
+
+#[test]
+fn test_extract_page_by_name_returns_the_named_entry() {
+    use codex::parsers::cbz::extract_page_from_cbz_by_name;
+
+    let temp_dir = TempDir::new().unwrap();
+    let cbz_path = common::create_test_cbz(&temp_dir, 3, false);
+
+    let data = extract_page_from_cbz_by_name(&cbz_path, "page002.png").unwrap();
+    assert_eq!(&data[0..4], b"\x89PNG");
+}
+
+#[test]
+fn test_extract_page_by_name_errors_for_a_missing_entry() {
+    use codex::parsers::cbz::extract_page_from_cbz_by_name;
+
+    let temp_dir = TempDir::new().unwrap();
+    let cbz_path = common::create_test_cbz(&temp_dir, 3, false);
+
+    let result = extract_page_from_cbz_by_name(&cbz_path, "nope.png");
+    assert!(result.is_err(), "a missing entry must not resolve silently");
+}
+
+/// Positional extraction drifts when an entry fails verification; addressing the
+/// entry by the name the page row recorded does not.
+#[test]
+fn test_extract_page_by_name_matches_metadata_when_an_entry_fails_verification() {
+    use codex::parsers::cbz::extract_page_from_cbz_by_name;
+
+    let temp_dir = TempDir::new().unwrap();
+    let cbz_path = create_cbz_with_undimensionable_entry(&temp_dir);
+
+    // The metadata pass drops the truncated entry, so page 2 is the third file.
+    let metadata = CbzParser::new().parse(&cbz_path).unwrap();
+    assert_eq!(
+        metadata.page_count, 2,
+        "truncated entry must not become a page"
+    );
+    assert_eq!(metadata.pages[1].file_name, "page003.png");
+
+    // Positional extraction still counts the truncated entry, so it disagrees.
+    let positional = extract_page_from_cbz(&cbz_path, 2).unwrap();
+    let by_name = extract_page_from_cbz_by_name(&cbz_path, &metadata.pages[1].file_name).unwrap();
+    let expected = extract_page_from_cbz_by_name(&cbz_path, "page003.png").unwrap();
+
+    assert_ne!(
+        positional, expected,
+        "this test is pointless if positional extraction already agrees"
+    );
+    assert_eq!(
+        by_name, expected,
+        "page 2 must resolve to the entry its page row names"
+    );
+}

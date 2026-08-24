@@ -4,7 +4,7 @@
 //! These endpoints provide page listing, streaming, and thumbnail generation.
 
 use super::super::dto::page::KomgaPageDto;
-use super::libraries::{extract_page_image, generate_thumbnail};
+use super::libraries::generate_thumbnail;
 use crate::require_permission;
 use crate::{
     error::ApiError,
@@ -183,10 +183,17 @@ pub async fn get_page(
         .map(|p| format!("image/{}", p.format.to_lowercase()))
         .unwrap_or_else(|| "image/jpeg".to_string());
 
-    // Extract the page image from the book file
-    let image_data = extract_page_image(&book.path, &book.format, page_number)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to extract page: {}", e)))?;
+    // Extract the page image from the book file. The page row's file name
+    // addresses the archive entry directly, so extraction cannot drift from the
+    // numbering the page rows describe.
+    let image_data = crate::page_extract::extract_page_image(
+        &book.path,
+        &book.format,
+        page_number,
+        page_metadata.as_ref().map(|p| p.file_name.as_str()),
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to extract page: {}", e)))?;
 
     // Build response with caching headers (immutable content)
     Ok(Response::builder()
@@ -260,10 +267,21 @@ pub async fn get_page_thumbnail(
         )));
     }
 
-    // Extract the page image from the book file
-    let image_data = extract_page_image(&book.path, &book.format, page_number)
+    // Address the archive entry by the name the page row records, so a page
+    // thumbnail shows the same image the page endpoint serves.
+    let page_metadata = PageRepository::get_by_book_and_number(&state.db, book_id, page_number)
         .await
-        .map_err(|e| ApiError::Internal(format!("Failed to extract page: {}", e)))?;
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch page metadata: {}", e)))?;
+
+    // Extract the page image from the book file
+    let image_data = crate::page_extract::extract_page_image(
+        &book.path,
+        &book.format,
+        page_number,
+        page_metadata.as_ref().map(|p| p.file_name.as_str()),
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to extract page: {}", e)))?;
 
     // Generate thumbnail (max 300px for page thumbnails)
     let thumbnail_data = generate_thumbnail(image_data, 300)

@@ -112,14 +112,22 @@ pub async fn get_page_image(
         .await;
     }
 
-    // Try to fetch page metadata for content type detection
+    // Page metadata drives the content type and, more importantly, addresses
+    // the archive entry by name so extraction cannot drift from the page rows.
     let page = PageRepository::get_by_book_and_number(&state.db, book_id, page_number)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch page: {}", e)))?;
 
     // For non-PDF formats, extract and serve directly
     // This works even if the book hasn't been analyzed - the parser will extract the page
-    let image_data = match extract_page_image(&book.path, &book.format, page_number).await {
+    let image_data = match crate::page_extract::extract_page_image(
+        &book.path,
+        &book.format,
+        page_number,
+        page.as_ref().map(|p| p.file_name.as_str()),
+    )
+    .await
+    {
         Ok(data) => data,
         Err(e) => {
             // If extraction fails and book isn't analyzed, provide a helpful message
@@ -672,7 +680,7 @@ pub(crate) async fn generate_book_thumbnail(
             data
         }
     } else {
-        extract_page_image(&book.path, &book.format, 1)
+        crate::page_extract::extract_page_image(&book.path, &book.format, 1, None)
             .await
             .map_err(|e| ApiError::from_anyhow_with_context(e, "Failed to extract cover image"))?
     };
@@ -790,31 +798,6 @@ fn detect_content_type(data: &[u8]) -> &'static str {
         // Default to JPEG as it's the most common format in comics
         "image/jpeg"
     }
-}
-
-/// Extract page image from book file
-///
-/// Uses spawn_blocking to avoid blocking the async runtime during CPU-intensive
-/// image extraction operations (ZIP parsing, RAR extraction, EPUB parsing, PDF rendering)
-async fn extract_page_image(
-    path: &str,
-    file_format: &str,
-    page_number: i32,
-) -> anyhow::Result<Vec<u8>> {
-    let path = std::path::PathBuf::from(path);
-    let format = file_format.to_uppercase();
-
-    // Use spawn_blocking for CPU-intensive file parsing operations
-    tokio::task::spawn_blocking(move || match format.as_str() {
-        "CBZ" => codex_parsers::cbz::extract_page_from_cbz(&path, page_number),
-        #[cfg(feature = "rar")]
-        "CBR" => codex_parsers::cbr::extract_page_from_cbr(&path, page_number),
-        "EPUB" => codex_parsers::epub::extract_page_from_epub(&path, page_number),
-        "PDF" => codex_parsers::pdf::extract_page_from_pdf(&path, page_number),
-        _ => anyhow::bail!("Unsupported format: {}", format),
-    })
-    .await
-    .map_err(|e| anyhow::anyhow!("Task join error: {}", e))?
 }
 
 #[cfg(test)]

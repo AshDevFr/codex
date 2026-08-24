@@ -761,3 +761,94 @@ async fn test_opds_page_fetch_records_progress() {
         progress.current_page
     );
 }
+
+// ============================================================================
+// Page rows address the archive entry, positional indexing does not
+// ============================================================================
+
+/// Build a CBZ whose middle entry has an image extension and valid magic bytes
+/// but is truncated before its dimensions can be read.
+///
+/// The scanner drops that entry, so its page rows are `page001.png` then
+/// `page003.png`. The extractor's own entry list keeps it, so indexing by
+/// position resolves page 2 to the truncated entry instead.
+fn create_cbz_with_undimensionable_entry(temp_dir: &TempDir) -> std::path::PathBuf {
+    use std::fs::File;
+    use std::io::Write;
+    use zip::ZipWriter;
+    use zip::write::FileOptions;
+
+    let cbz_path = temp_dir.path().join("undimensionable.cbz");
+    let file = File::create(&cbz_path).unwrap();
+    let mut zip = ZipWriter::new(file);
+
+    let options: FileOptions<'_, ()> =
+        FileOptions::default().compression_method(zip::CompressionMethod::Stored);
+
+    zip.start_file("page001.png", options).unwrap();
+    zip.write_all(&create_test_png(10, 10)).unwrap();
+
+    zip.start_file("page002.png", options).unwrap();
+    zip.write_all(&create_test_png(10, 10)[..16]).unwrap();
+
+    zip.start_file("page003.png", options).unwrap();
+    zip.write_all(&create_test_png(20, 20)).unwrap();
+
+    zip.finish().unwrap();
+    cbz_path
+}
+
+#[tokio::test]
+async fn test_get_page_image_serves_the_entry_the_page_row_names() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let cbz_temp_dir = TempDir::new().unwrap();
+    let cbz_path = create_cbz_with_undimensionable_entry(&cbz_temp_dir);
+
+    let library = LibraryRepository::create(
+        &db,
+        "Test Library",
+        cbz_temp_dir.path().to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    // Two pages, because the scanner drops the truncated middle entry.
+    let book = create_test_book_model(
+        series.id,
+        library.id,
+        cbz_path.to_str().unwrap(),
+        "undimensionable.cbz",
+        "cbz",
+        true,
+        2,
+    );
+    let book = BookRepository::create(&db, &book, None).await.unwrap();
+
+    for (number, name) in [(1, "page001.png"), (2, "page003.png")] {
+        let page = create_test_page_model(book.id, number, name, "png");
+        PageRepository::create(&db, &page).await.unwrap();
+    }
+
+    let state = create_test_app_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_app_state(state);
+
+    let request = get_request_with_auth(&format!("/api/v1/books/{}/pages/2", book.id), &token);
+    let (status, _headers, body) = make_full_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+
+    // Page 2 is `page003.png`, the 20x20 image. The truncated entry is 16 bytes,
+    // so serving it instead is unmistakable.
+    let expected = create_test_png(20, 20);
+    assert_eq!(
+        body, expected,
+        "page 2 must serve the entry its page row names, not the entry at index 1"
+    );
+}

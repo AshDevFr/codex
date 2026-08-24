@@ -263,6 +263,12 @@ impl TaskHandler for GenerateSeriesThumbnailHandler {
 ///
 /// Uses spawn_blocking to avoid blocking the async runtime during CPU-intensive
 /// image extraction operations (ZIP parsing, RAR extraction, EPUB parsing, PDF rendering)
+///
+/// Deliberately positional rather than addressed by page-row file name. The
+/// reader's endpoints must resolve page N to the exact entry its page row names,
+/// because positional indexing drifts past any entry the scanner dropped. This
+/// caller only ever asks for page 1 to have something to show as a cover, where
+/// any decodable image will do and no page row need exist yet.
 async fn extract_page_image(
     path: &str,
     file_format: &str,

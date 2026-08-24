@@ -232,7 +232,7 @@ async fn get_default_series_cover(
     }
 
     // Extract first page from the book
-    extract_page_image(&first_book.path, &first_book.format, 1)
+    crate::page_extract::extract_page_image(&first_book.path, &first_book.format, 1, None)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to extract cover image: {}", e)))
 }
@@ -297,33 +297,6 @@ pub async fn generate_thumbnail(
         generate_thumbnail_sync(&image_data, max_dimension)
     })
     .await
-}
-
-/// Extract page image from book file.
-///
-/// ZIP/RAR/EPUB parsing and PDF rendering are blocking file work, so they go to
-/// the blocking pool for the same reason [`generate_thumbnail`] does.
-pub async fn extract_page_image(
-    path: &str,
-    file_format: &str,
-    page_number: i32,
-) -> anyhow::Result<Vec<u8>> {
-    let path = std::path::PathBuf::from(path);
-    let format = file_format.to_uppercase();
-
-    tokio::task::spawn_blocking(move || match format.as_str() {
-        "CBZ" => codex_parsers::cbz::extract_page_from_cbz(&path, page_number),
-        #[cfg(feature = "rar")]
-        "CBR" => codex_parsers::cbr::extract_page_from_cbr(&path, page_number),
-        "EPUB" => codex_parsers::epub::extract_page_from_epub(&path, page_number),
-        "PDF" => codex_parsers::pdf::extract_page_from_pdf(&path, page_number),
-        _ => Err(anyhow::anyhow!(
-            "Unsupported format for page extraction: {}",
-            format
-        )),
-    })
-    .await
-    .map_err(|e| anyhow::anyhow!("image extraction join error: {e}"))?
 }
 
 #[cfg(test)]

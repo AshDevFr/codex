@@ -5,6 +5,7 @@ pub mod extractors;
 pub mod image_limit;
 pub mod middleware;
 pub mod observability;
+pub mod page_extract;
 pub mod permissions;
 pub mod ranged_file;
 pub mod routes;

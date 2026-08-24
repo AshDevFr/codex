@@ -302,6 +302,53 @@ pub fn extract_page_from_cbr_with_fallback<P: AsRef<Path>>(
     )
 }
 
+/// Extract a page image from a CBR file by its archive entry name.
+///
+/// Prefer this over [`extract_page_from_cbr`] whenever the entry name is known.
+/// Page numbers are positional, and the two passes over an archive do not filter
+/// it identically: the metadata pass drops entries whose dimensions cannot be
+/// read, while the list built for extraction keeps them. Indexing by position
+/// therefore drifts by one for every dropped entry, so page N serves an image
+/// the page row does not describe. Addressing the entry by name cannot drift.
+///
+/// Unlike the positional form this reads only the matching entry, skipping the
+/// rest rather than holding every image in the archive in memory at once.
+///
+/// # Arguments
+/// * `path` - Path to the CBR file
+/// * `file_name` - The archive entry name, exactly as recorded on the page
+///
+/// # Returns
+/// The raw image data as bytes, or an error if the entry is not in the archive
+pub fn extract_page_from_cbr_by_name<P: AsRef<Path>>(
+    path: P,
+    file_name: &str,
+) -> anyhow::Result<Vec<u8>> {
+    let mut archive = unrar::Archive::new(path.as_ref())
+        .open_for_processing()
+        .map_err(|e| anyhow::anyhow!("Failed to open RAR archive: {}", e))?;
+
+    while let Some(header) = archive
+        .read_header()
+        .map_err(|e| anyhow::anyhow!("Failed to read RAR header: {}", e))?
+    {
+        let entry_name = header.entry().filename.to_string_lossy().to_string();
+
+        if entry_name == file_name {
+            let (data, _) = header
+                .read()
+                .map_err(|e| anyhow::anyhow!("Failed to read RAR entry: {}", e))?;
+            return Ok(data);
+        }
+
+        archive = header
+            .skip()
+            .map_err(|e| anyhow::anyhow!("Failed to skip RAR entry: {}", e))?;
+    }
+
+    anyhow::bail!("Entry '{}' not found in RAR archive", file_name)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

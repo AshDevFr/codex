@@ -9,7 +9,7 @@ use super::super::dto::series::{
     KomgaSeriesMetadataDto, KomgaSeriesSearchRequestDto, KomgaWebLinkDto,
     codex_to_komga_reading_direction, codex_to_komga_status, extract_read_status_from_condition,
 };
-use super::libraries::{THUMBNAIL_CACHE_CONTROL, extract_page_image, generate_thumbnail};
+use super::libraries::{THUMBNAIL_CACHE_CONTROL, generate_thumbnail};
 use crate::require_permission;
 use crate::{
     error::ApiError,
@@ -1090,7 +1090,7 @@ async fn get_default_series_cover(
     }
 
     // Extract first page from the book
-    extract_page_image(&first_book.path, &first_book.format, 1)
+    crate::page_extract::extract_page_image(&first_book.path, &first_book.format, 1, None)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to extract cover image: {}", e)))
 }

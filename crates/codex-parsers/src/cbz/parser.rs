@@ -258,6 +258,37 @@ pub fn extract_page_from_cbz_with_fallback<P: AsRef<Path>>(
     )
 }
 
+/// Extract a page image from a CBZ file by its archive entry name.
+///
+/// Prefer this over [`extract_page_from_cbz`] whenever the entry name is known.
+/// Page numbers are positional, and the two passes over an archive do not filter
+/// it identically: the metadata pass drops entries whose dimensions cannot be
+/// read, while the list built for extraction keeps them. Indexing by position
+/// therefore drifts by one for every dropped entry, so page N serves an image
+/// the page row does not describe. Addressing the entry by name cannot drift.
+///
+/// # Arguments
+/// * `path` - Path to the CBZ file
+/// * `file_name` - The archive entry name, exactly as recorded on the page
+///
+/// # Returns
+/// The raw image data as bytes, or an error if the entry is not in the archive
+pub fn extract_page_from_cbz_by_name<P: AsRef<Path>>(
+    path: P,
+    file_name: &str,
+) -> anyhow::Result<Vec<u8>> {
+    let file = File::open(path)?;
+    let mut archive = ZipArchive::new(file)?;
+
+    let mut entry = archive
+        .by_name(file_name)
+        .map_err(|e| anyhow::anyhow!("Entry '{}' not found in archive: {}", file_name, e))?;
+
+    let mut buffer = Vec::new();
+    entry.read_to_end(&mut buffer)?;
+    Ok(buffer)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
