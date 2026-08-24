@@ -231,6 +231,7 @@ Enabled by default. Turn it off to use tap-only navigation.
 Some comics are scanned at very high resolution (e.g. 3000+ px wide), which is far more than a phone or tablet can display. **Downscale Pages** asks the server to resize each page down to roughly your screen size before sending it, so you download less data and use less memory.
 
 - Applies to **comic archives (CBZ/CBR)** only; EPUB and PDF are unaffected.
+- **AVIF pages are sent unchanged**, because the server does not decode AVIF. A book whose pages are AVIF ignores this setting. See [Supported Formats](./formats#avif-pages).
 - It's a data/quality trade-off: pages are slightly softer, most noticeable if you pinch-zoom. It is **not** applied in the `original` fit mode, where native pixels are the point.
 
 :::warning

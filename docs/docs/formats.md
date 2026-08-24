@@ -139,7 +139,11 @@ Within archives, Codex supports these image formats:
 | JPEG | `.jpg`, `.jpeg` | Photos, color comics |
 | PNG | `.png` | Art with transparency, line art |
 | WebP | `.webp` | Modern compression |
+| AVIF | `.avif` | Modern compression, smaller than WebP |
+| JPEG XL | `.jxl` | Modern compression, high fidelity |
 | GIF | `.gif` | Simple graphics |
+| BMP | `.bmp` | Uncompressed bitmaps |
+| SVG | `.svg` | Vector art |
 
 ### Image Handling
 
@@ -147,6 +151,33 @@ Within archives, Codex supports these image formats:
 - **Color profiles**: sRGB conversion for consistency
 - **Thumbnails**: Generated for fast previews
 - **On-demand resizing**: Reduces bandwidth
+
+### AVIF Pages
+
+AVIF pages inside an archive are read, counted, listed and served like any other
+format, and current readers display them natively.
+
+Codex does not decode AVIF on the server, so anything that transforms an image
+rather than simply sending it is unavailable for AVIF pages:
+
+- **Covers**: if a book's first page is AVIF, its cover is taken from the first
+  later page that can be decoded. If every page is AVIF, the book shows a
+  generated placeholder cover carrying its title and author instead of artwork.
+  The same applies to series covers.
+- **Downscaling**: the reader's [Downscale Pages](./reader-settings#downscale-pages)
+  setting has no effect on AVIF pages. The original is sent unchanged, so those
+  pages use more bandwidth and memory than downscaled ones.
+
+:::note Libraries scanned before AVIF support
+Books scanned before AVIF support was added still have their AVIF pages missing,
+and will look shorter than the file actually is. Re-analyze them to pick the
+pages up.
+
+Page numbers are positional, so a book that gains pages this way shifts every
+page number from the first AVIF entry onward. Any saved reading position in such
+a book was recorded against a sequence that was missing pages, and will land
+somewhere slightly different afterwards.
+:::
 
 ## Metadata Support
 
@@ -352,6 +383,13 @@ Planned formats:
 2. Verify disk I/O performance
 3. Consider splitting large files
 4. Reduce concurrent scan limit
+
+### Book Has Fewer Pages Than the File
+
+1. Check whether the archive contains AVIF pages; if the book was scanned before
+   AVIF support was added, re-analyze it
+2. Check server logs for entries skipped as unreadable
+3. Verify the images open in another tool
 
 ### Images Not Displaying
 
