@@ -99,6 +99,14 @@ jobs:
         run: cargo fmt -- --check
       - name: Clippy check
         run: cargo clippy --features rar -- -D warnings
+      # Every other Rust job builds the default feature set, so nothing
+      # otherwise compiles the crate with `rar` or `observability` off, even
+      # though both are documented, supported builds. That leaves feature-gated
+      # code and `cfg` attributes entirely unexercised: a `#[cfg(...)]` attached
+      # to the wrong item, or a reference to a gated module from ungated code,
+      # compiles cleanly here and fails only for whoever builds without them.
+      - name: Clippy check (no default features)
+        run: cargo clippy --workspace --all-targets --no-default-features -- -D warnings
 
   # Run frontend tests and build
   frontend:
