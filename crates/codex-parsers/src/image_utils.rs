@@ -297,14 +297,9 @@ pub fn process_image_data(filename: &str, data: &[u8]) -> Option<ProcessedImage>
     // Detect format using both extension and magic bytes
     let format = get_verified_image_format(filename, data)?;
 
-    // Get image dimensions (with special handling for SVG and JXL)
-    let (width, height) = match format {
-        ImageFormat::SVG => get_svg_dimensions(data)?,
-        ImageFormat::JXL => get_jxl_dimensions(data)?,
-        // Raster formats: read dimensions from the header only, never decode the
-        // full image. See `raster_dimensions`.
-        _ => raster_dimensions(data)?,
-    };
+    // Get image dimensions (with special handling for the formats the `image`
+    // crate cannot read here)
+    let (width, height) = dimensions_for_format(format, data)?;
 
     Some(ProcessedImage {
         format,
@@ -328,6 +323,21 @@ pub fn raster_dimensions(data: &[u8]) -> Option<(u32, u32)> {
         .ok()?
         .into_dimensions()
         .ok()
+}
+
+/// Read an image's dimensions, dispatching on the formats that need a reader of
+/// their own.
+///
+/// SVG is vector and has to be rendered; JXL and AVIF are raster but the `image`
+/// crate cannot read them in this build. Everything else has its dimensions read
+/// from the header without decoding. See [`raster_dimensions`].
+pub fn dimensions_for_format(format: ImageFormat, data: &[u8]) -> Option<(u32, u32)> {
+    match format {
+        ImageFormat::SVG => get_svg_dimensions(data),
+        ImageFormat::JXL => get_jxl_dimensions(data),
+        ImageFormat::AVIF => crate::avif::get_avif_dimensions(data),
+        _ => raster_dimensions(data),
+    }
 }
 
 /// Create a PageInfo from processed image data
@@ -388,6 +398,12 @@ pub fn get_jxl_dimensions(jxl_data: &[u8]) -> Option<(u32, u32)> {
 ///
 /// Includes SVG files which are rendered to raster format using resvg.
 /// Includes JXL (JPEG XL) files which are decoded using jxl-oxide.
+/// Includes AVIF files, whose dimensions are read from the container by
+/// [`crate::avif::get_avif_dimensions`] and whose bytes are served untouched.
+///
+/// This list is a contract with clients that index archives locally: page
+/// numbers are positional over the entries it accepts, so a client that filters
+/// differently numbers pages differently.
 ///
 /// Excludes macOS resource fork files (`__MACOSX/` directory or `._` prefix files)
 /// which may have image extensions but contain metadata, not actual images.
@@ -406,6 +422,7 @@ pub fn is_image_file(name: &str) -> bool {
         || lower.ends_with(".bmp")
         || lower.ends_with(".svg")
         || lower.ends_with(".jxl")
+        || lower.ends_with(".avif")
 }
 
 /// Check if a file is a macOS resource fork file
@@ -446,6 +463,8 @@ pub fn get_image_format(name: &str) -> Option<ImageFormat> {
         Some(ImageFormat::SVG)
     } else if lower.ends_with(".jxl") {
         Some(ImageFormat::JXL)
+    } else if lower.ends_with(".avif") {
+        Some(ImageFormat::AVIF)
     } else {
         None
     }

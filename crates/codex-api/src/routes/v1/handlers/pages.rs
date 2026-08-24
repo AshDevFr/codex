@@ -166,8 +166,13 @@ pub async fn get_page_image(
     // distinguished by URL, so the browser caches it per device. Trades a little
     // CPU for far cheaper rendering of oversized pages (notably on WebKit).
     let is_archive = matches!(book.format.to_uppercase().as_str(), "CBZ" | "CBR");
+    // No AVIF decoder is linked (see `codex_parsers::avif` for why), so resizing
+    // an AVIF page can only fail. Skipping the attempt avoids cloning the bytes,
+    // holding a permit from the bounded image-job pool that real downscales are
+    // queued on, and logging a warning on every page turn.
+    let is_resizable = is_archive && content_type != "image/avif";
     let (image_data, content_type) = match query.width {
-        Some(width) if is_archive => {
+        Some(width) if is_resizable => {
             let target = width.clamp(MIN_DOWNSCALE_WIDTH, MAX_DOWNSCALE_WIDTH);
             // Clone the (compressed) bytes for the blocking resize so the original
             // is still available if the source is already small enough or resize fails.

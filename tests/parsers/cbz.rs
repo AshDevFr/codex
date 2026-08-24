@@ -483,3 +483,54 @@ fn test_extract_page_by_name_matches_metadata_when_an_entry_fails_verification()
         "page 2 must resolve to the entry its page row names"
     );
 }
+
+// ============================================================================
+// AVIF pages
+// ============================================================================
+
+/// AVIF entries must take their place in the page sequence, not be dropped out
+/// of it. A dropped entry is invisible: the book simply looks shorter, and every
+/// page number after it belongs to a different image than the reader expects.
+#[test]
+fn test_cbz_with_mixed_avif_and_webp_pages_keeps_order_and_numbering() {
+    let temp_dir = TempDir::new().unwrap();
+    let cbz_path = common::create_mixed_avif_webp_cbz(&temp_dir);
+
+    let metadata = CbzParser::new().parse(&cbz_path).unwrap();
+
+    assert_eq!(metadata.page_count, 4, "AVIF entries must count as pages");
+
+    let expected = [
+        ("page001.webp", ImageFormat::WEBP, 10, 14),
+        ("page002.avif", ImageFormat::AVIF, 20, 28),
+        ("page003.webp", ImageFormat::WEBP, 30, 42),
+        ("page004.avif", ImageFormat::AVIF, 40, 56),
+    ];
+
+    for (index, (file_name, format, width, height)) in expected.iter().enumerate() {
+        let page = &metadata.pages[index];
+        assert_eq!(
+            page.page_number,
+            index + 1,
+            "pages must be numbered in order"
+        );
+        assert_eq!(&page.file_name, file_name);
+        assert_eq!(&page.format, format);
+        assert_eq!(
+            (page.width, page.height),
+            (*width, *height),
+            "AVIF dimensions come from the container, not a decoder"
+        );
+    }
+}
+
+#[test]
+fn test_cbz_avif_page_is_extractable_by_name() {
+    use codex::parsers::cbz::extract_page_from_cbz_by_name;
+
+    let temp_dir = TempDir::new().unwrap();
+    let cbz_path = common::create_mixed_avif_webp_cbz(&temp_dir);
+
+    let data = extract_page_from_cbz_by_name(&cbz_path, "page002.avif").unwrap();
+    assert_eq!(&data[4..12], b"ftypavif", "served bytes must be the AVIF");
+}

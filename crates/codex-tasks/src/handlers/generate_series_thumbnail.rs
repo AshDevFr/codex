@@ -209,17 +209,25 @@ impl TaskHandler for GenerateSeriesThumbnailHandler {
                 ));
             }
 
-            // Extract first page from book
-            let image_data = extract_page_image(&first_book.path, &first_book.format, 1)
+            // Render the first book's cover. This walks past pages that cannot
+            // be decoded (an AVIF page, or a corrupt one) and falls back to a
+            // placeholder, so a series whose first book opens on an undecodable
+            // page still gets a cover instead of a failed task.
+            let settings = self
+                .thumbnail_service
+                .get_settings(db)
                 .await
-                .map_err(|e| {
-                    anyhow!("Failed to extract page from book {}: {}", first_book.id, e)
-                })?;
+                .map_err(|e| anyhow!("Failed to read thumbnail settings: {}", e))?;
 
-            // Generate thumbnail from image
             let thumbnail_data = self
                 .thumbnail_service
-                .generate_thumbnail_from_image(db, image_data)
+                .render_cover_thumbnail(
+                    &first_book,
+                    settings.max_dimension,
+                    settings.jpeg_quality,
+                    None,
+                    None,
+                )
                 .await
                 .map_err(|e| anyhow!("Failed to generate thumbnail image: {}", e))?;
 
@@ -257,37 +265,6 @@ impl TaskHandler for GenerateSeriesThumbnailHandler {
             }
         })
     }
-}
-
-/// Extract page image from book file
-///
-/// Uses spawn_blocking to avoid blocking the async runtime during CPU-intensive
-/// image extraction operations (ZIP parsing, RAR extraction, EPUB parsing, PDF rendering)
-///
-/// Deliberately positional rather than addressed by page-row file name. The
-/// reader's endpoints must resolve page N to the exact entry its page row names,
-/// because positional indexing drifts past any entry the scanner dropped. This
-/// caller only ever asks for page 1 to have something to show as a cover, where
-/// any decodable image will do and no page row need exist yet.
-async fn extract_page_image(
-    path: &str,
-    file_format: &str,
-    page_number: i32,
-) -> anyhow::Result<Vec<u8>> {
-    let path = std::path::PathBuf::from(path);
-    let format = file_format.to_uppercase();
-
-    // Use spawn_blocking for CPU-intensive file parsing operations
-    tokio::task::spawn_blocking(move || match format.as_str() {
-        "CBZ" => codex_parsers::cbz::extract_page_from_cbz(&path, page_number),
-        #[cfg(feature = "rar")]
-        "CBR" => codex_parsers::cbr::extract_page_from_cbr(&path, page_number),
-        "EPUB" => codex_parsers::epub::extract_page_from_epub(&path, page_number),
-        "PDF" => codex_parsers::pdf::extract_page_from_pdf(&path, page_number),
-        _ => anyhow::bail!("Unsupported format: {}", format),
-    })
-    .await
-    .map_err(|e| anyhow::anyhow!("Task join error: {}", e))?
 }
 
 /// Helper to emit CoverUpdated event for a series

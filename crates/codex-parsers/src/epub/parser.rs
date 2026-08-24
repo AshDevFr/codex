@@ -1,10 +1,10 @@
 use crate::error::{ParserError, Result};
-use crate::image_utils::{get_image_format, get_svg_dimensions, is_image_file};
+use crate::image_utils::{get_image_format, is_image_file};
 use crate::isbn_utils::extract_isbns;
 use crate::metadata::{SpineItem, compute_epub_positions};
 use crate::opf;
 use crate::traits::FormatParser;
-use crate::{BookMetadata, FileFormat, ImageFormat, PageInfo};
+use crate::{BookMetadata, FileFormat, PageInfo};
 use chrono::{DateTime, Utc};
 use codex_utils::hash_file;
 use std::collections::HashMap;
@@ -438,20 +438,12 @@ impl FormatParser for EpubParser {
             let mut image_data = Vec::new();
             file.read_to_end(&mut image_data)?;
 
-            // Get image dimensions (with special handling for SVG)
-            let (width, height) = if format == ImageFormat::SVG {
-                // Use resvg to get SVG dimensions
-                match get_svg_dimensions(&image_data) {
-                    Some((w, h)) => (w, h),
-                    None => continue, // Skip if we can't parse the SVG
-                }
-            } else {
-                // Raster formats: read dimensions from the header only, never
-                // decode the full image (a bomb header would allocate gigabytes).
-                match crate::image_utils::raster_dimensions(&image_data) {
-                    Some(dims) => dims,
-                    None => continue, // Skip if we can't read the dimensions
-                }
+            // Dimensions, never by decoding: a bomb header would allocate
+            // gigabytes, and SVG, JXL and AVIF each need a reader of their own.
+            let Some((width, height)) =
+                crate::image_utils::dimensions_for_format(format, &image_data)
+            else {
+                continue; // Skip if we can't read the dimensions
             };
 
             pages.push(PageInfo {

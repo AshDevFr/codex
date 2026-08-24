@@ -52,6 +52,119 @@ pub fn create_test_jpeg(width: u32, height: u32) -> Vec<u8> {
     buffer
 }
 
+/// Create a simple test AVIF image using the image crate
+///
+/// The `image` crate is built with AVIF encoding but not decoding, so these
+/// bytes round-trip through the container parser rather than a decoder.
+pub fn create_test_avif(width: u32, height: u32) -> Vec<u8> {
+    let img: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::from_fn(width, height, |x, y| {
+        if (x + y) % 2 == 0 {
+            Rgb([255, 0, 0])
+        } else {
+            Rgb([0, 0, 255])
+        }
+    });
+
+    let mut buffer = Vec::new();
+    img.write_to(
+        &mut std::io::Cursor::new(&mut buffer),
+        image::ImageFormat::Avif,
+    )
+    .unwrap();
+
+    buffer
+}
+
+/// Create a simple test WebP image using the image crate
+pub fn create_test_webp(width: u32, height: u32) -> Vec<u8> {
+    let img: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::from_fn(width, height, |x, y| {
+        if (x + y) % 2 == 0 {
+            Rgb([255, 0, 0])
+        } else {
+            Rgb([0, 0, 255])
+        }
+    });
+
+    let mut buffer = Vec::new();
+    img.write_to(
+        &mut std::io::Cursor::new(&mut buffer),
+        image::ImageFormat::WebP,
+    )
+    .unwrap();
+
+    buffer
+}
+
+/// Create a CBZ mixing AVIF and WebP pages, in the given entry order.
+///
+/// Page numbering is positional over the accepted entries, so an archive that
+/// interleaves the two formats is what proves AVIF entries take their place in
+/// the sequence rather than being dropped out of it.
+pub fn create_mixed_avif_webp_cbz(temp_dir: &TempDir) -> PathBuf {
+    let cbz_path = temp_dir.path().join("mixed_avif_webp.cbz");
+    let file = File::create(&cbz_path).unwrap();
+    let mut zip = ZipWriter::new(file);
+
+    let options: FileOptions<'_, ()> =
+        FileOptions::default().compression_method(zip::CompressionMethod::Stored);
+
+    zip.start_file("page001.webp", options).unwrap();
+    zip.write_all(&create_test_webp(10, 14)).unwrap();
+
+    zip.start_file("page002.avif", options).unwrap();
+    zip.write_all(&create_test_avif(20, 28)).unwrap();
+
+    zip.start_file("page003.webp", options).unwrap();
+    zip.write_all(&create_test_webp(30, 42)).unwrap();
+
+    zip.start_file("page004.avif", options).unwrap();
+    zip.write_all(&create_test_avif(40, 56)).unwrap();
+
+    zip.finish().unwrap();
+    cbz_path
+}
+
+/// Create a CBZ whose first page is AVIF and whose second is WebP.
+///
+/// The server has no AVIF decoder, so the first page cannot be turned into a
+/// thumbnail; the cover renderer must walk past it rather than give up.
+pub fn create_avif_first_cbz(temp_dir: &TempDir) -> PathBuf {
+    let cbz_path = temp_dir.path().join("avif_first.cbz");
+    let file = File::create(&cbz_path).unwrap();
+    let mut zip = ZipWriter::new(file);
+
+    let options: FileOptions<'_, ()> =
+        FileOptions::default().compression_method(zip::CompressionMethod::Stored);
+
+    zip.start_file("page001.avif", options).unwrap();
+    zip.write_all(&create_test_avif(40, 56)).unwrap();
+
+    zip.start_file("page002.webp", options).unwrap();
+    zip.write_all(&create_test_webp(20, 28)).unwrap();
+
+    zip.finish().unwrap();
+    cbz_path
+}
+
+/// Create a CBZ whose every page is AVIF, so nothing in it can be decoded here.
+pub fn create_all_avif_cbz(temp_dir: &TempDir) -> PathBuf {
+    let cbz_path = temp_dir.path().join("all_avif.cbz");
+    let file = File::create(&cbz_path).unwrap();
+    let mut zip = ZipWriter::new(file);
+
+    let options: FileOptions<'_, ()> =
+        FileOptions::default().compression_method(zip::CompressionMethod::Stored);
+
+    for i in 1..=3 {
+        zip.start_file(format!("page{:03}.avif", i), options)
+            .unwrap();
+        zip.write_all(&create_test_avif(40, 56)).unwrap();
+    }
+
+    zip.finish().unwrap();
+    cbz_path
+}
+
 /// Create a test CBZ file with the specified number of pages
 pub fn create_test_cbz(temp_dir: &TempDir, num_pages: usize, with_comic_info: bool) -> PathBuf {
     let cbz_path = temp_dir.path().join("test_comic.cbz");
@@ -190,6 +303,69 @@ pub fn create_test_epub(temp_dir: &TempDir, num_chapters: usize, num_images: usi
             .unwrap();
         zip.write_all(&image_data).unwrap();
     }
+
+    zip.finish().unwrap();
+    epub_path
+}
+
+/// Create an EPUB carrying one PNG image and one AVIF image.
+///
+/// `is_image_file` gates EPUB image discovery just as it gates comic archives,
+/// so widening it to AVIF has to be checked here too.
+pub fn create_test_epub_with_avif_image(temp_dir: &TempDir) -> PathBuf {
+    let epub_path = temp_dir.path().join("avif_book.epub");
+    let file = File::create(&epub_path).unwrap();
+    let mut zip = ZipWriter::new(file);
+
+    let options: FileOptions<'_, ()> =
+        FileOptions::default().compression_method(zip::CompressionMethod::Stored);
+
+    zip.start_file("mimetype", options).unwrap();
+    zip.write_all(b"application/epub+zip").unwrap();
+
+    let container_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>"#;
+    zip.start_file("META-INF/container.xml", options).unwrap();
+    zip.write_all(container_xml.as_bytes()).unwrap();
+
+    let content_opf = r#"<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:title>AVIF EPUB</dc:title>
+    <dc:creator>Test Author</dc:creator>
+    <dc:identifier id="bookid">avif-epub-1</dc:identifier>
+    <dc:language>en</dc:language>
+  </metadata>
+  <manifest>
+    <item id="chapter1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
+    <item id="img1" href="images/image1.png" media-type="image/png"/>
+    <item id="img2" href="images/image2.avif" media-type="image/avif"/>
+  </manifest>
+  <spine>
+    <itemref idref="chapter1"/>
+  </spine>
+</package>"#;
+    zip.start_file("OEBPS/content.opf", options).unwrap();
+    zip.write_all(content_opf.as_bytes()).unwrap();
+
+    let chapter = r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head><title>Chapter 1</title></head>
+<body><h1>Chapter 1</h1></body>
+</html>"#;
+    zip.start_file("OEBPS/chapter1.xhtml", options).unwrap();
+    zip.write_all(chapter.as_bytes()).unwrap();
+
+    zip.start_file("OEBPS/images/image1.png", options).unwrap();
+    zip.write_all(&create_test_png(10, 14)).unwrap();
+
+    zip.start_file("OEBPS/images/image2.avif", options).unwrap();
+    zip.write_all(&create_test_avif(20, 28)).unwrap();
 
     zip.finish().unwrap();
     epub_path

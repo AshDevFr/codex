@@ -19,6 +19,14 @@ use tokio_util::io::ReaderStream;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
+/// How many leading pages to try when rendering a cover.
+///
+/// A page can be extractable yet not decodable here (an AVIF page, or a corrupt
+/// one), so the first page is not always usable. Small on purpose: if the first
+/// few pages of a book cannot be decoded, the placeholder is the honest answer
+/// and walking a 200-page archive to find out is not worth the I/O.
+const COVER_DECODE_ATTEMPTS: i32 = 5;
+
 use codex_config::FilesConfig;
 use codex_db::entities::books;
 use codex_db::repositories::{BookRepository, SeriesRepository, SettingsRepository};
@@ -963,15 +971,17 @@ impl ThumbnailService {
         // Get settings from database
         let settings = self.get_settings(db).await?;
 
-        // Extract cover image or generate placeholder for EPUB
-        // Uses file_name as title fallback when no metadata is available
-        let image_data = self
-            .extract_cover_image_or_placeholder(book, settings.max_dimension, None, None)
+        // Render the cover, falling back through later pages and then to a
+        // placeholder. Uses file_name as title fallback when no metadata exists.
+        let thumbnail_data = self
+            .render_cover_thumbnail(
+                book,
+                settings.max_dimension,
+                settings.jpeg_quality,
+                None,
+                None,
+            )
             .await?;
-
-        // Generate thumbnail (resize if it's a real image, placeholder is already sized)
-        let thumbnail_data =
-            self.resize_image(&image_data, settings.max_dimension, settings.jpeg_quality)?;
 
         // Save to cache
         self.save_thumbnail(book.id, &thumbnail_data).await?;
@@ -1153,21 +1163,27 @@ impl ThumbnailService {
         })
     }
 
-    /// Extract cover image (first page) from a book with fallback for corrupted images
+    /// Extract one candidate cover page from a book.
     ///
-    /// This method tries to extract the first valid image from the book.
-    /// If the first image is corrupted, it will try subsequent images.
-    async fn extract_cover_image(&self, book: &books::Model) -> Result<Vec<u8>> {
+    /// `fallback_on_invalid` is on for the archive formats, so an entry whose
+    /// bytes are not a recognisable image is skipped here rather than returned.
+    /// That check is on magic bytes only, though, so bytes that are recognisable
+    /// but not decodable still come back; see [`Self::render_cover_thumbnail`].
+    async fn extract_cover_page(&self, book: &books::Model, page_number: i32) -> Result<Vec<u8>> {
         let path = Path::new(&book.path);
 
-        // Use the appropriate parser extraction function based on format
-        // Enable fallback mode to skip corrupted images
         let image_data = match book.format.to_uppercase().as_str() {
-            "CBZ" => codex_parsers::cbz::extract_page_from_cbz_with_fallback(path, 1, true)?,
+            "CBZ" => {
+                codex_parsers::cbz::extract_page_from_cbz_with_fallback(path, page_number, true)?
+            }
             #[cfg(feature = "rar")]
-            "CBR" => codex_parsers::cbr::extract_page_from_cbr_with_fallback(path, 1, true)?,
-            "EPUB" => codex_parsers::epub::extract_page_from_epub_with_fallback(path, 1, true)?,
-            "PDF" => codex_parsers::pdf::extract_page_from_pdf(path, 1)?,
+            "CBR" => {
+                codex_parsers::cbr::extract_page_from_cbr_with_fallback(path, page_number, true)?
+            }
+            "EPUB" => {
+                codex_parsers::epub::extract_page_from_epub_with_fallback(path, page_number, true)?
+            }
+            "PDF" => codex_parsers::pdf::extract_page_from_pdf(path, page_number)?,
             _ => {
                 return Err(anyhow!(
                     "Unsupported format for thumbnail generation: {}",
@@ -1179,65 +1195,108 @@ impl ThumbnailService {
         Ok(image_data)
     }
 
-    /// Try to extract cover image, falling back to placeholder generation for EPUB
+    /// Render a book's cover thumbnail, falling back to a placeholder.
     ///
-    /// For EPUB files with no valid images, this will generate a placeholder
-    /// thumbnail with the book's title and author.
+    /// Walks the first few pages rather than insisting on page 1, because a page
+    /// can be perfectly serveable and still not decodable here. AVIF is the case
+    /// that forced this: those pages go to clients untouched and every client
+    /// renders them, but no AVIF decoder is linked into the server (see
+    /// `codex_parsers::avif` for why), so resizing one cannot work. The old code
+    /// treated that as a hard failure and left the book with no cover at all.
+    ///
+    /// The same walk covers an ordinary corrupt page, which fails here for
+    /// unrelated reasons and used to be fatal for every format except EPUB.
     ///
     /// # Arguments
     /// * `book` - The book model
     /// * `max_dimension` - Maximum dimension for the thumbnail
+    /// * `jpeg_quality` - JPEG quality for the encoded thumbnail
     /// * `title` - Optional title override (uses file_name if None)
-    /// * `author` - Optional author for placeholder
-    pub async fn extract_cover_image_or_placeholder(
+    /// * `author` - Optional author for the placeholder
+    pub async fn render_cover_thumbnail(
         &self,
         book: &books::Model,
         max_dimension: u32,
+        jpeg_quality: u8,
         title: Option<&str>,
         author: Option<&str>,
     ) -> Result<Vec<u8>> {
-        // First try to extract the cover image
-        match self.extract_cover_image(book).await {
-            Ok(data) => Ok(data),
-            Err(e) => {
-                // For EPUB files, generate a placeholder when no valid images found
-                if book.format.to_uppercase() == "EPUB" {
-                    let display_title = title.unwrap_or(&book.file_name);
-                    info!(
+        let mut last_error: Option<anyhow::Error> = None;
+
+        for page_number in 1..=COVER_DECODE_ATTEMPTS {
+            let image_data = match self.extract_cover_page(book, page_number).await {
+                Ok(data) => data,
+                Err(e) => {
+                    // Out of pages, or the format has none at all. Either way
+                    // there is nothing further to try.
+                    last_error = Some(e);
+                    break;
+                }
+            };
+
+            match self.resize_image(&image_data, max_dimension, jpeg_quality) {
+                Ok(thumbnail) => {
+                    if page_number > 1 {
+                        info!(
+                            book_id = %book.id,
+                            page = page_number,
+                            "Used a later page for the cover; earlier pages could not be decoded"
+                        );
+                    }
+                    return Ok(thumbnail);
+                }
+                Err(e) => {
+                    debug!(
                         book_id = %book.id,
-                        title = %display_title,
+                        page = page_number,
                         error = %e,
-                        "No valid cover image found, generating placeholder thumbnail"
+                        "Cover candidate could not be decoded, trying the next page"
                     );
-
-                    // Generate placeholder thumbnail
-                    let info = PlaceholderInfo {
-                        title: display_title.to_string(),
-                        author: author.map(|s| s.to_string()),
-                        format: book.format.clone(),
-                    };
-
-                    // Use 2:3 aspect ratio for book covers (typical for ebooks)
-                    let width = max_dimension;
-                    let height = (max_dimension as f32 * 1.5) as u32;
-
-                    let placeholder_img = generate_placeholder_thumbnail(&info, width, height)?;
-
-                    // Encode as JPEG
-                    let mut output = Cursor::new(Vec::new());
-                    let mut encoder =
-                        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut output, 85);
-                    encoder
-                        .encode_image(&placeholder_img)
-                        .context("Failed to encode placeholder thumbnail as JPEG")?;
-
-                    Ok(output.into_inner())
-                } else {
-                    // For other formats, propagate the error
-                    Err(e)
+                    last_error = Some(e);
                 }
             }
         }
+
+        let display_title = title.unwrap_or(&book.file_name);
+        info!(
+            book_id = %book.id,
+            title = %display_title,
+            error = ?last_error.map(|e| e.to_string()),
+            "No decodable cover image found, generating placeholder thumbnail"
+        );
+
+        self.placeholder_thumbnail(book, max_dimension, jpeg_quality, title, author)
+    }
+
+    /// Build a title/author placeholder thumbnail for a book with no usable cover.
+    fn placeholder_thumbnail(
+        &self,
+        book: &books::Model,
+        max_dimension: u32,
+        jpeg_quality: u8,
+        title: Option<&str>,
+        author: Option<&str>,
+    ) -> Result<Vec<u8>> {
+        let info = PlaceholderInfo {
+            title: title.unwrap_or(&book.file_name).to_string(),
+            author: author.map(|s| s.to_string()),
+            format: book.format.clone(),
+        };
+
+        // Use 2:3 aspect ratio for book covers (typical for ebooks)
+        let width = max_dimension;
+        let height = (max_dimension as f32 * 1.5) as u32;
+
+        let placeholder_img = generate_placeholder_thumbnail(&info, width, height)?;
+
+        let mut output = Cursor::new(Vec::new());
+        let mut encoder =
+            image::codecs::jpeg::JpegEncoder::new_with_quality(&mut output, jpeg_quality);
+        encoder
+            .encode_image(&placeholder_img)
+            .context("Failed to encode placeholder thumbnail as JPEG")?;
+
+        Ok(output.into_inner())
     }
 
     /// Resize an image to thumbnail size

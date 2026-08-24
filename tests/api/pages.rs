@@ -852,3 +852,125 @@ async fn test_get_page_image_serves_the_entry_the_page_row_names() {
         "page 2 must serve the entry its page row names, not the entry at index 1"
     );
 }
+
+// ============================================================================
+// AVIF pages are listed, counted and served
+// ============================================================================
+
+/// Seed a book backed by a real mixed AVIF/WebP archive, with the page rows the
+/// scanner produces for it.
+async fn seed_mixed_avif_webp_book(
+    db: &sea_orm::DatabaseConnection,
+    cbz_temp_dir: &TempDir,
+) -> codex::db::entities::books::Model {
+    let cbz_path = create_mixed_avif_webp_cbz(cbz_temp_dir);
+
+    let library = LibraryRepository::create(
+        db,
+        "Test Library",
+        cbz_temp_dir.path().to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    let series = SeriesRepository::create(db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    let book = create_test_book_model(
+        series.id,
+        library.id,
+        cbz_path.to_str().unwrap(),
+        "mixed_avif_webp.cbz",
+        "cbz",
+        true,
+        4,
+    );
+    let book = BookRepository::create(db, &book, None).await.unwrap();
+
+    for (number, name, format) in [
+        (1, "page001.webp", "webp"),
+        (2, "page002.avif", "avif"),
+        (3, "page003.webp", "webp"),
+        (4, "page004.avif", "avif"),
+    ] {
+        let page = create_test_page_model(book.id, number, name, format);
+        PageRepository::create(db, &page).await.unwrap();
+    }
+
+    book
+}
+
+#[tokio::test]
+async fn test_list_book_pages_includes_avif_pages() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let cbz_temp_dir = TempDir::new().unwrap();
+    let book = seed_mixed_avif_webp_book(&db, &cbz_temp_dir).await;
+
+    let state = create_test_app_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_app_state(state);
+
+    let request = get_request_with_auth(&format!("/api/v1/books/{}/pages", book.id), &token);
+    let (status, response): (StatusCode, Option<Vec<PageDto>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let pages = response.expect("Expected pages response");
+
+    assert_eq!(pages.len(), 4, "AVIF pages must be listed like any other");
+    assert_eq!(book.page_count, 4, "page_count must include AVIF pages");
+    assert_eq!(pages[1].page_number, 2);
+    assert_eq!(pages[1].file_format, "avif");
+    assert_eq!(pages[3].file_format, "avif");
+}
+
+#[tokio::test]
+async fn test_get_page_image_serves_an_avif_page_as_avif() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let cbz_temp_dir = TempDir::new().unwrap();
+    let book = seed_mixed_avif_webp_book(&db, &cbz_temp_dir).await;
+
+    let state = create_test_app_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_app_state(state);
+
+    let request = get_request_with_auth(&format!("/api/v1/books/{}/pages/2", book.id), &token);
+    let (status, headers, body) = make_full_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(headers.get("content-type").unwrap(), "image/avif");
+    assert_eq!(
+        &body[4..12],
+        b"ftypavif",
+        "the AVIF bytes must be served untouched"
+    );
+}
+
+/// `?width` cannot resize an AVIF page, because no AVIF decoder is linked. It
+/// must serve the original rather than failing or attempting the decode.
+#[tokio::test]
+async fn test_page_width_query_serves_avif_untouched() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let cbz_temp_dir = TempDir::new().unwrap();
+    let book = seed_mixed_avif_webp_book(&db, &cbz_temp_dir).await;
+
+    let state = create_test_app_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_app_state(state);
+
+    let request = get_request_with_auth(
+        &format!("/api/v1/books/{}/pages/2?width=320", book.id),
+        &token,
+    );
+    let (status, headers, body) = make_full_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        headers.get("content-type").unwrap(),
+        "image/avif",
+        "a downscale that cannot run must not change the media type"
+    );
+    assert_eq!(&body[4..12], b"ftypavif");
+}

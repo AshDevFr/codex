@@ -4,6 +4,7 @@
 //! Owns its own [`ParserError`] / [`Result`] types. Depends on `codex-utils`
 //! only for the file-level hasher. No upward deps to db/services/api.
 
+pub mod avif;
 #[cfg(feature = "rar")]
 pub mod cbr;
 pub mod cbz;

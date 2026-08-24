@@ -262,3 +262,33 @@ fn test_epub_parser_basic_epub_has_metadata() {
     assert!(ci.genre.is_none());
     assert!(ci.series.is_none());
 }
+
+/// EPUB image discovery goes through the same extension gate as comic archives,
+/// so an AVIF illustration must be found and measured here too.
+#[test]
+fn test_epub_with_avif_image_lists_it_as_a_page() {
+    let temp_dir = TempDir::new().unwrap();
+    let epub_path = common::create_test_epub_with_avif_image(&temp_dir);
+
+    let metadata = EpubParser::new().parse(&epub_path).unwrap();
+
+    let avif_page = metadata
+        .pages
+        .iter()
+        .find(|p| p.file_name.ends_with(".avif"))
+        .expect("the AVIF image must be discovered as a page");
+
+    assert_eq!(avif_page.format, ImageFormat::AVIF);
+    assert_eq!(
+        (avif_page.width, avif_page.height),
+        (20, 28),
+        "AVIF dimensions come from the container, not a decoder"
+    );
+
+    let png_page = metadata
+        .pages
+        .iter()
+        .find(|p| p.file_name.ends_with(".png"))
+        .expect("the PNG image must still be discovered");
+    assert_eq!((png_page.width, png_page.height), (10, 14));
+}
