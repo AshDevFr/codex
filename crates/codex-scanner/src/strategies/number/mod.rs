@@ -23,8 +23,14 @@ use codex_models::NumberStrategy;
 /// Context for resolving book numbers
 #[derive(Debug, Clone)]
 pub struct NumberContext {
-    /// Position of this book in the sorted file list (1-indexed)
-    pub file_order_position: usize,
+    /// Position of this book in the sorted file list (1-indexed).
+    ///
+    /// `None` when the caller has no complete view of the series. A position
+    /// is only meaningful against the full set of books, so callers that see
+    /// a partial set (per-book analysis, which runs while a scan is still
+    /// inserting siblings) must leave this unset rather than hand out a
+    /// position two books could end up sharing.
+    pub file_order_position: Option<usize>,
     /// Total books in series (for reference)
     pub total_books: usize,
 }
@@ -32,8 +38,17 @@ pub struct NumberContext {
 impl NumberContext {
     pub fn new(file_order_position: usize, total_books: usize) -> Self {
         Self {
-            file_order_position,
+            file_order_position: Some(file_order_position),
             total_books,
+        }
+    }
+
+    /// Context for a caller that cannot see the whole series, so positional
+    /// strategies decline to produce a number instead of guessing one.
+    pub fn without_position() -> Self {
+        Self {
+            file_order_position: None,
+            total_books: 0,
         }
     }
 }
@@ -53,7 +68,8 @@ pub trait BookNumberStrategy: Send + Sync {
     /// Resolve the book number
     ///
     /// Returns `Some(number)` if a number can be determined, `None` otherwise.
-    /// Note: For file_order strategy, this always returns Some since position is always available.
+    /// Positional strategies return `None` when the context carries no
+    /// position, leaving the number for the renumber pass to assign.
     fn resolve_number(
         &self,
         file_name: &str,
@@ -106,7 +122,7 @@ mod tests {
     #[test]
     fn test_number_context() {
         let ctx = NumberContext::new(5, 100);
-        assert_eq!(ctx.file_order_position, 5);
+        assert_eq!(ctx.file_order_position, Some(5));
         assert_eq!(ctx.total_books, 100);
     }
 }

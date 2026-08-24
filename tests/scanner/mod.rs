@@ -7,6 +7,7 @@ mod book_analysis_metadata;
 mod book_naming_strategy;
 mod core;
 mod force_analysis;
+mod number_race;
 mod scan_scaling;
 mod series_matching;
 mod soft_delete;

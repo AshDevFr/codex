@@ -33,8 +33,9 @@ impl BookNumberStrategy for FileOrderStrategy {
         _metadata: Option<&NumberMetadata>,
         context: &NumberContext,
     ) -> Option<f32> {
-        // Always use the file order position (1-indexed)
-        Some(context.file_order_position as f32)
+        // Position (1-indexed) is the whole definition of this strategy, so
+        // without one there is nothing to resolve.
+        context.file_order_position.map(|p| p as f32)
     }
 }
 
@@ -92,6 +93,14 @@ mod tests {
         // Should ignore any number patterns in filename
         let number = strategy.resolve_number("Batman #042.cbz", None, &ctx);
         assert_eq!(number, Some(7.0));
+    }
+
+    #[test]
+    fn test_no_number_without_position() {
+        let strategy = FileOrderStrategy::new();
+        let ctx = NumberContext::without_position();
+
+        assert_eq!(strategy.resolve_number("book.cbz", None, &ctx), None);
     }
 
     #[test]

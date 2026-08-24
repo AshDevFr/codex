@@ -43,8 +43,8 @@ impl BookNumberStrategy for SmartStrategy {
             return Some(num);
         }
 
-        // 3. Fall back to file order
-        Some(context.file_order_position as f32)
+        // 3. Fall back to file order, when the caller knows the position
+        context.file_order_position.map(|p| p as f32)
     }
 }
 

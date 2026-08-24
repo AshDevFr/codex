@@ -82,6 +82,7 @@ import { useSeriesTracking } from "@/hooks/useSeriesTracking";
 import { useShowSkeleton } from "@/lib/motion/useShowSkeleton";
 import { useCoverUpdatesStore } from "@/store/coverUpdatesStore";
 import { PERMISSIONS } from "@/types/permissions";
+import { compareBooksByNumber } from "@/utils/bookSort";
 import { transformFullSeriesToSeriesContext } from "@/utils/templateUtils";
 
 // Helper to format reading direction
@@ -201,9 +202,7 @@ export function SeriesDetail() {
   // Find the next book to read: first in-progress book (by number), or first unread book
   const nextBook = useMemo(() => {
     if (!seriesBooks?.length) return null;
-    const sorted = [...seriesBooks].sort(
-      (a, b) => (a.number ?? 0) - (b.number ?? 0),
-    );
+    const sorted = [...seriesBooks].sort((a, b) => compareBooksByNumber(a, b));
     // Prefer the first book that is in-progress (has progress but not completed)
     const inProgress = sorted.find(
       (b) => b.readProgress && !b.readProgress.completed,

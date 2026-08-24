@@ -10,8 +10,8 @@ use uuid::Uuid;
 
 use crate::analyze_file;
 use crate::strategies::{
-    BookMetadata, BookNamingContext, NumberContext, NumberMetadata, create_book_strategy,
-    create_number_strategy,
+    BookMetadata, BookNamingContext, BookNumberStrategy, FilenameStrategy, NumberContext,
+    NumberMetadata, create_book_strategy, create_number_strategy,
 };
 use codex_db::entities::book_error::{BookError, BookErrorType};
 use codex_db::entities::{book_metadata, books, pages};
@@ -285,7 +285,16 @@ async fn analyze_single_book(
         .and_then(|n| n.parse::<f32>().ok());
 
     // Resolve book number using the library's number strategy
-    let resolved_number = resolve_book_number(db, &book, &metadata, metadata_number).await;
+    let ResolvedNumber {
+        number: resolved_number,
+        needs_renumber,
+    } = resolve_book_number(db, &book, &metadata, metadata_number).await;
+
+    // Strategies that number by position need the whole series in view, which
+    // analysis never has. Hand that off to a renumber pass.
+    if needs_renumber {
+        queue_renumber(db, book.series_id).await;
+    }
 
     // Resolve book title using the library's book metadata strategy.
     // Note: title and number are now stored in book_metadata, not books table.
@@ -1221,13 +1230,24 @@ fn filename_fallback(file_name: &str) -> String {
     }
 }
 
-/// Resolve book number using the library's number strategy
+/// Resolve book number using the library's number strategy.
+///
+/// Only sources that depend on this file alone are consulted here: the
+/// embedded metadata number and the filename. A book's position within its
+/// series deliberately is not, because analysis runs per book while a scan is
+/// still inserting siblings, so any position computed now is taken against a
+/// partial series. Two books analyzed at different moments would be handed the
+/// same position, which is how duplicate numbers and gaps appeared.
+///
+/// When the strategy has no file-local source to fall back on, the number
+/// comes back as `None` with `needs_renumber` set, and the caller queues a
+/// renumber pass to assign positions once from a complete view of the series.
 async fn resolve_book_number(
     db: &DatabaseConnection,
     book: &books::Model,
     _file_metadata: &codex_parsers::BookMetadata,
     metadata_number: Option<f32>,
-) -> Option<f32> {
+) -> ResolvedNumber {
     // Get library to determine number strategy
     let library = match LibraryRepository::get_by_id(db, book.library_id).await {
         Ok(Some(lib)) => lib,
@@ -1238,7 +1258,10 @@ async fn resolve_book_number(
                 book.id
             );
             // We don't have file order position here, so fall back to metadata
-            return metadata_number;
+            return ResolvedNumber {
+                number: metadata_number,
+                needs_renumber: metadata_number.is_none(),
+            };
         }
     };
 
@@ -1250,56 +1273,52 @@ async fn resolve_book_number(
     let number_config_str = library.number_config.as_ref().map(|v| v.to_string());
     let strategy = create_number_strategy(number_strategy, number_config_str.as_deref());
 
-    // For file_order strategy, we need the book's position in the series
-    // Get total books in series and calculate position
-    let (file_order_position, total_books) =
-        match get_book_position_in_series(db, book.series_id, &book.file_name).await {
-            Ok((pos, total)) => (pos, total),
-            Err(_) => {
-                // Fallback: use 1 as position if we can't determine
-                warn!(
-                    "Could not determine file order position for book {}, using 1",
-                    book.id
-                );
-                (1, 1)
-            }
-        };
-
     // Build number metadata
     let number_metadata = NumberMetadata {
         number: metadata_number,
     };
 
-    // Build number context
-    let context = NumberContext::new(file_order_position, total_books);
+    let number = strategy.resolve_number(
+        &book.file_name,
+        Some(&number_metadata),
+        &NumberContext::without_position(),
+    );
 
-    // Resolve number using strategy
-    strategy.resolve_number(&book.file_name, Some(&number_metadata), &context)
+    // FileOrder and Smart fall back to a position, which only a pass over the
+    // whole series can supply. Metadata and Filename have nothing else to try.
+    let positional = matches!(
+        number_strategy,
+        NumberStrategy::FileOrder | NumberStrategy::Smart
+    );
+
+    ResolvedNumber {
+        needs_renumber: number.is_none() && positional,
+        number,
+    }
 }
 
-/// Get the position of a book within its series (sorted by filename using natural sort order)
-async fn get_book_position_in_series(
-    db: &DatabaseConnection,
-    series_id: Uuid,
-    file_name: &str,
-) -> Result<(usize, usize)> {
-    // Get all books in the series (not including deleted)
-    let books = BookRepository::list_by_series(db, series_id, false).await?;
+/// Outcome of numbering a book from the file alone.
+struct ResolvedNumber {
+    /// The number, when the file itself could supply one.
+    number: Option<f32>,
+    /// Set when the number has to come from the book's position in its series,
+    /// which analysis cannot determine on its own.
+    needs_renumber: bool,
+}
 
-    let total = books.len();
-
-    // Sort by filename using natural sort order so "Vol. 2" comes before "Vol. 10"
-    let mut sorted_names: Vec<&str> = books.iter().map(|b| b.file_name.as_str()).collect();
-    sorted_names.sort_by(|a, b| codex_utils::natural_cmp_filename(a, b));
-
-    // Find position of this book (1-indexed)
-    let position = sorted_names
-        .iter()
-        .position(|name| *name == file_name)
-        .map(|p| p + 1) // Convert to 1-indexed
-        .unwrap_or(1); // Fallback to 1 if not found
-
-    Ok((position, total))
+/// Queue a renumber pass for a series whose books need positional numbers.
+///
+/// `TaskRepository::enqueue` deduplicates on (task type, series), so a scan
+/// analyzing hundreds of books collapses onto a single pending task. The task
+/// sits at a lower priority than analysis, so the worker drains every
+/// AnalyzeBook first and the pass runs against the finished series. If more
+/// books land afterwards their analysis queues another pass, so numbering
+/// converges without analysis ever writing a position itself.
+async fn queue_renumber(db: &DatabaseConnection, series_id: Uuid) {
+    if let Err(e) = TaskRepository::enqueue(db, TaskType::RenumberSeries { series_id }, None).await
+    {
+        warn!("Failed to queue renumber for series {}: {}", series_id, e);
+    }
 }
 
 /// Renumber all books in a series using the library's number strategy
@@ -1416,6 +1435,20 @@ pub async fn renumber_series_books(
             .unwrap_or(1);
 
         let context = NumberContext::new(file_order_position, total_active);
+
+        // Smart prefers the ComicInfo number, which this pass cannot see
+        // without re-parsing every file. Rewriting such a book would swap a
+        // metadata number for a positional guess, so for Smart only touch
+        // books the filename can still account for, plus those with no number
+        // yet. FileOrder and Filename recompute from scratch safely.
+        if number_strategy == NumberStrategy::Smart
+            && metadata.number.is_some()
+            && FilenameStrategy::new()
+                .resolve_number(&book.file_name, None, &context)
+                .is_none()
+        {
+            continue;
+        }
 
         // We pass None for embedded metadata number since we don't have the raw
         // ComicInfo.xml data. This is fine because:

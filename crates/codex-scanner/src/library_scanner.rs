@@ -1181,23 +1181,30 @@ async fn process_series_batched(
         result.errors.extend(errors);
     }
 
-    // Renumber all books in the series when the series composition changed
-    // (new books added to an existing series).
-    // This ensures book numbers reflect the correct natural sort order
-    // even for books that weren't re-analyzed in this scan.
-    if result.books_created > 0 && !is_new_series {
-        match super::renumber_series_books(db, series_model.id, library.id).await {
-            Ok(count) => {
-                if count > 0 {
-                    debug!(
-                        "Renumbered {} books in series '{}' after adding new books",
-                        count, series_model.name
-                    );
-                }
+    // Queue a renumber when the series composition changed, so book numbers
+    // reflect the natural sort order of the finished series rather than of
+    // whatever subset existed mid-scan. This runs as a task, at a lower
+    // priority than analysis, so it sees every book this scan added, including
+    // those still queued for analysis. Enqueueing deduplicates per series.
+    if result.books_created > 0 {
+        match TaskRepository::enqueue(
+            db,
+            TaskType::RenumberSeries {
+                series_id: series_model.id,
+            },
+            None,
+        )
+        .await
+        {
+            Ok(task_id) => {
+                debug!(
+                    "Queued renumber task {} for series '{}' after adding new books",
+                    task_id, series_model.name
+                );
             }
             Err(e) => {
                 warn!(
-                    "Failed to renumber books in series '{}': {}",
+                    "Failed to queue renumber for series '{}': {}",
                     series_model.name, e
                 );
             }

@@ -18,7 +18,9 @@ pub use book::{BookMetadata, BookNamingContext, BookNamingStrategy, create_book_
 pub use common::{DetectedBook, DetectedSeries};
 
 // Re-export number strategy types
-pub use number::{NumberContext, NumberMetadata, create_number_strategy};
+pub use number::{
+    BookNumberStrategy, FilenameStrategy, NumberContext, NumberMetadata, create_number_strategy,
+};
 
 // Re-export series strategy types
 // ScanningStrategyImpl is public API for external strategy implementations

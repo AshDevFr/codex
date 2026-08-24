@@ -34,6 +34,7 @@ import {
 } from "@/store/libraryPreferencesStore";
 import { useUserPreferencesStore } from "@/store/userPreferencesStore";
 import type { Book } from "@/types";
+import { compareBooksByNumber } from "@/utils/bookSort";
 
 interface SeriesBookListProps {
   seriesId: string;
@@ -149,11 +150,18 @@ export function SeriesBookList({
     const books = [...allBooks];
     const [field, direction] = sort.split(",");
     books.sort((a, b) => {
+      // Number ordering owns its own direction so books still awaiting the
+      // renumber pass stay at the end rather than flipping to the top.
+      if (field === "number") {
+        return compareBooksByNumber(
+          a,
+          b,
+          direction === "desc" ? "desc" : "asc",
+        );
+      }
+
       let comparison = 0;
       switch (field) {
-        case "number":
-          comparison = (a.number ?? 0) - (b.number ?? 0);
-          break;
         case "title":
           comparison = a.title.localeCompare(b.title);
           break;

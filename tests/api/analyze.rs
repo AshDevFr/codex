@@ -454,11 +454,19 @@ async fn test_auto_analysis_queues_tasks() {
         "Books should be unanalyzed with analysis tasks queued"
     );
 
-    // Verify analysis tasks were actually queued
-    let stats = TaskRepository::get_stats(&db).await.unwrap();
+    // Verify analysis tasks were actually queued. Count analyze_book tasks
+    // specifically: a scan also queues a renumber pass for the series.
+    let analysis_tasks = TaskRepository::list(
+        &db,
+        Some("pending".to_string()),
+        Some("analyze_book".to_string()),
+        None,
+    )
+    .await
+    .unwrap();
     assert_eq!(
-        stats.pending,
-        unanalyzed_books.len() as u64,
+        analysis_tasks.len(),
+        unanalyzed_books.len(),
         "Should have analysis tasks queued for each unanalyzed book"
     );
 }
