@@ -7,9 +7,32 @@ use axum::{
     http::{HeaderValue, StatusCode, header},
     response::{IntoResponse, Response},
 };
+use codex_models::reading_direction::ReadingDirection;
 use serde::Serialize;
 
 use super::dto::common::PaginationLinkBuilder;
+use crate::error::ApiError;
+
+/// Validate a client-supplied reading direction.
+///
+/// The database columns are `String` because rows predating validation may hold
+/// anything, so the check lives here at the API boundary. Returns the canonical
+/// lowercase form, which means a client sending `"RTL"` stores the same value as
+/// one sending `"rtl"` and downstream resolution never has to case-fold.
+pub fn validate_reading_direction(value: &str) -> Result<String, ApiError> {
+    value
+        .parse::<ReadingDirection>()
+        .map(|direction| direction.as_str().to_string())
+        .map_err(ApiError::BadRequest)
+}
+
+/// [`validate_reading_direction`] for optional fields, where `None` means
+/// "no direction" rather than an invalid one.
+pub fn validate_optional_reading_direction(
+    value: Option<&str>,
+) -> Result<Option<String>, ApiError> {
+    value.map(validate_reading_direction).transpose()
+}
 
 /// Create a paginated response with Link headers (RFC 8288)
 ///

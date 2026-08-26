@@ -212,6 +212,7 @@ mod m20260820_000107_create_oidc_pending_states;
 mod m20260820_000108_create_user_plugin_oauth_states;
 mod m20260825_000109_seed_task_retention_setting;
 mod m20260825_000110_add_task_progress;
+mod m20260826_000111_normalize_library_reading_direction;
 
 pub struct Migrator;
 
@@ -405,6 +406,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260820_000108_create_user_plugin_oauth_states::Migration),
             Box::new(m20260825_000109_seed_task_retention_setting::Migration),
             Box::new(m20260825_000110_add_task_progress::Migration),
+            Box::new(m20260826_000111_normalize_library_reading_direction::Migration),
         ]
     }
 }

@@ -47,6 +47,7 @@ mod pool_contention;
 mod rate_limit;
 mod read_history;
 mod read_progress;
+mod reading_direction;
 mod reading_sessions;
 mod reading_stats;
 mod readlists;

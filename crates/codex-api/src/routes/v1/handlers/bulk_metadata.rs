@@ -82,7 +82,11 @@ pub async fn bulk_patch_series_metadata(
     let status_opt = request.status.into_nested_option();
     let age_rating_opt = request.age_rating.into_nested_option();
     let language_opt = request.language.into_nested_option();
-    let reading_direction_opt = request.reading_direction.into_nested_option();
+    let reading_direction_opt = request
+        .reading_direction
+        .into_nested_option()
+        .map(|opt| super::validate_optional_reading_direction(opt.as_deref()))
+        .transpose()?;
     let year_opt = request.year.into_nested_option();
     let total_volume_count_opt = request.total_volume_count.into_nested_option();
     let total_chapter_count_opt = request.total_chapter_count.into_nested_option();

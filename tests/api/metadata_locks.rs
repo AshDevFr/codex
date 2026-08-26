@@ -1529,7 +1529,7 @@ async fn test_patch_series_metadata_locks_every_field_it_writes() {
         "status": "ENDED",
         "ageRating": 18,
         "language": "en",
-        "readingDirection": "LEFT_TO_RIGHT",
+        "readingDirection": "ltr",
         "year": 1989,
         "totalVolumeCount": 10,
         "totalChapterCount": 75.0,

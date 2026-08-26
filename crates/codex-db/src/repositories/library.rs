@@ -134,7 +134,7 @@ impl LibraryRepository {
             scanning_config: Set(params.scanning_config),
             default_reading_direction: Set(params
                 .default_reading_direction
-                .unwrap_or_else(|| "LEFT_TO_RIGHT".to_string())),
+                .unwrap_or_else(|| "ltr".to_string())),
             allowed_formats: Set(params.allowed_formats),
             excluded_patterns: Set(params.excluded_patterns),
             title_preprocessing_rules: Set(params.title_preprocessing_rules),
@@ -665,8 +665,8 @@ mod tests {
         .await
         .unwrap();
 
-        // Should default to LEFT_TO_RIGHT
-        assert_eq!(library.default_reading_direction, "LEFT_TO_RIGHT");
+        // Should default to ltr
+        assert_eq!(library.default_reading_direction, "ltr");
     }
 
     #[tokio::test]
@@ -683,7 +683,7 @@ mod tests {
         .unwrap();
 
         // Update reading direction to right-to-left for manga
-        library.default_reading_direction = "RIGHT_TO_LEFT".to_string();
+        library.default_reading_direction = "rtl".to_string();
         LibraryRepository::update(db.sea_orm_connection(), &library)
             .await
             .unwrap();
@@ -693,7 +693,7 @@ mod tests {
             .unwrap()
             .unwrap();
 
-        assert_eq!(retrieved.default_reading_direction, "RIGHT_TO_LEFT");
+        assert_eq!(retrieved.default_reading_direction, "rtl");
     }
 
     #[tokio::test]
@@ -768,7 +768,7 @@ mod tests {
         .unwrap();
 
         // Update all new fields
-        library.default_reading_direction = "TOP_TO_BOTTOM".to_string();
+        library.default_reading_direction = "ttb".to_string();
         library.allowed_formats = Some(r#"["EPUB","PDF"]"#.to_string());
         library.excluded_patterns = Some("*.tmp\n*.bak".to_string());
 
@@ -781,7 +781,7 @@ mod tests {
             .unwrap()
             .unwrap();
 
-        assert_eq!(retrieved.default_reading_direction, "TOP_TO_BOTTOM");
+        assert_eq!(retrieved.default_reading_direction, "ttb");
         assert_eq!(
             retrieved.allowed_formats,
             Some(r#"["EPUB","PDF"]"#.to_string())

@@ -3248,7 +3248,9 @@ pub async fn replace_series_metadata(
     active.status = Set(request.status.clone());
     active.age_rating = Set(request.age_rating);
     active.language = Set(request.language.clone());
-    active.reading_direction = Set(request.reading_direction.clone());
+    active.reading_direction = Set(super::validate_optional_reading_direction(
+        request.reading_direction.as_deref(),
+    )?);
     active.year = Set(request.year);
     active.total_volume_count = Set(request.total_volume_count);
     active.total_chapter_count = Set(request.total_chapter_count);
@@ -3655,6 +3657,7 @@ pub async fn patch_series_metadata(
     }
     if let Some(opt) = request.reading_direction.into_nested_option() {
         let edited = opt.is_some();
+        let opt = super::validate_optional_reading_direction(opt.as_deref())?;
         metadata_active.reading_direction = Set(opt);
         if edited {
             metadata_active.reading_direction_lock = Set(true); // Auto-lock when user edits

@@ -31,6 +31,7 @@ use codex_db::repositories::{
     ReadProgressRepository, SeriesMetadataRepository, TagRepository,
 };
 use codex_models::pagination::Window;
+use codex_models::reading_direction::ReadingDirection;
 use codex_services::FilterService;
 use codex_utils::{
     json_merge_patch, normalize_for_search, parse_custom_metadata, serialize_custom_metadata,
@@ -352,10 +353,13 @@ pub async fn books_to_dtos(
             let read_progress = progress_map.get(&book.id).cloned();
 
             // Determine effective reading direction: series metadata > library default
-            let reading_direction = series_metadata_map
-                .get(&book.series_id)
-                .and_then(|m| m.reading_direction.clone())
-                .or_else(|| library.map(|l| l.default_reading_direction.clone()));
+            let reading_direction = ReadingDirection::resolve(&[
+                series_metadata_map
+                    .get(&book.series_id)
+                    .and_then(|m| m.reading_direction.as_deref()),
+                library.map(|l| l.default_reading_direction.as_str()),
+            ])
+            .map(|d| d.as_str().to_string());
 
             BookDto {
                 id: book.id,
@@ -530,9 +534,11 @@ pub async fn books_to_full_dtos_batched(
             .map(|d| d.to_string().parse::<i32>().unwrap_or(0));
 
         // Determine effective reading direction: series metadata > library default
-        let reading_direction = series_metadata
-            .and_then(|m| m.reading_direction.clone())
-            .or_else(|| library.map(|l| l.default_reading_direction.clone()));
+        let reading_direction = ReadingDirection::resolve(&[
+            series_metadata.and_then(|m| m.reading_direction.as_deref()),
+            library.map(|l| l.default_reading_direction.as_str()),
+        ])
+        .map(|d| d.as_str().to_string());
 
         let read_progress = progress_map.get(&book_id).cloned();
 

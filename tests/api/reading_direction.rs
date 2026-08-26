@@ -1,0 +1,295 @@
+//! Integration tests for reading direction: validation on write, and the
+//! layered resolution the reader depends on.
+
+#[path = "../common/mod.rs"]
+mod common;
+
+use codex::db::repositories::{LibraryRepository, SeriesMetadataRepository, UserRepository};
+use codex::utils::password;
+use common::*;
+use hyper::StatusCode;
+use serde_json::json;
+
+async fn admin_token(
+    db: &sea_orm::DatabaseConnection,
+    state: &codex::api::extractors::AuthState,
+) -> String {
+    let password_hash = password::hash_password("admin123").unwrap();
+    let user = create_test_user("admin", "admin@example.com", &password_hash, true);
+    let created = UserRepository::create(db, &user).await.unwrap();
+    state
+        .jwt_service
+        .generate_token(created.id, created.username.clone(), created.get_role())
+        .unwrap()
+}
+
+// ============================================================================
+// Validation on write
+// ============================================================================
+
+#[tokio::test]
+async fn patch_series_metadata_rejects_an_invalid_reading_direction() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let token = admin_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let library = create_test_library(&db, "Test Library", "/test/path").await;
+    let series = create_test_series(&db, &library, "Berserk").await;
+
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/series/{}/metadata", series.id),
+        &json!({ "readingDirection": "sideways" }),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    // The rejected write must not have landed.
+    let metadata = SeriesMetadataRepository::get_by_series_id(&db, series.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(metadata.reading_direction, None);
+}
+
+#[tokio::test]
+async fn patch_series_metadata_rejects_the_komga_vocabulary() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let token = admin_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let library = create_test_library(&db, "Test Library", "/test/path").await;
+    let series = create_test_series(&db, &library, "Berserk").await;
+
+    // Komga's wire vocabulary is not what this column stores. Accepting it
+    // silently is how the two vocabularies diverged in the first place.
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/series/{}/metadata", series.id),
+        &json!({ "readingDirection": "RIGHT_TO_LEFT" }),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn patch_series_metadata_canonicalises_case() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let token = admin_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let library = create_test_library(&db, "Test Library", "/test/path").await;
+    let series = create_test_series(&db, &library, "Berserk").await;
+
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/series/{}/metadata", series.id),
+        &json!({ "readingDirection": "RTL" }),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let metadata = SeriesMetadataRepository::get_by_series_id(&db, series.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(metadata.reading_direction, Some("rtl".to_string()));
+    assert!(metadata.reading_direction_lock);
+}
+
+#[tokio::test]
+async fn replace_series_metadata_rejects_an_invalid_reading_direction() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let token = admin_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let library = create_test_library(&db, "Test Library", "/test/path").await;
+    let series = create_test_series(&db, &library, "Berserk").await;
+
+    let request = put_json_request_with_auth(
+        &format!("/api/v1/series/{}/metadata", series.id),
+        &json!({ "title": "Berserk", "readingDirection": "sideways" }),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn creating_a_library_rejects_an_invalid_reading_direction() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let token = admin_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request = post_json_request_with_auth(
+        "/api/v1/libraries",
+        &json!({
+            "name": "Manga",
+            "path": "/manga",
+            "defaultReadingDirection": "sideways",
+        }),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn updating_a_library_rejects_an_invalid_reading_direction() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let token = admin_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let library = create_test_library(&db, "Test Library", "/test/path").await;
+
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/libraries/{}", library.id),
+        &json!({ "defaultReadingDirection": "LEFT_TO_RIGHT" }),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    let unchanged = LibraryRepository::get_by_id(&db, library.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(unchanged.default_reading_direction, "ltr");
+}
+
+// ============================================================================
+// Resolution
+// ============================================================================
+
+#[tokio::test]
+async fn a_new_library_defaults_to_the_canonical_lowercase_value() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // The repository default and the web form used to disagree, leaving rows
+    // the reader could not parse.
+    let library = create_test_library(&db, "Test Library", "/test/path").await;
+    assert_eq!(library.default_reading_direction, "ltr");
+}
+
+#[tokio::test]
+async fn book_reading_direction_prefers_series_over_library_default() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let token = admin_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let mut library = create_test_library(&db, "Test Library", "/test/path").await;
+    library.default_reading_direction = "ltr".to_string();
+    LibraryRepository::update(&db, &library).await.unwrap();
+
+    let series = create_test_series(&db, &library, "Berserk").await;
+    let book = create_test_book_with_hash(
+        &db,
+        &library,
+        &series,
+        "Vol 1",
+        "/test/path/v1.cbz",
+        "hash-1",
+    )
+    .await;
+
+    SeriesMetadataRepository::update_reading_direction(&db, series.id, Some("rtl".to_string()))
+        .await
+        .unwrap();
+
+    let request = get_request_with_auth(&format!("/api/v1/books/{}", book.id), &token);
+    let (status, response): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(response.unwrap()["book"]["readingDirection"], "rtl");
+}
+
+#[tokio::test]
+async fn an_unparseable_stored_direction_falls_through_to_the_library_default() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let token = admin_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let mut library = create_test_library(&db, "Test Library", "/test/path").await;
+    library.default_reading_direction = "rtl".to_string();
+    LibraryRepository::update(&db, &library).await.unwrap();
+
+    let series = create_test_series(&db, &library, "Berserk").await;
+    let book = create_test_book_with_hash(
+        &db,
+        &library,
+        &series,
+        "Vol 1",
+        "/test/path/v1.cbz",
+        "hash-1",
+    )
+    .await;
+
+    // Rows written before validation existed can hold anything. Writing through
+    // the repository bypasses the API boundary, which is exactly how such a row
+    // came to exist.
+    SeriesMetadataRepository::update_reading_direction(
+        &db,
+        series.id,
+        Some("sideways".to_string()),
+    )
+    .await
+    .unwrap();
+
+    let request = get_request_with_auth(&format!("/api/v1/books/{}", book.id), &token);
+    let (status, response): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    // Junk must not reach the reader, and must not mask the library default.
+    assert_eq!(response.unwrap()["book"]["readingDirection"], "rtl");
+}
+
+#[tokio::test]
+async fn a_series_without_a_direction_inherits_the_library_default() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let token = admin_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let mut library = create_test_library(&db, "Test Library", "/test/path").await;
+    library.default_reading_direction = "webtoon".to_string();
+    LibraryRepository::update(&db, &library).await.unwrap();
+
+    let series = create_test_series(&db, &library, "Solo Leveling").await;
+    let book = create_test_book_with_hash(
+        &db,
+        &library,
+        &series,
+        "Ch 1",
+        "/test/path/c1.cbz",
+        "hash-2",
+    )
+    .await;
+
+    let request = get_request_with_auth(&format!("/api/v1/books/{}", book.id), &token);
+    let (status, response): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(response.unwrap()["book"]["readingDirection"], "webtoon");
+}

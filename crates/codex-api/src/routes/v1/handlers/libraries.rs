@@ -282,7 +282,7 @@ pub async fn create_library(
     }
 
     if let Some(direction) = &request.default_reading_direction {
-        params.default_reading_direction = Some(direction.clone());
+        params.default_reading_direction = Some(super::validate_reading_direction(direction)?);
     }
 
     if let Some(rules) = &request.title_preprocessing_rules {
@@ -384,7 +384,7 @@ pub async fn update_library(
     }
     // Handle default_reading_direction if provided
     if let Some(direction) = request.default_reading_direction {
-        library.default_reading_direction = direction;
+        library.default_reading_direction = super::validate_reading_direction(&direction)?;
     }
     // Handle scanning_config if provided
     if let Some(config_dto) = request.scanning_config {

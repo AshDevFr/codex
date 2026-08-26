@@ -991,10 +991,10 @@ async fn test_library_reading_direction_fields() {
             .unwrap();
 
     // Verify default reading direction
-    assert_eq!(library.default_reading_direction, "LEFT_TO_RIGHT");
+    assert_eq!(library.default_reading_direction, "ltr");
 
     // Update to manga reading direction
-    library.default_reading_direction = "RIGHT_TO_LEFT".to_string();
+    library.default_reading_direction = "rtl".to_string();
     LibraryRepository::update(conn, &library).await.unwrap();
 
     // Verify update persisted
@@ -1002,7 +1002,7 @@ async fn test_library_reading_direction_fields() {
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(retrieved.default_reading_direction, "RIGHT_TO_LEFT");
+    assert_eq!(retrieved.default_reading_direction, "rtl");
 
     db.close().await;
 }
@@ -1073,7 +1073,7 @@ async fn test_series_reading_direction_override() {
         LibraryRepository::create(conn, "Manga Library", "/manga", ScanningStrategy::Default)
             .await
             .unwrap();
-    library.default_reading_direction = "RIGHT_TO_LEFT".to_string();
+    library.default_reading_direction = "rtl".to_string();
     LibraryRepository::update(conn, &library).await.unwrap();
 
     // Create series that inherits library default (reading_direction = None in metadata)
@@ -1090,13 +1090,9 @@ async fn test_series_reading_direction_override() {
     let series2 = SeriesRepository::create(conn, library.id, "Webtoon", None)
         .await
         .unwrap();
-    SeriesMetadataRepository::update_reading_direction(
-        conn,
-        series2.id,
-        Some("TOP_TO_BOTTOM".to_string()),
-    )
-    .await
-    .unwrap();
+    SeriesMetadataRepository::update_reading_direction(conn, series2.id, Some("ttb".to_string()))
+        .await
+        .unwrap();
 
     // Verify both series persisted correctly
     let retrieved_metadata1 = SeriesMetadataRepository::get_by_series_id(conn, series1.id)
@@ -1111,7 +1107,7 @@ async fn test_series_reading_direction_override() {
     assert_eq!(retrieved_metadata1.reading_direction, None); // Inherits library's RTL
     assert_eq!(
         retrieved_metadata2.reading_direction,
-        Some("TOP_TO_BOTTOM".to_string())
+        Some("ttb".to_string())
     );
 
     db.close().await;
@@ -1131,13 +1127,9 @@ async fn test_series_reading_direction_clear() {
     let series = SeriesRepository::create(conn, library.id, "Test Series", None)
         .await
         .unwrap();
-    SeriesMetadataRepository::update_reading_direction(
-        conn,
-        series.id,
-        Some("TOP_TO_BOTTOM".to_string()),
-    )
-    .await
-    .unwrap();
+    SeriesMetadataRepository::update_reading_direction(conn, series.id, Some("ttb".to_string()))
+        .await
+        .unwrap();
 
     // Clear it to revert to library default
     SeriesMetadataRepository::update_reading_direction(conn, series.id, None)

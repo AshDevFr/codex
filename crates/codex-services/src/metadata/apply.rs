@@ -22,6 +22,7 @@ use codex_db::repositories::{
     SeriesExternalIdRepository, SeriesMetadataRepository, TagRepository,
 };
 use codex_events::EventBroadcaster;
+use codex_models::reading_direction::ReadingDirection;
 
 use super::CoverService;
 
@@ -487,39 +488,55 @@ impl MetadataApplier {
         }
 
         // Reading Direction
-        if should_apply_field("readingDirection")
-            && let Some(reading_direction) = &metadata.reading_direction
-        {
-            let is_locked = current_metadata
-                .map(|m| m.reading_direction_lock)
-                .unwrap_or(false);
-            match check_field(
-                "readingDirection",
-                is_locked,
-                PluginPermission::MetadataWriteReadingDirection,
-            ) {
-                Ok(_) => {
-                    if let Some(changes) = dry_run_changes.as_mut() {
-                        changes.push(FieldChange {
-                            field: "readingDirection".to_string(),
-                            before: Some(serde_json::json!(
-                                current_metadata.and_then(|m| m.reading_direction.clone())
-                            )),
-                            after: serde_json::json!(reading_direction),
-                        });
-                    } else {
-                        SeriesMetadataRepository::update_reading_direction(
-                            db,
-                            series_id,
-                            Some(reading_direction.clone()),
-                        )
-                        .await
-                        .context("Failed to update reading direction")?;
-                    }
-                    applied_fields.push("readingDirection".to_string());
-                }
-                Err(skip) => skipped_fields.push(skip),
+        //
+        // A plugin may send any string. What parses is canonicalised, so a
+        // provider sending "RTL" stores the same value as one sending "rtl".
+        // What does not parse is reported as skipped rather than written: the
+        // reader could not render it, and resolution would skip past it anyway.
+        let canonical_reading_direction = metadata.reading_direction.as_deref().map(|raw| {
+            raw.parse::<ReadingDirection>()
+                .map(|direction| direction.as_str().to_string())
+        });
+        match canonical_reading_direction {
+            Some(Err(reason)) if should_apply_field("readingDirection") => {
+                skipped_fields.push(SkippedField {
+                    field: "readingDirection".to_string(),
+                    reason,
+                });
             }
+            Some(Ok(reading_direction)) if should_apply_field("readingDirection") => {
+                let is_locked = current_metadata
+                    .map(|m| m.reading_direction_lock)
+                    .unwrap_or(false);
+                match check_field(
+                    "readingDirection",
+                    is_locked,
+                    PluginPermission::MetadataWriteReadingDirection,
+                ) {
+                    Ok(_) => {
+                        if let Some(changes) = dry_run_changes.as_mut() {
+                            changes.push(FieldChange {
+                                field: "readingDirection".to_string(),
+                                before: Some(serde_json::json!(
+                                    current_metadata.and_then(|m| m.reading_direction.clone())
+                                )),
+                                after: serde_json::json!(reading_direction),
+                            });
+                        } else {
+                            SeriesMetadataRepository::update_reading_direction(
+                                db,
+                                series_id,
+                                Some(reading_direction.clone()),
+                            )
+                            .await
+                            .context("Failed to update reading direction")?;
+                        }
+                        applied_fields.push("readingDirection".to_string());
+                    }
+                    Err(skip) => skipped_fields.push(skip),
+                }
+            }
+            _ => {}
         }
 
         // Total Volume Count

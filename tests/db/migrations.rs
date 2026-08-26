@@ -1310,3 +1310,94 @@ async fn test_read_completions_backfill_inserts_postgres() {
     };
     assert_backfill_inserts(&conn).await;
 }
+
+/// The library reading-direction normalization.
+///
+/// `LibraryRepository::create` defaulted this column to the Komga-style
+/// `LEFT_TO_RIGHT` while the web form wrote `ltr`, so the same column held two
+/// vocabularies and the reader could parse only one of them. The migration
+/// converges the Komga-style rows onto the lowercase form Codex stores.
+#[tokio::test]
+async fn test_library_reading_direction_normalization_sqlite() {
+    let temp_dir = TempDir::new().unwrap();
+    let db_path = temp_dir.path().join("test.db");
+
+    let config = DatabaseConfig {
+        db_type: DatabaseType::SQLite,
+        postgres: None,
+        sqlite: Some(SQLiteConfig {
+            path: db_path.to_str().unwrap().to_string(),
+            pragmas: None,
+            ..SQLiteConfig::default()
+        }),
+        ..DatabaseConfig::default()
+    };
+
+    let db = Database::new(&config).await.unwrap();
+    let conn = db.sea_orm_connection();
+
+    // Run everything up to, but not including, the normalization. Locating it
+    // by name keeps this correct as later migrations are added.
+    let migrations = Migrator::migrations();
+    let index = migrations
+        .iter()
+        .position(|m| m.name() == "m20260826_000111_normalize_library_reading_direction")
+        .expect("normalization migration should be registered");
+    Migrator::up(conn, Some(index as u32)).await.unwrap();
+
+    // Seed one row per vocabulary, plus a value the migration must not touch.
+    let seeds = [
+        (1u8, "LEFT_TO_RIGHT"),
+        (2, "RIGHT_TO_LEFT"),
+        (3, "VERTICAL"),
+        (4, "TOP_TO_BOTTOM"),
+        (5, "WEBTOON"),
+        (6, "rtl"),
+        (7, "sideways"),
+    ];
+    for (n, direction) in seeds {
+        conn.execute(Statement::from_sql_and_values(
+            DatabaseBackend::Sqlite,
+            "INSERT INTO libraries (id, name, path, series_strategy, book_strategy, number_strategy, default_reading_direction, created_at, updated_at) \
+             VALUES (?, ?, ?, 'series_volume', 'filename', 'file_order', ?, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+            [
+                vec![n; 16].into(),
+                format!("Lib {}", n).into(),
+                format!("/lib{}", n).into(),
+                direction.into(),
+            ],
+        ))
+        .await
+        .unwrap();
+    }
+
+    Migrator::up(conn, Some(1)).await.unwrap();
+
+    let expected = [
+        (1u8, "ltr"),
+        (2, "rtl"),
+        (3, "ttb"),
+        (4, "ttb"),
+        (5, "webtoon"),
+        // Already canonical, left alone.
+        (6, "rtl"),
+        // Unrecognized values are not guessed at. Resolution treats an
+        // unparseable value as absent and falls through to the next layer.
+        (7, "sideways"),
+    ];
+    for (n, want) in expected {
+        let row = conn
+            .query_one(Statement::from_sql_and_values(
+                DatabaseBackend::Sqlite,
+                "SELECT default_reading_direction AS d FROM libraries WHERE id = ?",
+                [vec![n; 16].into()],
+            ))
+            .await
+            .unwrap()
+            .unwrap();
+        let got: String = row.try_get("", "d").unwrap();
+        assert_eq!(got, want, "library {} should normalize to {}", n, want);
+    }
+
+    db.close().await;
+}

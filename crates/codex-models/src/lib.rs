@@ -11,6 +11,7 @@ pub mod pagination;
 pub mod permissions;
 pub mod plugin;
 pub mod preprocessing;
+pub mod reading_direction;
 pub mod release;
 pub mod sort;
 pub mod strategies;
