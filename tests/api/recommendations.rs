@@ -1149,3 +1149,177 @@ async fn test_get_recommendations_merges_multiple_instances() {
     assert_eq!(recs[1]["externalId"], "2");
     assert_eq!(recs[2]["externalId"], "1");
 }
+
+// ============================================================================
+// Dismissals survive regeneration
+// ============================================================================
+
+/// Set up an enabled, connected recommendation plugin and return its instance.
+async fn enabled_recommendation_instance(
+    db: &sea_orm::DatabaseConnection,
+    state: &std::sync::Arc<codex::api::extractors::AuthState>,
+    user_id: uuid::Uuid,
+    token: &str,
+) -> codex::db::entities::user_plugins::Model {
+    let plugin_id =
+        create_recommendation_plugin(db, "recommendations-anilist", "AniList Recommendations")
+            .await;
+
+    let app = create_test_router(state.clone()).await;
+    let request =
+        post_request_with_auth(&format!("/api/v1/user/plugins/{}/enable", plugin_id), token);
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let instance = UserPluginsRepository::get_by_user_and_plugin(db, user_id, plugin_id)
+        .await
+        .unwrap()
+        .unwrap();
+    UserPluginsRepository::update_oauth_tokens(
+        db,
+        instance.id,
+        "fake_access_token",
+        Some("fake_refresh_token"),
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+    instance
+}
+
+/// Dismissing removed the item from the cached batch and recorded nothing else,
+/// so a regenerated batch brought it straight back. The dismissal has to outlive
+/// the cache write it was applied to.
+#[tokio::test]
+async fn test_dismiss_recommendation_is_recorded_for_later_generations() {
+    ensure_test_encryption_key();
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (user_id, token) = create_user_and_token(&db, &state, "testuser").await;
+    let instance = enabled_recommendation_instance(&db, &state, user_id, &token).await;
+
+    codex::db::repositories::UserPluginDataRepository::set(
+        &db,
+        instance.id,
+        "recommendations",
+        json!({
+            "recommendations": [
+                {"externalId": "12345", "title": "To Dismiss", "score": 0.8, "reason": "test"}
+            ],
+            "generatedAt": "2026-02-11T10:00:00Z",
+            "cached": true
+        }),
+        None,
+    )
+    .await
+    .unwrap();
+
+    let app = create_test_router(state.clone()).await;
+    let request = post_json_request_with_auth(
+        "/api/v1/user/recommendations/12345/dismiss",
+        &json!({"reason": "not_interested"}),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let dismissals =
+        codex::db::repositories::UserPluginDataRepository::get(&db, instance.id, "dismissals")
+            .await
+            .unwrap()
+            .expect("the dismissal must be recorded, not just applied to the cache");
+
+    let entries = dismissals.data["dismissals"]
+        .as_array()
+        .expect("dismissals array");
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0]["externalId"], "12345");
+    assert_eq!(
+        entries[0]["reason"], "not_interested",
+        "the reason distinguishes not_interested from already_read and is kept for later use",
+    );
+    assert!(
+        entries[0]["dismissedAt"].is_string(),
+        "entries carry a timestamp",
+    );
+}
+
+/// The old handler only recorded a dismissal when the item happened to be in the
+/// cache, so dismissing anything else was lost entirely.
+#[tokio::test]
+async fn test_dismiss_recommendation_is_recorded_even_when_not_cached() {
+    ensure_test_encryption_key();
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (user_id, token) = create_user_and_token(&db, &state, "testuser").await;
+    let instance = enabled_recommendation_instance(&db, &state, user_id, &token).await;
+
+    // Cache holds a different item entirely.
+    codex::db::repositories::UserPluginDataRepository::set(
+        &db,
+        instance.id,
+        "recommendations",
+        json!({
+            "recommendations": [
+                {"externalId": "67890", "title": "Unrelated", "score": 0.7, "reason": "test"}
+            ],
+            "generatedAt": "2026-02-11T10:00:00Z",
+            "cached": true
+        }),
+        None,
+    )
+    .await
+    .unwrap();
+
+    let app = create_test_router(state.clone()).await;
+    let request = post_json_request_with_auth(
+        "/api/v1/user/recommendations/12345/dismiss",
+        &json!({}),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let dismissals =
+        codex::db::repositories::UserPluginDataRepository::get(&db, instance.id, "dismissals")
+            .await
+            .unwrap()
+            .expect("a dismissal must be recorded even when the item was not cached");
+    let entries = dismissals.data["dismissals"].as_array().unwrap();
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0]["externalId"], "12345");
+}
+
+/// Dismissing the same item twice must not accumulate duplicate entries.
+#[tokio::test]
+async fn test_dismiss_recommendation_is_idempotent() {
+    ensure_test_encryption_key();
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (user_id, token) = create_user_and_token(&db, &state, "testuser").await;
+    let instance = enabled_recommendation_instance(&db, &state, user_id, &token).await;
+
+    for _ in 0..2 {
+        let app = create_test_router(state.clone()).await;
+        let request = post_json_request_with_auth(
+            "/api/v1/user/recommendations/12345/dismiss",
+            &json!({"reason": "already_read"}),
+            &token,
+        );
+        let (status, _): (StatusCode, Option<serde_json::Value>) =
+            make_json_request(app, request).await;
+        assert_eq!(status, StatusCode::OK);
+    }
+
+    let dismissals =
+        codex::db::repositories::UserPluginDataRepository::get(&db, instance.id, "dismissals")
+            .await
+            .unwrap()
+            .unwrap();
+    let entries = dismissals.data["dismissals"].as_array().unwrap();
+    assert_eq!(entries.len(), 1, "dismissing twice must not duplicate");
+}

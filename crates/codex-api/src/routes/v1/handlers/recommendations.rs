@@ -26,6 +26,9 @@ use std::sync::Arc;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
+/// `user_plugin_data` key holding an instance's durable dismissals.
+const DISMISSALS_KEY: &str = "dismissals";
+
 type RecPlugin = (
     codex_db::entities::plugins::Model,
     codex_db::entities::user_plugins::Model,
@@ -494,6 +497,51 @@ fn to_recommendation_dto(
     }
 }
 
+/// Append a dismissal to an instance's durable dismissal list.
+///
+/// Stored beside the cached batch in `user_plugin_data` rather than in a table
+/// of its own: this is per-instance state that the recommendation-signals work
+/// is expected to supersede with a real user-scoped model, and a bespoke table
+/// now would have to be reconciled with it later.
+///
+/// The reason is kept because `not_interested`, `already_read` and
+/// `already_owned` are different statements, and they are exactly what a taste
+/// model would want. Re-dismissing an item refreshes it in place rather than
+/// appending a duplicate.
+async fn record_dismissal(
+    db: &sea_orm::DatabaseConnection,
+    user_plugin_id: Uuid,
+    external_id: &str,
+    reason: Option<&str>,
+) -> Result<(), anyhow::Error> {
+    let existing = UserPluginDataRepository::get(db, user_plugin_id, DISMISSALS_KEY).await?;
+
+    let mut entries: Vec<serde_json::Value> = existing
+        .as_ref()
+        .and_then(|entry| entry.data.get(DISMISSALS_KEY))
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+
+    entries.retain(|e| e.get("externalId").and_then(|v| v.as_str()) != Some(external_id));
+    entries.push(serde_json::json!({
+        "externalId": external_id,
+        "reason": reason,
+        "dismissedAt": Utc::now().to_rfc3339(),
+    }));
+
+    UserPluginDataRepository::set(
+        db,
+        user_plugin_id,
+        DISMISSALS_KEY,
+        serde_json::json!({ DISMISSALS_KEY: entries }),
+        None,
+    )
+    .await?;
+
+    Ok(())
+}
+
 /// Dismiss a recommendation
 ///
 /// Removes the recommendation from the cached list immediately and enqueues
@@ -539,6 +587,26 @@ pub async fn dismiss_recommendation(
     // title recommended by more than one provider). Remove it from each cache
     // that has it and notify only those plugins.
     for (plugin, instance) in &instances {
+        // Record the dismissal before touching the cache, and do it whether or
+        // not the item is currently cached. Removing it from the cached batch
+        // only hides it until the next generation overwrites that batch, and an
+        // item dismissed while absent from the cache was previously lost with no
+        // trace at all.
+        //
+        // The list is deliberately unbounded. Every eviction policy reintroduces
+        // the defect this exists to fix: past the threshold a dismissal silently
+        // comes back, with no way for the reader to tell why. Entries are small,
+        // so growth is a signal to move this into a real table rather than to
+        // start dropping the reader's answers.
+        if let Err(e) =
+            record_dismissal(&state.db, instance.id, &external_id, reason.as_deref()).await
+        {
+            return Err(ApiError::Internal(format!(
+                "Failed to record dismissal: {}",
+                e
+            )));
+        }
+
         let cached_entry = UserPluginDataRepository::get(&state.db, instance.id, "recommendations")
             .await
             .map_err(|e| {

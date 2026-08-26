@@ -37,6 +37,10 @@ use codex_services::plugin::recommendations::{
 /// Default plugin task timeout in seconds (5 minutes)
 const DEFAULT_TASK_TIMEOUT_SECS: u64 = 300;
 
+/// `user_plugin_data` key holding an instance's durable dismissals, written by
+/// the dismiss endpoint.
+const DISMISSALS_KEY: &str = "dismissals";
+
 // =============================================================================
 // Codex Recommendation Settings
 // =============================================================================
@@ -263,6 +267,39 @@ fn emit_phase(
     }
 }
 
+/// Read an instance's dismissed external IDs.
+///
+/// A failure here must not fail the generation: losing a batch of
+/// recommendations is worse than briefly re-suggesting something, so this logs
+/// and returns an empty set instead of propagating.
+async fn load_dismissed_ids(
+    db: &DatabaseConnection,
+    user_plugin_id: Uuid,
+) -> std::collections::HashSet<String> {
+    match UserPluginDataRepository::get(db, user_plugin_id, DISMISSALS_KEY).await {
+        Ok(Some(entry)) => entry
+            .data
+            .get(DISMISSALS_KEY)
+            .and_then(|v| v.as_array())
+            .map(|entries| {
+                entries
+                    .iter()
+                    .filter_map(|e| {
+                        e.get("externalId")
+                            .and_then(|v| v.as_str())
+                            .map(str::to_string)
+                    })
+                    .collect()
+            })
+            .unwrap_or_default(),
+        Ok(None) => std::collections::HashSet::new(),
+        Err(e) => {
+            warn!("Failed to load dismissals for plugin instance {user_plugin_id}: {e}");
+            std::collections::HashSet::new()
+        }
+    }
+}
+
 impl TaskHandler for UserPluginRecommendationsHandler {
     fn handle<'a>(
         &'a self,
@@ -373,6 +410,13 @@ impl TaskHandler for UserPluginRecommendationsHandler {
             // — the user may want recommendations for titles they own but haven't
             // started yet. Derived from the scoped `library`, so exclusions stay
             // within the plugin's library scope.
+            // Everything the reader has said "not interested" to. Feeding these
+            // to the plugin through the existing `exclude_ids` field lets a
+            // well-behaved plugin return a full batch instead of one this task
+            // then has to trim, and the post-generation filter below still
+            // enforces it for plugins that ignore the hint.
+            let dismissed_ids = load_dismissed_ids(db, context.user_plugin_id).await;
+
             let exclude_ids = match plugin_model.as_ref() {
                 Some(plugin_model) => {
                     let source = plugin_model
@@ -406,10 +450,16 @@ impl TaskHandler for UserPluginRecommendationsHandler {
                 None => vec![],
             };
 
+            let mut exclude_ids = exclude_ids;
+            exclude_ids.extend(dismissed_ids.iter().cloned());
+            exclude_ids.sort();
+            exclude_ids.dedup();
+
             debug!(
-                "Task {}: Excluding {} external IDs from recommendations",
+                "Task {}: Excluding {} external IDs from recommendations ({} dismissed)",
                 task.id,
-                exclude_ids.len()
+                exclude_ids.len(),
+                dismissed_ids.len(),
             );
 
             emit_phase(
@@ -506,6 +556,23 @@ impl TaskHandler for UserPluginRecommendationsHandler {
                 );
                 anyhow::anyhow!("Failed to generate recommendations: {}", e)
             })?;
+
+            // A plugin is free to ignore `exclude_ids`, and the reader's answer
+            // must hold either way. Filtering here rather than at read time also
+            // keeps the cached batch honest about what will be shown.
+            if !dismissed_ids.is_empty() {
+                let before = response.recommendations.len();
+                response
+                    .recommendations
+                    .retain(|r| !dismissed_ids.contains(&r.external_id));
+                let removed = before - response.recommendations.len();
+                if removed > 0 {
+                    debug!(
+                        "Task {}: Dropped {} dismissed recommendations the plugin returned anyway",
+                        task.id, removed
+                    );
+                }
+            }
 
             let count = response.recommendations.len();
 
