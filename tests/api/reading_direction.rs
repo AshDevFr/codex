@@ -293,3 +293,283 @@ async fn a_series_without_a_direction_inherits_the_library_default() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(response.unwrap()["book"]["readingDirection"], "webtoon");
 }
+
+// ============================================================================
+// Per-user, per-series reader settings
+// ============================================================================
+
+async fn user_and_token(
+    db: &sea_orm::DatabaseConnection,
+    state: &codex::api::extractors::AuthState,
+    username: &str,
+    is_admin: bool,
+) -> (uuid::Uuid, String) {
+    let password_hash = password::hash_password("pw").unwrap();
+    let user = create_test_user(
+        username,
+        &format!("{}@example.com", username),
+        &password_hash,
+        is_admin,
+    );
+    let created = UserRepository::create(db, &user).await.unwrap();
+    let token = state
+        .jwt_service
+        .generate_token(created.id, created.username.clone(), created.get_role())
+        .unwrap();
+    (created.id, token)
+}
+
+#[tokio::test]
+async fn a_reader_can_set_its_own_series_reader_settings() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_id, token) = user_and_token(&db, &state, "reader", false).await;
+    let app = create_test_router(state).await;
+
+    let library = create_test_library(&db, "Test Library", "/test/path").await;
+    let series = create_test_series(&db, &library, "Berserk").await;
+
+    // The whole point: a reader role, which has no series:write, can still
+    // correct a series for itself.
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/user/series/{}/reader-settings", series.id),
+        &json!({ "readingDirection": "rtl" }),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(response.unwrap()["readingDirection"], "rtl");
+}
+
+#[tokio::test]
+async fn a_reader_still_cannot_change_the_series_metadata() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_id, token) = user_and_token(&db, &state, "reader", false).await;
+    let app = create_test_router(state).await;
+
+    let library = create_test_library(&db, "Test Library", "/test/path").await;
+    let series = create_test_series(&db, &library, "Berserk").await;
+
+    // Personal settings are not a back door into what everyone sees.
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/series/{}/metadata", series.id),
+        &json!({ "readingDirection": "rtl" }),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn reader_settings_start_empty_rather_than_missing() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_id, token) = user_and_token(&db, &state, "reader", false).await;
+    let app = create_test_router(state).await;
+
+    let library = create_test_library(&db, "Test Library", "/test/path").await;
+    let series = create_test_series(&db, &library, "Berserk").await;
+
+    let request = get_request_with_auth(
+        &format!("/api/v1/user/series/{}/reader-settings", series.id),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(response.unwrap(), json!({}));
+}
+
+#[tokio::test]
+async fn a_null_clears_one_setting_and_leaves_the_others() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_id, token) = user_and_token(&db, &state, "reader", false).await;
+    let app = create_test_router(state.clone()).await;
+
+    let library = create_test_library(&db, "Test Library", "/test/path").await;
+    let series = create_test_series(&db, &library, "Berserk").await;
+
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/user/series/{}/reader-settings", series.id),
+        &json!({ "readingDirection": "rtl", "backgroundColor": "black" }),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let app = create_test_router(state).await;
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/user/series/{}/reader-settings", series.id),
+        &json!({ "backgroundColor": null }),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body = response.unwrap();
+    // Undoing one override must not wipe the rest.
+    assert_eq!(body["readingDirection"], "rtl");
+    assert!(body.get("backgroundColor").is_none());
+}
+
+#[tokio::test]
+async fn deleting_reader_settings_restores_full_inheritance() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_id, token) = user_and_token(&db, &state, "reader", false).await;
+    let app = create_test_router(state.clone()).await;
+
+    let mut library = create_test_library(&db, "Test Library", "/test/path").await;
+    library.default_reading_direction = "ltr".to_string();
+    LibraryRepository::update(&db, &library).await.unwrap();
+    let series = create_test_series(&db, &library, "Berserk").await;
+
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/user/series/{}/reader-settings", series.id),
+        &json!({ "readingDirection": "rtl" }),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let app = create_test_router(state.clone()).await;
+    let request = delete_request_with_auth(
+        &format!("/api/v1/user/series/{}/reader-settings", series.id),
+        &token,
+    );
+    let (status, _) = make_request(app, request).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+
+    let app = create_test_router(state).await;
+    let request = get_request_with_auth(
+        &format!("/api/v1/user/series/{}/reader-settings", series.id),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(response.unwrap(), json!({}));
+}
+
+#[tokio::test]
+async fn deleting_settings_that_were_never_set_is_not_an_error() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_id, token) = user_and_token(&db, &state, "reader", false).await;
+    let app = create_test_router(state).await;
+
+    let library = create_test_library(&db, "Test Library", "/test/path").await;
+    let series = create_test_series(&db, &library, "Berserk").await;
+
+    let request = delete_request_with_auth(
+        &format!("/api/v1/user/series/{}/reader-settings", series.id),
+        &token,
+    );
+    let (status, _) = make_request(app, request).await;
+
+    assert_eq!(status, StatusCode::NO_CONTENT);
+}
+
+#[tokio::test]
+async fn reader_settings_reject_an_invalid_value() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_id, token) = user_and_token(&db, &state, "reader", false).await;
+    let app = create_test_router(state).await;
+
+    let library = create_test_library(&db, "Test Library", "/test/path").await;
+    let series = create_test_series(&db, &library, "Berserk").await;
+
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/user/series/{}/reader-settings", series.id),
+        &json!({ "readingDirection": "sideways" }),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+}
+
+#[tokio::test]
+async fn reader_settings_for_an_unknown_series_are_not_found() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_id, token) = user_and_token(&db, &state, "reader", false).await;
+    let app = create_test_router(state).await;
+
+    let request = get_request_with_auth(
+        &format!(
+            "/api/v1/user/series/{}/reader-settings",
+            uuid::Uuid::new_v4()
+        ),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn reader_settings_require_authentication() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let app = create_test_router(state).await;
+
+    let library = create_test_library(&db, "Test Library", "/test/path").await;
+    let series = create_test_series(&db, &library, "Berserk").await;
+
+    let request = get_request(&format!(
+        "/api/v1/user/series/{}/reader-settings",
+        series.id
+    ));
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn one_users_reader_settings_are_invisible_to_another() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_reader_id, reader_token) = user_and_token(&db, &state, "reader", false).await;
+    let (_other_id, other_token) = user_and_token(&db, &state, "other", false).await;
+    let app = create_test_router(state.clone()).await;
+
+    let library = create_test_library(&db, "Test Library", "/test/path").await;
+    let series = create_test_series(&db, &library, "Berserk").await;
+
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/user/series/{}/reader-settings", series.id),
+        &json!({ "readingDirection": "rtl" }),
+        &reader_token,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // The identity comes from the token, never the path, so the second user
+    // sees its own empty record rather than the first user's.
+    let app = create_test_router(state).await;
+    let request = get_request_with_auth(
+        &format!("/api/v1/user/series/{}/reader-settings", series.id),
+        &other_token,
+    );
+    let (status, response): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(response.unwrap(), json!({}));
+}

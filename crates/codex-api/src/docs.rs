@@ -232,6 +232,10 @@ The following paths are exempt from rate limiting:
         v1::handlers::user_preferences::set_bulk_preferences,
         v1::handlers::user_preferences::delete_preference,
 
+        v1::handlers::user_series_reader_settings::get_series_reader_settings,
+        v1::handlers::user_series_reader_settings::patch_series_reader_settings,
+        v1::handlers::user_series_reader_settings::delete_series_reader_settings,
+
         // Series Exports
         v1::handlers::series_exports::create_export,
         v1::handlers::series_exports::list_exports,
@@ -820,6 +824,10 @@ The following paths are exempt from rate limiting:
             v1::dto::SetPreferencesResponse,
             v1::dto::DeletePreferenceResponse,
 
+            // Per-user, per-series reader settings
+            v1::dto::SeriesReaderSettingsResponse,
+            v1::dto::PatchSeriesReaderSettingsRequest,
+
             // Series Export DTOs
             v1::dto::series_export::CreateSeriesExportRequest,
             v1::dto::series_export::SeriesExportDto,
@@ -1284,6 +1292,7 @@ The following paths are exempt from rate limiting:
         // User Features
         (name = "Users", description = "User management (admin only)"),
         (name = "User Preferences", description = "Per-user settings and preferences"),
+        (name = "User Reader Settings", description = "Per-user, per-series reader overrides"),
         (name = "Filter Presets", description = "Saved filter combinations for list pages and the advanced search page"),
         (name = "Reading Progress", description = "Reading progress tracking"),
 
@@ -1773,7 +1782,7 @@ impl utoipa::Modify for TagGroupsModifier {
             },
             {
                 "name": "User Features",
-                "tags": ["Users", "User Preferences", "Filter Presets", "User Plugins", "Recommendations", "Reading Progress"]
+                "tags": ["Users", "User Preferences", "User Reader Settings", "Filter Presets", "User Plugins", "Recommendations", "Reading Progress"]
             },
             {
                 "name": "Background Jobs",

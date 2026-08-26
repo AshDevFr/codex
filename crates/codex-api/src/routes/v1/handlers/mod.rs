@@ -104,6 +104,7 @@ pub mod task_queue;
 pub mod tracking;
 pub mod user_plugins;
 pub mod user_preferences;
+pub mod user_series_reader_settings;
 pub mod users;
 pub mod want_to_read;
 

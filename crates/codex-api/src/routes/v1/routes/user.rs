@@ -60,6 +60,20 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/user/preferences/{key}",
             delete(handlers::user_preferences::delete_preference),
         )
+        // Per-user, per-series reader settings. Not gated on series:write:
+        // this is what a reader sees, not what everyone sees.
+        .route(
+            "/user/series/{series_id}/reader-settings",
+            get(handlers::user_series_reader_settings::get_series_reader_settings),
+        )
+        .route(
+            "/user/series/{series_id}/reader-settings",
+            patch(handlers::user_series_reader_settings::patch_series_reader_settings),
+        )
+        .route(
+            "/user/series/{series_id}/reader-settings",
+            delete(handlers::user_series_reader_settings::delete_series_reader_settings),
+        )
         // Series export routes
         .route(
             "/user/exports/series",

@@ -56,10 +56,16 @@ pub struct UserPreferencesApi;
 /// camelCase of the JSON fields around them: a key is a value in a database
 /// column, not a field name.
 ///
-/// Reader settings are deliberately not here. Fit mode, reading direction,
-/// zoom, and per-series reader overrides are device-local state, held by each
-/// client and never synced, because a phone and a desktop legitimately want
-/// different ones.
+/// Global reader settings are deliberately not here. A client's default fit
+/// mode, zoom and background are device-local state, held by that client and
+/// never synced, because a phone and a desktop legitimately want different
+/// ones.
+///
+/// Per-series reader overrides are a different thing and do sync, through
+/// `/api/v1/user/series/{series_id}/reader-settings`. They describe how one
+/// book is made rather than how one device is used: a manga is right to left
+/// on every screen the user owns, and the stored series value is routinely
+/// absent or wrong, so a reader needs that correction to follow them.
 #[utoipa::path(
     get,
     path = "/api/v1/user/preferences",

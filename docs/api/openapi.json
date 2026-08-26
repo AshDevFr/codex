@@ -17863,7 +17863,7 @@
           "User Preferences"
         ],
         "summary": "Get all preferences for the authenticated user",
-        "description": "The store is an open `key -> JSON` map: any syntactically valid key is\naccepted, and this endpoint returns whatever the user has set. The list\nbelow is not a whitelist, it is the set Codex's own clients read and write.\nA client that wants a user's settings to follow them between devices has to\nuse these exact keys and value shapes.\n\n| Key | Value |\n| --- | --- |\n| `ui.theme` | `\"light\"`, `\"dark\"`, or `\"system\"` (default `\"system\"`) |\n| `library.show_deleted_books` | boolean (default `false`) |\n| `want_to_read.sort` | `\"newest\"`, `\"oldest\"`, or `\"custom\"` (default `\"newest\"`) |\n| `release_tracking.muted_series_ids` | array of series id strings (default `[]`) |\n\nKeys are `snake_case`, matching the server settings store rather than the\ncamelCase of the JSON fields around them: a key is a value in a database\ncolumn, not a field name.\n\nReader settings are deliberately not here. Fit mode, reading direction,\nzoom, and per-series reader overrides are device-local state, held by each\nclient and never synced, because a phone and a desktop legitimately want\ndifferent ones.",
+        "description": "The store is an open `key -> JSON` map: any syntactically valid key is\naccepted, and this endpoint returns whatever the user has set. The list\nbelow is not a whitelist, it is the set Codex's own clients read and write.\nA client that wants a user's settings to follow them between devices has to\nuse these exact keys and value shapes.\n\n| Key | Value |\n| --- | --- |\n| `ui.theme` | `\"light\"`, `\"dark\"`, or `\"system\"` (default `\"system\"`) |\n| `library.show_deleted_books` | boolean (default `false`) |\n| `want_to_read.sort` | `\"newest\"`, `\"oldest\"`, or `\"custom\"` (default `\"newest\"`) |\n| `release_tracking.muted_series_ids` | array of series id strings (default `[]`) |\n\nKeys are `snake_case`, matching the server settings store rather than the\ncamelCase of the JSON fields around them: a key is a value in a database\ncolumn, not a field name.\n\nGlobal reader settings are deliberately not here. A client's default fit\nmode, zoom and background are device-local state, held by that client and\nnever synced, because a phone and a desktop legitimately want different\nones.\n\nPer-series reader overrides are a different thing and do sync, through\n`/api/v1/user/series/{series_id}/reader-settings`. They describe how one\nbook is made rather than how one device is used: a manga is right to left\non every screen the user owns, and the stored series value is routinely\nabsent or wrong, so a reader needs that correction to follow them.",
         "operationId": "get_all_preferences",
         "responses": {
           "200": {
@@ -18238,6 +18238,152 @@
             "description": "No recommendation plugin enabled"
           }
         }
+      }
+    },
+    "/api/v1/user/series/{series_id}/reader-settings": {
+      "get": {
+        "tags": [
+          "User Reader Settings"
+        ],
+        "summary": "Get the authenticated user's reader overrides for a series",
+        "description": "The response is sparse: a field is absent when the user has not overridden\nit, and the reader inherits from the series metadata or the library default\ninstead. A user with no overrides gets an empty object, not a 404.\n\nReading direction also arrives already resolved on the book responses, so a\nclient rendering a book does not need this endpoint for that field. It is\nhere for the settings UI, which has to show which values are overridden and\nwhich are inherited.",
+        "operationId": "get_series_reader_settings",
+        "parameters": [
+          {
+            "name": "series_id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reader settings retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeriesReaderSettingsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "User Reader Settings"
+        ],
+        "summary": "Clear all of the authenticated user's reader overrides for a series",
+        "description": "The series inherits fully again: series metadata, then the library default.\nClearing settings that were never set is not an error.",
+        "operationId": "delete_series_reader_settings",
+        "parameters": [
+          {
+            "name": "series_id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Reader settings cleared"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "User Reader Settings"
+        ],
+        "summary": "Update the authenticated user's reader overrides for a series",
+        "description": "Ordinary PATCH semantics, per field: absent leaves the setting alone, an\nexplicit `null` clears the override so the setting inherits again, and a\nvalue overrides it.\n\nPer-key clearing exists because the record is sparse. Each setting is\nindependently inherited or overridden, so undoing one must not require\nwiping the rest and re-setting them. When the last override is cleared the\nstored record is removed entirely, which is the same end state as `DELETE`.\n\nThis writes only what this user sees. Changing the series for everyone is\n`PATCH /api/v1/series/{series_id}/metadata`, which requires `series:write`.",
+        "operationId": "patch_series_reader_settings",
+        "parameters": [
+          {
+            "name": "series_id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchSeriesReaderSettingsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Reader settings updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeriesReaderSettingsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid setting value"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
       }
     },
     "/api/v1/user/sharing-tags": {
@@ -23232,6 +23378,15 @@
             "description": "User-facing setup instructions for the plugin"
           }
         }
+      },
+      "BackgroundColor": {
+        "type": "string",
+        "description": "Backdrop behind the page.",
+        "enum": [
+          "black",
+          "gray",
+          "white"
+        ]
       },
       "BelongsTo": {
         "type": "object",
@@ -30291,6 +30446,17 @@
           }
         }
       },
+      "FitMode": {
+        "type": "string",
+        "description": "How a page is scaled to the viewport.",
+        "enum": [
+          "screen",
+          "width",
+          "width-shrink",
+          "height",
+          "original"
+        ]
+      },
       "FlatStrategyConfig": {
         "type": "object",
         "description": "Configuration for flat scanning strategy",
@@ -34791,6 +34957,15 @@
           }
         }
       },
+      "PageLayout": {
+        "type": "string",
+        "description": "How many pages are shown at once.",
+        "enum": [
+          "single",
+          "double",
+          "continuous"
+        ]
+      },
       "PaginatedResponse": {
         "type": "object",
         "description": "Generic paginated response wrapper with HATEOAS links",
@@ -35929,6 +36104,39 @@
             "format": "int32",
             "description": "Release year",
             "example": 1987
+          }
+        }
+      },
+      "PatchSeriesReaderSettingsRequest": {
+        "type": "object",
+        "description": "Partial update to a user's reader overrides for one series.\n\nEach field has three states, the usual PATCH semantics:\n\n- absent: leave the setting as it is\n- `null`: clear the override, so the setting inherits again\n- a value: override the setting with it\n\nPer-key clearing matters because the record is sparse. Undoing one\noverride must not require wiping the rest and re-setting them; `DELETE`\non the same path is the all-at-once reset.",
+        "properties": {
+          "backgroundColor": {
+            "$ref": "#/components/schemas/BackgroundColor"
+          },
+          "doublePageShowWideAlone": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "doublePageStartOnOdd": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "fitMode": {
+            "$ref": "#/components/schemas/FitMode"
+          },
+          "pageLayout": {
+            "$ref": "#/components/schemas/PageLayout"
+          },
+          "readingDirection": {
+            "$ref": "#/components/schemas/ReadingDirection"
+          },
+          "webtoonFitMode": {
+            "$ref": "#/components/schemas/WebtoonFitMode"
           }
         }
       },
@@ -38179,6 +38387,16 @@
             "format": "date-time"
           }
         }
+      },
+      "ReadingDirection": {
+        "type": "string",
+        "description": "Direction a book's pages are read in.",
+        "enum": [
+          "ltr",
+          "rtl",
+          "ttb",
+          "webtoon"
+        ]
       },
       "ReadingPeriodDto": {
         "type": "object",
@@ -41778,6 +41996,48 @@
               "null"
             ],
             "description": "Sort parameter (e.g., \"metadata.titleSort,asc\", \"createdDate,desc\")"
+          }
+        }
+      },
+      "SeriesReaderSettingsResponse": {
+        "type": "object",
+        "description": "A user's reader overrides for one series.\n\nSparse: a field is absent when the user has not overridden it, and the\nreader inherits from the series metadata or the library default instead.",
+        "properties": {
+          "backgroundColor": {
+            "$ref": "#/components/schemas/BackgroundColor",
+            "description": "Backdrop behind the page"
+          },
+          "doublePageShowWideAlone": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether a wide page is shown alone in double-page layout",
+            "example": true
+          },
+          "doublePageStartOnOdd": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether double-page layout starts on an odd page",
+            "example": false
+          },
+          "fitMode": {
+            "$ref": "#/components/schemas/FitMode",
+            "description": "How a page is scaled to the viewport"
+          },
+          "pageLayout": {
+            "$ref": "#/components/schemas/PageLayout",
+            "description": "How many pages are shown at once"
+          },
+          "readingDirection": {
+            "$ref": "#/components/schemas/ReadingDirection",
+            "description": "Reading direction for this series, for this user only"
+          },
+          "webtoonFitMode": {
+            "$ref": "#/components/schemas/WebtoonFitMode",
+            "description": "Fit mode for the webtoon reader"
           }
         }
       },
@@ -46236,6 +46496,14 @@
             "description": "URL template with config placeholders already substituted. The only\nremaining placeholder is `{externalId}`, filled client-side."
           }
         }
+      },
+      "WebtoonFitMode": {
+        "type": "string",
+        "description": "Fit mode for the webtoon reader, where only width and original make sense.",
+        "enum": [
+          "width",
+          "original"
+        ]
       }
     },
     "securitySchemes": {
@@ -46316,6 +46584,10 @@
     {
       "name": "User Preferences",
       "description": "Per-user settings and preferences"
+    },
+    {
+      "name": "User Reader Settings",
+      "description": "Per-user, per-series reader overrides"
     },
     {
       "name": "Filter Presets",
@@ -46445,6 +46717,7 @@
       "tags": [
         "Users",
         "User Preferences",
+        "User Reader Settings",
         "Filter Presets",
         "User Plugins",
         "Recommendations",

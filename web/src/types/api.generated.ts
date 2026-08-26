@@ -5996,10 +5996,16 @@ export interface paths {
          *     camelCase of the JSON fields around them: a key is a value in a database
          *     column, not a field name.
          *
-         *     Reader settings are deliberately not here. Fit mode, reading direction,
-         *     zoom, and per-series reader overrides are device-local state, held by each
-         *     client and never synced, because a phone and a desktop legitimately want
-         *     different ones.
+         *     Global reader settings are deliberately not here. A client's default fit
+         *     mode, zoom and background are device-local state, held by that client and
+         *     never synced, because a phone and a desktop legitimately want different
+         *     ones.
+         *
+         *     Per-series reader overrides are a different thing and do sync, through
+         *     `/api/v1/user/series/{series_id}/reader-settings`. They describe how one
+         *     book is made rather than how one device is used: a manga is right to left
+         *     on every screen the user owns, and the stored series value is routinely
+         *     absent or wrong, so a reader needs that correction to follow them.
          */
         get: operations["get_all_preferences"];
         /** Set multiple preferences at once */
@@ -6130,6 +6136,52 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/user/series/{series_id}/reader-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the authenticated user's reader overrides for a series
+         * @description The response is sparse: a field is absent when the user has not overridden
+         *     it, and the reader inherits from the series metadata or the library default
+         *     instead. A user with no overrides gets an empty object, not a 404.
+         *
+         *     Reading direction also arrives already resolved on the book responses, so a
+         *     client rendering a book does not need this endpoint for that field. It is
+         *     here for the settings UI, which has to show which values are overridden and
+         *     which are inherited.
+         */
+        get: operations["get_series_reader_settings"];
+        put?: never;
+        post?: never;
+        /**
+         * Clear all of the authenticated user's reader overrides for a series
+         * @description The series inherits fully again: series metadata, then the library default.
+         *     Clearing settings that were never set is not an error.
+         */
+        delete: operations["delete_series_reader_settings"];
+        options?: never;
+        head?: never;
+        /**
+         * Update the authenticated user's reader overrides for a series
+         * @description Ordinary PATCH semantics, per field: absent leaves the setting alone, an
+         *     explicit `null` clears the override so the setting inherits again, and a
+         *     value overrides it.
+         *
+         *     Per-key clearing exists because the record is sparse. Each setting is
+         *     independently inherited or overridden, so undoing one must not require
+         *     wiping the rest and re-setting them. When the last override is cleared the
+         *     stored record is removed entirely, which is the same end state as `DELETE`.
+         *
+         *     This writes only what this user sees. Changing the series for everyone is
+         *     `PATCH /api/v1/series/{series_id}/metadata`, which requires `series:write`.
+         */
+        patch: operations["patch_series_reader_settings"];
         trace?: never;
     };
     "/api/v1/user/sharing-tags": {
@@ -8420,6 +8472,11 @@ export interface components {
             /** @description User-facing setup instructions for the plugin */
             userSetupInstructions?: string | null;
         };
+        /**
+         * @description Backdrop behind the page.
+         * @enum {string}
+         */
+        BackgroundColor: "black" | "gray" | "white";
         /** @description Series membership information */
         BelongsTo: {
             /** @description Series information */
@@ -12264,6 +12321,11 @@ export interface components {
         FilterPresetListResponse: {
             presets: components["schemas"]["FilterPresetDto"][];
         };
+        /**
+         * @description How a page is scaled to the viewport.
+         * @enum {string}
+         */
+        FitMode: "screen" | "width" | "width-shrink" | "height" | "original";
         /** @description Configuration for flat scanning strategy */
         FlatStrategyConfig: {
             /**
@@ -14691,6 +14753,11 @@ export interface components {
              */
             width?: number | null;
         };
+        /**
+         * @description How many pages are shown at once.
+         * @enum {string}
+         */
+        PageLayout: "single" | "double" | "continuous";
         /** @description Generic paginated response wrapper with HATEOAS links */
         PaginatedResponse: {
             /** @description The data items for this page */
@@ -15360,6 +15427,28 @@ export interface components {
              * @example 1987
              */
             year?: number | null;
+        };
+        /**
+         * @description Partial update to a user's reader overrides for one series.
+         *
+         *     Each field has three states, the usual PATCH semantics:
+         *
+         *     - absent: leave the setting as it is
+         *     - `null`: clear the override, so the setting inherits again
+         *     - a value: override the setting with it
+         *
+         *     Per-key clearing matters because the record is sparse. Undoing one
+         *     override must not require wiping the rest and re-setting them; `DELETE`
+         *     on the same path is the all-at-once reset.
+         */
+        PatchSeriesReaderSettingsRequest: {
+            backgroundColor?: components["schemas"]["BackgroundColor"];
+            doublePageShowWideAlone?: boolean | null;
+            doublePageStartOnOdd?: boolean | null;
+            fitMode?: components["schemas"]["FitMode"];
+            pageLayout?: components["schemas"]["PageLayout"];
+            readingDirection?: components["schemas"]["ReadingDirection"];
+            webtoonFitMode?: components["schemas"]["WebtoonFitMode"];
         };
         /**
          * @description PATCH request for updating series title
@@ -16674,6 +16763,11 @@ export interface components {
             /** Format: date-time */
             lastReadAt?: string | null;
         };
+        /**
+         * @description Direction a book's pages are read in.
+         * @enum {string}
+         */
+        ReadingDirection: "ltr" | "rtl" | "ttb" | "webtoon";
         /**
          * @description One bucket of the time series.
          *
@@ -18838,6 +18932,34 @@ export interface components {
             size?: number;
             /** @description Sort parameter (e.g., "metadata.titleSort,asc", "createdDate,desc") */
             sort?: string | null;
+        };
+        /**
+         * @description A user's reader overrides for one series.
+         *
+         *     Sparse: a field is absent when the user has not overridden it, and the
+         *     reader inherits from the series metadata or the library default instead.
+         */
+        SeriesReaderSettingsResponse: {
+            /** @description Backdrop behind the page */
+            backgroundColor?: components["schemas"]["BackgroundColor"];
+            /**
+             * @description Whether a wide page is shown alone in double-page layout
+             * @example true
+             */
+            doublePageShowWideAlone?: boolean | null;
+            /**
+             * @description Whether double-page layout starts on an odd page
+             * @example false
+             */
+            doublePageStartOnOdd?: boolean | null;
+            /** @description How a page is scaled to the viewport */
+            fitMode?: components["schemas"]["FitMode"];
+            /** @description How many pages are shown at once */
+            pageLayout?: components["schemas"]["PageLayout"];
+            /** @description Reading direction for this series, for this user only */
+            readingDirection?: components["schemas"]["ReadingDirection"];
+            /** @description Fit mode for the webtoon reader */
+            webtoonFitMode?: components["schemas"]["WebtoonFitMode"];
         };
         /**
          * @description Series scanning strategy type for library organization
@@ -21171,6 +21293,11 @@ export interface components {
              */
             urlTemplate: string;
         };
+        /**
+         * @description Fit mode for the webtoon reader, where only width and original make sense.
+         * @enum {string}
+         */
+        WebtoonFitMode: "width" | "original";
     };
     responses: never;
     parameters: never;
@@ -35111,6 +35238,126 @@ export interface operations {
                 content?: never;
             };
             /** @description No recommendation plugin enabled */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_series_reader_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                series_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reader settings retrieved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesReaderSettingsResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_series_reader_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                series_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reader settings cleared */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    patch_series_reader_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                series_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchSeriesReaderSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description Reader settings updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesReaderSettingsResponse"];
+                };
+            };
+            /** @description Invalid setting value */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
             404: {
                 headers: {
                     [name: string]: unknown;
