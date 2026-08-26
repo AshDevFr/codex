@@ -518,3 +518,163 @@ async fn test_api_list_tasks_resolves_target_titles() {
     assert!(library_task.get("bookTitle").is_none());
     assert!(library_task.get("seriesTitle").is_none());
 }
+
+// ============================================================================
+// Surfaces that only work because finished tasks now survive
+// ============================================================================
+
+/// Log in as an admin and return the token.
+async fn admin_token(
+    db: &sea_orm::DatabaseConnection,
+    app: axum::Router,
+    username: &str,
+) -> String {
+    let password = "admin_password";
+    let password_hash = password::hash_password(password).unwrap();
+    let user = create_test_user_with_permissions(
+        username,
+        &format!("{username}@example.com"),
+        &password_hash,
+        true,
+        vec![],
+    );
+    UserRepository::create(db, &user).await.unwrap();
+
+    let login_request = json!({"username": username, "password": password});
+    let request = post_json_request_with_auth("/api/v1/auth/login", &login_request, "");
+    let (_, response): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+    response.unwrap()["accessToken"]
+        .as_str()
+        .unwrap()
+        .to_string()
+}
+
+/// Drive a task into the terminal `failed` state.
+///
+/// `mark_failed` reschedules a first attempt rather than failing it, so a task
+/// only reaches `failed` once its attempts are exhausted. Set the row directly.
+async fn force_failed(db: &sea_orm::DatabaseConnection, task_id: uuid::Uuid, error: &str) {
+    use codex::db::entities::tasks;
+    use sea_orm::{ActiveModelTrait, Set};
+
+    let task = TaskRepository::get_by_id(db, task_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let mut active: tasks::ActiveModel = task.into();
+    active.status = Set("failed".to_string());
+    active.last_error = Set(Some(error.to_string()));
+    active.completed_at = Set(Some(chrono::Utc::now()));
+    active.update(db).await.unwrap();
+}
+
+/// A failed task has to be listable and retryable. Both were unreachable while
+/// the cleanup sweep deleted finished tasks after ten seconds: `last_error` is
+/// the only record of why a task failed, and retry rejects anything that is not
+/// `failed`.
+#[tokio::test]
+async fn test_api_failed_task_can_be_listed_and_retried() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_app_state(db.clone()).await;
+    let app = create_test_router_with_app_state(state.clone());
+    let token = admin_token(&db, app.clone(), "admin").await;
+
+    let task_id = TaskRepository::enqueue(&db, TaskType::CleanupPluginData, None)
+        .await
+        .unwrap();
+    force_failed(&db, task_id, "disk went away").await;
+
+    // The failure is visible, along with the reason.
+    let request = get_request_with_auth("/api/v1/tasks?status=failed", &token);
+    let (status, response): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app.clone(), request).await;
+    assert_eq!(status, StatusCode::OK);
+    let tasks = response.unwrap();
+    let listed = tasks
+        .as_array()
+        .expect("task array")
+        .iter()
+        .find(|t| t["id"].as_str() == Some(&task_id.to_string()))
+        .expect("the failed task must be listed");
+    assert_eq!(
+        listed["lastError"], "disk went away",
+        "the reason for a failure is only recorded on the task row",
+    );
+
+    // And it can be retried.
+    let request = post_request_with_auth(&format!("/api/v1/tasks/{}/retry", task_id), &token);
+    let (status, _) = make_request(app, request).await;
+    assert_eq!(status, StatusCode::OK, "a failed task must be retryable");
+
+    let after = TaskRepository::get_by_id(&db, task_id)
+        .await
+        .unwrap()
+        .expect("retried task still exists");
+    assert_eq!(
+        after.status, "pending",
+        "retry puts the task back in the queue"
+    );
+}
+
+/// The purge endpoint now speaks the same unit as the retention setting. It
+/// spoke in days while the automatic sweep spoke in seconds, so it could never
+/// delete anything: nothing survived long enough to be a day old.
+#[tokio::test]
+async fn test_api_purge_tasks_accepts_seconds_and_deletes() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_app_state(db.clone()).await;
+    let app = create_test_router_with_app_state(state.clone());
+    let token = admin_token(&db, app.clone(), "admin").await;
+
+    let task_id = TaskRepository::enqueue(&db, TaskType::CleanupPluginData, None)
+        .await
+        .unwrap();
+    force_failed(&db, task_id, "boom").await;
+
+    let request = delete_request_with_auth("/api/v1/tasks/purge?seconds=0", &token);
+    let (status, body) = make_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let parsed: serde_json::Value = serde_json::from_slice(&body).expect("json body");
+    assert_eq!(
+        parsed["deleted"], 1,
+        "a cutoff of zero seconds must delete a task that has already finished",
+    );
+    assert!(
+        TaskRepository::get_by_id(&db, task_id)
+            .await
+            .unwrap()
+            .is_none(),
+        "the task is gone",
+    );
+}
+
+/// `days` still works, so an existing caller is unaffected by the new unit.
+#[tokio::test]
+async fn test_api_purge_tasks_still_accepts_days() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_app_state(db.clone()).await;
+    let app = create_test_router_with_app_state(state.clone());
+    let token = admin_token(&db, app.clone(), "admin").await;
+
+    let task_id = TaskRepository::enqueue(&db, TaskType::CleanupPluginData, None)
+        .await
+        .unwrap();
+    force_failed(&db, task_id, "boom").await;
+
+    // Thirty days: the task finished moments ago, so it must survive.
+    let request = delete_request_with_auth("/api/v1/tasks/purge?days=30", &token);
+    let (status, body) = make_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let parsed: serde_json::Value = serde_json::from_slice(&body).expect("json body");
+    assert_eq!(parsed["deleted"], 0);
+    assert!(
+        TaskRepository::get_by_id(&db, task_id)
+            .await
+            .unwrap()
+            .is_some(),
+        "a task that finished seconds ago is not thirty days old",
+    );
+}
