@@ -30,6 +30,7 @@ use codex_db::repositories::{
     BookMetadataRepository, BookRepository, GenreRepository, LibraryRepository, PageRepository,
     ReadProgressRepository, SeriesMetadataRepository, TagRepository,
 };
+use codex_models::pagination::Window;
 use codex_services::FilterService;
 use codex_utils::{
     json_merge_patch, normalize_for_search, parse_custom_metadata, serialize_custom_metadata,
@@ -894,8 +895,7 @@ pub async fn list_books(
         BookRepository::list_all(
             &state.db,
             false, // exclude deleted
-            offset,
-            page_size,
+            Window::from_offset(offset, page_size),
             visibility.as_ref(),
         )
         .await
@@ -1090,8 +1090,7 @@ pub async fn list_books_filtered(
                         &sort,
                         Some(auth.user_id),
                         request.include_deleted,
-                        offset,
-                        page_size,
+                        Window::from_offset(offset, page_size),
                         visibility.as_ref(),
                     )
                     .await
@@ -1149,8 +1148,7 @@ pub async fn list_books_filtered(
                     &state.db,
                     &id_vec,
                     request.include_deleted,
-                    offset,
-                    page_size,
+                    Window::from_offset(offset, page_size),
                     visibility.as_ref(),
                 )
                 .await
@@ -1161,8 +1159,7 @@ pub async fn list_books_filtered(
         (None, _) => BookRepository::list_all(
             &state.db,
             request.include_deleted,
-            offset,
-            page_size,
+            Window::from_offset(offset, page_size),
             visibility.as_ref(),
         )
         .await
@@ -1705,8 +1702,7 @@ pub async fn list_library_books(
         library_id,
         &sort,
         false, // exclude deleted
-        offset,
-        page_size,
+        Window::from_offset(offset, page_size),
         visibility.as_ref(),
     )
     .await
@@ -1784,8 +1780,7 @@ pub async fn list_in_progress_books(
         auth.user_id,
         query.library_id,
         Some(false), // only in-progress (not completed)
-        offset,
-        page_size,
+        Window::from_offset(offset, page_size),
         visibility.as_ref(),
     )
     .await
@@ -1865,8 +1860,7 @@ pub async fn list_library_in_progress_books(
         auth.user_id,
         Some(library_id),
         Some(false), // only in-progress (not completed)
-        offset,
-        page_size,
+        Window::from_offset(offset, page_size),
         visibility.as_ref(),
     )
     .await
@@ -1933,8 +1927,7 @@ pub async fn list_on_deck_books(
         &state.db,
         auth.user_id,
         query.library_id,
-        offset,
-        page_size,
+        Window::from_offset(offset, page_size),
         visibility.as_ref(),
     )
     .await
@@ -2004,8 +1997,7 @@ pub async fn list_library_on_deck_books(
         &state.db,
         auth.user_id,
         Some(library_id),
-        offset,
-        page_size,
+        Window::from_offset(offset, page_size),
         visibility.as_ref(),
     )
     .await
@@ -2073,8 +2065,7 @@ pub async fn list_recently_added_books(
         &state.db,
         query.library_id,
         false, // exclude deleted
-        offset,
-        page_size,
+        Window::from_offset(offset, page_size),
         visibility.as_ref(),
     )
     .await
@@ -2153,8 +2144,7 @@ pub async fn list_library_recently_added_books(
         &state.db,
         Some(library_id),
         false, // exclude deleted
-        offset,
-        page_size,
+        Window::from_offset(offset, page_size),
         visibility.as_ref(),
     )
     .await
@@ -4673,8 +4663,7 @@ pub async fn list_books_with_errors(
         query.library_id,
         query.series_id,
         error_type_filter,
-        (page - 1) * page_size,
-        page_size,
+        Window::from_page(page, page_size),
     )
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to fetch books with errors: {}", e)))?;
@@ -4917,8 +4906,7 @@ pub async fn retry_all_book_errors(
         request.library_id,
         None, // No series filter for bulk retry
         error_type_filter,
-        0,
-        10000, // Large page size to get all
+        Window::unbounded(),
     )
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to fetch books with errors: {}", e)))?;

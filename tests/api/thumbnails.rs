@@ -7,6 +7,7 @@ use codex::db::ScanningStrategy;
 use codex::db::repositories::{
     BookRepository, LibraryRepository, SeriesRepository, TaskRepository, UserRepository,
 };
+use codex::models::pagination::Window;
 use codex::scanner::ScanMode;
 use codex::tasks::TaskWorker;
 use codex::utils::password;
@@ -96,7 +97,7 @@ async fn test_generate_book_thumbnails_all_success() {
     tokio::time::sleep(Duration::from_millis(100)).await;
 
     // Verify books were created
-    let (books, _) = BookRepository::list_all(&db, false, 0, 100, None)
+    let (books, _) = BookRepository::list_all(&db, false, Window::from_offset(0, 100), None)
         .await
         .unwrap();
     assert!(!books.is_empty(), "Should have books after scan");
@@ -928,9 +929,10 @@ async fn test_generate_thumbnails_fan_out() {
     tokio::time::sleep(Duration::from_millis(100)).await;
 
     // Get book count
-    let (books, _) = BookRepository::list_by_library(&db, library.id, false, 0, 100)
-        .await
-        .unwrap();
+    let (books, _) =
+        BookRepository::list_by_library(&db, library.id, false, Window::from_offset(0, 100))
+            .await
+            .unwrap();
     let book_count = books.len();
 
     if book_count == 0 {

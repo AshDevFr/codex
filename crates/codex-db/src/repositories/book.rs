@@ -2,6 +2,7 @@
 
 use anyhow::{Context, Result};
 use chrono::Utc;
+use codex_models::pagination::Window;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection, EntityTrait, JoinType, Order,
     PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, RelationTrait, Set,
@@ -796,10 +797,10 @@ impl BookRepository {
     pub async fn list_all(
         db: &DatabaseConnection,
         include_deleted: bool,
-        offset: u64,
-        page_size: u64,
+        window: Window,
         visibility: Option<&SeriesVisibility>,
     ) -> Result<(Vec<books::Model>, u64)> {
+        let (offset, limit) = (window.offset(), window.limit());
         if let Some(v) = visibility
             && v.is_empty_whitelist()
         {
@@ -832,7 +833,7 @@ impl BookRepository {
             .order_by_asc(book_metadata::Column::Title)
             .order_by_asc(books::Column::FileName)
             .offset(offset)
-            .limit(page_size)
+            .limit(limit)
             .all(db)
             .await
             .context("Failed to list all books")?;
@@ -892,10 +893,10 @@ impl BookRepository {
         db: &DatabaseConnection,
         ids: &[Uuid],
         include_deleted: bool,
-        offset: u64,
-        page_size: u64,
+        window: Window,
         visibility: Option<&SeriesVisibility>,
     ) -> Result<(Vec<books::Model>, u64)> {
+        let (offset, limit) = (window.offset(), window.limit());
         if ids.is_empty() {
             return Ok((vec![], 0));
         }
@@ -929,7 +930,7 @@ impl BookRepository {
             .order_by_asc(book_metadata::Column::Title)
             .order_by_asc(books::Column::FileName)
             .offset(offset)
-            .limit(page_size)
+            .limit(limit)
             .all(db)
             .await
             .context("Failed to list books by IDs")?;
@@ -955,8 +956,7 @@ impl BookRepository {
         sort: &codex_models::sort::BookSortParam,
         user_id: Option<Uuid>,
         include_deleted: bool,
-        offset: u64,
-        limit: u64,
+        window: Window,
         visibility: Option<&SeriesVisibility>,
     ) -> Result<(Vec<books::Model>, u64)> {
         if ids.is_empty() {
@@ -974,7 +974,7 @@ impl BookRepository {
         }
         base_query = apply_book_visibility(base_query, visibility);
 
-        Self::paginate_sorted(db, base_query, sort, user_id, offset, limit).await
+        Self::paginate_sorted(db, base_query, sort, user_id, window).await
     }
 
     /// Count, sort and paginate an already-filtered book query.
@@ -993,9 +993,9 @@ impl BookRepository {
         base_query: sea_orm::Select<Books>,
         sort: &codex_models::sort::BookSortParam,
         user_id: Option<Uuid>,
-        offset: u64,
-        limit: u64,
+        window: Window,
     ) -> Result<(Vec<books::Model>, u64)> {
+        let (offset, limit) = (window.offset(), window.limit());
         use crate::entities::{book_metadata, read_progress, series, series_metadata};
         use codex_models::sort::{BookSortField, SortDirection};
 
@@ -1159,9 +1159,9 @@ impl BookRepository {
         db: &DatabaseConnection,
         library_id: Uuid,
         include_deleted: bool,
-        offset: u64,
-        limit: u64,
+        window: Window,
     ) -> Result<(Vec<books::Model>, u64)> {
+        let (offset, limit) = (window.offset(), window.limit());
         // Build query filtering directly by library_id (now on books table)
         let mut query = Books::find().filter(books::Column::LibraryId.eq(library_id));
 
@@ -1216,10 +1216,10 @@ impl BookRepository {
         library_id: Uuid,
         sort: &codex_models::sort::BookSortParam,
         include_deleted: bool,
-        offset: u64,
-        limit: u64,
+        window: Window,
         visibility: Option<&SeriesVisibility>,
     ) -> Result<(Vec<books::Model>, u64)> {
+        let (offset, limit) = (window.offset(), window.limit());
         use crate::entities::{book_metadata, series, series_metadata};
         use codex_models::sort::{BookSortField, SortDirection};
         use sea_orm::JoinType;
@@ -1359,10 +1359,10 @@ impl BookRepository {
         db: &DatabaseConnection,
         library_id: Option<Uuid>,
         include_deleted: bool,
-        offset: u64,
-        limit: u64,
+        window: Window,
         visibility: Option<&SeriesVisibility>,
     ) -> Result<(Vec<books::Model>, u64)> {
+        let (offset, limit) = (window.offset(), window.limit());
         use crate::entities::series;
         use sea_orm::JoinType;
 
@@ -1457,10 +1457,10 @@ impl BookRepository {
         user_id: Uuid,
         library_id: Option<Uuid>,
         completed: Option<bool>,
-        offset: u64,
-        limit: u64,
+        window: Window,
         visibility: Option<&SeriesVisibility>,
     ) -> Result<(Vec<books::Model>, u64)> {
+        let (offset, limit) = (window.offset(), window.limit());
         use crate::entities::{read_progress, series};
         use sea_orm::JoinType;
 
@@ -1536,10 +1536,10 @@ impl BookRepository {
         user_id: Uuid,
         library_id: Option<Uuid>,
         // 0-indexed row offset (callers pass `(page - 1) * page_size`).
-        offset: u64,
-        page_size: u64,
+        window: Window,
         visibility: Option<&SeriesVisibility>,
     ) -> Result<(Vec<books::Model>, u64)> {
+        let (offset, limit) = (window.offset(), window.limit());
         use crate::entities::{read_progress, series};
         use sea_orm::JoinType;
 
@@ -1685,7 +1685,7 @@ impl BookRepository {
         if start >= ordered_series.len() {
             return Ok((vec![], total));
         }
-        let end = (start + page_size as usize).min(ordered_series.len());
+        let end = (start + limit as usize).min(ordered_series.len());
         let page_series = &ordered_series[start..end];
 
         // Step 7: Load unread books only for the page's series, then pick the first
@@ -1837,7 +1837,14 @@ impl BookRepository {
 
         match (sort, pagination) {
             (Some(sort), Some((offset, limit))) => {
-                Self::paginate_sorted(db, base_query, sort, user_id, offset, limit).await
+                Self::paginate_sorted(
+                    db,
+                    base_query,
+                    sort,
+                    user_id,
+                    Window::from_offset(offset, limit),
+                )
+                .await
             }
             // No sort supplied: keep the historical title-ascending order for
             // callers that only want the matching set, such as the series
@@ -2501,9 +2508,9 @@ impl BookRepository {
         library_id: Option<Uuid>,
         series_id: Option<Uuid>,
         error_type: Option<BookErrorType>,
-        offset: u64,
-        limit: u64,
+        window: Window,
     ) -> Result<(Vec<(books::Model, BookErrors)>, u64)> {
+        let (offset, limit) = (window.offset(), window.limit());
         use crate::entities::book_error::parse_analysis_errors;
 
         let mut query = Books::find()
@@ -3202,9 +3209,14 @@ mod tests {
                 .unwrap();
         }
 
-        let (books, total) = BookRepository::list_all(db.sea_orm_connection(), false, 0, 10, None)
-            .await
-            .unwrap();
+        let (books, total) = BookRepository::list_all(
+            db.sea_orm_connection(),
+            false,
+            Window::from_offset(0, 10),
+            None,
+        )
+        .await
+        .unwrap();
 
         assert_eq!(books.len(), 5);
         assert_eq!(total, 5);
@@ -3242,19 +3254,27 @@ mod tests {
         }
 
         // Get first page (5 items)
-        let (books_page1, total) =
-            BookRepository::list_all(db.sea_orm_connection(), false, 0, 5, None)
-                .await
-                .unwrap();
+        let (books_page1, total) = BookRepository::list_all(
+            db.sea_orm_connection(),
+            false,
+            Window::from_offset(0, 5),
+            None,
+        )
+        .await
+        .unwrap();
 
         assert_eq!(books_page1.len(), 5);
         assert_eq!(total, 10);
 
         // Get second page (5 items)
-        let (books_page2, total) =
-            BookRepository::list_all(db.sea_orm_connection(), false, 1, 5, None)
-                .await
-                .unwrap();
+        let (books_page2, total) = BookRepository::list_all(
+            db.sea_orm_connection(),
+            false,
+            Window::from_offset(1, 5),
+            None,
+        )
+        .await
+        .unwrap();
 
         assert_eq!(books_page2.len(), 5);
         assert_eq!(total, 10);
@@ -3302,18 +3322,27 @@ mod tests {
             .unwrap();
 
         // List without deleted
-        let (books, total) = BookRepository::list_all(db.sea_orm_connection(), false, 0, 10, None)
-            .await
-            .unwrap();
+        let (books, total) = BookRepository::list_all(
+            db.sea_orm_connection(),
+            false,
+            Window::from_offset(0, 10),
+            None,
+        )
+        .await
+        .unwrap();
 
         assert_eq!(books.len(), 2);
         assert_eq!(total, 2);
 
         // List with deleted
-        let (books_with_deleted, total_with_deleted) =
-            BookRepository::list_all(db.sea_orm_connection(), true, 0, 10, None)
-                .await
-                .unwrap();
+        let (books_with_deleted, total_with_deleted) = BookRepository::list_all(
+            db.sea_orm_connection(),
+            true,
+            Window::from_offset(0, 10),
+            None,
+        )
+        .await
+        .unwrap();
 
         assert_eq!(books_with_deleted.len(), 3);
         assert_eq!(total_with_deleted, 3);
@@ -3323,9 +3352,14 @@ mod tests {
     async fn test_list_all_books_empty() {
         let (db, _temp_dir) = create_test_db().await;
 
-        let (books, total) = BookRepository::list_all(db.sea_orm_connection(), false, 0, 10, None)
-            .await
-            .unwrap();
+        let (books, total) = BookRepository::list_all(
+            db.sea_orm_connection(),
+            false,
+            Window::from_offset(0, 10),
+            None,
+        )
+        .await
+        .unwrap();
 
         assert_eq!(books.len(), 0);
         assert_eq!(total, 0);
@@ -3363,9 +3397,14 @@ mod tests {
                 .unwrap();
         }
 
-        let (books, _) = BookRepository::list_all(db.sea_orm_connection(), false, 0, 10, None)
-            .await
-            .unwrap();
+        let (books, _) = BookRepository::list_all(
+            db.sea_orm_connection(),
+            false,
+            Window::from_offset(0, 10),
+            None,
+        )
+        .await
+        .unwrap();
 
         // Default sort order is by file_name
         assert_eq!(books[0].file_name, "Apple.cbz");
@@ -3434,19 +3473,27 @@ mod tests {
         }
 
         // Test library 1 books
-        let (books, total) =
-            BookRepository::list_by_library(db.sea_orm_connection(), library1.id, false, 0, 10)
-                .await
-                .unwrap();
+        let (books, total) = BookRepository::list_by_library(
+            db.sea_orm_connection(),
+            library1.id,
+            false,
+            Window::from_offset(0, 10),
+        )
+        .await
+        .unwrap();
 
         assert_eq!(books.len(), 3);
         assert_eq!(total, 3);
 
         // Test library 2 books
-        let (books, total) =
-            BookRepository::list_by_library(db.sea_orm_connection(), library2.id, false, 0, 10)
-                .await
-                .unwrap();
+        let (books, total) = BookRepository::list_by_library(
+            db.sea_orm_connection(),
+            library2.id,
+            false,
+            Window::from_offset(0, 10),
+        )
+        .await
+        .unwrap();
 
         assert_eq!(books.len(), 2);
         assert_eq!(total, 2);
@@ -3540,8 +3587,7 @@ mod tests {
             created_user.id,
             None,
             Some(false), // only in-progress
-            0,
-            10,
+            Window::from_offset(0, 10),
             None,
         )
         .await
@@ -3556,8 +3602,7 @@ mod tests {
             created_user.id,
             None,
             None, // all with progress
-            0,
-            10,
+            Window::from_offset(0, 10),
             None,
         )
         .await
@@ -3601,10 +3646,15 @@ mod tests {
         }
 
         // Test getting recently added books
-        let (books, total) =
-            BookRepository::list_recently_added(db.sea_orm_connection(), None, false, 0, 10, None)
-                .await
-                .unwrap();
+        let (books, total) = BookRepository::list_recently_added(
+            db.sea_orm_connection(),
+            None,
+            false,
+            Window::from_offset(0, 10),
+            None,
+        )
+        .await
+        .unwrap();
 
         assert_eq!(books.len(), 5);
         assert_eq!(total, 5);
@@ -3622,8 +3672,7 @@ mod tests {
             db.sea_orm_connection(),
             Some(library.id),
             false,
-            0,
-            10,
+            Window::from_offset(0, 10),
             None,
         )
         .await
@@ -4178,10 +4227,15 @@ mod tests {
         .unwrap();
 
         // List all books with errors
-        let (books, total) =
-            BookRepository::list_with_errors(db.sea_orm_connection(), None, None, None, 0, 10)
-                .await
-                .unwrap();
+        let (books, total) = BookRepository::list_with_errors(
+            db.sea_orm_connection(),
+            None,
+            None,
+            None,
+            Window::from_offset(0, 10),
+        )
+        .await
+        .unwrap();
 
         assert_eq!(total, 2);
         assert_eq!(books.len(), 2);
@@ -4192,8 +4246,7 @@ mod tests {
             None,
             None,
             Some(BookErrorType::Parser),
-            0,
-            10,
+            Window::from_offset(0, 10),
         )
         .await
         .unwrap();
@@ -4207,8 +4260,7 @@ mod tests {
             None,
             None,
             Some(BookErrorType::Thumbnail),
-            0,
-            10,
+            Window::from_offset(0, 10),
         )
         .await
         .unwrap();
@@ -4218,10 +4270,15 @@ mod tests {
         assert_eq!(books[0].0.id, book2.id);
 
         // Test pagination
-        let (books, total) =
-            BookRepository::list_with_errors(db.sea_orm_connection(), None, None, None, 0, 1)
-                .await
-                .unwrap();
+        let (books, total) = BookRepository::list_with_errors(
+            db.sea_orm_connection(),
+            None,
+            None,
+            None,
+            Window::from_offset(0, 1),
+        )
+        .await
+        .unwrap();
 
         assert_eq!(total, 2);
         assert_eq!(books.len(), 1);
@@ -4232,10 +4289,15 @@ mod tests {
         // nothing, so this case tells the two conventions apart. The check above
         // cannot: at offset 0 both readings agree, which is why the defect this
         // guards against survived in five other methods.
-        let (books, total) =
-            BookRepository::list_with_errors(db.sea_orm_connection(), None, None, None, 1, 2)
-                .await
-                .unwrap();
+        let (books, total) = BookRepository::list_with_errors(
+            db.sea_orm_connection(),
+            None,
+            None,
+            None,
+            Window::from_offset(1, 2),
+        )
+        .await
+        .unwrap();
 
         assert_eq!(total, 2);
         assert_eq!(

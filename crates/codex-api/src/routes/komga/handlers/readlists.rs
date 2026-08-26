@@ -34,6 +34,7 @@ use codex_db::repositories::{
     BookMetadataRepository, BookRepository, ReadListRepository, ReadProgressRepository,
     WantToReadRepository, visibility::SeriesVisibility,
 };
+use codex_models::pagination::Window;
 use codex_models::sort::{BookSortField, BookSortParam, SortDirection, WantToReadSort};
 use std::sync::Arc;
 use uuid::Uuid;
@@ -270,8 +271,7 @@ pub async fn get_readlist_books(
                 &sort,
                 Some(auth.user_id),
                 true,
-                start,
-                size as u64,
+                Window::from_offset(start, size as u64),
                 None,
             )
             .await

@@ -20,6 +20,7 @@ use codex_db::repositories::{
     ReadListRepository, ReadProgressRepository, SeriesMetadataRepository, SeriesRepository,
     SettingsRepository,
 };
+use codex_models::pagination::Window;
 use codex_models::sort::SortDirection;
 use codex_services::CollectionMembershipService;
 use std::sync::Arc;
@@ -426,8 +427,7 @@ pub async fn recent(
         &state.db,
         None, // All libraries
         false,
-        0,
-        pagination.page_size as u64,
+        Window::from_offset(0, pagination.page_size as u64),
         visibility.as_ref(),
     )
     .await

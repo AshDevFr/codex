@@ -1,4 +1,5 @@
 use anyhow::Result;
+use codex_models::pagination::Window;
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 use tracing::{debug, info, warn};
@@ -80,12 +81,13 @@ impl TaskHandler for GenerateThumbnailsHandler {
                     lib_id, force
                 );
                 let (books, _total) =
-                    BookRepository::list_by_library(db, lib_id, false, 0, 1000000).await?;
+                    BookRepository::list_by_library(db, lib_id, false, Window::unbounded()).await?;
                 books
             } else {
                 // All libraries
                 info!("Generating thumbnails for all books (force={})", force);
-                let (books, _total) = BookRepository::list_all(db, false, 0, 1000000, None).await?;
+                let (books, _total) =
+                    BookRepository::list_all(db, false, Window::unbounded(), None).await?;
                 books
             };
 

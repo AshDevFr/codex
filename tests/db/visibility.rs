@@ -143,9 +143,15 @@ async fn book_list_recently_added_honors_deny() {
     let fx = build_fixture(&db).await;
     let vis = deny_only(&fx);
 
-    let (books, total) = BookRepository::list_recently_added(&db, None, false, 0, 10, Some(&vis))
-        .await
-        .unwrap();
+    let (books, total) = BookRepository::list_recently_added(
+        &db,
+        None,
+        false,
+        Window::from_offset(0, 10),
+        Some(&vis),
+    )
+    .await
+    .unwrap();
 
     assert_eq!(total, 1);
     assert_eq!(books.len(), 1);
@@ -158,9 +164,15 @@ async fn book_list_recently_added_honors_whitelist() {
     let fx = build_fixture(&db).await;
     let vis = whitelist_only(&fx);
 
-    let (books, total) = BookRepository::list_recently_added(&db, None, false, 0, 10, Some(&vis))
-        .await
-        .unwrap();
+    let (books, total) = BookRepository::list_recently_added(
+        &db,
+        None,
+        false,
+        Window::from_offset(0, 10),
+        Some(&vis),
+    )
+    .await
+    .unwrap();
 
     assert_eq!(total, 1);
     assert_eq!(books[0].id, fx.visible_book.id);
@@ -175,9 +187,15 @@ async fn book_list_recently_added_empty_whitelist_short_circuits() {
         allowed_series_ids: Some(vec![]),
     };
 
-    let (books, total) = BookRepository::list_recently_added(&db, None, false, 0, 10, Some(&vis))
-        .await
-        .unwrap();
+    let (books, total) = BookRepository::list_recently_added(
+        &db,
+        None,
+        false,
+        Window::from_offset(0, 10),
+        Some(&vis),
+    )
+    .await
+    .unwrap();
 
     assert_eq!(total, 0);
     assert!(books.is_empty());
@@ -189,9 +207,10 @@ async fn book_list_all_honors_deny() {
     let fx = build_fixture(&db).await;
     let vis = deny_only(&fx);
 
-    let (books, total) = BookRepository::list_all(&db, false, 0, 10, Some(&vis))
-        .await
-        .unwrap();
+    let (books, total) =
+        BookRepository::list_all(&db, false, Window::from_offset(0, 10), Some(&vis))
+            .await
+            .unwrap();
 
     assert_eq!(total, 1);
     assert_eq!(books.len(), 1);
@@ -205,9 +224,10 @@ async fn book_list_by_ids_honors_deny() {
     let vis = deny_only(&fx);
 
     let ids = vec![fx.visible_book.id, fx.hidden_book.id];
-    let (books, total) = BookRepository::list_by_ids(&db, &ids, false, 0, 10, Some(&vis))
-        .await
-        .unwrap();
+    let (books, total) =
+        BookRepository::list_by_ids(&db, &ids, false, Window::from_offset(0, 10), Some(&vis))
+            .await
+            .unwrap();
 
     assert_eq!(total, 1);
     assert_eq!(books.len(), 1);
@@ -225,10 +245,17 @@ async fn book_list_by_ids_sorted_honors_deny() {
         field: BookSortField::Title,
         direction: codex::models::sort::SortDirection::Asc,
     };
-    let (books, total) =
-        BookRepository::list_by_ids_sorted(&db, &ids, &sort, None, false, 0, 10, Some(&vis))
-            .await
-            .unwrap();
+    let (books, total) = BookRepository::list_by_ids_sorted(
+        &db,
+        &ids,
+        &sort,
+        None,
+        false,
+        Window::from_offset(0, 10),
+        Some(&vis),
+    )
+    .await
+    .unwrap();
 
     assert_eq!(total, 1);
     assert_eq!(books.len(), 1);
@@ -257,10 +284,16 @@ async fn book_list_by_library_sorted_honors_deny() {
     let vis = deny_only(&fx);
 
     let sort = BookSortParam::default();
-    let (books, total) =
-        BookRepository::list_by_library_sorted(&db, fx.library.id, &sort, false, 0, 10, Some(&vis))
-            .await
-            .unwrap();
+    let (books, total) = BookRepository::list_by_library_sorted(
+        &db,
+        fx.library.id,
+        &sort,
+        false,
+        Window::from_offset(0, 10),
+        Some(&vis),
+    )
+    .await
+    .unwrap();
 
     assert_eq!(total, 1);
     assert_eq!(books.len(), 1);
@@ -281,10 +314,16 @@ async fn book_list_with_progress_honors_deny() {
         .await
         .unwrap();
 
-    let (books, total) =
-        BookRepository::list_with_progress(&db, fx.user_id, None, None, 0, 10, Some(&vis))
-            .await
-            .unwrap();
+    let (books, total) = BookRepository::list_with_progress(
+        &db,
+        fx.user_id,
+        None,
+        None,
+        Window::from_offset(0, 10),
+        Some(&vis),
+    )
+    .await
+    .unwrap();
 
     assert_eq!(total, 1);
     assert_eq!(books.len(), 1);
@@ -329,9 +368,15 @@ async fn book_list_on_deck_honors_deny() {
         .unwrap();
 
     let vis = deny_only(&fx);
-    let (books, total) = BookRepository::list_on_deck(&db, fx.user_id, None, 0, 10, Some(&vis))
-        .await
-        .unwrap();
+    let (books, total) = BookRepository::list_on_deck(
+        &db,
+        fx.user_id,
+        None,
+        Window::from_offset(0, 10),
+        Some(&vis),
+    )
+    .await
+    .unwrap();
 
     assert_eq!(
         total, 1,
@@ -562,9 +607,10 @@ async fn none_visibility_returns_everything() {
     let (db, _temp) = setup_test_db().await;
     let fx = build_fixture(&db).await;
 
-    let (books, total) = BookRepository::list_recently_added(&db, None, false, 0, 10, None)
-        .await
-        .unwrap();
+    let (books, total) =
+        BookRepository::list_recently_added(&db, None, false, Window::from_offset(0, 10), None)
+            .await
+            .unwrap();
     assert_eq!(total, 2);
     assert_eq!(books.len(), 2);
 

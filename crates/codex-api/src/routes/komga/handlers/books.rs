@@ -29,6 +29,7 @@ use codex_db::repositories::{
     ReadProgressRepository, ReadStatusFilter, ReleaseDateFilter, ReleaseDateOperator,
     SeriesMetadataRepository,
 };
+use codex_models::pagination::Window;
 use serde::Deserialize;
 use std::sync::Arc;
 use tokio_util::io::ReaderStream;
@@ -352,8 +353,7 @@ pub async fn get_books_ondeck(
         &state.db,
         user_id,
         query.library_id,
-        offset,
-        size,
+        Window::from_offset(offset, size),
         visibility.as_ref(),
     )
     .await
