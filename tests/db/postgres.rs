@@ -13,6 +13,7 @@ use codex::db::{
     },
 };
 use codex::models::ScanningStrategy;
+use codex::models::pagination::Window;
 use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, PaginatorTrait, QueryFilter, Statement};
 use uuid::Uuid;
 
@@ -410,10 +411,16 @@ async fn test_postgres_rating_sort() {
     let all_ids = vec![series_a.id, series_b.id, _series_c.id];
     let sort = SeriesSortParam::new(SeriesSortField::Rating, SortDirection::Desc);
 
-    let (sorted_series, total) =
-        SeriesRepository::list_by_ids_sorted(conn, &all_ids, &sort, Some(user.id), 0, 50, None)
-            .await
-            .expect("Rating sort should work on PostgreSQL");
+    let (sorted_series, total) = SeriesRepository::list_by_ids_sorted(
+        conn,
+        &all_ids,
+        &sort,
+        Some(user.id),
+        Window::from_offset(0, 50),
+        None,
+    )
+    .await
+    .expect("Rating sort should work on PostgreSQL");
 
     assert_eq!(total, 3);
     assert_eq!(sorted_series.len(), 3);

@@ -16,6 +16,7 @@ use codex::db::repositories::{
     LibraryRepository, NewReleaseEntry, NewReleaseSource, ReleaseLedgerRepository,
     ReleaseSourceRepository, ReleaseSourceUpdate, SeriesRepository, UserRepository,
 };
+use codex::models::pagination::Window;
 use codex::utils::password;
 use common::*;
 use hyper::StatusCode;
@@ -757,9 +758,10 @@ async fn reset_clears_ledger_rows_and_poll_state() {
     assert!(after.last_summary.is_none());
 
     // Other source's row survives.
-    let surviving = ReleaseLedgerRepository::list_for_series(&db, series, None, 100, 0)
-        .await
-        .unwrap();
+    let surviving =
+        ReleaseLedgerRepository::list_for_series(&db, series, None, Window::from_offset(0, 100))
+            .await
+            .unwrap();
     assert_eq!(surviving.len(), 1);
     assert_eq!(surviving[0].source_id, other_source);
     assert_eq!(surviving[0].external_release_id, "rel-keep");

@@ -30,6 +30,7 @@ use axum::{
 use codex_db::repositories::{
     CollectionRepository, SeriesRepository, WantToReadRepository, visibility::SeriesVisibility,
 };
+use codex_models::pagination::Window;
 use codex_models::sort::{SeriesSortField, SeriesSortParam, SortDirection, WantToReadSort};
 use codex_services::CollectionMembershipService;
 use std::sync::Arc;
@@ -311,8 +312,7 @@ pub async fn get_collection_series(
                 &ids,
                 &sort,
                 Some(auth.user_id),
-                start,
-                size as u64,
+                Window::from_offset(start, size as u64),
                 None,
             )
             .await

@@ -45,6 +45,7 @@ use codex_db::repositories::{
     WantToReadRepository,
 };
 use codex_events::{EntityChangeEvent, EntityEvent, EntityType};
+use codex_models::pagination::Window;
 use codex_services::release::upstream_gap::{UpstreamGap, UpstreamGapInputs, compute_upstream_gap};
 use codex_utils::{
     json_merge_patch, normalize_for_search, parse_custom_metadata, serialize_custom_metadata,
@@ -1020,8 +1021,7 @@ async fn list_series_impl(
         &filtered_ids,
         &sort,
         Some(auth.user_id),
-        offset,
-        page_size,
+        Window::from_offset(offset, page_size),
         visibility.as_ref(),
     )
     .await
@@ -1128,8 +1128,7 @@ pub async fn list_series_external_index(
         &visible_ids,
         &SeriesSortParam::default(),
         Some(auth.user_id),
-        offset,
-        page_size,
+        Window::from_offset(offset, page_size),
         visibility.as_ref(),
     )
     .await
@@ -1696,8 +1695,7 @@ pub async fn list_series_filtered(
                 &visible,
                 &sort,
                 Some(auth.user_id),
-                offset,
-                page_size,
+                Window::from_offset(offset, page_size),
                 visibility.as_ref(),
             )
             .await
@@ -1747,8 +1745,7 @@ pub async fn list_series_filtered(
             &filtered_ids,
             &sort,
             Some(auth.user_id),
-            offset,
-            page_size,
+            Window::from_offset(offset, page_size),
             visibility.as_ref(),
         )
         .await
@@ -2810,8 +2807,7 @@ pub async fn list_library_series(
         &filtered_ids,
         &sort,
         Some(auth.user_id),
-        offset,
-        page_size,
+        Window::from_offset(offset, page_size),
         visibility.as_ref(),
     )
     .await

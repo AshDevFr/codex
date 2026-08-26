@@ -16,6 +16,7 @@ use codex::db::repositories::{
     BookMetadataRepository, BookRepository, LibraryRepository, ReadProgressRepository,
     SeriesRepository, SeriesVisibility, UserRepository,
 };
+use codex::models::pagination::Window;
 use codex::models::sort::{BookSortField, BookSortParam, SeriesSortField, SeriesSortParam};
 use codex::utils::password;
 use common::*;
@@ -467,8 +468,7 @@ async fn series_list_by_library_sorted_honors_deny() {
         fx.library.id,
         &sort,
         None,
-        0,
-        10,
+        Window::from_offset(0, 10),
         Some(&vis),
     )
     .await
@@ -486,10 +486,16 @@ async fn series_list_by_ids_sorted_honors_deny() {
 
     let ids = vec![fx.visible_series.id, fx.hidden_series.id];
     let sort = SeriesSortParam::default();
-    let (series_list, total) =
-        SeriesRepository::list_by_ids_sorted(&db, &ids, &sort, None, 0, 10, Some(&vis))
-            .await
-            .unwrap();
+    let (series_list, total) = SeriesRepository::list_by_ids_sorted(
+        &db,
+        &ids,
+        &sort,
+        None,
+        Window::from_offset(0, 10),
+        Some(&vis),
+    )
+    .await
+    .unwrap();
 
     assert_eq!(total, 1);
     assert_eq!(series_list.len(), 1);

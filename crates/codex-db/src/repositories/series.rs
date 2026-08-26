@@ -6,6 +6,7 @@
 
 use anyhow::{Context, Result};
 use chrono::Utc;
+use codex_models::pagination::Window;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection, EntityTrait, FromQueryResult,
     JoinType, Order, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, RelationTrait, Set,
@@ -1118,8 +1119,7 @@ impl SeriesRepository {
         library_id: Uuid,
         sort: &SeriesSortParam,
         user_id: Option<Uuid>,
-        offset: u64,
-        limit: u64,
+        window: Window,
         visibility: Option<&SeriesVisibility>,
     ) -> Result<Vec<series::Model>> {
         if let Some(v) = visibility
@@ -1142,18 +1142,16 @@ impl SeriesRepository {
 
         match sort.field {
             SeriesSortField::DateRead => {
-                Self::list_with_date_read_sort(
-                    db, library_id, sort, user_id, offset, limit, visibility,
-                )
-                .await
+                Self::list_with_date_read_sort(db, library_id, sort, user_id, window, visibility)
+                    .await
             }
             SeriesSortField::ReleaseDate => {
                 // Sort by year from series_metadata
                 base()
                     .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def())
                     .order_by(series_metadata::Column::Year, order)
-                    .offset(offset)
-                    .limit(limit)
+                    .offset(window.offset())
+                    .limit(window.limit())
                     .all(db)
                     .await
                     .context("Failed to list series with release date sort")
@@ -1167,8 +1165,8 @@ impl SeriesRepository {
                     )
                     .group_by(series::Column::Id)
                     .order_by(Expr::col(Alias::new("book_count")), order)
-                    .offset(offset)
-                    .limit(limit)
+                    .offset(window.offset())
+                    .limit(window.limit())
                     .into_model::<SeriesWithBookCount>()
                     .all(db)
                     .await
@@ -1254,8 +1252,8 @@ impl SeriesRepository {
                     .column_as(rating_expr, "sort_rating")
                     .group_by(series::Column::Id)
                     .order_by_with_nulls(Expr::col(Alias::new("sort_rating")), order, null_order)
-                    .offset(offset)
-                    .limit(limit)
+                    .offset(window.offset())
+                    .limit(window.limit())
                     .into_model::<SeriesWithRating>()
                     .all(db)
                     .await
@@ -1295,8 +1293,8 @@ impl SeriesRepository {
                 };
 
                 query
-                    .offset(offset)
-                    .limit(limit)
+                    .offset(window.offset())
+                    .limit(window.limit())
                     .all(db)
                     .await
                     .context("Failed to list series with sort")
@@ -1315,8 +1313,7 @@ impl SeriesRepository {
         ids: &[Uuid],
         sort: &SeriesSortParam,
         user_id: Option<Uuid>,
-        offset: u64,
-        limit: u64,
+        window: Window,
         visibility: Option<&SeriesVisibility>,
     ) -> Result<(Vec<series::Model>, u64)> {
         if ids.is_empty() {
@@ -1377,8 +1374,8 @@ impl SeriesRepository {
                     .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def())
                     .order_by(Expr::expr(sort_expr), order.clone())
                     .order_by(series::Column::Id, Order::Asc)
-                    .offset(offset)
-                    .limit(limit)
+                    .offset(window.offset())
+                    .limit(window.limit())
                     .all(db)
                     .await
                     .context("Failed to list series by IDs with name sort")?
@@ -1387,8 +1384,8 @@ impl SeriesRepository {
                 .filter(base_condition)
                 .order_by(series::Column::CreatedAt, order.clone())
                 .order_by(series::Column::Id, Order::Asc)
-                .offset(offset)
-                .limit(limit)
+                .offset(window.offset())
+                .limit(window.limit())
                 .all(db)
                 .await
                 .context("Failed to list series by IDs with date added sort")?,
@@ -1396,8 +1393,8 @@ impl SeriesRepository {
                 .filter(base_condition)
                 .order_by(series::Column::UpdatedAt, order.clone())
                 .order_by(series::Column::Id, Order::Asc)
-                .offset(offset)
-                .limit(limit)
+                .offset(window.offset())
+                .limit(window.limit())
                 .all(db)
                 .await
                 .context("Failed to list series by IDs with date updated sort")?,
@@ -1408,8 +1405,8 @@ impl SeriesRepository {
                     .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def())
                     .order_by(series_metadata::Column::Year, order.clone())
                     .order_by(series::Column::Id, Order::Asc)
-                    .offset(offset)
-                    .limit(limit)
+                    .offset(window.offset())
+                    .limit(window.limit())
                     .all(db)
                     .await
                     .context("Failed to list series by IDs with release date sort")?
@@ -1445,8 +1442,8 @@ impl SeriesRepository {
                     .group_by(series::Column::Id)
                     .order_by(Expr::col(Alias::new("book_count")), order.clone())
                     .order_by(series::Column::Id, Order::Asc)
-                    .offset(offset)
-                    .limit(limit)
+                    .offset(window.offset())
+                    .limit(window.limit())
                     .into_model::<SeriesWithBookCount>()
                     .all(db)
                     .await
@@ -1456,22 +1453,13 @@ impl SeriesRepository {
             }
             SeriesSortField::DateRead => {
                 // User-specific sort - requires user_id
-                Self::list_by_ids_with_date_read_sort(db, ids, &order, user_id, offset, limit)
-                    .await?
+                Self::list_by_ids_with_date_read_sort(db, ids, &order, user_id, window).await?
             }
             SeriesSortField::Rating
             | SeriesSortField::CommunityRating
             | SeriesSortField::ExternalRating => {
-                Self::list_by_ids_with_rating_sort(
-                    db,
-                    ids,
-                    &sort.field,
-                    &order,
-                    user_id,
-                    offset,
-                    limit,
-                )
-                .await?
+                Self::list_by_ids_with_rating_sort(db, ids, &sort.field, &order, user_id, window)
+                    .await?
             }
         };
 
@@ -1485,8 +1473,7 @@ impl SeriesRepository {
         sort_field: &SeriesSortField,
         order: &Order,
         user_id: Option<Uuid>,
-        offset: u64,
-        limit: u64,
+        window: Window,
     ) -> Result<Vec<series::Model>> {
         let base_condition = series::Column::Id.is_in(ids.to_vec());
 
@@ -1581,8 +1568,8 @@ impl SeriesRepository {
             // Tie-breaker for deterministic pagination when many series share
             // the same rating (or all have NULL ratings).
             .order_by(series::Column::Id, Order::Asc)
-            .offset(offset)
-            .limit(limit)
+            .offset(window.offset())
+            .limit(window.limit())
             .into_model::<SeriesWithRating>()
             .all(db)
             .await
@@ -1597,8 +1584,7 @@ impl SeriesRepository {
         ids: &[Uuid],
         order: &Order,
         user_id: Option<Uuid>,
-        offset: u64,
-        limit: u64,
+        window: Window,
     ) -> Result<Vec<series::Model>> {
         use sea_orm::sea_query::Expr;
 
@@ -1663,8 +1649,8 @@ impl SeriesRepository {
             )
             // Tie-breaker for deterministic pagination across ties / all-NULL pages.
             .order_by(series::Column::Id, Order::Asc)
-            .offset(offset)
-            .limit(limit)
+            .offset(window.offset())
+            .limit(window.limit())
             .into_model::<SeriesWithLastRead>()
             .all(db)
             .await
@@ -1680,8 +1666,7 @@ impl SeriesRepository {
         library_id: Uuid,
         sort: &SeriesSortParam,
         user_id: Option<Uuid>,
-        offset: u64,
-        limit: u64,
+        window: Window,
         visibility: Option<&SeriesVisibility>,
     ) -> Result<Vec<series::Model>> {
         use sea_orm::sea_query::Expr;
@@ -1718,8 +1703,8 @@ impl SeriesRepository {
             )
             .group_by(series::Column::Id)
             .order_by(Expr::col(Alias::new("last_read_at")), order)
-            .offset(offset)
-            .limit(limit)
+            .offset(window.offset())
+            .limit(window.limit())
             .into_model::<SeriesWithAggregates>()
             .all(db)
             .await
