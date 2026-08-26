@@ -1,8 +1,4 @@
 //! Repository for Book operations
-//!
-//! TODO: Remove allow(dead_code) when all book features are fully integrated
-
-#![allow(dead_code)]
 
 use anyhow::{Context, Result};
 use chrono::Utc;
@@ -1199,63 +1195,6 @@ impl BookRepository {
         Ok((books, total))
     }
 
-    /// List books by library with series compound sort (series name + book number)
-    ///
-    /// This sort groups books by their series name alphabetically, then sorts
-    /// books within each series by their book number. This is the "reading order" sort.
-    pub async fn list_by_library_series_sorted(
-        db: &DatabaseConnection,
-        library_id: Uuid,
-        include_deleted: bool,
-        ascending: bool,
-        page: u64,
-        page_size: u64,
-    ) -> Result<(Vec<books::Model>, u64)> {
-        use crate::entities::{series, series_metadata};
-        use sea_orm::{JoinType, Order};
-
-        // Build query filtering directly by library_id (now on books table)
-        let mut query = Books::find().filter(books::Column::LibraryId.eq(library_id));
-
-        if !include_deleted {
-            query = query.filter(books::Column::Deleted.eq(false));
-        }
-
-        // Get total count
-        let total = query
-            .clone()
-            .paginate(db, 1)
-            .num_items()
-            .await
-            .context("Failed to count books in library")?;
-
-        // Determine sort order
-        let order = if ascending { Order::Asc } else { Order::Desc };
-
-        // Get paginated results with series sorting
-        // JOIN with series, series_metadata and book_metadata for sorting
-        use crate::entities::book_metadata;
-
-        let books = query
-            .join(JoinType::LeftJoin, books::Relation::Series.def())
-            .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def())
-            .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
-            // Sort by series title_sort (if set) or series title from metadata
-            .order_by(series_metadata::Column::TitleSort, order.clone())
-            .order_by(series_metadata::Column::Title, order.clone())
-            // Then by book number within series (from book_metadata)
-            .order_by(book_metadata::Column::Number, Order::Asc)
-            // Then by book title as fallback (from book_metadata)
-            .order_by(book_metadata::Column::Title, Order::Asc)
-            .offset(page * page_size)
-            .limit(page_size)
-            .all(db)
-            .await
-            .context("Failed to list books by library with series sort")?;
-
-        Ok((books, total))
-    }
-
     /// List books by library with sorting (database-level)
     ///
     /// This method handles all sort types at the database level with proper JOINs:
@@ -1581,60 +1520,6 @@ impl BookRepository {
             .all(db)
             .await
             .context("Failed to list books with progress")?;
-
-        Ok((books, total))
-    }
-
-    /// List unread books for a user (books without progress records)
-    ///
-    /// Returns books that the user has not started reading yet (no progress record exists).
-    pub async fn list_unread(
-        db: &DatabaseConnection,
-        user_id: Uuid,
-        library_id: Option<Uuid>,
-        page: u64,
-        page_size: u64,
-    ) -> Result<(Vec<books::Model>, u64)> {
-        use crate::entities::{read_progress, series};
-        use sea_orm::JoinType;
-
-        // Get all book IDs that have progress for this user
-        let books_with_progress: Vec<Uuid> = read_progress::Entity::find()
-            .select_only()
-            .column(read_progress::Column::BookId)
-            .filter(read_progress::Column::UserId.eq(user_id))
-            .into_tuple()
-            .all(db)
-            .await
-            .context("Failed to get books with progress")?;
-
-        // Query books that are NOT in the progress list
-        let mut query = Books::find()
-            .filter(books::Column::Deleted.eq(false))
-            .filter(books::Column::Id.is_not_in(books_with_progress));
-
-        // Filter by library if specified
-        if let Some(lib_id) = library_id {
-            query = query
-                .join(JoinType::InnerJoin, books::Relation::Series.def())
-                .filter(series::Column::LibraryId.eq(lib_id));
-        }
-
-        // Get total count
-        let total = query
-            .clone()
-            .count(db)
-            .await
-            .context("Failed to count unread books")?;
-
-        // Get paginated results, ordered by created_at descending (newest first)
-        let books = query
-            .order_by_desc(books::Column::CreatedAt)
-            .offset(page * page_size)
-            .limit(page_size)
-            .all(db)
-            .await
-            .context("Failed to list unread books")?;
 
         Ok((books, total))
     }
