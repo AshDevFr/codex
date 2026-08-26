@@ -38,6 +38,12 @@ pub struct Model {
     // Results (optional)
     pub result: Option<Json>,
 
+    /// Incremental progress for a task that is still running.
+    ///
+    /// `result` is only written on completion, so this is the only thing a
+    /// caller can read while the work is in flight. Shape is per task type.
+    pub progress: Option<Json>,
+
     // Timestamps
     pub scheduled_for: DateTime<Utc>,
     pub created_at: DateTime<Utc>,

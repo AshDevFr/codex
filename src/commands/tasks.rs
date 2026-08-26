@@ -272,7 +272,10 @@ pub async fn purge_tasks(db: &DatabaseConnection, days: i64, confirm: bool) -> R
         return Ok(());
     }
 
-    let deleted = TaskRepository::purge_old_tasks(db, days).await?;
+    // The CLI keeps `--days`, which is the natural unit for an operator running
+    // this by hand. The repository speaks seconds so it matches the retention
+    // setting that deletes tasks automatically.
+    let deleted = TaskRepository::purge_finished_tasks_older_than(db, days * 86_400).await?;
     println!("✓ Purged {} old tasks", deleted);
     Ok(())
 }

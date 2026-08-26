@@ -860,6 +860,7 @@ async fn seed_completed_scan_task(
         reschedule_count: Set(0),
         max_reschedules: Set(0),
         result: Set(Some(result)),
+        progress: Set(None),
         scheduled_for: Set(now),
         created_at: Set(now),
         started_at: Set(Some(now)),
@@ -911,12 +912,12 @@ async fn test_get_scan_status_reports_the_counts_the_scan_produced() {
     assert_eq!(status, StatusCode::OK);
     let scan_status = response.unwrap();
 
-    assert_eq!(scan_status.files_total, 120, "filesTotal");
-    assert_eq!(scan_status.files_processed, 118, "filesProcessed");
-    assert_eq!(scan_status.series_found, 7, "seriesFound");
+    assert_eq!(scan_status.files_total, Some(120), "filesTotal");
+    assert_eq!(scan_status.files_processed, Some(118), "filesProcessed");
+    assert_eq!(scan_status.series_found, Some(7), "seriesFound");
     // "Found" is created plus updated, so a re-scan that changes nothing reports
     // zero rather than the size of the library. Deleted and restored are excluded.
-    assert_eq!(scan_status.books_found, 115, "booksFound");
+    assert_eq!(scan_status.books_found, Some(115), "booksFound");
     assert_eq!(
         scan_status.errors,
         vec!["Failed to hash file /lib/broken.cbz: Permission denied".to_string()],
@@ -1008,9 +1009,99 @@ async fn test_get_scan_status_reports_zero_for_a_rescan_that_changed_nothing() {
 
     assert_eq!(status, StatusCode::OK);
     let scan_status = response.unwrap();
-    assert_eq!(scan_status.books_found, 0);
+    assert_eq!(scan_status.books_found, Some(0));
     assert_eq!(
-        scan_status.files_processed, 42,
+        scan_status.files_processed,
+        Some(42),
         "the scan still walked the library, which is what separates it from unknown",
     );
+}
+
+/// `null` and `0` mean different things now: a scan that recorded nothing has
+/// unknown counts, while one that genuinely found nothing reports zeros. The
+/// all-zeros response made those indistinguishable, which is what forced
+/// clients into guessing.
+#[tokio::test]
+async fn test_get_scan_status_reports_unknown_rather_than_zero() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(
+        &db,
+        "Test Library",
+        temp_dir.path().to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    // A task with neither progress nor result: nothing is known about it.
+    seed_completed_scan_task(&db, library.id, serde_json::json!(null), None).await;
+
+    let state = create_test_app_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_app_state(state);
+
+    let uri = format!("/api/v1/libraries/{}/scan-status", library.id);
+    let (status, response): (StatusCode, Option<ScanStatusDto>) =
+        make_json_request(app, get_request_with_auth(&uri, &token)).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let scan_status = response.unwrap();
+    assert_eq!(scan_status.files_total, None, "filesTotal");
+    assert_eq!(scan_status.files_processed, None, "filesProcessed");
+    assert_eq!(scan_status.series_found, None, "seriesFound");
+    assert_eq!(scan_status.books_found, None, "booksFound");
+}
+
+/// A scan in flight writes `progress`, which the handler must prefer over the
+/// `result` the worker only writes at the end. Without it the endpoint could
+/// answer only after the scan finished, which is the opposite of when a client
+/// watching a scan wants the numbers.
+#[tokio::test]
+async fn test_get_scan_status_prefers_live_progress_over_the_final_result() {
+    use codex::db::repositories::TaskRepository;
+
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(
+        &db,
+        "Test Library",
+        temp_dir.path().to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    let task_id = trigger_scan_task(&db, library.id, ScanMode::Normal)
+        .await
+        .expect("scan task enqueued");
+
+    TaskRepository::set_progress(
+        &db,
+        task_id,
+        serde_json::json!({
+            "files_total": 500,
+            "files_processed": 210,
+            "series_created": 3,
+            "books_created": 180,
+            "books_updated": 0,
+        }),
+    )
+    .await
+    .unwrap();
+
+    let state = create_test_app_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_app_state(state);
+
+    let uri = format!("/api/v1/libraries/{}/scan-status", library.id);
+    let (status, response): (StatusCode, Option<ScanStatusDto>) =
+        make_json_request(app, get_request_with_auth(&uri, &token)).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let scan_status = response.unwrap();
+    assert_eq!(scan_status.files_total, Some(500));
+    assert_eq!(scan_status.files_processed, Some(210));
+    assert_eq!(scan_status.series_found, Some(3));
+    assert_eq!(scan_status.books_found, Some(180));
 }

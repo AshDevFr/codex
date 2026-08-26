@@ -211,6 +211,7 @@ pub mod m20260814_000106_backfill_reading_sessions;
 mod m20260820_000107_create_oidc_pending_states;
 mod m20260820_000108_create_user_plugin_oauth_states;
 mod m20260825_000109_seed_task_retention_setting;
+mod m20260825_000110_add_task_progress;
 
 pub struct Migrator;
 
@@ -403,6 +404,7 @@ impl MigratorTrait for Migrator {
             // sweep that ran in the wrong process.
             Box::new(m20260820_000108_create_user_plugin_oauth_states::Migration),
             Box::new(m20260825_000109_seed_task_retention_setting::Migration),
+            Box::new(m20260825_000110_add_task_progress::Migration),
         ]
     }
 }

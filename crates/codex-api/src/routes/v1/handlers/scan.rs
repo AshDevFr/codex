@@ -18,6 +18,43 @@ use codex_db::repositories::{BookRepository, LibraryRepository, SeriesRepository
 use codex_scanner::ScanMode;
 use codex_tasks::types::TaskType;
 
+/// The four scan counts, read from a task row.
+///
+/// A running scan writes `progress`; the worker writes `result` when it
+/// finishes. Prefer whichever is current, and leave anything neither recorded
+/// as `None`, so "the scan found nothing" stays distinct from "nothing has been
+/// recorded yet". Both write the same keys precisely so this can read either.
+struct ScanCounts {
+    files_total: Option<usize>,
+    files_processed: Option<usize>,
+    series_found: Option<usize>,
+    books_found: Option<usize>,
+}
+
+fn scan_counts(task: &codex_db::entities::tasks::Model) -> ScanCounts {
+    let counts = task.progress.as_ref().or(task.result.as_ref());
+    let count = |key: &str| -> Option<usize> {
+        counts
+            .and_then(|r| r.get(key))
+            .and_then(|v| v.as_u64())
+            .map(|v| v as usize)
+    };
+
+    ScanCounts {
+        files_total: count("files_total"),
+        files_processed: count("files_processed"),
+        series_found: count("series_created"),
+        // "Found" is created plus updated, so a re-scan that changes nothing
+        // reports zero rather than the size of the library. Deleted and restored
+        // are tracked separately and deliberately excluded. Unknown only when
+        // neither component was recorded at all.
+        books_found: match (count("books_created"), count("books_updated")) {
+            (None, None) => None,
+            (created, updated) => Some(created.unwrap_or(0) + updated.unwrap_or(0)),
+        },
+    }
+}
+
 /// Trigger a library scan
 ///
 /// # Permission Required
@@ -95,10 +132,13 @@ pub async fn trigger_scan(
     let status = ScanStatusDto {
         library_id,
         status: "pending".to_string(),
-        files_total: 0,
-        files_processed: 0,
-        series_found: 0,
-        books_found: 0,
+        // Discovery has not run, so the size of the job is genuinely unknown.
+        // The rest are zero rather than unknown: the scan has provably done
+        // nothing yet.
+        files_total: None,
+        files_processed: Some(0),
+        series_found: Some(0),
+        books_found: Some(0),
         errors: vec![],
         started_at: Utc::now(),
         completed_at: None,
@@ -152,18 +192,11 @@ pub async fn get_scan_status(
     // Convert task to ScanStatusDto
     use chrono::Utc;
 
-    // The worker writes these counts to `result` on completion. Read them back
-    // rather than reporting zeros, which are indistinguishable from a scan that
-    // genuinely found nothing.
-    let result = task.result.as_ref();
-    let count = |key: &str| -> usize {
-        result
-            .and_then(|r| r.get(key))
-            .and_then(|v| v.as_u64())
-            .unwrap_or(0) as usize
-    };
+    let counts = scan_counts(&task);
 
-    let mut errors: Vec<String> = result
+    let mut errors: Vec<String> = task
+        .result
+        .as_ref()
         .and_then(|r| r.get("errors"))
         .and_then(|v| v.as_array())
         .map(|entries| {
@@ -183,13 +216,10 @@ pub async fn get_scan_status(
     let status = ScanStatusDto {
         library_id,
         status: task.status,
-        files_total: count("files_total"),
-        files_processed: count("files_processed"),
-        series_found: count("series_created"),
-        // "Found" is created plus updated, so a re-scan that changes nothing
-        // reports zero rather than the size of the library. Deleted and
-        // restored are tracked separately and deliberately excluded.
-        books_found: count("books_created") + count("books_updated"),
+        files_total: counts.files_total,
+        files_processed: counts.files_processed,
+        series_found: counts.series_found,
+        books_found: counts.books_found,
         errors,
         started_at: task.started_at.unwrap_or_else(Utc::now),
         completed_at: task.completed_at,
@@ -289,13 +319,14 @@ pub async fn list_active_scans(
     let dtos: Vec<ScanStatusDto> = tasks
         .into_iter()
         .filter_map(|task| {
+            let counts = scan_counts(&task);
             task.library_id.map(|library_id| ScanStatusDto {
                 library_id,
                 status: task.status.clone(),
-                files_total: 0,
-                files_processed: 0,
-                series_found: 0,
-                books_found: 0,
+                files_total: counts.files_total,
+                files_processed: counts.files_processed,
+                series_found: counts.series_found,
+                books_found: counts.books_found,
                 errors: vec![],
                 started_at: task.started_at.unwrap_or_else(Utc::now),
                 completed_at: task.completed_at,
@@ -359,34 +390,23 @@ pub async fn scan_progress_stream(
                                 codex_events::TaskStatus::Failed => "failed",
                             };
 
-                            // For completed tasks, try to extract scan counts from task result
-                            let (series_found, books_found) = if event.status == codex_events::TaskStatus::Completed {
-                                // Query task result to get actual scan counts
+                            // The event carries file counts but not series or
+                            // book counts, so read those off the row, which now
+                            // records them while the scan runs as well as after.
+                            let (series_found, books_found) =
                                 match TaskRepository::get_by_id(&db, event.task_id).await {
-                                    Ok(Some(task)) if task.result.is_some() => {
-                                        if let Some(result) = task.result {
-                                            let series = result.get("series_created")
-                                                .and_then(|v| v.as_u64())
-                                                .unwrap_or(0) as usize;
-                                            let books = result.get("books_created")
-                                                .and_then(|v| v.as_u64())
-                                                .unwrap_or(0) as usize;
-                                            (series, books)
-                                        } else {
-                                            (0, 0)
-                                        }
+                                    Ok(Some(task)) => {
+                                        let counts = scan_counts(&task);
+                                        (counts.series_found, counts.books_found)
                                     }
-                                    _ => (0, 0),
-                                }
-                            } else {
-                                (0, 0)
-                            };
+                                    _ => (None, None),
+                                };
 
                             let dto = ScanStatusDto {
                                 library_id,
                                 status: status_str.to_string(),
-                                files_total,
-                                files_processed,
+                                files_total: Some(files_total),
+                                files_processed: Some(files_processed),
                                 series_found,
                                 books_found,
                                 errors: vec![],

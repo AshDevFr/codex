@@ -17804,7 +17804,7 @@ export interface components {
              *     library.
              * @example 750
              */
-            booksFound: number;
+            booksFound?: number | null;
             /**
              * Format: date-time
              * @description When the scan completed (if finished)
@@ -17821,14 +17821,13 @@ export interface components {
              * @description Number of files processed so far.
              * @example 750
              */
-            filesProcessed: number;
+            filesProcessed?: number | null;
             /**
              * @description Total number of files the scan discovered, which is the denominator
-             *     `filesProcessed` counts towards. Zero for a scan that has not started or
-             *     has not finished discovery.
+             *     `filesProcessed` counts towards. `null` until file discovery finishes.
              * @example 1500
              */
-            filesTotal: number;
+            filesTotal?: number | null;
             /**
              * Format: uuid
              * @description Library ID being scanned
@@ -17840,7 +17839,7 @@ export interface components {
              *     existing series reports zero.
              * @example 45
              */
-            seriesFound: number;
+            seriesFound?: number | null;
             /**
              * Format: date-time
              * @description When the scan started
@@ -17850,9 +17849,9 @@ export interface components {
             /**
              * @description Current status of the scan (scanning, completed, failed).
              *
-             *     The counts below are written when the scan finishes, so a scan that is
-             *     still running reports zeros for them. Live progress for an in-flight
-             *     scan is available on the task event stream.
+             *     The counts below are `null` when they are not known, which is different
+             *     from zero: a scan that genuinely found nothing reports `0`, while one
+             *     that has not recorded anything yet reports `null`.
              * @example scanning
              */
             status: string;
@@ -33763,7 +33762,9 @@ export interface operations {
     purge_old_tasks: {
         parameters: {
             query?: {
-                /** @description Delete tasks older than N days (default: 30) */
+                /** @description Delete finished tasks older than N seconds (default: 2592000, thirty days). Same unit as the `task.completed_retention_seconds` setting, which deletes tasks automatically; this endpoint is a manual sweep on top of it, useful when the retention has been raised. */
+                seconds?: number;
+                /** @description Deprecated. Use `seconds` instead, which matches the retention setting's unit. */
                 days?: number;
             };
             header?: never;

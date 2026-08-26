@@ -512,6 +512,7 @@ mod tests {
             series_id: Set(None),
             book_id: Set(None),
             params: Set(None),
+            progress: Set(None),
             status: Set("pending".to_string()),
             priority: Set(155),
             locked_by: Set(None),

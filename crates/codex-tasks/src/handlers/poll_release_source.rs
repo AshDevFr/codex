@@ -1030,6 +1030,7 @@ mod tests {
             reschedule_count: 0,
             max_reschedules: 5,
             result: None,
+            progress: None,
             scheduled_for: Utc::now(),
             created_at: Utc::now(),
             started_at: None,

@@ -529,8 +529,8 @@ async fn test_purge_old_tasks() {
         .await
         .expect("Failed to mark completed");
 
-    // Purge tasks older than 0 days (all)
-    let deleted = TaskRepository::purge_old_tasks(&db, 0)
+    // Cutoff of zero seconds: everything already finished is older than "now".
+    let deleted = TaskRepository::purge_finished_tasks_older_than(&db, 0)
         .await
         .expect("Failed to purge");
 

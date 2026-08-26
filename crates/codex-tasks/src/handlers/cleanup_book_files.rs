@@ -233,6 +233,7 @@ mod tests {
             reschedule_count: 0,
             max_reschedules: 10,
             result: None,
+            progress: None,
             scheduled_for: chrono::Utc::now(),
             created_at: chrono::Utc::now(),
             started_at: None,

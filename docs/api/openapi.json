@@ -16725,9 +16725,19 @@
         "operationId": "purge_old_tasks",
         "parameters": [
           {
+            "name": "seconds",
+            "in": "query",
+            "description": "Delete finished tasks older than N seconds (default: 2592000, thirty days). Same unit as the `task.completed_retention_seconds` setting, which deletes tasks automatically; this endpoint is a manual sweep on top of it, useful when the retention has been raised.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
             "name": "days",
             "in": "query",
-            "description": "Delete tasks older than N days (default: 30)",
+            "description": "Deprecated. Use `seconds` instead, which matches the retention setting's unit.",
             "required": false,
             "schema": {
               "type": "integer",
@@ -40083,16 +40093,15 @@
         "required": [
           "libraryId",
           "status",
-          "filesTotal",
-          "filesProcessed",
-          "seriesFound",
-          "booksFound",
           "errors",
           "startedAt"
         ],
         "properties": {
           "booksFound": {
-            "type": "integer",
+            "type": [
+              "integer",
+              "null"
+            ],
             "description": "Number of books created plus updated by this scan. Books that were\ndeleted or restored are tracked separately and are not counted here, so\na re-scan that changed nothing reports zero rather than the size of the\nlibrary.",
             "example": 750,
             "minimum": 0
@@ -40114,14 +40123,20 @@
             "description": "Errors encountered during the scan, plus the task's fatal error if it\nhad one. Capped at the first 100 individual errors; a scan that produced\nmore is truncated here rather than in the count the worker records."
           },
           "filesProcessed": {
-            "type": "integer",
+            "type": [
+              "integer",
+              "null"
+            ],
             "description": "Number of files processed so far.",
             "example": 750,
             "minimum": 0
           },
           "filesTotal": {
-            "type": "integer",
-            "description": "Total number of files the scan discovered, which is the denominator\n`filesProcessed` counts towards. Zero for a scan that has not started or\nhas not finished discovery.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Total number of files the scan discovered, which is the denominator\n`filesProcessed` counts towards. `null` until file discovery finishes.",
             "example": 1500,
             "minimum": 0
           },
@@ -40132,7 +40147,10 @@
             "example": "550e8400-e29b-41d4-a716-446655440000"
           },
           "seriesFound": {
-            "type": "integer",
+            "type": [
+              "integer",
+              "null"
+            ],
             "description": "Number of series created by this scan. A re-scan that matched only\nexisting series reports zero.",
             "example": 45,
             "minimum": 0
@@ -40145,7 +40163,7 @@
           },
           "status": {
             "type": "string",
-            "description": "Current status of the scan (scanning, completed, failed).\n\nThe counts below are written when the scan finishes, so a scan that is\nstill running reports zeros for them. Live progress for an in-flight\nscan is available on the task event stream.",
+            "description": "Current status of the scan (scanning, completed, failed).\n\nThe counts below are `null` when they are not known, which is different\nfrom zero: a scan that genuinely found nothing reports `0`, while one\nthat has not recorded anything yet reports `null`.",
             "example": "scanning"
           }
         }

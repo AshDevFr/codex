@@ -184,13 +184,39 @@ impl From<codex_db::repositories::task::TaskWithTargets> for TaskResponse {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PurgeTasksParams {
-    #[serde(default = "default_purge_days")]
-    pub days: i64,
+    /// Delete finished tasks older than this many seconds.
+    ///
+    /// The same unit as `task.completed_retention_seconds`, which is what
+    /// deletes tasks automatically. The two used to speak different units, days
+    /// here and seconds there, which made it easy to read this endpoint as the
+    /// retention policy when it is really a manual sweep on top of one.
+    #[serde(default)]
+    pub seconds: Option<i64>,
+
+    /// Deprecated alias for `seconds`, expressed in days.
+    #[deprecated(
+        since = "2.3.0",
+        note = "use `seconds`, which matches the retention setting's unit"
+    )]
+    #[serde(default)]
+    pub days: Option<i64>,
 }
 
-fn default_purge_days() -> i64 {
-    30
+impl PurgeTasksParams {
+    /// Resolve the cutoff in seconds.
+    ///
+    /// `seconds` wins when both are given. The default matches the old `days=30`
+    /// so an existing caller that passes nothing sees no change.
+    #[allow(deprecated)]
+    pub fn cutoff_seconds(&self) -> i64 {
+        self.seconds
+            .or_else(|| self.days.map(|d| d.saturating_mul(86_400)))
+            .unwrap_or(DEFAULT_PURGE_SECONDS)
+    }
 }
+
+/// Thirty days, the previous default expressed in the new unit.
+const DEFAULT_PURGE_SECONDS: i64 = 30 * 86_400;
 
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -510,7 +536,8 @@ pub async fn get_task_stats(
     delete,
     path = "/api/v1/tasks/purge",
     params(
-        ("days" = Option<i64>, Query, description = "Delete tasks older than N days (default: 30)")
+        ("seconds" = Option<i64>, Query, description = "Delete finished tasks older than N seconds (default: 2592000, thirty days). Same unit as the `task.completed_retention_seconds` setting, which deletes tasks automatically; this endpoint is a manual sweep on top of it, useful when the retention has been raised."),
+        ("days" = Option<i64>, Query, description = "Deprecated. Use `seconds` instead, which matches the retention setting's unit.")
     ),
     responses(
         (status = 200, description = "Tasks purged successfully", body = PurgeTasksResponse),
@@ -530,9 +557,10 @@ pub async fn purge_old_tasks(
     // Check permission
     auth.require_permission(&Permission::TasksWrite)?;
 
-    let deleted = TaskRepository::purge_old_tasks(&state.db, params.days)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to purge tasks: {}", e)))?;
+    let deleted =
+        TaskRepository::purge_finished_tasks_older_than(&state.db, params.cutoff_seconds())
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to purge tasks: {}", e)))?;
 
     Ok(Json(PurgeTasksResponse { deleted }))
 }

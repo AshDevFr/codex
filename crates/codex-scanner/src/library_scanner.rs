@@ -156,10 +156,14 @@ struct SharedScanState {
     task_id: Option<Uuid>,
     library_name: String,
     event_broadcaster: Option<Arc<EventBroadcaster>>,
+    /// Used to persist progress onto the task row. The SSE event is ephemeral,
+    /// so a client that polls, reconnects, or reloads has only the row to read.
+    db: DatabaseConnection,
 }
 
 impl SharedScanState {
     fn new(
+        db: DatabaseConnection,
         library_id: Uuid,
         library_name: String,
         progress_tx: Option<mpsc::Sender<ScanProgress>>,
@@ -175,6 +179,7 @@ impl SharedScanState {
             task_id,
             library_name,
             event_broadcaster,
+            db,
         }
     }
 
@@ -239,6 +244,31 @@ impl SharedScanState {
             ));
         }
 
+        // Persist the same snapshot. The event above only reaches clients that
+        // are connected right now; the row is what `scan-status` reads, and it
+        // is the only thing a client that polls or reconnects can see. Written
+        // once per completed series, which is the cadence this function is
+        // already called at, so it adds no extra write pressure.
+        //
+        // Keys match the worker's completion `result` so `get_scan_status` can
+        // read either without knowing which it got.
+        if let Some(task_id) = self.task_id {
+            let snapshot = serde_json::json!({
+                "files_total": progress.files_total,
+                "files_processed": progress.files_processed,
+                "series_created": progress.series_found,
+                "books_created": progress.books_found,
+                "books_updated": 0,
+            });
+            if let Err(e) = TaskRepository::set_progress(&self.db, task_id, snapshot).await {
+                // Progress is a nicety; a scan must not fail because of it.
+                debug!(
+                    "Failed to persist scan progress for task {}: {}",
+                    task_id, e
+                );
+            }
+        }
+
         if let Some(ref tx) = self.progress_tx
             && let Err(e) = tx.send(progress).await
         {
@@ -288,6 +318,7 @@ impl Clone for SharedScanState {
             task_id: self.task_id,
             library_name: self.library_name.clone(),
             event_broadcaster: self.event_broadcaster.clone(),
+            db: self.db.clone(),
         }
     }
 }
@@ -580,6 +611,7 @@ async fn scan_batched(
 
     // Create shared state for thread-safe progress tracking
     let shared_state = SharedScanState::new(
+        db.clone(),
         library.id,
         library.name.clone(),
         progress_tx,

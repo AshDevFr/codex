@@ -55,6 +55,7 @@ struct TaskWithTargetsRow {
     reschedule_count: i32,
     max_reschedules: i32,
     result: Option<serde_json::Value>,
+    progress: Option<serde_json::Value>,
     scheduled_for: DateTime<Utc>,
     created_at: DateTime<Utc>,
     started_at: Option<DateTime<Utc>>,
@@ -85,6 +86,7 @@ impl From<TaskWithTargetsRow> for TaskWithTargets {
                 reschedule_count: row.reschedule_count,
                 max_reschedules: row.max_reschedules,
                 result: row.result,
+                progress: row.progress,
                 scheduled_for: row.scheduled_for,
                 created_at: row.created_at,
                 started_at: row.started_at,
@@ -149,6 +151,7 @@ impl TaskRepository {
             reschedule_count: Set(0),
             max_reschedules: Set(DEFAULT_MAX_RESCHEDULES),
             result: Set(None),
+            progress: Set(None),
             scheduled_for: Set(scheduled_for.unwrap_or(now)),
             created_at: Set(now),
             started_at: Set(None),
@@ -228,6 +231,7 @@ impl TaskRepository {
             reschedule_count: Set(0),
             max_reschedules: Set(DEFAULT_MAX_RESCHEDULES),
             result: Set(None),
+            progress: Set(None),
             scheduled_for: Set(scheduled_for.unwrap_or(now)),
             created_at: Set(now),
             started_at: Set(None),
@@ -347,6 +351,7 @@ impl TaskRepository {
                 reschedule_count: Set(0),
                 max_reschedules: Set(DEFAULT_MAX_RESCHEDULES),
                 result: Set(None),
+                progress: Set(None),
                 scheduled_for: Set(scheduled),
                 created_at: Set(now),
                 started_at: Set(None),
@@ -743,6 +748,7 @@ impl TaskRepository {
                                 reschedule_count: row.try_get("", "reschedule_count").ok()?,
                                 max_reschedules: row.try_get("", "max_reschedules").ok()?,
                                 result: row.try_get("", "result").ok()?,
+                                progress: row.try_get("", "progress").ok()?,
                                 scheduled_for: row.try_get("", "scheduled_for").ok()?,
                                 created_at: row.try_get("", "created_at").ok()?,
                                 started_at: row.try_get("", "started_at").ok()?,
@@ -794,6 +800,7 @@ impl TaskRepository {
                                 reschedule_count: row.try_get("", "reschedule_count").ok()?,
                                 max_reschedules: row.try_get("", "max_reschedules").ok()?,
                                 result: row.try_get("", "result").ok()?,
+                                progress: row.try_get("", "progress").ok()?,
                                 scheduled_for: row.try_get("", "scheduled_for").ok()?,
                                 created_at: row.try_get("", "created_at").ok()?,
                                 started_at: row.try_get("", "started_at").ok()?,
@@ -1143,9 +1150,38 @@ impl TaskRepository {
         Ok(())
     }
 
-    /// Purge completed/failed tasks older than N days
-    pub async fn purge_old_tasks(db: &DatabaseConnection, days: i64) -> Result<u64> {
-        let cutoff = Utc::now() - Duration::days(days);
+    /// Record incremental progress for a running task.
+    ///
+    /// `result` is only written when a task finishes, so without this a caller
+    /// reading the row mid-flight has nothing. Deliberately a plain column write
+    /// with no read-modify-write: the caller owns the shape and writes whole
+    /// snapshots, so concurrent updates cannot interleave into a torn value.
+    pub async fn set_progress(
+        db: &DatabaseConnection,
+        task_id: Uuid,
+        progress: serde_json::Value,
+    ) -> Result<()> {
+        Tasks::update_many()
+            .col_expr(tasks::Column::Progress, Expr::value(Some(progress)))
+            .filter(tasks::Column::Id.eq(task_id))
+            .exec(db)
+            .await
+            .context("Failed to record task progress")?;
+
+        Ok(())
+    }
+
+    /// Purge finished tasks older than N seconds.
+    ///
+    /// Seconds rather than days so this speaks the same unit as
+    /// `task.completed_retention_seconds`, the automatic sweep it sits on top
+    /// of. Two retention mechanisms in different units is what made this one
+    /// read as the policy when it is a manual override.
+    pub async fn purge_finished_tasks_older_than(
+        db: &DatabaseConnection,
+        seconds: i64,
+    ) -> Result<u64> {
+        let cutoff = Utc::now() - Duration::seconds(seconds);
 
         let result = Tasks::delete_many()
             .filter(tasks::Column::Status.is_in(["completed", "failed", "cancelled"]))

@@ -128,6 +128,7 @@ mod tests {
             reschedule_count: 0,
             max_reschedules: 0,
             result: None,
+            progress: None,
             scheduled_for: now,
             created_at: now,
             started_at: Some(now),
