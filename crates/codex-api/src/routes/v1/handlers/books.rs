@@ -4668,13 +4668,12 @@ pub async fn list_books_with_errors(
     // Convert internal error type to DTO if provided
     let error_type_filter = query.error_type.map(|t| t.into());
 
-    // Fetch books with errors (convert to 0-indexed for repository)
     let (books_with_errors, total) = BookRepository::list_with_errors(
         &state.db,
         query.library_id,
         query.series_id,
         error_type_filter,
-        page - 1, // Convert 1-indexed to 0-indexed for repository
+        (page - 1) * page_size,
         page_size,
     )
     .await

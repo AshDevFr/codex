@@ -1159,8 +1159,8 @@ impl BookRepository {
         db: &DatabaseConnection,
         library_id: Uuid,
         include_deleted: bool,
-        page: u64,
-        page_size: u64,
+        offset: u64,
+        limit: u64,
     ) -> Result<(Vec<books::Model>, u64)> {
         // Build query filtering directly by library_id (now on books table)
         let mut query = Books::find().filter(books::Column::LibraryId.eq(library_id));
@@ -1186,8 +1186,8 @@ impl BookRepository {
             .order_by_asc(book_metadata::Column::TitleSort)
             .order_by_asc(book_metadata::Column::Title)
             .order_by_asc(books::Column::FileName)
-            .offset(page * page_size)
-            .limit(page_size)
+            .offset(offset)
+            .limit(limit)
             .all(db)
             .await
             .context("Failed to list books by library")?;
@@ -2501,8 +2501,8 @@ impl BookRepository {
         library_id: Option<Uuid>,
         series_id: Option<Uuid>,
         error_type: Option<BookErrorType>,
-        page: u64,
-        page_size: u64,
+        offset: u64,
+        limit: u64,
     ) -> Result<(Vec<(books::Model, BookErrors)>, u64)> {
         use crate::entities::book_error::parse_analysis_errors;
 
@@ -2545,11 +2545,13 @@ impl BookRepository {
 
         let total = filtered_books.len() as u64;
 
-        // Apply pagination
+        // Apply pagination. A row offset, not a page index: every neighbouring
+        // method takes an offset, and the two being indistinguishable `u64`s is
+        // what let six endpoints ship querying `(page - 1) * page_size²`.
         let paginated: Vec<(books::Model, BookErrors)> = filtered_books
             .into_iter()
-            .skip((page * page_size) as usize)
-            .take(page_size as usize)
+            .skip(offset as usize)
+            .take(limit as usize)
             .collect();
 
         Ok((paginated, total))
@@ -4223,6 +4225,24 @@ mod tests {
 
         assert_eq!(total, 2);
         assert_eq!(books.len(), 1);
+
+        // The first argument is a row offset, not a page index. Offset 1 with a
+        // limit of 2 must skip exactly one row and return the other book. Under
+        // the page-index reading this would skip `1 * 2` rows and return
+        // nothing, so this case tells the two conventions apart. The check above
+        // cannot: at offset 0 both readings agree, which is why the defect this
+        // guards against survived in five other methods.
+        let (books, total) =
+            BookRepository::list_with_errors(db.sea_orm_connection(), None, None, None, 1, 2)
+                .await
+                .unwrap();
+
+        assert_eq!(total, 2);
+        assert_eq!(
+            books.len(),
+            1,
+            "offset 1 of 2 rows must return the remaining row, not skip past the end",
+        );
     }
 
     #[tokio::test]

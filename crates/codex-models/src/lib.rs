@@ -7,6 +7,7 @@
 //! `codex-models`, this crate depends on nothing else inside Codex).
 
 pub mod filter;
+pub mod pagination;
 pub mod permissions;
 pub mod plugin;
 pub mod preprocessing;

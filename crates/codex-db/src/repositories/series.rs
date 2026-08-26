@@ -1771,7 +1771,10 @@ impl SeriesRepository {
     /// Unified search method with optional filters:
     /// - `library_id`: Filter to a specific library (None = all libraries)
     /// - `candidate_ids`: Filter to specific series IDs (None = no ID filter)
-    /// - `pagination`: Optional (page, page_size) tuple. If None, returns all results.
+    /// - `pagination`: Optional `(row_offset, limit)` tuple. If None, returns all
+    ///   results. A row offset, not a page index, matching every neighbouring
+    ///   method: the two conventions used to coexist and were indistinguishable
+    ///   at a call site, since both are `u64`.
     ///
     /// Returns (results, total_count). If pagination is None, total_count equals results.len().
     /// Returns empty vec if candidate_ids is Some but empty.
@@ -1829,7 +1832,7 @@ impl SeriesRepository {
             .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def())
             .filter(search_condition.clone());
 
-        if let Some((page, page_size)) = pagination {
+        if let Some((offset, limit)) = pagination {
             // With pagination: count total and fetch page
             let total = Series::find()
                 .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def())
@@ -1840,8 +1843,8 @@ impl SeriesRepository {
 
             let results = base_query
                 .order_by_asc(series_metadata::Column::Title)
-                .offset(page * page_size)
-                .limit(page_size)
+                .offset(offset)
+                .limit(limit)
                 .all(db)
                 .await
                 .context("Failed to search series by title")?;
