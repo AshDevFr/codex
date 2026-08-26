@@ -963,10 +963,6 @@ impl BookRepository {
         limit: u64,
         visibility: Option<&SeriesVisibility>,
     ) -> Result<(Vec<books::Model>, u64)> {
-        use crate::entities::{book_metadata, read_progress, series, series_metadata};
-        use codex_models::sort::{BookSortField, SortDirection};
-        use sea_orm::{Condition, JoinType};
-
         if ids.is_empty() {
             return Ok((vec![], 0));
         }
@@ -981,6 +977,31 @@ impl BookRepository {
             base_query = base_query.filter(books::Column::Deleted.eq(false));
         }
         base_query = apply_book_visibility(base_query, visibility);
+
+        Self::paginate_sorted(db, base_query, sort, user_id, offset, limit).await
+    }
+
+    /// Count, sort and paginate an already-filtered book query.
+    ///
+    /// Split out of `list_by_ids_sorted` so the search path can reuse it. Both
+    /// callers build their own predicate and hand it over here, which keeps the
+    /// sort arms, the offset convention and the count query in one place: two
+    /// copies of this is how the id path and the search path drifted apart, one
+    /// honouring `sort` and the other pinning its own `ORDER BY title`.
+    ///
+    /// `base_query` must already carry its deleted and visibility filters, and
+    /// must not join `book_metadata`: several sort arms join it themselves and a
+    /// second join makes the column references ambiguous.
+    async fn paginate_sorted(
+        db: &DatabaseConnection,
+        base_query: sea_orm::Select<Books>,
+        sort: &codex_models::sort::BookSortParam,
+        user_id: Option<Uuid>,
+        offset: u64,
+        limit: u64,
+    ) -> Result<(Vec<books::Model>, u64)> {
+        use crate::entities::{book_metadata, read_progress, series, series_metadata};
+        use codex_models::sort::{BookSortField, SortDirection};
 
         // Count visible matches after filter so totals stay accurate.
         let total = base_query
@@ -1246,13 +1267,18 @@ impl BookRepository {
     /// - FileSize: sorts by books.file_size
     /// - Filename: sorts by books.file_name
     /// - PageCount: sorts by books.page_count
+    ///
+    /// `offset` is a row offset, matching every neighbouring method. It was a
+    /// page index that this function multiplied by `limit` itself, which
+    /// disagreed with the row offset `list_library_books` passes, so every page
+    /// after the first queried far past the end of the library.
     pub async fn list_by_library_sorted(
         db: &DatabaseConnection,
         library_id: Uuid,
         sort: &codex_models::sort::BookSortParam,
         include_deleted: bool,
-        page: u64,
-        page_size: u64,
+        offset: u64,
+        limit: u64,
         visibility: Option<&SeriesVisibility>,
     ) -> Result<(Vec<books::Model>, u64)> {
         use crate::entities::{book_metadata, series, series_metadata};
@@ -1298,8 +1324,8 @@ impl BookRepository {
                     .order_by(series_metadata::Column::Title, order.clone())
                     .order_by(book_metadata::Column::Number, Order::Asc)
                     .order_by(book_metadata::Column::Title, Order::Asc)
-                    .offset(page * page_size)
-                    .limit(page_size)
+                    .offset(offset)
+                    .limit(limit)
                     .all(db)
                     .await
                     .context("Failed to list books with series sort")?
@@ -1314,16 +1340,16 @@ impl BookRepository {
                     .order_by(book_metadata::Column::TitleSort, order.clone())
                     .order_by(book_metadata::Column::Title, order)
                     .order_by_asc(books::Column::FileName)
-                    .offset(page * page_size)
-                    .limit(page_size)
+                    .offset(offset)
+                    .limit(limit)
                     .all(db)
                     .await
                     .context("Failed to list books with title sort")?
             }
             BookSortField::DateAdded => base_query
                 .order_by(books::Column::CreatedAt, order)
-                .offset(page * page_size)
-                .limit(page_size)
+                .offset(offset)
+                .limit(limit)
                 .all(db)
                 .await
                 .context("Failed to list books with date added sort")?,
@@ -1332,8 +1358,8 @@ impl BookRepository {
                 base_query
                     .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
                     .order_by(book_metadata::Column::Year, order)
-                    .offset(page * page_size)
-                    .limit(page_size)
+                    .offset(offset)
+                    .limit(limit)
                     .all(db)
                     .await
                     .context("Failed to list books with release date sort")?
@@ -1343,30 +1369,30 @@ impl BookRepository {
                 base_query
                     .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
                     .order_by(book_metadata::Column::Number, order)
-                    .offset(page * page_size)
-                    .limit(page_size)
+                    .offset(offset)
+                    .limit(limit)
                     .all(db)
                     .await
                     .context("Failed to list books with chapter number sort")?
             }
             BookSortField::FileSize => base_query
                 .order_by(books::Column::FileSize, order)
-                .offset(page * page_size)
-                .limit(page_size)
+                .offset(offset)
+                .limit(limit)
                 .all(db)
                 .await
                 .context("Failed to list books with file size sort")?,
             BookSortField::Filename => base_query
                 .order_by(books::Column::FileName, order)
-                .offset(page * page_size)
-                .limit(page_size)
+                .offset(offset)
+                .limit(limit)
                 .all(db)
                 .await
                 .context("Failed to list books with filename sort")?,
             BookSortField::PageCount => base_query
                 .order_by(books::Column::PageCount, order)
-                .offset(page * page_size)
-                .limit(page_size)
+                .offset(offset)
+                .limit(limit)
                 .all(db)
                 .await
                 .context("Failed to list books with page count sort")?,
@@ -1375,8 +1401,8 @@ impl BookRepository {
                 // Fall back to DateAdded sort; use BookRepository::query() for LastRead support
                 base_query
                     .order_by(books::Column::CreatedAt, order)
-                    .offset(page * page_size)
-                    .limit(page_size)
+                    .offset(offset)
+                    .limit(limit)
                     .all(db)
                     .await
                     .context("Failed to list books (LastRead fallback to DateAdded)")?
@@ -1814,8 +1840,22 @@ impl BookRepository {
         query: &str,
         visibility: Option<&SeriesVisibility>,
     ) -> Result<Vec<books::Model>> {
-        let (books, _) =
-            Self::search_by_title(db, query, None, None, false, Some((0, 50)), visibility).await?;
+        // `BookSortParam::default()` is title ascending, which is the order this
+        // wrapper has always returned. Pass it explicitly so the 50-row limit is
+        // applied against a defined order rather than whatever the planner picks.
+        let sort = codex_models::sort::BookSortParam::default();
+        let (books, _) = Self::search_by_title(
+            db,
+            query,
+            None,
+            None,
+            false,
+            Some(&sort),
+            None,
+            Some((0, 50)),
+            visibility,
+        )
+        .await?;
         Ok(books)
     }
 
@@ -1829,17 +1869,30 @@ impl BookRepository {
     ///
     /// Returns (results, total_count). If pagination is None, total_count equals results.len().
     /// Returns empty vec if candidate_ids is Some but empty.
+    /// Search books by title, optionally sorted and paginated.
+    ///
+    /// `sort` and `pagination` are applied by [`Self::paginate_sorted`], the
+    /// same code the id-based listing uses, so the two paths cannot order or
+    /// page results differently. `pagination` is `(row_offset, limit)`, matching
+    /// every neighbouring method; it used to be a page index that this function
+    /// multiplied itself, which silently disagreed with the row offset callers
+    /// were passing.
+    // The parameters are all independent query predicates rather than a
+    // cohesive value, so a params struct would only move the list elsewhere.
+    #[allow(clippy::too_many_arguments)]
     pub async fn search_by_title(
         db: &DatabaseConnection,
         query: &str,
         library_id: Option<Uuid>,
         candidate_ids: Option<&[Uuid]>,
         include_deleted: bool,
+        sort: Option<&codex_models::sort::BookSortParam>,
+        user_id: Option<Uuid>,
         pagination: Option<(u64, u64)>,
         visibility: Option<&SeriesVisibility>,
     ) -> Result<(Vec<books::Model>, u64)> {
         use crate::entities::book_metadata;
-        use sea_orm::JoinType;
+        use sea_orm::sea_query::Query;
 
         // Short-circuit if candidate_ids is explicitly empty
         if let Some(ids) = candidate_ids
@@ -1855,10 +1908,17 @@ impl BookRepository {
 
         let pattern = format!("%{}%", normalize_for_search(query));
 
-        // Use search_title LIKE pattern for accent-insensitive, case-insensitive search
-        let mut search_condition = Condition::all().add(
-            Expr::col((book_metadata::Entity, book_metadata::Column::SearchTitle)).like(&pattern),
-        );
+        // Match on `search_title` through a subquery rather than a join. Several
+        // sort arms in `paginate_sorted` join `book_metadata` themselves, and
+        // joining it here as well would make the ordering columns ambiguous.
+        let title_matches = Query::select()
+            .column(book_metadata::Column::BookId)
+            .from(book_metadata::Entity)
+            .and_where(Expr::col(book_metadata::Column::SearchTitle).like(&pattern))
+            .to_owned();
+
+        let mut search_condition =
+            Condition::all().add(books::Column::Id.in_subquery(title_matches));
 
         // Add library filter if specified
         if let Some(lib_id) = library_id {
@@ -1882,38 +1942,26 @@ impl BookRepository {
             search_condition = search_condition.add(expr);
         }
 
-        let base_query = Books::find()
-            .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
-            .filter(search_condition.clone());
+        let base_query = Books::find().filter(search_condition);
 
-        if let Some((page, page_size)) = pagination {
-            // With pagination: count total and fetch page
-            let total = Books::find()
-                .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
-                .filter(search_condition)
-                .count(db)
-                .await
-                .context("Failed to count search results")?;
+        match (sort, pagination) {
+            (Some(sort), Some((offset, limit))) => {
+                Self::paginate_sorted(db, base_query, sort, user_id, offset, limit).await
+            }
+            // No sort supplied: keep the historical title-ascending order for
+            // callers that only want the matching set, such as the series
+            // handler collecting ids before sorting them itself.
+            _ => {
+                let books_list = base_query
+                    .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
+                    .order_by_asc(book_metadata::Column::Title)
+                    .all(db)
+                    .await
+                    .context("Failed to search books by title")?;
 
-            let books_list = base_query
-                .order_by_asc(book_metadata::Column::Title)
-                .offset(page * page_size)
-                .limit(page_size)
-                .all(db)
-                .await
-                .context("Failed to search books by title")?;
-
-            Ok((books_list, total))
-        } else {
-            // Without pagination: return all results
-            let books_list = base_query
-                .order_by_asc(book_metadata::Column::Title)
-                .all(db)
-                .await
-                .context("Failed to search books by title")?;
-
-            let total = books_list.len() as u64;
-            Ok((books_list, total))
+                let total = books_list.len() as u64;
+                Ok((books_list, total))
+            }
         }
     }
 

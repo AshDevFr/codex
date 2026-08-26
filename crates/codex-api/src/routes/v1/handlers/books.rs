@@ -1114,9 +1114,9 @@ pub async fn list_books_filtered(
                     None,
                     Some(&id_vec),
                     request.include_deleted,
-                    // `search_by_title` takes a page index, not a row offset:
-                    // it computes `page * page_size` itself.
-                    Some((page - 1, page_size)),
+                    Some(&sort),
+                    Some(auth.user_id),
+                    Some((offset, page_size)),
                     visibility.as_ref(),
                 )
                 .await
@@ -1131,9 +1131,9 @@ pub async fn list_books_filtered(
                 None,
                 None,
                 request.include_deleted,
-                // `search_by_title` takes a page index, not a row offset:
-                // it computes `page * page_size` itself.
-                Some((page - 1, page_size)),
+                Some(&sort),
+                Some(auth.user_id),
+                Some((offset, page_size)),
                 visibility.as_ref(),
             )
             .await

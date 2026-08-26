@@ -347,10 +347,19 @@ async fn book_search_by_title_honors_deny() {
     let fx = build_fixture(&db).await;
     let vis = deny_only(&fx);
 
-    let (books, total) =
-        BookRepository::search_by_title(&db, "cbz", None, None, false, Some((0, 10)), Some(&vis))
-            .await
-            .unwrap();
+    let (books, total) = BookRepository::search_by_title(
+        &db,
+        "cbz",
+        None,
+        None,
+        false,
+        None,
+        None,
+        Some((0, 10)),
+        Some(&vis),
+    )
+    .await
+    .unwrap();
 
     assert_eq!(total, 1);
     assert_eq!(books.len(), 1);

@@ -5302,3 +5302,122 @@ async fn test_list_books_full_text_search_paginates_past_first_page() {
         "pages must not overlap",
     );
 }
+
+/// The non-fuzzy LIKE path routed through `search_by_title`, which had no sort
+/// parameter and pinned its own `ORDER BY title ASC`. The handler's resolved
+/// sort was computed and then dropped, so every sort produced the same order.
+/// Asserting only `title,asc` would pass against the bug, so this checks that
+/// reversing the direction actually reverses the result.
+#[tokio::test]
+async fn test_list_books_full_text_search_honors_sort() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Series", None)
+        .await
+        .unwrap();
+
+    for i in 1..=4 {
+        create_test_book_with_metadata(
+            &db,
+            series.id,
+            library.id,
+            &format!("/daredevil-{i:02}.cbz"),
+            &format!("daredevil-{i:02}.cbz"),
+            Some(format!("Daredevil {i:02}")),
+        )
+        .await;
+    }
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    async fn titles_for(app: axum::Router, token: &str, sort: &str) -> Vec<String> {
+        let body = BookListRequest {
+            full_text_search: Some("Daredevil".to_string()),
+            ..Default::default()
+        };
+        let uri = format!("/api/v1/books/list?page=1&pageSize=10&sort={sort}");
+        let (status, response): (StatusCode, Option<BookListResponse>) =
+            make_json_request(app, post_json_request_with_auth(&uri, &body, token)).await;
+        assert_eq!(status, StatusCode::OK, "sort={sort}");
+        response
+            .unwrap()
+            .data
+            .into_iter()
+            .map(|b| b.title)
+            .collect()
+    }
+
+    let ascending = titles_for(app.clone(), &token, "title,asc").await;
+    let descending = titles_for(app, &token, "title,desc").await;
+
+    assert_eq!(ascending.len(), 4, "all four books should match");
+    assert_eq!(
+        descending,
+        ascending.iter().rev().cloned().collect::<Vec<_>>(),
+        "sort=title,desc must reverse sort=title,asc, got {descending:?} against {ascending:?}",
+    );
+}
+
+/// `list_by_library_sorted` had the same offset/page-index mismatch as the
+/// search path: the handler computes a row offset and the repository multiplied
+/// it by the page size again. Page 1 was correct by coincidence.
+#[tokio::test]
+async fn test_list_library_books_paginates_past_first_page() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Series", None)
+        .await
+        .unwrap();
+
+    for i in 1..=6 {
+        create_test_book_with_metadata(
+            &db,
+            series.id,
+            library.id,
+            &format!("/vol-{i:02}.cbz"),
+            &format!("vol-{i:02}.cbz"),
+            Some(format!("Volume {i:02}")),
+        )
+        .await;
+    }
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let fetch = |app: axum::Router, token: String, page: u64| async move {
+        let uri = format!(
+            "/api/v1/libraries/{}/books?page={page}&pageSize=3",
+            library.id
+        );
+        let (status, response): (StatusCode, Option<BookListResponse>) =
+            make_json_request(app, get_request_with_auth(&uri, &token)).await;
+        assert_eq!(status, StatusCode::OK);
+        response.unwrap()
+    };
+
+    let page1 = fetch(app.clone(), token.clone(), 1).await;
+    let page2 = fetch(app, token, 2).await;
+
+    assert_eq!(page1.total, 6);
+    assert_eq!(page1.data.len(), 3);
+    assert_eq!(
+        page2.data.len(),
+        3,
+        "page 2 of a 6-book library at pageSize 3 must return the remaining 3",
+    );
+
+    let page1_ids: Vec<_> = page1.data.iter().map(|b| b.id).collect();
+    assert!(
+        page2.data.iter().all(|b| !page1_ids.contains(&b.id)),
+        "pages must not overlap",
+    );
+}
