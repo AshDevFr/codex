@@ -3188,6 +3188,15 @@ pub async fn download_series(
 ///
 /// Replaces all metadata fields with the values in the request.
 /// Omitting a field (or setting it to null) will clear that field.
+///
+/// Each replaced field's lock is recomputed from the payload: supplying a value
+/// locks the field, omitting or clearing it unlocks it. A locked field is one a
+/// metadata provider will not overwrite, so this is what makes a hand-made
+/// correction survive the next match. `title` is the exception, since it is
+/// preserved rather than cleared when omitted; its lock is preserved too.
+///
+/// Use `PUT /series/{series_id}/metadata/locks` to set locks without changing
+/// values.
 #[utoipa::path(
     put,
     path = "/api/v1/series/{series_id}/metadata",
@@ -3534,6 +3543,14 @@ pub async fn reset_series_metadata(
 ///
 /// Only provided fields will be updated. Absent fields are unchanged.
 /// Explicitly null fields will be cleared.
+///
+/// Setting a field to a non-null value also locks it, so a metadata provider
+/// will not overwrite it on the next match: editing a field is taken as an
+/// instruction to keep it. Clearing a field with an explicit null does not
+/// change its lock, and absent fields are left entirely alone.
+///
+/// Use `PUT /series/{series_id}/metadata/locks` to set locks without changing
+/// values, and `GET /series/{series_id}/metadata/locks` to read them.
 #[utoipa::path(
     patch,
     path = "/api/v1/series/{series_id}/metadata",

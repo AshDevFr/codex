@@ -1639,6 +1639,10 @@ export interface paths {
          * @description Only provided fields will be updated. Absent fields are unchanged.
          *     Explicitly null fields will be cleared.
          *     If no metadata record exists, one will be created with the provided fields.
+         *
+         *     Setting a field to a non-null value also locks it, so a metadata provider
+         *     will not overwrite it on the next match. Clearing a field with an explicit
+         *     null does not change its lock, and absent fields are left alone.
          */
         patch: operations["patch_book_metadata"];
         trace?: never;
@@ -4857,6 +4861,15 @@ export interface paths {
          * Replace all series metadata (PUT)
          * @description Replaces all metadata fields with the values in the request.
          *     Omitting a field (or setting it to null) will clear that field.
+         *
+         *     Each replaced field's lock is recomputed from the payload: supplying a value
+         *     locks the field, omitting or clearing it unlocks it. A locked field is one a
+         *     metadata provider will not overwrite, so this is what makes a hand-made
+         *     correction survive the next match. `title` is the exception, since it is
+         *     preserved rather than cleared when omitted; its lock is preserved too.
+         *
+         *     Use `PUT /series/{series_id}/metadata/locks` to set locks without changing
+         *     values.
          */
         put: operations["replace_series_metadata"];
         post?: never;
@@ -4877,6 +4890,14 @@ export interface paths {
          * Partially update series metadata (PATCH)
          * @description Only provided fields will be updated. Absent fields are unchanged.
          *     Explicitly null fields will be cleared.
+         *
+         *     Setting a field to a non-null value also locks it, so a metadata provider
+         *     will not overwrite it on the next match: editing a field is taken as an
+         *     instruction to keep it. Clearing a field with an explicit null does not
+         *     change its lock, and absent fields are left entirely alone.
+         *
+         *     Use `PUT /series/{series_id}/metadata/locks` to set locks without changing
+         *     values, and `GET /series/{series_id}/metadata/locks` to read them.
          */
         patch: operations["patch_series_metadata"];
         trace?: never;

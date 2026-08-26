@@ -4949,7 +4949,7 @@
           "Books"
         ],
         "summary": "Partially update book metadata (PATCH)",
-        "description": "Only provided fields will be updated. Absent fields are unchanged.\nExplicitly null fields will be cleared.\nIf no metadata record exists, one will be created with the provided fields.",
+        "description": "Only provided fields will be updated. Absent fields are unchanged.\nExplicitly null fields will be cleared.\nIf no metadata record exists, one will be created with the provided fields.\n\nSetting a field to a non-null value also locks it, so a metadata provider\nwill not overwrite it on the next match. Clearing a field with an explicit\nnull does not change its lock, and absent fields are left alone.",
         "operationId": "patch_book_metadata",
         "parameters": [
           {
@@ -14778,7 +14778,7 @@
           "Series"
         ],
         "summary": "Replace all series metadata (PUT)",
-        "description": "Replaces all metadata fields with the values in the request.\nOmitting a field (or setting it to null) will clear that field.",
+        "description": "Replaces all metadata fields with the values in the request.\nOmitting a field (or setting it to null) will clear that field.\n\nEach replaced field's lock is recomputed from the payload: supplying a value\nlocks the field, omitting or clearing it unlocks it. A locked field is one a\nmetadata provider will not overwrite, so this is what makes a hand-made\ncorrection survive the next match. `title` is the exception, since it is\npreserved rather than cleared when omitted; its lock is preserved too.\n\nUse `PUT /series/{series_id}/metadata/locks` to set locks without changing\nvalues.",
         "operationId": "replace_series_metadata",
         "parameters": [
           {
@@ -14880,7 +14880,7 @@
           "Series"
         ],
         "summary": "Partially update series metadata (PATCH)",
-        "description": "Only provided fields will be updated. Absent fields are unchanged.\nExplicitly null fields will be cleared.",
+        "description": "Only provided fields will be updated. Absent fields are unchanged.\nExplicitly null fields will be cleared.\n\nSetting a field to a non-null value also locks it, so a metadata provider\nwill not overwrite it on the next match: editing a field is taken as an\ninstruction to keep it. Clearing a field with an explicit null does not\nchange its lock, and absent fields are left entirely alone.\n\nUse `PUT /series/{series_id}/metadata/locks` to set locks without changing\nvalues, and `GET /series/{series_id}/metadata/locks` to read them.",
         "operationId": "patch_series_metadata",
         "parameters": [
           {

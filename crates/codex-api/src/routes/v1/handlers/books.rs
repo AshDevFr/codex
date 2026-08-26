@@ -2773,6 +2773,10 @@ pub async fn replace_book_metadata(
 /// Only provided fields will be updated. Absent fields are unchanged.
 /// Explicitly null fields will be cleared.
 /// If no metadata record exists, one will be created with the provided fields.
+///
+/// Setting a field to a non-null value also locks it, so a metadata provider
+/// will not overwrite it on the next match. Clearing a field with an explicit
+/// null does not change its lock, and absent fields are left alone.
 #[utoipa::path(
     patch,
     path = "/api/v1/books/{book_id}/metadata",
