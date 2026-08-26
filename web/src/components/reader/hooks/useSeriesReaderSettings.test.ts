@@ -31,7 +31,6 @@ describe("useSeriesReaderSettings", () => {
         fitMode: "screen",
         webtoonFitMode: "width",
         pageLayout: "single",
-        readingDirection: "ltr",
         backgroundColor: "black",
         pdfMode: "streaming",
         pdfSpreadMode: "single",
@@ -106,7 +105,6 @@ describe("useSeriesReaderSettings", () => {
         settings: {
           ...useReaderStore.getState().settings,
           pageLayout: "double",
-          readingDirection: "rtl",
         },
       });
 
@@ -119,7 +117,6 @@ describe("useSeriesReaderSettings", () => {
       });
 
       expect(result.current.effectiveSettings.pageLayout).toBe("double");
-      expect(result.current.effectiveSettings.readingDirection).toBe("rtl");
     });
 
     it("should handle null seriesId gracefully", async () => {
@@ -156,7 +153,6 @@ describe("useSeriesReaderSettings", () => {
           fitMode: "width",
           webtoonFitMode: "width",
           pageLayout: "single",
-          readingDirection: "rtl",
           backgroundColor: "white",
           doublePageShowWideAlone: false,
           doublePageStartOnOdd: false,
@@ -175,7 +171,6 @@ describe("useSeriesReaderSettings", () => {
 
       expect(result.current.hasSeriesOverride).toBe(true);
       expect(result.current.effectiveSettings.pageLayout).toBe("single");
-      expect(result.current.effectiveSettings.readingDirection).toBe("rtl");
       expect(result.current.effectiveSettings.backgroundColor).toBe("white");
     });
 
@@ -210,7 +205,6 @@ describe("useSeriesReaderSettings", () => {
           fitMode: "width",
           webtoonFitMode: "width",
           pageLayout: "single",
-          readingDirection: "rtl",
           backgroundColor: "white",
           doublePageShowWideAlone: false,
           doublePageStartOnOdd: false,
@@ -274,7 +268,6 @@ describe("useSeriesReaderSettings", () => {
         settings: {
           ...useReaderStore.getState().settings,
           pageLayout: "double",
-          readingDirection: "rtl",
           fitMode: "width",
         },
       });
@@ -293,7 +286,6 @@ describe("useSeriesReaderSettings", () => {
 
       expect(result.current.hasSeriesOverride).toBe(true);
       expect(result.current.effectiveSettings.pageLayout).toBe("double");
-      expect(result.current.effectiveSettings.readingDirection).toBe("rtl");
       expect(result.current.effectiveSettings.fitMode).toBe("width");
 
       // Check localStorage
@@ -341,7 +333,6 @@ describe("useSeriesReaderSettings", () => {
           fitMode: "width",
           webtoonFitMode: "width",
           pageLayout: "single",
-          readingDirection: "rtl",
           backgroundColor: "white",
           doublePageShowWideAlone: false,
           doublePageStartOnOdd: false,
@@ -355,7 +346,6 @@ describe("useSeriesReaderSettings", () => {
         settings: {
           ...useReaderStore.getState().settings,
           pageLayout: "double",
-          readingDirection: "ltr",
         },
       });
 
@@ -378,7 +368,6 @@ describe("useSeriesReaderSettings", () => {
       // Should now use global
       expect(result.current.hasSeriesOverride).toBe(false);
       expect(result.current.effectiveSettings.pageLayout).toBe("double");
-      expect(result.current.effectiveSettings.readingDirection).toBe("ltr");
 
       // localStorage should be cleared
       expect(localStorage.getItem(storageKey)).toBeNull();
@@ -432,7 +421,6 @@ describe("useSeriesReaderSettings", () => {
           fitMode: "screen",
           webtoonFitMode: "width",
           pageLayout: "double",
-          readingDirection: "rtl",
           backgroundColor: "black",
           doublePageShowWideAlone: true,
           doublePageStartOnOdd: true,
@@ -457,7 +445,6 @@ describe("useSeriesReaderSettings", () => {
 
       expect(result.current.effectiveSettings.pageLayout).toBe("single");
       // Other settings should be preserved
-      expect(result.current.effectiveSettings.readingDirection).toBe("rtl");
       // createdAt should be preserved
       expect(result.current.seriesOverride?.createdAt).toBe(originalCreatedAt);
     });
@@ -502,7 +489,6 @@ describe("useSeriesReaderSettings", () => {
       act(() => {
         result.current.updateSetting("readingDirection", "ttb");
       });
-      expect(result.current.effectiveSettings.readingDirection).toBe("ttb");
 
       act(() => {
         result.current.updateSetting("backgroundColor", "gray");
@@ -535,7 +521,6 @@ describe("useSeriesReaderSettings", () => {
           fitMode: "width",
           webtoonFitMode: "width",
           pageLayout: "single",
-          readingDirection: "rtl",
           backgroundColor: "white",
           doublePageShowWideAlone: false,
           doublePageStartOnOdd: false,
@@ -628,7 +613,6 @@ describe("useSeriesReaderSettings", () => {
           fitMode: "width",
           webtoonFitMode: "width",
           pageLayout: "double",
-          readingDirection: "rtl",
           backgroundColor: "white",
           doublePageShowWideAlone: false,
           doublePageStartOnOdd: false,
@@ -660,7 +644,6 @@ describe("useSeriesReaderSettings", () => {
       });
 
       expect(result.current.hasSeriesOverride).toBe(true);
-      expect(result.current.effectiveSettings.readingDirection).toBe("rtl");
 
       // Switch to user 2 (no override for this series)
       useAuthStore.setState({
@@ -684,7 +667,6 @@ describe("useSeriesReaderSettings", () => {
       });
 
       // Should now use global settings
-      expect(result.current.effectiveSettings.readingDirection).toBe("ltr");
     });
   });
 
@@ -797,7 +779,6 @@ describe("useSeriesReaderSettings", () => {
           fitMode: "screen",
           webtoonFitMode: "width",
           pageLayout: "single",
-          readingDirection: "rtl",
           backgroundColor: "black",
           doublePageShowWideAlone: true,
           doublePageStartOnOdd: true,
@@ -813,7 +794,6 @@ describe("useSeriesReaderSettings", () => {
           fitMode: "screen",
           webtoonFitMode: "width",
           pageLayout: "double",
-          readingDirection: "ltr",
           backgroundColor: "white",
           doublePageShowWideAlone: false,
           doublePageStartOnOdd: false,
@@ -829,8 +809,6 @@ describe("useSeriesReaderSettings", () => {
       await vi.waitFor(() => {
         expect(result1.current.isLoaded).toBe(true);
       });
-
-      expect(result1.current.effectiveSettings.readingDirection).toBe("rtl");
       expect(result1.current.effectiveSettings.pageLayout).toBe("single");
 
       const { result: result2 } = renderHook(() =>
@@ -840,8 +818,6 @@ describe("useSeriesReaderSettings", () => {
       await vi.waitFor(() => {
         expect(result2.current.isLoaded).toBe(true);
       });
-
-      expect(result2.current.effectiveSettings.readingDirection).toBe("ltr");
       expect(result2.current.effectiveSettings.pageLayout).toBe("double");
     });
   });
@@ -858,7 +834,6 @@ describe("useSeriesReaderSettings", () => {
           fitMode: "screen",
           webtoonFitMode: "width",
           pageLayout: "single",
-          readingDirection: "rtl",
           backgroundColor: "black",
           doublePageShowWideAlone: true,
           doublePageStartOnOdd: true,
@@ -878,7 +853,6 @@ describe("useSeriesReaderSettings", () => {
       });
 
       expect(result.current.hasSeriesOverride).toBe(true);
-      expect(result.current.effectiveSettings.readingDirection).toBe("rtl");
 
       // Change to series 2
       rerender({ seriesId: "series-2" });
@@ -888,7 +862,6 @@ describe("useSeriesReaderSettings", () => {
       });
 
       // Should now use global settings
-      expect(result.current.effectiveSettings.readingDirection).toBe("ltr");
     });
   });
 });
@@ -906,7 +879,6 @@ describe("localStorage cleanup utilities", () => {
       fitMode: "screen",
       webtoonFitMode: "width",
       pageLayout: "single",
-      readingDirection: "ltr",
       backgroundColor: "black",
       doublePageShowWideAlone: true,
       doublePageStartOnOdd: true,
@@ -989,7 +961,6 @@ describe("localStorage cleanup utilities", () => {
           fitMode: "width",
           webtoonFitMode: "width",
           pageLayout: "double",
-          readingDirection: "rtl",
           backgroundColor: "white",
           doublePageShowWideAlone: false,
           doublePageStartOnOdd: false,
@@ -1277,7 +1248,6 @@ describe("localStorage cleanup utilities", () => {
           fitMode: "screen",
           webtoonFitMode: "width",
           pageLayout: "single",
-          readingDirection: "ltr",
           backgroundColor: "black",
           doublePageShowWideAlone: true,
           doublePageStartOnOdd: true,

@@ -8,7 +8,6 @@ import {
   type ForkableReaderSettings,
   isSeriesReaderOverride,
   type PageLayout,
-  type ReadingDirection,
   type SeriesReaderOverride,
   useReaderStore,
   type WebtoonFitMode,
@@ -228,7 +227,6 @@ export function useSeriesReaderSettings(
       fitMode: seriesOverride.fitMode,
       webtoonFitMode: seriesOverride.webtoonFitMode,
       pageLayout: seriesOverride.pageLayout,
-      readingDirection: seriesOverride.readingDirection,
       backgroundColor: seriesOverride.backgroundColor,
       doublePageShowWideAlone: seriesOverride.doublePageShowWideAlone,
       doublePageStartOnOdd: seriesOverride.doublePageStartOnOdd,
@@ -276,9 +274,6 @@ export function useSeriesReaderSettings(
             break;
           case "pageLayout":
             state.setPageLayout(value as PageLayout);
-            break;
-          case "readingDirection":
-            state.setReadingDirection(value as ReadingDirection);
             break;
           case "backgroundColor":
             state.setBackgroundColor(value as BackgroundColor);

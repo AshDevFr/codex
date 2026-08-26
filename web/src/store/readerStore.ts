@@ -67,15 +67,21 @@ export type NavigationDirection = "next" | "prev" | null;
 // =============================================================================
 
 /**
- * Settings that can be customized per-series.
- * These are the settings that vary based on content type (manga vs western comics,
- * old 2-page scans vs modern single-page scans, etc.)
+ * Settings that can be customized per-series, on this device.
+ *
+ * All of these describe the screen rather than the file: how much of a page a
+ * display can show, whether two pages fit side by side, what backdrop suits the
+ * room. A phone and a desktop legitimately want different answers, so they are
+ * held per client and never synced.
+ *
+ * Reading direction is deliberately absent. It describes how the book was made,
+ * is the same on every screen its reader owns, and is stored server-side per
+ * user against the series. See `useSeriesReadingDirection`.
  */
 export interface ForkableReaderSettings {
   fitMode: FitMode;
   webtoonFitMode: WebtoonFitMode;
   pageLayout: PageLayout;
-  readingDirection: ReadingDirection;
   backgroundColor: BackgroundColor;
   doublePageShowWideAlone: boolean;
   doublePageStartOnOdd: boolean;
@@ -90,7 +96,6 @@ export const FORKABLE_SETTING_KEYS: readonly (keyof ForkableReaderSettings)[] =
     "fitMode",
     "webtoonFitMode",
     "pageLayout",
-    "readingDirection",
     "backgroundColor",
     "doublePageShowWideAlone",
     "doublePageStartOnOdd",
@@ -139,12 +144,9 @@ export function isSeriesReaderOverride(
     return false;
   }
 
-  if (
-    typeof obj.readingDirection !== "string" ||
-    !["ltr", "rtl", "ttb", "webtoon"].includes(obj.readingDirection)
-  ) {
-    return false;
-  }
+  // `readingDirection` is deliberately not checked. Blobs written before it
+  // moved server-side still carry it, and blobs the migration has stripped no
+  // longer do; both must validate.
 
   if (
     typeof obj.backgroundColor !== "string" ||
@@ -176,7 +178,6 @@ export function extractForkableSettings(
     fitMode: settings.fitMode,
     webtoonFitMode: settings.webtoonFitMode,
     pageLayout: settings.pageLayout,
-    readingDirection: settings.readingDirection,
     backgroundColor: settings.backgroundColor,
     doublePageShowWideAlone: settings.doublePageShowWideAlone,
     doublePageStartOnOdd: settings.doublePageStartOnOdd,

@@ -1394,13 +1394,21 @@ describe("readerStore", () => {
         ).toBe(false);
       });
 
-      it("should return false for invalid readingDirection", () => {
+      it("ignores readingDirection entirely", () => {
+        // It moved server-side. A blob written before that still carries one,
+        // and a migrated blob no longer does; both have to validate.
         expect(
           isSeriesReaderOverride({
             ...validOverride,
             readingDirection: "invalid",
           }),
-        ).toBe(false);
+        ).toBe(true);
+
+        const { readingDirection: _dropped, ...migrated } = {
+          ...validOverride,
+          readingDirection: "rtl",
+        };
+        expect(isSeriesReaderOverride(migrated)).toBe(true);
       });
 
       it("should return false for invalid backgroundColor", () => {
@@ -1504,7 +1512,6 @@ describe("readerStore", () => {
           fitMode: fullSettings.fitMode,
           webtoonFitMode: fullSettings.webtoonFitMode,
           pageLayout: fullSettings.pageLayout,
-          readingDirection: fullSettings.readingDirection,
           backgroundColor: fullSettings.backgroundColor,
           doublePageShowWideAlone: fullSettings.doublePageShowWideAlone,
           doublePageStartOnOdd: fullSettings.doublePageStartOnOdd,
@@ -1548,7 +1555,6 @@ describe("readerStore", () => {
         expect(forkable.fitMode).toBe("width");
         expect(forkable.webtoonFitMode).toBe("original");
         expect(forkable.pageLayout).toBe("double");
-        expect(forkable.readingDirection).toBe("rtl");
         expect(forkable.backgroundColor).toBe("white");
         expect(forkable.doublePageShowWideAlone).toBe(false);
         expect(forkable.doublePageStartOnOdd).toBe(false);

@@ -55,6 +55,7 @@ import { WantToRead } from "@/pages/WantToRead";
 import { navigationService } from "@/services/navigation";
 import { useAuthStore } from "@/store/authStore";
 import { useBulkSelectionStore } from "@/store/bulkSelectionStore";
+import { migrateSeriesReadingDirections } from "@/utils/readingDirectionMigration";
 
 // Protected route wrapper
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -90,6 +91,25 @@ function NavigationServiceInitializer() {
   useEffect(() => {
     navigationService.setNavigate(navigate);
   }, [navigate]);
+
+  return null;
+}
+
+// Move per-series reading directions from this browser to the account.
+//
+// They used to live in localStorage, so they died with a browser profile and
+// never reached a second device. Running once per user makes the upgrade
+// invisible rather than one where those directions silently vanish.
+function ReadingDirectionMigration() {
+  const user = useAuthStore((state) => state.user);
+  const userId = user?.id;
+
+  useEffect(() => {
+    if (!userId) return;
+    // Best-effort: a failure leaves the local values in place and the next
+    // load tries again, so nothing here should block or surface an error.
+    void migrateSeriesReadingDirections(userId);
+  }, [userId]);
 
   return null;
 }
@@ -156,6 +176,7 @@ function App() {
     <BrowserRouter>
       <NavigationServiceInitializer />
       <RateLimitNotificationHandler />
+      <ReadingDirectionMigration />
       <BulkSelectionRouteGuard />
       <SetupRedirect />
       <Routes>
