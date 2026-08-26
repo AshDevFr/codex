@@ -40093,7 +40093,7 @@
         "properties": {
           "booksFound": {
             "type": "integer",
-            "description": "Number of books found/created",
+            "description": "Number of books created plus updated by this scan. Books that were\ndeleted or restored are tracked separately and are not counted here, so\na re-scan that changed nothing reports zero rather than the size of the\nlibrary.",
             "example": 750,
             "minimum": 0
           },
@@ -40111,17 +40111,17 @@
             "items": {
               "type": "string"
             },
-            "description": "List of errors encountered during scan"
+            "description": "Errors encountered during the scan, plus the task's fatal error if it\nhad one. Capped at the first 100 individual errors; a scan that produced\nmore is truncated here rather than in the count the worker records."
           },
           "filesProcessed": {
             "type": "integer",
-            "description": "Number of files processed so far",
+            "description": "Number of files processed so far.",
             "example": 750,
             "minimum": 0
           },
           "filesTotal": {
             "type": "integer",
-            "description": "Total number of files discovered",
+            "description": "Total number of files the scan discovered, which is the denominator\n`filesProcessed` counts towards. Zero for a scan that has not started or\nhas not finished discovery.",
             "example": 1500,
             "minimum": 0
           },
@@ -40133,7 +40133,7 @@
           },
           "seriesFound": {
             "type": "integer",
-            "description": "Number of series found/created",
+            "description": "Number of series created by this scan. A re-scan that matched only\nexisting series reports zero.",
             "example": 45,
             "minimum": 0
           },
@@ -40145,7 +40145,7 @@
           },
           "status": {
             "type": "string",
-            "description": "Current status of the scan (scanning, completed, failed)",
+            "description": "Current status of the scan (scanning, completed, failed).\n\nThe counts below are written when the scan finishes, so a scan that is\nstill running reports zeros for them. Live progress for an in-flight\nscan is available on the task event stream.",
             "example": "scanning"
           }
         }

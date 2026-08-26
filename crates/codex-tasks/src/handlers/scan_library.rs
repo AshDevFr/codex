@@ -20,6 +20,15 @@ const SETTING_POST_SCAN_AUTO_MATCH_ENABLED: &str = "plugins.post_scan_auto_match
 /// Default value for post-scan auto-match (disabled for safety)
 const DEFAULT_POST_SCAN_AUTO_MATCH_ENABLED: bool = false;
 
+/// How many individual scan errors to persist on the task row.
+///
+/// Scan errors arrive in bulk and repeat: a permissions problem on one
+/// directory tree yields one near-identical error per file. Persisting all of
+/// them would put megabytes of duplicate text in a JSON column that is re-read
+/// on every status poll. The full count is kept alongside as `errors_total`, so
+/// a client can say "and 4,903 more"; anyone needing every error has the logs.
+const MAX_PERSISTED_SCAN_ERRORS: usize = 100;
+
 pub struct ScanLibraryHandler {
     settings_service: Option<Arc<SettingsService>>,
     pdf_handle_cache: Option<Arc<codex_services::PdfHandleCache>>,
@@ -339,6 +348,7 @@ impl TaskHandler for ScanLibraryHandler {
                             }
                         ),
                         json!({
+                            "files_total": result.files_total,
                             "files_processed": result.files_processed,
                             "series_created": result.series_created,
                             "books_created": result.books_created,
@@ -348,7 +358,12 @@ impl TaskHandler for ScanLibraryHandler {
                             "tasks_queued": result.tasks_queued,
                             "books_purged": purged_count,
                             "auto_match_tasks_queued": auto_match_tasks_queued,
-                            "errors": result.errors.len(),
+                            "errors": result
+                                .errors
+                                .iter()
+                                .take(MAX_PERSISTED_SCAN_ERRORS)
+                                .collect::<Vec<_>>(),
+                            "errors_total": result.errors.len(),
                         }),
                     ))
                 }

@@ -825,3 +825,192 @@ async fn test_scan_cancel_broadcasts_update() {
         assert_eq!(progress.library_id, Some(library.id));
     }
 }
+
+// ============================================================================
+// GET /scan-status reports the counts the scan actually produced
+// ============================================================================
+
+/// Seed a completed `scan_library` task carrying the payload the worker writes,
+/// so the mapping is pinned and the DTO cannot drift from the worker's keys.
+async fn seed_completed_scan_task(
+    db: &sea_orm::DatabaseConnection,
+    library_id: uuid::Uuid,
+    result: serde_json::Value,
+    last_error: Option<String>,
+) {
+    use chrono::Utc;
+    use codex::db::entities::tasks;
+    use sea_orm::{ActiveModelTrait, Set};
+
+    let now = Utc::now();
+    let task = tasks::ActiveModel {
+        id: Set(uuid::Uuid::new_v4()),
+        task_type: Set("scan_library".to_string()),
+        library_id: Set(Some(library_id)),
+        series_id: Set(None),
+        book_id: Set(None),
+        params: Set(None),
+        status: Set("completed".to_string()),
+        priority: Set(0),
+        locked_by: Set(None),
+        locked_until: Set(None),
+        attempts: Set(1),
+        max_attempts: Set(3),
+        last_error: Set(last_error),
+        reschedule_count: Set(0),
+        max_reschedules: Set(0),
+        result: Set(Some(result)),
+        scheduled_for: Set(now),
+        created_at: Set(now),
+        started_at: Set(Some(now)),
+        completed_at: Set(Some(now)),
+    };
+    task.insert(db).await.unwrap();
+}
+
+#[tokio::test]
+async fn test_get_scan_status_reports_the_counts_the_scan_produced() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(
+        &db,
+        "Test Library",
+        temp_dir.path().to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    seed_completed_scan_task(
+        &db,
+        library.id,
+        serde_json::json!({
+            "files_total": 120,
+            "files_processed": 118,
+            "series_created": 7,
+            "books_created": 100,
+            "books_updated": 15,
+            "books_deleted": 2,
+            "books_restored": 1,
+            "tasks_queued": 118,
+            "errors": ["Failed to hash file /lib/broken.cbz: Permission denied"],
+            "errors_total": 1,
+        }),
+        None,
+    )
+    .await;
+
+    let state = create_test_app_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_app_state(state);
+
+    let uri = format!("/api/v1/libraries/{}/scan-status", library.id);
+    let (status, response): (StatusCode, Option<ScanStatusDto>) =
+        make_json_request(app, get_request_with_auth(&uri, &token)).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let scan_status = response.unwrap();
+
+    assert_eq!(scan_status.files_total, 120, "filesTotal");
+    assert_eq!(scan_status.files_processed, 118, "filesProcessed");
+    assert_eq!(scan_status.series_found, 7, "seriesFound");
+    // "Found" is created plus updated, so a re-scan that changes nothing reports
+    // zero rather than the size of the library. Deleted and restored are excluded.
+    assert_eq!(scan_status.books_found, 115, "booksFound");
+    assert_eq!(
+        scan_status.errors,
+        vec!["Failed to hash file /lib/broken.cbz: Permission denied".to_string()],
+        "errors",
+    );
+}
+
+#[tokio::test]
+async fn test_get_scan_status_reports_a_failure_in_errors() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(
+        &db,
+        "Test Library",
+        temp_dir.path().to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    // A task that died before writing a result still has to say why.
+    seed_completed_scan_task(
+        &db,
+        library.id,
+        serde_json::json!(null),
+        Some("Library path does not exist: /gone".to_string()),
+    )
+    .await;
+
+    let state = create_test_app_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_app_state(state);
+
+    let uri = format!("/api/v1/libraries/{}/scan-status", library.id);
+    let (status, response): (StatusCode, Option<ScanStatusDto>) =
+        make_json_request(app, get_request_with_auth(&uri, &token)).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let scan_status = response.unwrap();
+    assert!(
+        scan_status
+            .errors
+            .iter()
+            .any(|e| e.contains("Library path does not exist")),
+        "a failed scan must report why, got {:?}",
+        scan_status.errors,
+    );
+}
+
+/// A re-scan that genuinely found nothing must be distinguishable from a scan
+/// whose counts were never recorded, which is what the all-zeros response made
+/// impossible.
+#[tokio::test]
+async fn test_get_scan_status_reports_zero_for_a_rescan_that_changed_nothing() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(
+        &db,
+        "Test Library",
+        temp_dir.path().to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    seed_completed_scan_task(
+        &db,
+        library.id,
+        serde_json::json!({
+            "files_total": 42,
+            "files_processed": 42,
+            "series_created": 0,
+            "books_created": 0,
+            "books_updated": 0,
+            "errors": [],
+            "errors_total": 0,
+        }),
+        None,
+    )
+    .await;
+
+    let state = create_test_app_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_app_state(state);
+
+    let uri = format!("/api/v1/libraries/{}/scan-status", library.id);
+    let (status, response): (StatusCode, Option<ScanStatusDto>) =
+        make_json_request(app, get_request_with_auth(&uri, &token)).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let scan_status = response.unwrap();
+    assert_eq!(scan_status.books_found, 0);
+    assert_eq!(
+        scan_status.files_processed, 42,
+        "the scan still walked the library, which is what separates it from unknown",
+    );
+}

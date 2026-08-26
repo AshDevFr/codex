@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use futures::future::join_all;
 use globset::{GlobBuilder, GlobSet, GlobSetBuilder};
@@ -263,7 +263,7 @@ impl SharedScanState {
 
     /// Get the final results
     async fn into_result(self) -> (ScanResult, ScanProgress) {
-        let result = match Arc::try_unwrap(self.result) {
+        let mut result = match Arc::try_unwrap(self.result) {
             Ok(mutex) => mutex.into_inner(),
             Err(arc) => arc.lock().await.clone(),
         };
@@ -271,6 +271,10 @@ impl SharedScanState {
             Ok(mutex) => mutex.into_inner(),
             Err(arc) => arc.lock().await.clone(),
         };
+        // Only the discovery pass knows the denominator, and it records it on
+        // the progress. Carry it onto the result so callers that never see the
+        // progress channel can still report it.
+        result.files_total = progress.files_total;
         (result, progress)
     }
 }
@@ -490,7 +494,7 @@ pub async fn scan_library(
     match &result {
         Ok(scan_result) => {
             final_progress.files_processed = scan_result.files_processed;
-            final_progress.files_total = scan_result.files_processed;
+            final_progress.files_total = scan_result.files_total.max(scan_result.files_processed);
             final_progress.series_found = scan_result.series_created;
             final_progress.books_found = scan_result.books_created + scan_result.books_updated;
 
@@ -941,7 +945,11 @@ async fn hash_files_parallel(
                     .acquire()
                     .await
                     .map_err(|e| anyhow::anyhow!("Failed to acquire semaphore: {}", e))?;
-                hash_file_with_metadata(path).await
+                // Attach the path before the result loses it: the caller sees
+                // only the Result, so a bare hashing error is unattributable
+                // and useless in a scan's reported error list.
+                let display = path.display().to_string();
+                hash_file_with_metadata(path).await.with_context(|| display)
             }
         })
         .collect();
@@ -1149,7 +1157,9 @@ async fn process_series_batched(
                     }
                 }
                 Err(e) => {
-                    result.errors.push(format!("Failed to hash file: {}", e));
+                    // `{:#}` renders the whole context chain, so the path
+                    // attached above appears alongside the underlying cause.
+                    result.errors.push(format!("Failed to hash file: {:#}", e));
                 }
             }
 

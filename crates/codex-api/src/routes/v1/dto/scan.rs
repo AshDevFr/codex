@@ -13,27 +13,39 @@ pub struct ScanStatusDto {
     #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
     pub library_id: Uuid,
 
-    /// Current status of the scan (scanning, completed, failed)
+    /// Current status of the scan (scanning, completed, failed).
+    ///
+    /// The counts below are written when the scan finishes, so a scan that is
+    /// still running reports zeros for them. Live progress for an in-flight
+    /// scan is available on the task event stream.
     #[schema(example = "scanning")]
     pub status: String,
 
-    /// Total number of files discovered
+    /// Total number of files the scan discovered, which is the denominator
+    /// `filesProcessed` counts towards. Zero for a scan that has not started or
+    /// has not finished discovery.
     #[schema(example = 1500)]
     pub files_total: usize,
 
-    /// Number of files processed so far
+    /// Number of files processed so far.
     #[schema(example = 750)]
     pub files_processed: usize,
 
-    /// Number of series found/created
+    /// Number of series created by this scan. A re-scan that matched only
+    /// existing series reports zero.
     #[schema(example = 45)]
     pub series_found: usize,
 
-    /// Number of books found/created
+    /// Number of books created plus updated by this scan. Books that were
+    /// deleted or restored are tracked separately and are not counted here, so
+    /// a re-scan that changed nothing reports zero rather than the size of the
+    /// library.
     #[schema(example = 750)]
     pub books_found: usize,
 
-    /// List of errors encountered during scan
+    /// Errors encountered during the scan, plus the task's fatal error if it
+    /// had one. Capped at the first 100 individual errors; a scan that produced
+    /// more is truncated here rather than in the count the worker records.
     pub errors: Vec<String>,
 
     /// When the scan started
@@ -45,6 +57,12 @@ pub struct ScanStatusDto {
     pub completed_at: Option<DateTime<Utc>>,
 }
 
+/// Maps the scanner's live progress onto the status DTO.
+///
+/// This is the path a running scan will report through once the scanner's
+/// progress channel is wired to persisted task progress. Until then
+/// `get_scan_status` answers from the task row's `result`, which the worker
+/// writes on completion, so an in-flight scan reports zeros for its counts.
 impl From<ScanProgress> for ScanStatusDto {
     fn from(progress: ScanProgress) -> Self {
         Self {

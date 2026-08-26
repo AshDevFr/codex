@@ -152,14 +152,45 @@ pub async fn get_scan_status(
     // Convert task to ScanStatusDto
     use chrono::Utc;
 
+    // The worker writes these counts to `result` on completion. Read them back
+    // rather than reporting zeros, which are indistinguishable from a scan that
+    // genuinely found nothing.
+    let result = task.result.as_ref();
+    let count = |key: &str| -> usize {
+        result
+            .and_then(|r| r.get(key))
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0) as usize
+    };
+
+    let mut errors: Vec<String> = result
+        .and_then(|r| r.get("errors"))
+        .and_then(|v| v.as_array())
+        .map(|entries| {
+            entries
+                .iter()
+                .filter_map(|e| e.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    // A scan that died before writing a result still has to say why, and a
+    // partially-successful one records its fatal error here too.
+    if let Some(last_error) = task.last_error.as_ref().filter(|e| !e.is_empty()) {
+        errors.push(last_error.clone());
+    }
+
     let status = ScanStatusDto {
         library_id,
         status: task.status,
-        files_total: 0,
-        files_processed: 0,
-        series_found: 0,
-        books_found: 0,
-        errors: vec![],
+        files_total: count("files_total"),
+        files_processed: count("files_processed"),
+        series_found: count("series_created"),
+        // "Found" is created plus updated, so a re-scan that changes nothing
+        // reports zero rather than the size of the library. Deleted and
+        // restored are tracked separately and deliberately excluded.
+        books_found: count("books_created") + count("books_updated"),
+        errors,
         started_at: task.started_at.unwrap_or_else(Utc::now),
         completed_at: task.completed_at,
     };

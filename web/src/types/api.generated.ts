@@ -17798,7 +17798,10 @@ export interface components {
         /** @description Scan status response */
         ScanStatusDto: {
             /**
-             * @description Number of books found/created
+             * @description Number of books created plus updated by this scan. Books that were
+             *     deleted or restored are tracked separately and are not counted here, so
+             *     a re-scan that changed nothing reports zero rather than the size of the
+             *     library.
              * @example 750
              */
             booksFound: number;
@@ -17808,15 +17811,21 @@ export interface components {
              * @example 2024-01-15T10:45:00Z
              */
             completedAt?: string | null;
-            /** @description List of errors encountered during scan */
+            /**
+             * @description Errors encountered during the scan, plus the task's fatal error if it
+             *     had one. Capped at the first 100 individual errors; a scan that produced
+             *     more is truncated here rather than in the count the worker records.
+             */
             errors: string[];
             /**
-             * @description Number of files processed so far
+             * @description Number of files processed so far.
              * @example 750
              */
             filesProcessed: number;
             /**
-             * @description Total number of files discovered
+             * @description Total number of files the scan discovered, which is the denominator
+             *     `filesProcessed` counts towards. Zero for a scan that has not started or
+             *     has not finished discovery.
              * @example 1500
              */
             filesTotal: number;
@@ -17827,7 +17836,8 @@ export interface components {
              */
             libraryId: string;
             /**
-             * @description Number of series found/created
+             * @description Number of series created by this scan. A re-scan that matched only
+             *     existing series reports zero.
              * @example 45
              */
             seriesFound: number;
@@ -17838,7 +17848,11 @@ export interface components {
              */
             startedAt: string;
             /**
-             * @description Current status of the scan (scanning, completed, failed)
+             * @description Current status of the scan (scanning, completed, failed).
+             *
+             *     The counts below are written when the scan finishes, so a scan that is
+             *     still running reports zeros for them. Live progress for an in-flight
+             *     scan is available on the task event stream.
              * @example scanning
              */
             status: string;

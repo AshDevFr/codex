@@ -159,6 +159,10 @@ impl ScanProgress {
 /// Final result of a completed scan operation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScanResult {
+    /// Total number of files discovered by the walk, which is the denominator
+    /// `files_processed` counts towards. Recorded separately because a scan can
+    /// finish having processed fewer files than it found.
+    pub files_total: usize,
     /// Number of files processed during scan
     pub files_processed: usize,
     /// Number of series created
@@ -181,6 +185,7 @@ impl ScanResult {
     /// Create new empty scan result
     pub fn new() -> Self {
         Self {
+            files_total: 0,
             files_processed: 0,
             series_created: 0,
             books_created: 0,
