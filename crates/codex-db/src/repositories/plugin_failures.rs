@@ -14,6 +14,7 @@
 use crate::entities::plugin_failures::{self, Entity as PluginFailures};
 use anyhow::Result;
 use chrono::{Duration, Utc};
+use codex_models::pagination::Window;
 use sea_orm::*;
 use uuid::Uuid;
 
@@ -207,9 +208,9 @@ impl PluginFailuresRepository {
     pub async fn get_failures_paginated(
         db: &DatabaseConnection,
         plugin_id: Uuid,
-        limit: u64,
-        offset: u64,
+        window: Window,
     ) -> Result<(Vec<plugin_failures::Model>, u64)> {
+        let (offset, limit) = (window.offset(), window.limit());
         let total = PluginFailures::find()
             .filter(plugin_failures::Column::PluginId.eq(plugin_id))
             .count(db)
@@ -456,18 +457,25 @@ mod tests {
         }
 
         // Get page 1 (first 2)
-        let (failures, total) =
-            PluginFailuresRepository::get_failures_paginated(&db, plugin_id, 2, 0)
-                .await
-                .unwrap();
+        let (failures, total) = PluginFailuresRepository::get_failures_paginated(
+            &db,
+            plugin_id,
+            Window::from_offset(0, 2),
+        )
+        .await
+        .unwrap();
 
         assert_eq!(total, 5);
         assert_eq!(failures.len(), 2);
 
         // Get page 2 (next 2)
-        let (failures, _) = PluginFailuresRepository::get_failures_paginated(&db, plugin_id, 2, 2)
-            .await
-            .unwrap();
+        let (failures, _) = PluginFailuresRepository::get_failures_paginated(
+            &db,
+            plugin_id,
+            Window::from_offset(2, 2),
+        )
+        .await
+        .unwrap();
 
         assert_eq!(failures.len(), 2);
     }

@@ -10,6 +10,7 @@
 
 use anyhow::Result;
 use chrono::Utc;
+use codex_models::pagination::Window;
 use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set};
 use uuid::Uuid;
 
@@ -159,21 +160,18 @@ impl SeriesTrackingRepository {
 
     /// List all tracked series IDs. Used by the polling service to enumerate
     /// what to ask plugins for. Paginated to keep memory bounded for large
-    /// libraries; pass `limit = 0` for no limit (callers should normally page).
-    pub async fn list_tracked_ids(
-        db: &DatabaseConnection,
-        limit: u64,
-        offset: u64,
-    ) -> Result<Vec<Uuid>> {
+    /// libraries; pass [`Window::unbounded`] for no limit, though callers should
+    /// normally page.
+    pub async fn list_tracked_ids(db: &DatabaseConnection, window: Window) -> Result<Vec<Uuid>> {
         use sea_orm::QuerySelect;
-        let mut query = SeriesTracking::find().filter(series_tracking::Column::Tracked.eq(true));
-        if limit > 0 {
-            query = query.limit(limit);
-        }
-        if offset > 0 {
-            query = query.offset(offset);
-        }
-        let results = query.all(db).await?;
+        // Applied unconditionally: an unbounded window carries a limit no query
+        // reaches, so there is no sentinel to branch on.
+        let results = SeriesTracking::find()
+            .filter(series_tracking::Column::Tracked.eq(true))
+            .offset(window.offset())
+            .limit(window.limit())
+            .all(db)
+            .await?;
         Ok(results.into_iter().map(|m| m.series_id).collect())
     }
 
@@ -363,7 +361,7 @@ mod tests {
             .unwrap();
         // s3 has no tracking row at all.
 
-        let ids = SeriesTrackingRepository::list_tracked_ids(conn, 0, 0)
+        let ids = SeriesTrackingRepository::list_tracked_ids(conn, Window::unbounded())
             .await
             .unwrap();
         assert_eq!(ids.len(), 1);

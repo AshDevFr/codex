@@ -2,6 +2,7 @@ use crate::entities::{sharing_tags, user_sharing_tags, users, users::Entity as U
 use crate::trace::db_system_str;
 use anyhow::Result;
 use chrono::Utc;
+use codex_models::pagination::Window;
 use sea_orm::*;
 use uuid::Uuid;
 
@@ -187,9 +188,9 @@ impl UserRepository {
     pub async fn list_paginated(
         db: &DatabaseConnection,
         filter: &UserListFilter,
-        offset: u64,
-        limit: u64,
+        window: Window,
     ) -> Result<UserListResult> {
+        let (offset, limit) = (window.offset(), window.limit());
         // Build base query with optional sharing tag join
         let user_ids = if let Some(tag_name) = &filter.sharing_tag {
             // When filtering by sharing tag, we need to find users with grants for that tag

@@ -10,6 +10,7 @@
 //! caller has the `release_source` capability and focuses on data scoping
 //! and validation.
 
+use codex_models::pagination::Window;
 use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
@@ -134,17 +135,21 @@ impl ReleasesRequestHandler {
         let offset = params.offset.unwrap_or(0);
 
         // 1. List tracked series IDs.
-        let series_ids =
-            match SeriesTrackingRepository::list_tracked_ids(&self.db, limit, offset).await {
-                Ok(ids) => ids,
-                Err(e) => {
-                    error!(error = %e, "tracked-series listing failed");
-                    return JsonRpcResponse::error(
-                        Some(id),
-                        JsonRpcError::new(error_codes::INTERNAL_ERROR, format!("db error: {}", e)),
-                    );
-                }
-            };
+        let series_ids = match SeriesTrackingRepository::list_tracked_ids(
+            &self.db,
+            Window::from_offset(offset, limit),
+        )
+        .await
+        {
+            Ok(ids) => ids,
+            Err(e) => {
+                error!(error = %e, "tracked-series listing failed");
+                return JsonRpcResponse::error(
+                    Some(id),
+                    JsonRpcError::new(error_codes::INTERNAL_ERROR, format!("db error: {}", e)),
+                );
+            }
+        };
 
         // 2. Fetch the tracking rows for those series (so we can return
         //    latest_known_chapter / latest_known_volume).
@@ -285,16 +290,17 @@ impl ReleasesRequestHandler {
         // `series_external_ids` row whose source matches the plugin's
         // requirements (with both `api:` and `plugin:` prefix conventions
         // accepted, mirroring `handle_list_tracked`).
-        let tracked_ids = match SeriesTrackingRepository::list_tracked_ids(&self.db, 0, 0).await {
-            Ok(ids) => ids,
-            Err(e) => {
-                error!(error = %e, "tracked-series listing failed during count");
-                return JsonRpcResponse::error(
-                    Some(id),
-                    JsonRpcError::new(error_codes::INTERNAL_ERROR, format!("db error: {}", e)),
-                );
-            }
-        };
+        let tracked_ids =
+            match SeriesTrackingRepository::list_tracked_ids(&self.db, Window::unbounded()).await {
+                Ok(ids) => ids,
+                Err(e) => {
+                    error!(error = %e, "tracked-series listing failed during count");
+                    return JsonRpcResponse::error(
+                        Some(id),
+                        JsonRpcError::new(error_codes::INTERNAL_ERROR, format!("db error: {}", e)),
+                    );
+                }
+            };
         if tracked_ids.is_empty() {
             let resp = CountTrackedResponse { total: 0 };
             return JsonRpcResponse::success(id, serde_json::to_value(resp).unwrap());

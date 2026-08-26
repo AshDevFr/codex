@@ -18,6 +18,7 @@ use crate::entities::plugins::{self, Entity as Plugins, PluginPermission};
 use crate::trace::db_system_str;
 use anyhow::{Result, anyhow};
 use chrono::Utc;
+use codex_models::pagination::Window;
 use codex_models::plugin::{PluginManifest, PluginScope};
 use codex_utils::credential_encryption::CredentialEncryption;
 use sea_orm::*;
@@ -54,19 +55,21 @@ impl PluginsRepository {
     /// Use limit=0 to get total count without loading any plugins.
     pub async fn get_all_paginated(
         db: &DatabaseConnection,
-        limit: u64,
-        offset: u64,
+        window: Window,
     ) -> Result<(Vec<plugins::Model>, u64)> {
         let total = Plugins::find().count(db).await?;
 
-        if limit == 0 {
+        // A zero limit means "just the count": the same thing `Window` says by
+        // carrying a limit of zero, so this is not a sentinel needing a comment
+        // elsewhere. Callers wanting every row pass `Window::unbounded()`.
+        if window.limit() == 0 {
             return Ok((vec![], total));
         }
 
         let plugins = Plugins::find()
             .order_by_asc(plugins::Column::Name)
-            .limit(limit)
-            .offset(offset)
+            .limit(window.limit())
+            .offset(window.offset())
             .all(db)
             .await?;
         Ok((plugins, total))
@@ -105,23 +108,25 @@ impl PluginsRepository {
     /// Use limit=0 to get total count without loading any plugins.
     pub async fn get_enabled_paginated(
         db: &DatabaseConnection,
-        limit: u64,
-        offset: u64,
+        window: Window,
     ) -> Result<(Vec<plugins::Model>, u64)> {
         let total = Plugins::find()
             .filter(plugins::Column::Enabled.eq(true))
             .count(db)
             .await?;
 
-        if limit == 0 {
+        // A zero limit means "just the count": the same thing `Window` says by
+        // carrying a limit of zero, so this is not a sentinel needing a comment
+        // elsewhere. Callers wanting every row pass `Window::unbounded()`.
+        if window.limit() == 0 {
             return Ok((vec![], total));
         }
 
         let plugins = Plugins::find()
             .filter(plugins::Column::Enabled.eq(true))
             .order_by_asc(plugins::Column::Name)
-            .limit(limit)
-            .offset(offset)
+            .limit(window.limit())
+            .offset(window.offset())
             .all(db)
             .await?;
         Ok((plugins, total))
@@ -1812,7 +1817,7 @@ mod tests {
         }
 
         // Get first page (2 plugins)
-        let (plugins, total) = PluginsRepository::get_all_paginated(&db, 2, 0)
+        let (plugins, total) = PluginsRepository::get_all_paginated(&db, Window::from_offset(0, 2))
             .await
             .unwrap();
         assert_eq!(total, 5);
@@ -1821,7 +1826,7 @@ mod tests {
         assert_eq!(plugins[1].name, "plugin_1");
 
         // Get second page
-        let (plugins, total) = PluginsRepository::get_all_paginated(&db, 2, 2)
+        let (plugins, total) = PluginsRepository::get_all_paginated(&db, Window::from_offset(2, 2))
             .await
             .unwrap();
         assert_eq!(total, 5);
@@ -1829,14 +1834,14 @@ mod tests {
         assert_eq!(plugins[0].name, "plugin_2");
 
         // Get third page (only 1 remaining)
-        let (plugins, total) = PluginsRepository::get_all_paginated(&db, 2, 4)
+        let (plugins, total) = PluginsRepository::get_all_paginated(&db, Window::from_offset(4, 2))
             .await
             .unwrap();
         assert_eq!(total, 5);
         assert_eq!(plugins.len(), 1);
 
         // Get count only (limit=0)
-        let (plugins, total) = PluginsRepository::get_all_paginated(&db, 0, 0)
+        let (plugins, total) = PluginsRepository::get_all_paginated(&db, Window::from_offset(0, 0))
             .await
             .unwrap();
         assert_eq!(total, 5);
@@ -1877,23 +1882,26 @@ mod tests {
         }
 
         // Get first page of enabled plugins
-        let (plugins, total) = PluginsRepository::get_enabled_paginated(&db, 2, 0)
-            .await
-            .unwrap();
+        let (plugins, total) =
+            PluginsRepository::get_enabled_paginated(&db, Window::from_offset(0, 2))
+                .await
+                .unwrap();
         assert_eq!(total, 3); // Only 3 are enabled
         assert_eq!(plugins.len(), 2);
 
         // Get second page
-        let (plugins, total) = PluginsRepository::get_enabled_paginated(&db, 2, 2)
-            .await
-            .unwrap();
+        let (plugins, total) =
+            PluginsRepository::get_enabled_paginated(&db, Window::from_offset(2, 2))
+                .await
+                .unwrap();
         assert_eq!(total, 3);
         assert_eq!(plugins.len(), 1); // Only 1 remaining
 
         // Get count only (limit=0)
-        let (plugins, total) = PluginsRepository::get_enabled_paginated(&db, 0, 0)
-            .await
-            .unwrap();
+        let (plugins, total) =
+            PluginsRepository::get_enabled_paginated(&db, Window::from_offset(0, 0))
+                .await
+                .unwrap();
         assert_eq!(total, 3);
         assert!(plugins.is_empty());
     }

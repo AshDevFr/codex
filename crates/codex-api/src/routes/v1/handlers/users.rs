@@ -117,10 +117,9 @@ pub async fn list_users(
         sharing_tag_mode: params.sharing_tag_mode.clone(),
     };
 
-    let result =
-        UserRepository::list_paginated(&state.db, &filter, params.offset(), params.limit())
-            .await
-            .map_err(|e| ApiError::Internal(format!("Failed to fetch users: {}", e)))?;
+    let result = UserRepository::list_paginated(&state.db, &filter, params.window())
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch users: {}", e)))?;
 
     let dtos: Vec<UserDto> = result
         .users

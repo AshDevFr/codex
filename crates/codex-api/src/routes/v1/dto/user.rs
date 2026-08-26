@@ -2,6 +2,7 @@ use super::common::{DEFAULT_PAGE, DEFAULT_PAGE_SIZE};
 use super::sharing_tag::UserSharingTagGrantDto;
 use crate::permissions::UserRole;
 use chrono::{DateTime, Utc};
+use codex_models::pagination::Window;
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 
@@ -202,9 +203,13 @@ impl UserListParams {
         self
     }
 
-    /// Calculate offset for database queries (converts 1-indexed page to 0-indexed offset)
-    pub fn offset(&self) -> u64 {
-        self.page.saturating_sub(1) * self.page_size
+    /// The row range these parameters describe.
+    ///
+    /// Shares [`Window::from_page`] with every other paginated endpoint rather
+    /// than repeating the conversion, which used to live here in a slightly
+    /// different form from the one on `ListPaginationParams`.
+    pub fn window(&self) -> Window {
+        Window::from_page(self.page, self.page_size)
     }
 
     /// Get limit for database queries

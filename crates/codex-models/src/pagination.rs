@@ -44,10 +44,15 @@ impl Window {
     }
 
     /// Every row, for callers that want no pagination at all.
+    ///
+    /// The limit is `i64::MAX` rather than `u64::MAX`: SQL `LIMIT` is signed on
+    /// Postgres, so a value above `i64::MAX` does not survive the round trip.
+    /// This is not a real ceiling either way, and having one lets every query
+    /// apply its limit unconditionally instead of branching on a sentinel.
     pub fn unbounded() -> Self {
         Self {
             offset: 0,
-            limit: u64::MAX,
+            limit: i64::MAX as u64,
         }
     }
 
@@ -111,7 +116,17 @@ mod tests {
     fn unbounded_starts_at_the_beginning_and_does_not_stop() {
         let window = Window::unbounded();
         assert_eq!(window.offset(), 0);
-        assert_eq!(window.limit(), u64::MAX);
+        assert_eq!(window.limit(), i64::MAX as u64);
+    }
+
+    /// SQL `LIMIT` is signed on Postgres, so an unbounded window has to stay
+    /// inside `i64` or it cannot be sent at all. `u64::MAX` would not.
+    #[test]
+    fn unbounded_limit_fits_in_a_signed_sql_limit() {
+        assert!(
+            i64::try_from(Window::unbounded().limit()).is_ok(),
+            "an unbounded limit must survive the trip to a signed SQL LIMIT",
+        );
     }
 
     /// A large page must not wrap into a small offset.

@@ -1,3 +1,4 @@
+use codex_models::pagination::Window;
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 
@@ -116,11 +117,15 @@ impl ListPaginationParams {
         (page, page_size)
     }
 
-    /// Calculate offset for database queries (converts 1-indexed page to 0-indexed offset)
-    #[allow(dead_code)]
-    pub fn offset(&self) -> u64 {
+    /// The row range these parameters describe.
+    ///
+    /// Built from the validated page and clamped size, so callers never handle
+    /// the 1-indexed page and the 0-indexed offset as interchangeable `u64`s.
+    /// Confusing the two is what shipped six endpoints querying
+    /// `(page - 1) * page_size²`, and it compiled every time.
+    pub fn window(&self) -> Window {
         let (page, page_size) = self.validated();
-        (page - 1) * page_size
+        Window::from_page(page, page_size)
     }
 }
 

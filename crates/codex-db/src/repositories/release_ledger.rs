@@ -9,6 +9,7 @@
 
 use anyhow::Result;
 use chrono::Utc;
+use codex_models::pagination::Window;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, Order, PaginatorTrait,
     QueryFilter, QueryOrder, QuerySelect, Set, sea_query::NullOrdering,
@@ -264,8 +265,7 @@ impl ReleaseLedgerRepository {
         db: &DatabaseConnection,
         series_id: Uuid,
         state_filter: Option<&str>,
-        limit: u64,
-        offset: u64,
+        window: Window,
     ) -> Result<Vec<ReleaseLedgerRow>> {
         let mut query = ReleaseLedger::find()
             .filter(release_ledger::Column::SeriesId.eq(series_id))
@@ -284,12 +284,11 @@ impl ReleaseLedgerRepository {
         if let Some(s) = state_filter {
             query = query.filter(release_ledger::Column::State.eq(s));
         }
-        if limit > 0 {
-            query = query.limit(limit);
-        }
-        if offset > 0 {
-            query = query.offset(offset);
-        }
+        // Applied unconditionally: `Window::unbounded` carries a limit no query
+        // reaches, so "everything" no longer needs a zero sentinel. That
+        // sentinel meant the opposite thing in `plugins`, where zero means
+        // "count only", which is precisely the ambiguity worth removing.
+        query = query.limit(window.limit()).offset(window.offset());
         Ok(query.all(db).await?)
     }
 
@@ -299,10 +298,9 @@ impl ReleaseLedgerRepository {
     pub async fn list_inbox(
         db: &DatabaseConnection,
         filter: LedgerInboxFilter,
-        limit: u64,
-        offset: u64,
+        window: Window,
     ) -> Result<Vec<ReleaseLedgerRow>> {
-        Self::list_inbox_sorted(db, filter, InboxSort::default(), limit, offset).await
+        Self::list_inbox_sorted(db, filter, InboxSort::default(), window).await
     }
 
     /// Inbox view across all series, with filters and an explicit sort.
@@ -326,8 +324,7 @@ impl ReleaseLedgerRepository {
         db: &DatabaseConnection,
         filter: LedgerInboxFilter,
         sort: InboxSort,
-        limit: u64,
-        offset: u64,
+        window: Window,
     ) -> Result<Vec<ReleaseLedgerRow>> {
         use sea_orm::{JoinType, RelationTrait};
         let query =
@@ -369,12 +366,11 @@ impl ReleaseLedgerRepository {
         // `series_already_joined: true` so apply_inbox_filter doesn't add
         // a duplicate join when `library_id` is present in the filter.
         query = apply_inbox_filter(query, &filter, true);
-        if limit > 0 {
-            query = query.limit(limit);
-        }
-        if offset > 0 {
-            query = query.offset(offset);
-        }
+        // Applied unconditionally: `Window::unbounded` carries a limit no query
+        // reaches, so "everything" no longer needs a zero sentinel. That
+        // sentinel meant the opposite thing in `plugins`, where zero means
+        // "count only", which is precisely the ambiguity worth removing.
+        query = query.limit(window.limit()).offset(window.offset());
         Ok(query.all(db).await?)
     }
 
@@ -857,9 +853,14 @@ mod tests {
             .await
             .unwrap();
 
-        let rows = ReleaseLedgerRepository::list_for_series(conn, series_id, None, 10, 0)
-            .await
-            .unwrap();
+        let rows = ReleaseLedgerRepository::list_for_series(
+            conn,
+            series_id,
+            None,
+            Window::from_offset(0, 10),
+        )
+        .await
+        .unwrap();
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0].chapter, Some(200.0));
         assert_eq!(rows[1].chapter, Some(150.0));
@@ -879,9 +880,14 @@ mod tests {
         ReleaseLedgerRepository::record(conn, older).await.unwrap();
         ReleaseLedgerRepository::record(conn, newer).await.unwrap();
 
-        let rows = ReleaseLedgerRepository::list_for_series(conn, series_id, None, 10, 0)
-            .await
-            .unwrap();
+        let rows = ReleaseLedgerRepository::list_for_series(
+            conn,
+            series_id,
+            None,
+            Window::from_offset(0, 10),
+        )
+        .await
+        .unwrap();
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0].external_release_id, "rel-new");
         assert_eq!(rows[1].external_release_id, "rel-old");
@@ -922,8 +928,7 @@ mod tests {
                 field: InboxSortField::Observed,
                 direction: SortDirection::Desc,
             },
-            100,
-            0,
+            Window::from_offset(0, 100),
         )
         .await
         .unwrap();
@@ -940,8 +945,7 @@ mod tests {
                 field: InboxSortField::Observed,
                 direction: SortDirection::Asc,
             },
-            100,
-            0,
+            Window::from_offset(0, 100),
         )
         .await
         .unwrap();
@@ -1006,8 +1010,7 @@ mod tests {
                 field: InboxSortField::Released,
                 direction: SortDirection::Desc,
             },
-            100,
-            0,
+            Window::from_offset(0, 100),
         )
         .await
         .unwrap();
@@ -1025,8 +1028,7 @@ mod tests {
                 field: InboxSortField::Released,
                 direction: SortDirection::Asc,
             },
-            100,
-            0,
+            Window::from_offset(0, 100),
         )
         .await
         .unwrap();
@@ -1053,10 +1055,13 @@ mod tests {
             .await
             .unwrap();
 
-        let announced =
-            ReleaseLedgerRepository::list_inbox(conn, LedgerInboxFilter::default(), 10, 0)
-                .await
-                .unwrap();
+        let announced = ReleaseLedgerRepository::list_inbox(
+            conn,
+            LedgerInboxFilter::default(),
+            Window::from_offset(0, 10),
+        )
+        .await
+        .unwrap();
         assert_eq!(announced.len(), 1);
         assert_eq!(announced[0].external_release_id, "rel-2");
 
@@ -1066,8 +1071,7 @@ mod tests {
                 state: Some(state::DISMISSED.to_string()),
                 ..Default::default()
             },
-            10,
-            0,
+            Window::from_offset(0, 10),
         )
         .await
         .unwrap();
@@ -1116,9 +1120,13 @@ mod tests {
                 .unwrap();
         }
 
-        let rows = ReleaseLedgerRepository::list_inbox(conn, LedgerInboxFilter::default(), 100, 0)
-            .await
-            .unwrap();
+        let rows = ReleaseLedgerRepository::list_inbox(
+            conn,
+            LedgerInboxFilter::default(),
+            Window::from_offset(0, 100),
+        )
+        .await
+        .unwrap();
         let series_order: Vec<Uuid> = rows.iter().map(|r| r.series_id).collect();
         assert_eq!(
             series_order,
@@ -1154,9 +1162,13 @@ mod tests {
             ReleaseLedgerRepository::record(conn, e).await.unwrap();
         }
 
-        let rows = ReleaseLedgerRepository::list_inbox(conn, LedgerInboxFilter::default(), 100, 0)
-            .await
-            .unwrap();
+        let rows = ReleaseLedgerRepository::list_inbox(
+            conn,
+            LedgerInboxFilter::default(),
+            Window::from_offset(0, 100),
+        )
+        .await
+        .unwrap();
         let chapters: Vec<f64> = rows.iter().filter_map(|r| r.chapter).collect();
         assert_eq!(
             chapters,
@@ -1183,9 +1195,13 @@ mod tests {
             ReleaseLedgerRepository::record(conn, e).await.unwrap();
         }
 
-        let rows = ReleaseLedgerRepository::list_inbox(conn, LedgerInboxFilter::default(), 100, 0)
-            .await
-            .unwrap();
+        let rows = ReleaseLedgerRepository::list_inbox(
+            conn,
+            LedgerInboxFilter::default(),
+            Window::from_offset(0, 100),
+        )
+        .await
+        .unwrap();
         let chapters: Vec<f64> = rows.iter().filter_map(|r| r.chapter).collect();
         assert_eq!(
             chapters,
@@ -1240,9 +1256,13 @@ mod tests {
         ReleaseLedgerRepository::record(conn, a2).await.unwrap();
         ReleaseLedgerRepository::record(conn, b2).await.unwrap();
 
-        let rows = ReleaseLedgerRepository::list_inbox(conn, LedgerInboxFilter::default(), 100, 0)
-            .await
-            .unwrap();
+        let rows = ReleaseLedgerRepository::list_inbox(
+            conn,
+            LedgerInboxFilter::default(),
+            Window::from_offset(0, 100),
+        )
+        .await
+        .unwrap();
         // Each series' rows must be contiguous and chapter-desc internally.
         let series_groups: Vec<Vec<(Uuid, f64)>> = rows
             .iter()
@@ -1298,8 +1318,7 @@ mod tests {
                 series_id: Some(series_a),
                 ..Default::default()
             },
-            10,
-            0,
+            Window::from_offset(0, 10),
         )
         .await
         .unwrap();
@@ -1342,9 +1361,14 @@ mod tests {
 
         SeriesRepository::delete(conn, series_id).await.unwrap();
 
-        let rows = ReleaseLedgerRepository::list_for_series(conn, series_id, None, 10, 0)
-            .await
-            .unwrap();
+        let rows = ReleaseLedgerRepository::list_for_series(
+            conn,
+            series_id,
+            None,
+            Window::from_offset(0, 10),
+        )
+        .await
+        .unwrap();
         assert!(rows.is_empty(), "ledger rows cascaded with series");
     }
 
@@ -1385,21 +1409,27 @@ mod tests {
         assert_eq!(removed, 2);
 
         // Source A is empty; source B still has its row.
-        let after_a =
-            ReleaseLedgerRepository::list_inbox(conn, LedgerInboxFilter::default(), 100, 0)
-                .await
-                .unwrap()
-                .into_iter()
-                .filter(|r| r.source_id == source_a)
-                .count();
+        let after_a = ReleaseLedgerRepository::list_inbox(
+            conn,
+            LedgerInboxFilter::default(),
+            Window::from_offset(0, 100),
+        )
+        .await
+        .unwrap()
+        .into_iter()
+        .filter(|r| r.source_id == source_a)
+        .count();
         assert_eq!(after_a, 0);
-        let after_b =
-            ReleaseLedgerRepository::list_inbox(conn, LedgerInboxFilter::default(), 100, 0)
-                .await
-                .unwrap()
-                .into_iter()
-                .filter(|r| r.source_id == source_b.id)
-                .count();
+        let after_b = ReleaseLedgerRepository::list_inbox(
+            conn,
+            LedgerInboxFilter::default(),
+            Window::from_offset(0, 100),
+        )
+        .await
+        .unwrap()
+        .into_iter()
+        .filter(|r| r.source_id == source_b.id)
+        .count();
         assert_eq!(after_b, 1);
     }
 
@@ -1416,9 +1446,14 @@ mod tests {
             .await
             .unwrap();
 
-        let rows = ReleaseLedgerRepository::list_for_series(conn, series_id, None, 10, 0)
-            .await
-            .unwrap();
+        let rows = ReleaseLedgerRepository::list_for_series(
+            conn,
+            series_id,
+            None,
+            Window::from_offset(0, 10),
+        )
+        .await
+        .unwrap();
         assert!(rows.is_empty(), "ledger rows cascaded with source");
     }
 }

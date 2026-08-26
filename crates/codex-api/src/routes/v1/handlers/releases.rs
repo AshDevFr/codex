@@ -19,6 +19,7 @@ use axum::{
     response::Response,
 };
 use chrono::Utc;
+use codex_models::pagination::Window;
 use serde::Deserialize;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -144,7 +145,7 @@ pub async fn list_series_releases(
 
     let page = params.page.max(1);
     let page_size = params.page_size.clamp(1, MAX_PAGE_SIZE);
-    let offset = (page - 1) * page_size;
+    let window = Window::from_page(page, page_size);
 
     // Validate state filter if present.
     if let Some(ref s) = params.state
@@ -157,8 +158,7 @@ pub async fn list_series_releases(
         &state.db,
         series_id,
         params.state.as_deref(),
-        page_size,
-        offset,
+        window,
     )
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to list releases: {}", e)))?;
@@ -178,7 +178,7 @@ pub async fn list_series_releases(
             .await
             .map_err(|e| ApiError::Internal(format!("Failed to count releases: {}", e)))?
     } else {
-        ReleaseLedgerRepository::list_for_series(&state.db, series_id, None, 0, 0)
+        ReleaseLedgerRepository::list_for_series(&state.db, series_id, None, Window::unbounded())
             .await
             .map_err(|e| ApiError::Internal(format!("Failed to count releases: {}", e)))?
             .len() as u64
@@ -262,7 +262,7 @@ pub async fn list_release_inbox(
 
     let page = params.page.max(1);
     let page_size = params.page_size.clamp(1, MAX_PAGE_SIZE);
-    let offset = (page - 1) * page_size;
+    let window = Window::from_page(page, page_size);
 
     // `all` is a sentinel meaning "no state filter"; otherwise validate
     // against the canonical set.
@@ -291,15 +291,9 @@ pub async fn list_release_inbox(
         .as_deref()
         .map(InboxSort::parse)
         .unwrap_or_default();
-    let rows = ReleaseLedgerRepository::list_inbox_sorted(
-        &state.db,
-        filter.clone(),
-        sort,
-        page_size,
-        offset,
-    )
-    .await
-    .map_err(|e| ApiError::Internal(format!("Failed to list inbox: {}", e)))?;
+    let rows = ReleaseLedgerRepository::list_inbox_sorted(&state.db, filter.clone(), sort, window)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to list inbox: {}", e)))?;
     let total = ReleaseLedgerRepository::count_inbox(&state.db, filter)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to count inbox: {}", e)))?;

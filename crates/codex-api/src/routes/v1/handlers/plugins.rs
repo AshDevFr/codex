@@ -19,6 +19,7 @@ use axum::{
 use codex_db::entities::plugins::{InternalPluginConfig, PluginPermission};
 use codex_db::repositories::{PluginFailuresRepository, PluginsRepository, UserPluginsRepository};
 use codex_events::{EntityChangeEvent, EntityEvent};
+use codex_models::pagination::Window;
 use codex_services::PluginHealthStatus;
 use codex_services::plugin::process::{allowed_commands_description, is_command_allowed};
 use codex_services::plugin::protocol::PluginScope;
@@ -1170,10 +1171,13 @@ pub async fn get_plugin_failures(
         .ok_or_else(|| ApiError::NotFound("Plugin not found".to_string()))?;
 
     // Get paginated failures
-    let (failures, total) =
-        PluginFailuresRepository::get_failures_paginated(&state.db, id, query.limit, query.offset)
-            .await
-            .map_err(|e| ApiError::Internal(format!("Failed to get failures: {}", e)))?;
+    let (failures, total) = PluginFailuresRepository::get_failures_paginated(
+        &state.db,
+        id,
+        Window::from_offset(query.offset, query.limit),
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to get failures: {}", e)))?;
 
     // Get count within time window
     // Use the default settings (can be made configurable via settings later)
