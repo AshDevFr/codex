@@ -7259,9 +7259,12 @@ async fn test_get_series_metadata_includes_authors_and_lock() {
         .expect("authors should be present in full response");
     assert_eq!(authors.len(), 1);
     assert_eq!(authors[0].name, "Eiichiro Oda");
+    // Editing authors through PATCH locks them, matching `patch_book_metadata`.
+    // This assertion previously expected `false`, which recorded the series
+    // handler's old behaviour of writing a field without protecting it.
     assert!(
-        !metadata.locks.authors_json_lock,
-        "authors_json_lock should default to false"
+        metadata.locks.authors_json_lock,
+        "editing authors must lock them, or the next provider apply overwrites the edit"
     );
 }
 

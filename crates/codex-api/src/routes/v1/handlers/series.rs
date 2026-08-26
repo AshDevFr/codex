@@ -3248,11 +3248,30 @@ pub async fn replace_series_metadata(
     active.total_volume_count = Set(request.total_volume_count);
     active.total_chapter_count = Set(request.total_chapter_count);
 
+    // These fields are replaced wholesale, so their locks are recomputed from
+    // the payload rather than carried over. Leaving a stale lock on a field the
+    // replace just cleared would block a provider from ever refilling it.
+    // `title` is deliberately absent: it is preserved when omitted, so its lock
+    // is preserved too.
+    active.title_sort_lock = Set(request.title_sort.is_some());
+    active.summary_lock = Set(request.summary.is_some());
+    active.publisher_lock = Set(request.publisher.is_some());
+    active.imprint_lock = Set(request.imprint.is_some());
+    active.status_lock = Set(request.status.is_some());
+    active.age_rating_lock = Set(request.age_rating.is_some());
+    active.language_lock = Set(request.language.is_some());
+    active.reading_direction_lock = Set(request.reading_direction.is_some());
+    active.year_lock = Set(request.year.is_some());
+    active.total_volume_count_lock = Set(request.total_volume_count.is_some());
+    active.total_chapter_count_lock = Set(request.total_chapter_count.is_some());
+
     // Validate and convert custom_metadata from JSON Value to String
     if let Some(ref cm) = request.custom_metadata {
         validate_custom_metadata_size(Some(cm)).map_err(ApiError::BadRequest)?;
     }
+    active.custom_metadata_lock = Set(request.custom_metadata.is_some());
     active.custom_metadata = Set(serialize_custom_metadata(request.custom_metadata.as_ref()));
+    active.authors_json_lock = Set(request.authors.is_some());
     active.authors_json = Set(request
         .authors
         .map(|authors| serde_json::to_string(&authors).unwrap_or_default()));
@@ -3566,47 +3585,91 @@ pub async fn patch_series_metadata(
         has_changes = true;
     }
     if let Some(opt) = request.title_sort.into_nested_option() {
+        let edited = opt.is_some();
         metadata_active.title_sort = Set(opt);
+        if edited {
+            metadata_active.title_sort_lock = Set(true); // Auto-lock when user edits
+        }
         has_changes = true;
     }
     if let Some(opt) = request.summary.into_nested_option() {
+        let edited = opt.is_some();
         metadata_active.summary = Set(opt);
+        if edited {
+            metadata_active.summary_lock = Set(true); // Auto-lock when user edits
+        }
         has_changes = true;
     }
     if let Some(opt) = request.publisher.into_nested_option() {
+        let edited = opt.is_some();
         metadata_active.publisher = Set(opt);
+        if edited {
+            metadata_active.publisher_lock = Set(true); // Auto-lock when user edits
+        }
         has_changes = true;
     }
     if let Some(opt) = request.imprint.into_nested_option() {
+        let edited = opt.is_some();
         metadata_active.imprint = Set(opt);
+        if edited {
+            metadata_active.imprint_lock = Set(true); // Auto-lock when user edits
+        }
         has_changes = true;
     }
     if let Some(opt) = request.status.into_nested_option() {
+        let edited = opt.is_some();
         metadata_active.status = Set(opt);
+        if edited {
+            metadata_active.status_lock = Set(true); // Auto-lock when user edits
+        }
         has_changes = true;
     }
     if let Some(opt) = request.age_rating.into_nested_option() {
+        let edited = opt.is_some();
         metadata_active.age_rating = Set(opt);
+        if edited {
+            metadata_active.age_rating_lock = Set(true); // Auto-lock when user edits
+        }
         has_changes = true;
     }
     if let Some(opt) = request.language.into_nested_option() {
+        let edited = opt.is_some();
         metadata_active.language = Set(opt);
+        if edited {
+            metadata_active.language_lock = Set(true); // Auto-lock when user edits
+        }
         has_changes = true;
     }
     if let Some(opt) = request.reading_direction.into_nested_option() {
+        let edited = opt.is_some();
         metadata_active.reading_direction = Set(opt);
+        if edited {
+            metadata_active.reading_direction_lock = Set(true); // Auto-lock when user edits
+        }
         has_changes = true;
     }
     if let Some(opt) = request.year.into_nested_option() {
+        let edited = opt.is_some();
         metadata_active.year = Set(opt);
+        if edited {
+            metadata_active.year_lock = Set(true); // Auto-lock when user edits
+        }
         has_changes = true;
     }
     if let Some(opt) = request.total_volume_count.into_nested_option() {
+        let edited = opt.is_some();
         metadata_active.total_volume_count = Set(opt);
+        if edited {
+            metadata_active.total_volume_count_lock = Set(true); // Auto-lock when user edits
+        }
         has_changes = true;
     }
     if let Some(opt) = request.total_chapter_count.into_nested_option() {
+        let edited = opt.is_some();
         metadata_active.total_chapter_count = Set(opt);
+        if edited {
+            metadata_active.total_chapter_count_lock = Set(true); // Auto-lock when user edits
+        }
         has_changes = true;
     }
     if let Some(opt) = request.custom_metadata.into_nested_option() {
@@ -3621,12 +3684,25 @@ pub async fn patch_series_metadata(
             // Explicit null clears custom_metadata
             None
         };
+        // Guard on the merged value, not the serialised string:
+        // `serialize_custom_metadata(None)` is non-null and would lock a field
+        // the user just cleared.
+        let edited = merged.is_some();
         metadata_active.custom_metadata = Set(serialize_custom_metadata(merged.as_ref()));
+        if edited {
+            metadata_active.custom_metadata_lock = Set(true); // Auto-lock when user edits
+        }
         has_changes = true;
     }
     if let Some(authors_opt) = request.authors.into_nested_option() {
+        // Guard before the map: an empty Vec still serialises to a non-null
+        // string, so the serialised form cannot tell a clear from an edit.
+        let edited = authors_opt.is_some();
         metadata_active.authors_json =
             Set(authors_opt.map(|authors| serde_json::to_string(&authors).unwrap_or_default()));
+        if edited {
+            metadata_active.authors_json_lock = Set(true); // Auto-lock when user edits
+        }
         has_changes = true;
     }
 

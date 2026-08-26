@@ -1496,3 +1496,190 @@ async fn test_book_metadata_response_includes_locks() {
     assert!(metadata.locks.summary_lock);
     assert!(!metadata.locks.publisher_lock);
 }
+
+// ============================================================================
+// Series metadata auto-lock parity with the book endpoints
+// ============================================================================
+
+/// Editing a field through PATCH must protect it, the way `patch_book_metadata`
+/// already does. Without the lock a later provider apply overwrites the hand
+/// correction, so the edit silently reverts days after it was made.
+#[tokio::test]
+async fn test_patch_series_metadata_locks_every_field_it_writes() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test/path", ScanningStrategy::Default)
+            .await
+            .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    let body = serde_json::json!({
+        "title": "The Sandman",
+        "titleSort": "Sandman, The",
+        "summary": "A hand-written summary",
+        "publisher": "Vertigo",
+        "imprint": "DC Black Label",
+        "status": "ENDED",
+        "ageRating": 18,
+        "language": "en",
+        "readingDirection": "LEFT_TO_RIGHT",
+        "year": 1989,
+        "totalVolumeCount": 10,
+        "totalChapterCount": 75.0,
+        "customMetadata": {"shelf": "favourites"},
+        "authors": [{"name": "Neil Gaiman", "role": "writer"}],
+    });
+
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/series/{}/metadata", series.id),
+        &body,
+        &token,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app.clone(), request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let request = get_request_with_auth(
+        &format!("/api/v1/series/{}/metadata/locks", series.id),
+        &token,
+    );
+    let (status, locks): (StatusCode, Option<MetadataLocks>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+    let locks = locks.unwrap();
+
+    assert!(locks.title, "title");
+    assert!(locks.title_sort, "titleSort");
+    assert!(locks.summary, "summary");
+    assert!(locks.publisher, "publisher");
+    assert!(locks.imprint, "imprint");
+    assert!(locks.status, "status");
+    assert!(locks.age_rating, "ageRating");
+    assert!(locks.language, "language");
+    assert!(locks.reading_direction, "readingDirection");
+    assert!(locks.year, "year");
+    assert!(locks.total_volume_count, "totalVolumeCount");
+    assert!(locks.total_chapter_count, "totalChapterCount");
+    assert!(locks.custom_metadata, "customMetadata");
+    assert!(locks.authors_json_lock, "authors");
+}
+
+/// `patch_book_metadata` locks only non-null values, so an explicit null clears
+/// without locking. The series handler must answer the same way, or the two
+/// halves of the API disagree about what clearing a field means.
+#[tokio::test]
+async fn test_patch_series_metadata_null_clears_without_locking() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test/path", ScanningStrategy::Default)
+            .await
+            .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    let body = serde_json::json!({
+        "titleSort": serde_json::Value::Null,
+        "summary": serde_json::Value::Null,
+        "customMetadata": serde_json::Value::Null,
+        "authors": serde_json::Value::Null,
+    });
+
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/series/{}/metadata", series.id),
+        &body,
+        &token,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app.clone(), request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let request = get_request_with_auth(
+        &format!("/api/v1/series/{}/metadata/locks", series.id),
+        &token,
+    );
+    let (status, locks): (StatusCode, Option<MetadataLocks>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+    let locks = locks.unwrap();
+
+    assert!(!locks.title_sort, "clearing titleSort must not lock it");
+    assert!(!locks.summary, "clearing summary must not lock it");
+    // These two serialise through helpers whose output is non-null even for an
+    // empty value, so the guard has to read the pre-serialisation value.
+    assert!(
+        !locks.custom_metadata,
+        "clearing customMetadata must not lock it"
+    );
+    assert!(
+        !locks.authors_json_lock,
+        "clearing authors must not lock it"
+    );
+}
+
+/// A replace recomputes lock state from the payload it was handed, matching
+/// `replace_book_metadata`. Carrying the previous locks forward would leave a
+/// field null and locked, permanently blocking a provider from refilling it.
+#[tokio::test]
+async fn test_replace_series_metadata_recomputes_locks_from_payload() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test/path", ScanningStrategy::Default)
+            .await
+            .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    // Lock summary and publisher by editing them.
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/series/{}/metadata", series.id),
+        &serde_json::json!({"summary": "first", "publisher": "Vertigo"}),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app.clone(), request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // Replace with a payload that sets publisher and omits summary entirely.
+    let request = put_json_request_with_auth(
+        &format!("/api/v1/series/{}/metadata", series.id),
+        &serde_json::json!({"publisher": "DC"}),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app.clone(), request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let request = get_request_with_auth(
+        &format!("/api/v1/series/{}/metadata/locks", series.id),
+        &token,
+    );
+    let (status, locks): (StatusCode, Option<MetadataLocks>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+    let locks = locks.unwrap();
+
+    assert!(locks.publisher, "publisher was supplied, so it locks");
+    assert!(
+        !locks.summary,
+        "summary was cleared by the replace, so it must not stay locked",
+    );
+}
