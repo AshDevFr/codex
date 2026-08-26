@@ -5224,3 +5224,81 @@ async fn full_routes_404_on_a_missing_entity() {
         assert_eq!(status, StatusCode::NOT_FOUND, "{path}");
     }
 }
+
+// ============================================================================
+// POST /books/list full-text search pagination
+// ============================================================================
+
+/// `search_by_title` interprets its pagination tuple as `(page_index, page_size)`
+/// and multiplies the two, while the handler hands it a row offset. Page 1 was
+/// therefore correct by coincidence (zero times anything is zero) and every
+/// later page queried `offset * page_size`, far past the end of the result set.
+#[tokio::test]
+async fn test_list_books_full_text_search_paginates_past_first_page() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Series", None)
+        .await
+        .unwrap();
+
+    // Six matching books at pageSize 3: page 2 starts at row 3, but a page-index
+    // misread lands at row 9 and returns nothing.
+    for i in 1..=6 {
+        create_test_book_with_metadata(
+            &db,
+            series.id,
+            library.id,
+            &format!("/daredevil-{i:02}.cbz"),
+            &format!("daredevil-{i:02}.cbz"),
+            Some(format!("Daredevil {i:02}")),
+        )
+        .await;
+    }
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request_body = BookListRequest {
+        full_text_search: Some("Daredevil".to_string()),
+        ..Default::default()
+    };
+
+    let request = post_json_request_with_auth(
+        "/api/v1/books/list?page=1&pageSize=3",
+        &request_body,
+        &token,
+    );
+    let (status, page1): (StatusCode, Option<BookListResponse>) =
+        make_json_request(app.clone(), request).await;
+    assert_eq!(status, StatusCode::OK);
+    let page1 = page1.unwrap();
+    assert_eq!(page1.total, 6);
+    assert_eq!(page1.data.len(), 3);
+
+    let request = post_json_request_with_auth(
+        "/api/v1/books/list?page=2&pageSize=3",
+        &request_body,
+        &token,
+    );
+    let (status, page2): (StatusCode, Option<BookListResponse>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+    let page2 = page2.unwrap();
+
+    assert_eq!(page2.total, 6);
+    assert_eq!(
+        page2.data.len(),
+        3,
+        "page 2 of a 6-result search at pageSize 3 must return the remaining 3 books",
+    );
+
+    let page1_ids: Vec<_> = page1.data.iter().map(|b| b.id).collect();
+    assert!(
+        page2.data.iter().all(|b| !page1_ids.contains(&b.id)),
+        "pages must not overlap",
+    );
+}
