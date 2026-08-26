@@ -25,10 +25,12 @@ use axum::{
 };
 use codex_db::repositories::{
     AlternateTitleRepository, BookMetadataRepository, BookQueryOptions, BookQuerySort,
-    BookRepository, BookSortField, ExternalLinkRepository, GenreRepository, ReadProgressRepository,
-    SeriesCoversRepository, SeriesMetadataRepository, SeriesQueryOptions, SeriesQuerySort,
-    SeriesRepository, SeriesSortFieldRepo, TagRepository,
+    BookRepository, BookSortField, ExternalLinkRepository, GenreRepository, LibraryRepository,
+    ReadProgressRepository, SeriesCoversRepository, SeriesMetadataRepository, SeriesQueryOptions,
+    SeriesQuerySort, SeriesRepository, SeriesSortFieldRepo, TagRepository,
+    UserSeriesReaderSettingsRepository,
 };
+use codex_models::reading_direction::ReadingDirection;
 use serde::Deserialize;
 use std::sync::Arc;
 use tokio::fs;
@@ -883,6 +885,40 @@ pub(crate) async fn build_series_dto(
     let (aggregated_authors, aggregated_tags) =
         aggregate_books_metadata(&state.db, series.id).await;
 
+    // Effective reading direction for this caller: their own override, then the
+    // series metadata, then the library default. This is the only channel a
+    // Komga client has for direction, so resolving it here is what lets those
+    // clients honour a user's correction.
+    //
+    // The library is fetched only when the first two layers come up empty.
+    // This function is already called once per series by the list endpoints, so
+    // the common case stays at one extra query rather than two.
+    let user_reading_direction = match user_id {
+        Some(uid) => {
+            UserSeriesReaderSettingsRepository::get_for_user_series(&state.db, uid, series.id)
+                .await
+                .map_err(|e| ApiError::Internal(format!("Failed to fetch reader settings: {}", e)))?
+                .and_then(|settings| settings.reading_direction)
+        }
+        None => None,
+    };
+
+    let effective_reading_direction = match ReadingDirection::resolve(&[
+        user_reading_direction.map(|d| d.as_str()),
+        metadata
+            .as_ref()
+            .and_then(|m| m.reading_direction.as_deref()),
+    ]) {
+        Some(direction) => Some(direction),
+        None => LibraryRepository::get_by_id(&state.db, series.library_id)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to fetch library: {}", e)))?
+            .and_then(|library| {
+                ReadingDirection::parse_stored(Some(&library.default_reading_direction))
+            }),
+    };
+    let effective_reading_direction = effective_reading_direction.map(|d| d.as_str());
+
     // Build metadata DTO
     let now = chrono::Utc::now().to_rfc3339();
     let series_metadata = if let Some(ref m) = metadata {
@@ -895,7 +931,11 @@ pub(crate) async fn build_series_dto(
             title_sort_lock: m.title_sort_lock,
             summary: m.summary.clone().unwrap_or_default(),
             summary_lock: m.summary_lock,
-            reading_direction: codex_to_komga_reading_direction(m.reading_direction.as_deref()),
+            // The resolved value, so a Komga client renders what this user
+            // chose. The lock beside it still describes the shared series
+            // field; the Komga layer exposes no write, so nothing can act on
+            // the difference.
+            reading_direction: codex_to_komga_reading_direction(effective_reading_direction),
             reading_direction_lock: m.reading_direction_lock,
             publisher: m.publisher.clone().unwrap_or_default(),
             publisher_lock: m.publisher_lock,
@@ -933,6 +973,9 @@ pub(crate) async fn build_series_dto(
             tags: tag_names,
             links,
             alternate_titles: alt_titles,
+            // A series with no metadata row still inherits a direction from the
+            // user's override or the library default.
+            reading_direction: codex_to_komga_reading_direction(effective_reading_direction),
             ..Default::default()
         }
     };

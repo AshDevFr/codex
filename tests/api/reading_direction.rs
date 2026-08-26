@@ -573,3 +573,250 @@ async fn one_users_reader_settings_are_invisible_to_another() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(response.unwrap(), json!({}));
 }
+
+// ============================================================================
+// Three-layer resolution
+// ============================================================================
+
+/// The user's own override beats the series metadata, which beats the library.
+#[tokio::test]
+async fn a_user_override_wins_over_the_series_metadata() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_id, token) = user_and_token(&db, &state, "reader", false).await;
+    let app = create_test_router(state.clone()).await;
+
+    let mut library = create_test_library(&db, "Test Library", "/test/path").await;
+    library.default_reading_direction = "ttb".to_string();
+    LibraryRepository::update(&db, &library).await.unwrap();
+
+    let series = create_test_series(&db, &library, "Berserk").await;
+    let book = create_test_book_with_hash(
+        &db,
+        &library,
+        &series,
+        "Vol 1",
+        "/test/path/v1.cbz",
+        "hash-1",
+    )
+    .await;
+
+    SeriesMetadataRepository::update_reading_direction(&db, series.id, Some("ltr".to_string()))
+        .await
+        .unwrap();
+
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/user/series/{}/reader-settings", series.id),
+        &json!({ "readingDirection": "rtl" }),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let app = create_test_router(state).await;
+    let request = get_request_with_auth(&format!("/api/v1/books/{}", book.id), &token);
+    let (status, response): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(response.unwrap()["book"]["readingDirection"], "rtl");
+}
+
+/// The same book, two callers, two answers. This is the whole feature.
+#[tokio::test]
+async fn two_users_see_different_directions_for_the_same_book() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_reader_id, reader_token) = user_and_token(&db, &state, "reader", false).await;
+    let (_other_id, other_token) = user_and_token(&db, &state, "other", false).await;
+    let app = create_test_router(state.clone()).await;
+
+    let mut library = create_test_library(&db, "Test Library", "/test/path").await;
+    library.default_reading_direction = "ltr".to_string();
+    LibraryRepository::update(&db, &library).await.unwrap();
+
+    let series = create_test_series(&db, &library, "Berserk").await;
+    let book = create_test_book_with_hash(
+        &db,
+        &library,
+        &series,
+        "Vol 1",
+        "/test/path/v1.cbz",
+        "hash-1",
+    )
+    .await;
+
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/user/series/{}/reader-settings", series.id),
+        &json!({ "readingDirection": "rtl" }),
+        &reader_token,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let app = create_test_router(state.clone()).await;
+    let request = get_request_with_auth(&format!("/api/v1/books/{}", book.id), &reader_token);
+    let (_status, mine): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    let app = create_test_router(state).await;
+    let request = get_request_with_auth(&format!("/api/v1/books/{}", book.id), &other_token);
+    let (_status, theirs): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(mine.unwrap()["book"]["readingDirection"], "rtl");
+    // Untouched by the other user's correction: still the library default.
+    assert_eq!(theirs.unwrap()["book"]["readingDirection"], "ltr");
+}
+
+/// Clearing the override falls back through the layers again rather than
+/// leaving the last value stuck.
+#[tokio::test]
+async fn clearing_the_override_restores_the_series_direction() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_id, token) = user_and_token(&db, &state, "reader", false).await;
+    let app = create_test_router(state.clone()).await;
+
+    let library = create_test_library(&db, "Test Library", "/test/path").await;
+    let series = create_test_series(&db, &library, "Berserk").await;
+    let book = create_test_book_with_hash(
+        &db,
+        &library,
+        &series,
+        "Vol 1",
+        "/test/path/v1.cbz",
+        "hash-1",
+    )
+    .await;
+
+    SeriesMetadataRepository::update_reading_direction(&db, series.id, Some("ttb".to_string()))
+        .await
+        .unwrap();
+
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/user/series/{}/reader-settings", series.id),
+        &json!({ "readingDirection": "rtl" }),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let app = create_test_router(state.clone()).await;
+    let request = delete_request_with_auth(
+        &format!("/api/v1/user/series/{}/reader-settings", series.id),
+        &token,
+    );
+    let (status, _) = make_request(app, request).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+
+    let app = create_test_router(state).await;
+    let request = get_request_with_auth(&format!("/api/v1/books/{}", book.id), &token);
+    let (_status, response): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(response.unwrap()["book"]["readingDirection"], "ttb");
+}
+
+/// The list path resolves per caller too, not just the single-book path.
+#[tokio::test]
+async fn the_book_list_resolves_the_user_override() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_id, token) = user_and_token(&db, &state, "reader", false).await;
+    let app = create_test_router(state.clone()).await;
+
+    let mut library = create_test_library(&db, "Test Library", "/test/path").await;
+    library.default_reading_direction = "ltr".to_string();
+    LibraryRepository::update(&db, &library).await.unwrap();
+
+    let series = create_test_series(&db, &library, "Berserk").await;
+    create_test_book_with_hash(
+        &db,
+        &library,
+        &series,
+        "Vol 1",
+        "/test/path/v1.cbz",
+        "hash-1",
+    )
+    .await;
+
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/user/series/{}/reader-settings", series.id),
+        &json!({ "readingDirection": "rtl" }),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let app = create_test_router(state).await;
+    let request = get_request_with_auth("/api/v1/books", &token);
+    let (status, response): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body = response.unwrap();
+    let books = body["data"].as_array().expect("a data array");
+    assert_eq!(books.len(), 1);
+    assert_eq!(books[0]["readingDirection"], "rtl");
+}
+
+/// A user override for one series must not bleed into another.
+#[tokio::test]
+async fn an_override_applies_only_to_its_own_series() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_id, token) = user_and_token(&db, &state, "reader", false).await;
+    let app = create_test_router(state.clone()).await;
+
+    let mut library = create_test_library(&db, "Test Library", "/test/path").await;
+    library.default_reading_direction = "ltr".to_string();
+    LibraryRepository::update(&db, &library).await.unwrap();
+
+    let manga = create_test_series(&db, &library, "Berserk").await;
+    let comic = create_test_series(&db, &library, "Bone").await;
+    let manga_book = create_test_book_with_hash(
+        &db,
+        &library,
+        &manga,
+        "Vol 1",
+        "/test/path/b1.cbz",
+        "hash-1",
+    )
+    .await;
+    let comic_book = create_test_book_with_hash(
+        &db,
+        &library,
+        &comic,
+        "Vol 1",
+        "/test/path/o1.cbz",
+        "hash-2",
+    )
+    .await;
+
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/user/series/{}/reader-settings", manga.id),
+        &json!({ "readingDirection": "rtl" }),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let app = create_test_router(state.clone()).await;
+    let request = get_request_with_auth(&format!("/api/v1/books/{}", manga_book.id), &token);
+    let (_s, manga_response): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    let app = create_test_router(state).await;
+    let request = get_request_with_auth(&format!("/api/v1/books/{}", comic_book.id), &token);
+    let (_s, comic_response): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(manga_response.unwrap()["book"]["readingDirection"], "rtl");
+    assert_eq!(comic_response.unwrap()["book"]["readingDirection"], "ltr");
+}

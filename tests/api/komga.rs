@@ -5940,3 +5940,121 @@ async fn test_komga_container_thumbnails_serve_image_bytes() {
         assert!(body.is_empty(), "{uri} 304 must not carry a body");
     }
 }
+
+// ============================================================================
+// Reading direction resolution
+//
+// The Komga series metadata field is the only channel a Komga client has for
+// reading direction, so it resolves the same three layers the native API does:
+// the caller's own override, then the series metadata, then the library
+// default. Without that, a client like Komic renders the wrong direction in
+// exactly the case a per-user override exists to fix.
+// ============================================================================
+
+#[tokio::test]
+async fn test_komga_series_reading_direction_uses_the_series_metadata() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Manga", "/manga", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Berserk", None)
+        .await
+        .unwrap();
+    SeriesMetadataRepository::update_reading_direction(&db, series.id, Some("rtl".to_string()))
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    let uri = format!("/komga/api/v1/series/{}", series.id);
+    let request = get_request_with_auth(&uri, &token);
+    let (status, response): (StatusCode, Option<KomgaSeriesDto>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    // Codex stores `rtl`; the Komga wire format spells it out.
+    assert_eq!(
+        response.unwrap().metadata.reading_direction.as_deref(),
+        Some("RIGHT_TO_LEFT")
+    );
+}
+
+#[tokio::test]
+async fn test_komga_series_reading_direction_falls_back_to_the_library_default() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let mut library = LibraryRepository::create(&db, "Manga", "/manga", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    library.default_reading_direction = "rtl".to_string();
+    LibraryRepository::update(&db, &library).await.unwrap();
+
+    // No series metadata direction: the library default is the only layer left.
+    let series = SeriesRepository::create(&db, library.id, "Berserk", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    let uri = format!("/komga/api/v1/series/{}", series.id);
+    let request = get_request_with_auth(&uri, &token);
+    let (status, response): (StatusCode, Option<KomgaSeriesDto>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        response.unwrap().metadata.reading_direction.as_deref(),
+        Some("RIGHT_TO_LEFT")
+    );
+}
+
+#[tokio::test]
+async fn test_komga_series_reading_direction_honours_the_callers_override() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let mut library = LibraryRepository::create(&db, "Manga", "/manga", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    library.default_reading_direction = "ltr".to_string();
+    LibraryRepository::update(&db, &library).await.unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Berserk", None)
+        .await
+        .unwrap();
+    SeriesMetadataRepository::update_reading_direction(&db, series.id, Some("ltr".to_string()))
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let (user, token) = create_admin_user_and_token(&db, &state).await;
+
+    // The correction a reader made in the web reader has to reach Komic too.
+    codex::db::repositories::UserSeriesReaderSettingsRepository::upsert(
+        &db,
+        user.id,
+        series.id,
+        codex::models::reader_settings::SeriesReaderSettings {
+            reading_direction: Some(codex::models::reading_direction::ReadingDirection::Rtl),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+
+    let app = create_test_router_with_komga(state);
+    let uri = format!("/komga/api/v1/series/{}", series.id);
+    let request = get_request_with_auth(&uri, &token);
+    let (status, response): (StatusCode, Option<KomgaSeriesDto>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        response.unwrap().metadata.reading_direction.as_deref(),
+        Some("RIGHT_TO_LEFT")
+    );
+}

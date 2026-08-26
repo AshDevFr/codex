@@ -29,6 +29,7 @@ use axum::{
 use codex_db::repositories::{
     BookMetadataRepository, BookRepository, GenreRepository, LibraryRepository, PageRepository,
     ReadProgressRepository, SeriesMetadataRepository, TagRepository,
+    UserSeriesReaderSettingsRepository,
 };
 use codex_models::pagination::Window;
 use codex_models::reading_direction::ReadingDirection;
@@ -272,7 +273,13 @@ pub async fn books_to_dtos(
     // produced O(books) sequential DB roundtrips here.
     let limiter = crate::db_batch::fan_out_limiter(crate::db_batch::configured_fan_out());
     use crate::db_batch::with_permit;
-    let (series_metadata_result, book_metadata_result, libraries_result, progress_result) = tokio::join!(
+    let (
+        series_metadata_result,
+        book_metadata_result,
+        libraries_result,
+        progress_result,
+        reader_settings_result,
+    ) = tokio::join!(
         with_permit(
             &limiter,
             SeriesMetadataRepository::get_by_series_ids(db, &series_ids)
@@ -286,10 +293,16 @@ pub async fn books_to_dtos(
             &limiter,
             ReadProgressRepository::get_for_user_books(db, user_id, &book_ids)
         ),
+        with_permit(
+            &limiter,
+            UserSeriesReaderSettingsRepository::get_for_user_series_batch(db, user_id, &series_ids)
+        ),
     );
 
     let series_metadata_map = series_metadata_result
         .map_err(|e| ApiError::Internal(format!("Failed to fetch series metadata: {}", e)))?;
+    let reader_settings_map = reader_settings_result
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch reader settings: {}", e)))?;
     let book_metadata_map = book_metadata_result
         .map_err(|e| ApiError::Internal(format!("Failed to fetch book metadata: {}", e)))?;
     let library_map = libraries_result
@@ -352,8 +365,13 @@ pub async fn books_to_dtos(
 
             let read_progress = progress_map.get(&book.id).cloned();
 
-            // Determine effective reading direction: series metadata > library default
+            // Effective reading direction for this caller:
+            // their own override > series metadata > library default.
             let reading_direction = ReadingDirection::resolve(&[
+                reader_settings_map
+                    .get(&book.series_id)
+                    .and_then(|s| s.reading_direction)
+                    .map(|d| d.as_str()),
                 series_metadata_map
                     .get(&book.series_id)
                     .and_then(|m| m.reading_direction.as_deref()),
@@ -448,7 +466,15 @@ pub async fn books_to_full_dtos_batched(
     // hold one pool connection per query and exhaust the pool.
     let limiter = crate::db_batch::fan_out_limiter(crate::db_batch::configured_fan_out());
     use crate::db_batch::with_permit;
-    let (metadata_map, series_metadata_map, library_map, progress_map, genres_map, tags_map) = tokio::join!(
+    let (
+        metadata_map,
+        series_metadata_map,
+        library_map,
+        progress_map,
+        genres_map,
+        tags_map,
+        reader_settings_map,
+    ) = tokio::join!(
         with_permit(
             &limiter,
             BookMetadataRepository::get_by_book_ids(db, &book_ids)
@@ -478,6 +504,10 @@ pub async fn books_to_full_dtos_batched(
             &limiter,
             TagRepository::get_tags_for_book_ids(db, &book_ids)
         ),
+        with_permit(
+            &limiter,
+            UserSeriesReaderSettingsRepository::get_for_user_series_batch(db, user_id, &series_ids)
+        ),
     );
 
     // Handle errors
@@ -493,6 +523,8 @@ pub async fn books_to_full_dtos_batched(
         .map_err(|e| ApiError::Internal(format!("Failed to fetch book genres: {}", e)))?;
     let tags_map =
         tags_map.map_err(|e| ApiError::Internal(format!("Failed to fetch book tags: {}", e)))?;
+    let reader_settings_map = reader_settings_map
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch reader settings: {}", e)))?;
 
     // Convert to DTOs
     let mut results = Vec::with_capacity(books.len());
@@ -533,8 +565,13 @@ pub async fn books_to_full_dtos_batched(
             .and_then(|m| m.number)
             .map(|d| d.to_string().parse::<i32>().unwrap_or(0));
 
-        // Determine effective reading direction: series metadata > library default
+        // Effective reading direction for this caller:
+        // their own override > series metadata > library default.
         let reading_direction = ReadingDirection::resolve(&[
+            reader_settings_map
+                .get(&book.series_id)
+                .and_then(|s| s.reading_direction)
+                .map(|d| d.as_str()),
             series_metadata.and_then(|m| m.reading_direction.as_deref()),
             library.map(|l| l.default_reading_direction.as_str()),
         ])
