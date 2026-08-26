@@ -7,6 +7,38 @@ release. A patch release may fix an API bug; it may not add an operation, a para
 field, or a new behaviour on an existing route. A client may therefore treat the release a feature
 first appears under in the 🔌 API sections below as a floor it can rely on.
 
+## [2.3.0] - 2026-08-26
+
+### 🔌 API (breaking)
+
+- *(api)* [**breaking**] Report live scan progress, and purge in seconds not days
+
+### 🔌 API
+
+- *(api)* Stop book search multiplying its page offset by the page size
+- *(api)* Lock every series metadata field the write endpoints touch
+- *(api)* Report the scan counts the worker already recorded
+- *(api)* Honor the sort parameter on non-fuzzy book search
+- *(api)* Return the second page of the recently-added and in-progress feeds
+- *(api)* Keep recommendation dismissals across regeneration
+- *(api)* Describe the metadata auto-lock behaviour in the schema
+
+### 🐛 Bug Fixes
+
+- *(tasks)* Make finished-task retention a setting instead of ten seconds
+
+### 🚜 Refactor
+
+- *(db)* Delete two unused book listing methods
+- *(db)* Give pagination one convention and a type that enforces it
+- *(db)* Take a typed Window in five repositories
+- *(db)* Take a typed Window in the series repository
+- *(db)* Take a typed Window in the book repository
+
+### 🧪 Testing
+
+- *(api)* Cover the task endpoints that finished-task retention unblocked
+
 ## [2.2.4] - 2026-08-24
 
 ### 🐛 Bug Fixes
