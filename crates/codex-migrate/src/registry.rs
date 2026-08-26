@@ -79,6 +79,7 @@ macro_rules! for_each_entity {
         $op!(tags);
         $op!(user_preferences);
         $op!(user_series_ratings);
+        $op!(user_series_reader_settings);
         $op!(series_sharing_tags);
         $op!(sharing_tags);
         $op!(user_sharing_tags);

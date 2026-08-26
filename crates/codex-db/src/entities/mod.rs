@@ -71,6 +71,7 @@ pub mod series_tracking;
 pub mod tags;
 pub mod user_preferences;
 pub mod user_series_ratings;
+pub mod user_series_reader_settings;
 
 // Sharing tags for content access control
 pub mod series_sharing_tags;

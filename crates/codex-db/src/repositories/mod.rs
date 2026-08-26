@@ -42,6 +42,7 @@ pub mod task_metrics;
 pub mod user;
 pub mod user_preferences;
 pub mod user_series_rating;
+pub mod user_series_reader_settings;
 pub mod want_to_read;
 
 // Sharing tags for content access control
@@ -126,6 +127,7 @@ pub use task::TaskRepository;
 pub use user::{UserListFilter, UserRepository};
 pub use user_preferences::UserPreferencesRepository;
 pub use user_series_rating::UserSeriesRatingRepository;
+pub use user_series_reader_settings::UserSeriesReaderSettingsRepository;
 pub use want_to_read::WantToReadRepository;
 
 // Sharing tags
