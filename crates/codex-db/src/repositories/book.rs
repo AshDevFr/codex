@@ -1413,12 +1413,15 @@ impl BookRepository {
     }
 
     /// List recently added books with pagination
+    /// `offset` is a row offset, matching every neighbouring method. It was a
+    /// page index that this function multiplied by `limit` itself, which
+    /// disagreed with the row offset the handlers pass.
     pub async fn list_recently_added(
         db: &DatabaseConnection,
         library_id: Option<Uuid>,
         include_deleted: bool,
-        page: u64,
-        page_size: u64,
+        offset: u64,
+        limit: u64,
         visibility: Option<&SeriesVisibility>,
     ) -> Result<(Vec<books::Model>, u64)> {
         use crate::entities::series;
@@ -1458,8 +1461,8 @@ impl BookRepository {
         // Get paginated results, ordered by created_at descending (most recent first)
         let books = query
             .order_by_desc(books::Column::CreatedAt)
-            .offset(page * page_size)
-            .limit(page_size)
+            .offset(offset)
+            .limit(limit)
             .all(db)
             .await
             .context("Failed to list recently added books")?;
@@ -1507,13 +1510,16 @@ impl BookRepository {
     }
 
     /// Get books with reading progress for a user (in-progress books)
+    /// `offset` is a row offset, matching every neighbouring method. It was a
+    /// page index that this function multiplied by `limit` itself, which
+    /// disagreed with the row offset the handlers pass.
     pub async fn list_with_progress(
         db: &DatabaseConnection,
         user_id: Uuid,
         library_id: Option<Uuid>,
         completed: Option<bool>,
-        page: u64,
-        page_size: u64,
+        offset: u64,
+        limit: u64,
         visibility: Option<&SeriesVisibility>,
     ) -> Result<(Vec<books::Model>, u64)> {
         use crate::entities::{read_progress, series};
@@ -1570,8 +1576,8 @@ impl BookRepository {
         // Get paginated results, ordered by most recently updated
         let books = base_query
             .order_by(Expr::col(Alias::new("last_read_at")), Order::Desc)
-            .offset(page * page_size)
-            .limit(page_size)
+            .offset(offset)
+            .limit(limit)
             .all(db)
             .await
             .context("Failed to list books with progress")?;

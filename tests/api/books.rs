@@ -5421,3 +5421,82 @@ async fn test_list_library_books_paginates_past_first_page() {
         "pages must not overlap",
     );
 }
+
+/// `list_recently_added` and `list_with_progress` carried the same offset vs
+/// page-index mismatch as the search and library-listing paths: the handlers
+/// compute a row offset and the repository multiplied it by the page size
+/// again. Page 1 was correct by coincidence on all of them.
+#[tokio::test]
+async fn test_paged_book_feeds_return_their_second_page() {
+    use codex::db::repositories::ReadProgressRepository;
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Series", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let user = UserRepository::get_by_username(&db, "admin")
+        .await
+        .unwrap()
+        .unwrap();
+
+    for i in 1..=6 {
+        let book = create_test_book_with_metadata(
+            &db,
+            series.id,
+            library.id,
+            &format!("/feed-{i:02}.cbz"),
+            &format!("feed-{i:02}.cbz"),
+            Some(format!("Feed {i:02}")),
+        )
+        .await;
+        // Partial progress so the book qualifies for the in-progress feed.
+        ReadProgressRepository::upsert(&db, user.id, book.id, 3, false)
+            .await
+            .unwrap();
+    }
+
+    let app = create_test_router(state).await;
+
+    for path in [
+        "/api/v1/books/recently-added".to_string(),
+        format!("/api/v1/libraries/{}/books/recently-added", library.id),
+        "/api/v1/books/in-progress".to_string(),
+        format!("/api/v1/libraries/{}/books/in-progress", library.id),
+    ] {
+        let fetch = |page: u64| {
+            let app = app.clone();
+            let token = token.clone();
+            let uri = format!("{path}?page={page}&pageSize=3");
+            async move {
+                let (status, response): (StatusCode, Option<BookListResponse>) =
+                    make_json_request(app, get_request_with_auth(&uri, &token)).await;
+                assert_eq!(status, StatusCode::OK, "{uri}");
+                response.unwrap()
+            }
+        };
+
+        let page1 = fetch(1).await;
+        let page2 = fetch(2).await;
+
+        assert_eq!(page1.total, 6, "{path} total");
+        assert_eq!(page1.data.len(), 3, "{path} page 1");
+        assert_eq!(
+            page2.data.len(),
+            3,
+            "{path}: page 2 of six results at pageSize 3 must return the remaining three",
+        );
+
+        let page1_ids: Vec<_> = page1.data.iter().map(|b| b.id).collect();
+        assert!(
+            page2.data.iter().all(|b| !page1_ids.contains(&b.id)),
+            "{path}: pages must not overlap",
+        );
+    }
+}
