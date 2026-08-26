@@ -47,9 +47,17 @@ impl From<SeriesReaderSettings> for SeriesReaderSettingsResponse {
 #[derive(Debug, Clone, Default, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PatchSeriesReaderSettingsRequest {
+    /// Reading direction: `ltr`, `rtl`, `ttb` or `webtoon`. Null clears the
+    /// override so the series metadata or library default applies again.
+    ///
+    /// Typed as a string rather than as the enum because a `$ref` cannot also
+    /// be nullable, and the null is the whole point of the field: a schema that
+    /// could not express it would not describe how to stop overriding. The
+    /// value is validated in the handler, as it is on the series metadata
+    /// endpoints.
     #[serde(default)]
-    #[schema(value_type = Option<ReadingDirection>, nullable = true)]
-    pub reading_direction: PatchValue<ReadingDirection>,
+    #[schema(value_type = Option<String>, example = "rtl", nullable = true)]
+    pub reading_direction: PatchValue<String>,
 }
 
 impl PatchSeriesReaderSettingsRequest {
@@ -59,13 +67,29 @@ impl PatchSeriesReaderSettingsRequest {
     /// [`PatchValue`] is what distinguishes absent from null, and it depends on
     /// `sea-orm` and `utoipa` that `codex-models` deliberately does not carry.
     /// `patch_series_metadata` merges at this layer for the same reason.
-    pub fn apply_to(self, mut current: SeriesReaderSettings) -> SeriesReaderSettings {
+    /// `direction` is the already-validated value, so this cannot fail.
+    pub fn apply_to(
+        self,
+        mut current: SeriesReaderSettings,
+        direction: Option<ReadingDirection>,
+    ) -> SeriesReaderSettings {
         // Absent leaves the field alone; null clears it; a value sets it.
-        if let Some(value) = self.reading_direction.into_nested_option() {
-            current.reading_direction = value;
+        if self.reading_direction.into_nested_option().is_some() {
+            current.reading_direction = direction;
         }
 
         current
+    }
+
+    /// Validate the incoming direction, returning what `apply_to` should write.
+    ///
+    /// `Ok(None)` covers both "not provided" and "explicitly null"; `apply_to`
+    /// distinguishes them from the patch itself.
+    pub fn validated_direction(&self) -> Result<Option<ReadingDirection>, String> {
+        match self.reading_direction.clone().into_nested_option() {
+            Some(Some(raw)) => raw.parse::<ReadingDirection>().map(Some),
+            _ => Ok(None),
+        }
     }
 }
 
@@ -77,21 +101,39 @@ mod tests {
         serde_json::from_str(json).unwrap()
     }
 
+    fn apply(json: &str, current: SeriesReaderSettings) -> SeriesReaderSettings {
+        let request = patch(json);
+        let direction = request.validated_direction().unwrap();
+        request.apply_to(current, direction)
+    }
+
     #[test]
     fn an_absent_field_is_left_alone() {
         let current = SeriesReaderSettings {
             reading_direction: Some(ReadingDirection::Rtl),
         };
 
-        assert_eq!(patch("{}").apply_to(current), current);
+        assert_eq!(apply("{}", current), current);
     }
 
     #[test]
     fn a_value_overrides_the_setting() {
-        let merged =
-            patch(r#"{"readingDirection":"webtoon"}"#).apply_to(SeriesReaderSettings::default());
+        let merged = apply(
+            r#"{"readingDirection":"webtoon"}"#,
+            SeriesReaderSettings::default(),
+        );
 
         assert_eq!(merged.reading_direction, Some(ReadingDirection::Webtoon));
+    }
+
+    #[test]
+    fn a_value_is_canonicalised() {
+        let merged = apply(
+            r#"{"readingDirection":"RTL"}"#,
+            SeriesReaderSettings::default(),
+        );
+
+        assert_eq!(merged.reading_direction, Some(ReadingDirection::Rtl));
     }
 
     #[test]
@@ -100,7 +142,7 @@ mod tests {
             reading_direction: Some(ReadingDirection::Rtl),
         };
 
-        let merged = patch(r#"{"readingDirection":null}"#).apply_to(current);
+        let merged = apply(r#"{"readingDirection":null}"#, current);
 
         assert_eq!(merged.reading_direction, None);
         // The repository turns an empty record into no row at all.
@@ -109,11 +151,8 @@ mod tests {
 
     #[test]
     fn an_invalid_value_is_rejected_before_it_reaches_the_merge() {
-        assert!(
-            serde_json::from_str::<PatchSeriesReaderSettingsRequest>(
-                r#"{"readingDirection":"sideways"}"#
-            )
-            .is_err()
-        );
+        let request = patch(r#"{"readingDirection":"sideways"}"#);
+        let error = request.validated_direction().unwrap_err();
+        assert!(error.contains("sideways"));
     }
 }

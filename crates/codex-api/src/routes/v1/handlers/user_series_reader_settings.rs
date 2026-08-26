@@ -135,7 +135,12 @@ pub async fn patch_series_reader_settings(
             .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?
             .unwrap_or_default();
 
-    let merged = request.apply_to(current);
+    // Validated here rather than by serde so the failure is a 400 with a
+    // message naming the valid values, matching the series metadata endpoints.
+    let direction = request
+        .validated_direction()
+        .map_err(ApiError::BadRequest)?;
+    let merged = request.apply_to(current, direction);
 
     // An emptied record is stored as no record: the repository drops the row.
     UserSeriesReaderSettingsRepository::upsert(&state.db, auth.user_id, series_id, merged)

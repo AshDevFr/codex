@@ -530,7 +530,9 @@ async fn reader_settings_reject_an_invalid_value() {
     let (status, _): (StatusCode, Option<serde_json::Value>) =
         make_json_request(app, request).await;
 
-    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    // A 400 naming the valid values, matching the series metadata endpoints,
+    // rather than serde's opaque 422.
+    assert_eq!(status, StatusCode::BAD_REQUEST);
 }
 
 #[tokio::test]

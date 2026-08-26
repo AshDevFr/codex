@@ -18,10 +18,10 @@ import {
   IconAlertTriangle,
   IconBookmark,
   IconRefresh,
+  IconUsers,
 } from "@tabler/icons-react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
-import { seriesMetadataApi } from "@/api/seriesMetadata";
+import { usePermissions } from "@/hooks/usePermissions";
 import {
   type BackgroundColor,
   type FitMode,
@@ -35,7 +35,9 @@ import {
   useReaderStore,
   type WebtoonFitMode,
 } from "@/store/readerStore";
+import { PERMISSIONS } from "@/types/permissions";
 import { useSeriesReaderSettings } from "./hooks/useSeriesReaderSettings";
+import { useSeriesReadingDirection } from "./hooks/useSeriesReadingDirection";
 
 interface ReaderSettingsProps {
   /** Whether the modal is open */
@@ -64,7 +66,6 @@ export function ReaderSettings({
   seriesId,
   format,
 }: ReaderSettingsProps) {
-  const queryClient = useQueryClient();
   const globalSettings = useReaderStore((state) => state.settings);
   const effectiveReadingDirection = useReaderStore(
     selectEffectiveReadingDirection,
@@ -128,41 +129,24 @@ export function ReaderSettings({
     updateSetting,
   } = useSeriesReaderSettings(seriesId);
 
-  // Mutation to update series reading direction in backend
-  // Also locks the reading direction field to prevent scans/imports from overwriting it
-  const updateSeriesReadingDirection = useMutation({
-    mutationFn: async (direction: ReadingDirection) => {
-      if (!seriesId) {
-        return;
-      }
-      await seriesMetadataApi.patchMetadata(seriesId, {
-        readingDirection: direction,
-      });
-      await seriesMetadataApi.updateLocks(seriesId, {
-        readingDirection: true,
-      });
-    },
-    onSuccess: () => {
-      if (seriesId) {
-        queryClient.invalidateQueries({
-          queryKey: ["seriesMetadata", seriesId],
-        });
-      }
-    },
-  });
+  // Reading direction, unlike the display settings below it, is a property of
+  // how the book was made rather than of this screen. It is stored server-side
+  // per user and resolves against the series metadata and library default.
+  const { userDirection, setUserDirection, promoteToSeries, isPromoting } =
+    useSeriesReadingDirection(seriesId);
+
+  const { hasPermission } = usePermissions();
+  const canWriteSeries = hasPermission(PERMISSIONS.SERIES_WRITE);
 
   const handleReadingModeChange = (direction: ReadingDirection) => {
-    // Update the reading direction override in global store for immediate effect
+    // Apply immediately so the page re-renders while the write is in flight.
     setReadingDirectionOverride(direction);
 
-    // If we have series context with an existing override, save to series-specific settings
-    if (seriesId && hasSeriesOverride) {
-      updateSetting("readingDirection", direction);
-    }
-
-    // Persist to backend if we have series context (always, regardless of override)
+    // Saves for this user only. Changing what every user sees is the separate,
+    // permissioned action below, which used to fire silently on every toggle
+    // and lock the field for the whole server.
     if (seriesId) {
-      updateSeriesReadingDirection.mutate(direction);
+      setUserDirection(direction);
     }
   };
 
@@ -285,8 +269,26 @@ export function ReaderSettings({
             ]}
           />
           <Text size="xs" c="dimmed" mt={4}>
-            {seriesId ? "Saved to series" : "Session only"}
+            {seriesId
+              ? "Saved for this series, on all your devices"
+              : "Session only"}
           </Text>
+
+          {/* Promoting to the series is deliberate and permissioned, so that
+              reading a mis-tagged volume in the right direction cannot rewrite
+              and lock the field for everyone by accident. */}
+          {seriesId && canWriteSeries && userDirection && (
+            <Button
+              mt="xs"
+              size="xs"
+              variant="light"
+              leftSection={<IconUsers size={14} />}
+              loading={isPromoting}
+              onClick={() => promoteToSeries(effectiveReadingDirection)}
+            >
+              Save as series default for everyone
+            </Button>
+          )}
         </Box>
 
         {/* PDF rendering mode toggle - only shown for PDF format */}

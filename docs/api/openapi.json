@@ -36083,7 +36083,12 @@
         "description": "Partial update to a user's content-setting overrides for one series.\n\nEach field has three states, the usual PATCH semantics:\n\n- absent: leave the setting as it is\n- `null`: clear the override, so the setting inherits again\n- a value: override the setting with it\n\nClearing the last override removes the stored record entirely, which is the\nsame end state as `DELETE` on the same path.",
         "properties": {
           "readingDirection": {
-            "$ref": "#/components/schemas/ReadingDirection"
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Reading direction: `ltr`, `rtl`, `ttb` or `webtoon`. Null clears the\noverride so the series metadata or library default applies again.\n\nTyped as a string rather than as the enum because a `$ref` cannot also\nbe nullable, and the null is the whole point of the field: a schema that\ncould not express it would not describe how to stop overriding. The\nvalue is validated in the handler, as it is on the series metadata\nendpoints.",
+            "example": "rtl"
           }
         }
       },

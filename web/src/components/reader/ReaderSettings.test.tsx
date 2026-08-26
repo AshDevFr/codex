@@ -11,11 +11,26 @@ vi.mock("@/api/seriesMetadata", () => ({
   },
 }));
 
+vi.mock("@/api/userSeriesReaderSettings", () => ({
+  userSeriesReaderSettingsApi: {
+    get: vi.fn().mockResolvedValue({}),
+    patch: vi.fn().mockResolvedValue({ readingDirection: "rtl" }),
+    remove: vi.fn().mockResolvedValue(undefined),
+  },
+}));
+
+let mockHasPermission = vi.fn(() => false);
+vi.mock("@/hooks/usePermissions", () => ({
+  usePermissions: () => ({ hasPermission: mockHasPermission }),
+}));
+
 import { seriesMetadataApi } from "@/api/seriesMetadata";
+import { userSeriesReaderSettingsApi } from "@/api/userSeriesReaderSettings";
 
 // Reset store before each test
 beforeEach(() => {
   vi.clearAllMocks();
+  mockHasPermission = vi.fn(() => false);
   useReaderStore.setState({
     settings: {
       ...useReaderStore.getState().settings,
@@ -178,8 +193,84 @@ describe("ReaderSettings", () => {
     });
   });
 
-  describe("Reading Direction Lock", () => {
-    it("should lock reading direction when changing it with a series context", async () => {
+  describe("Reading direction", () => {
+    async function pickRightToLeft() {
+      const user = userEvent.setup();
+      const selectInput = screen.getByText("Left to Right");
+      await user.click(selectInput);
+      await waitFor(() => {
+        expect(screen.getByText("Right to Left (Manga)")).toBeInTheDocument();
+      });
+      await user.click(screen.getByText("Right to Left (Manga)"));
+      return user;
+    }
+
+    it("saves the direction for this user only", async () => {
+      renderWithProviders(
+        <ReaderSettings
+          opened={true}
+          onClose={vi.fn()}
+          seriesId="test-series-123"
+        />,
+      );
+
+      await pickRightToLeft();
+
+      await waitFor(() => {
+        expect(userSeriesReaderSettingsApi.patch).toHaveBeenCalledWith(
+          "test-series-123",
+          { readingDirection: "rtl" },
+        );
+      });
+    });
+
+    it("never writes the series metadata implicitly", async () => {
+      // Changing the reader control used to rewrite the series for every user
+      // and lock the field, so a glance at a mis-tagged volume permanently
+      // changed what everyone saw.
+      mockHasPermission = vi.fn(() => true);
+      renderWithProviders(
+        <ReaderSettings
+          opened={true}
+          onClose={vi.fn()}
+          seriesId="test-series-123"
+        />,
+      );
+
+      await pickRightToLeft();
+
+      await waitFor(() => {
+        expect(userSeriesReaderSettingsApi.patch).toHaveBeenCalled();
+      });
+      expect(seriesMetadataApi.patchMetadata).not.toHaveBeenCalled();
+      expect(seriesMetadataApi.updateLocks).not.toHaveBeenCalled();
+    });
+
+    it("hides the promote action without series:write", async () => {
+      vi.mocked(userSeriesReaderSettingsApi.get).mockResolvedValueOnce({
+        readingDirection: "rtl",
+      });
+      renderWithProviders(
+        <ReaderSettings
+          opened={true}
+          onClose={vi.fn()}
+          seriesId="test-series-123"
+        />,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText("Reading mode")).toBeInTheDocument();
+      });
+      expect(
+        screen.queryByText("Save as series default for everyone"),
+      ).not.toBeInTheDocument();
+    });
+
+    it("promotes to the series metadata only on an explicit click", async () => {
+      mockHasPermission = vi.fn(() => true);
+      vi.mocked(userSeriesReaderSettingsApi.get).mockResolvedValueOnce({
+        readingDirection: "rtl",
+      });
       const user = userEvent.setup();
       renderWithProviders(
         <ReaderSettings
@@ -189,25 +280,21 @@ describe("ReaderSettings", () => {
         />,
       );
 
-      // Open the reading mode Select dropdown
-      const selectInput = screen.getByText("Left to Right");
-      await user.click(selectInput);
+      const promote = await screen.findByText(
+        "Save as series default for everyone",
+      );
+      expect(seriesMetadataApi.patchMetadata).not.toHaveBeenCalled();
 
-      // Select RTL option
-      await waitFor(() => {
-        expect(screen.getByText("Right to Left (Manga)")).toBeInTheDocument();
-      });
-      await user.click(screen.getByText("Right to Left (Manga)"));
+      await user.click(promote);
 
-      // Should call patchMetadata to save the direction
       await waitFor(() => {
         expect(seriesMetadataApi.patchMetadata).toHaveBeenCalledWith(
           "test-series-123",
           { readingDirection: "rtl" },
         );
       });
-
-      // Should also call updateLocks to lock the reading direction
+      // Locking is right here: the change was deliberate, so it should survive
+      // the next metadata apply.
       await waitFor(() => {
         expect(seriesMetadataApi.updateLocks).toHaveBeenCalledWith(
           "test-series-123",
@@ -216,21 +303,12 @@ describe("ReaderSettings", () => {
       });
     });
 
-    it("should not call updateLocks when there is no series context", async () => {
-      const user = userEvent.setup();
+    it("does not call any API without series context", async () => {
       renderWithProviders(<ReaderSettings opened={true} onClose={vi.fn()} />);
 
-      // Open the reading mode Select dropdown
-      const selectInput = screen.getByText("Left to Right");
-      await user.click(selectInput);
+      await pickRightToLeft();
 
-      // Select RTL option
-      await waitFor(() => {
-        expect(screen.getByText("Right to Left (Manga)")).toBeInTheDocument();
-      });
-      await user.click(screen.getByText("Right to Left (Manga)"));
-
-      // Should NOT call any API without series context
+      expect(userSeriesReaderSettingsApi.patch).not.toHaveBeenCalled();
       expect(seriesMetadataApi.patchMetadata).not.toHaveBeenCalled();
       expect(seriesMetadataApi.updateLocks).not.toHaveBeenCalled();
     });

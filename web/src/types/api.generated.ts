@@ -15426,7 +15426,18 @@ export interface components {
          *     same end state as `DELETE` on the same path.
          */
         PatchSeriesReaderSettingsRequest: {
-            readingDirection?: components["schemas"]["ReadingDirection"];
+            /**
+             * @description Reading direction: `ltr`, `rtl`, `ttb` or `webtoon`. Null clears the
+             *     override so the series metadata or library default applies again.
+             *
+             *     Typed as a string rather than as the enum because a `$ref` cannot also
+             *     be nullable, and the null is the whole point of the field: a schema that
+             *     could not express it would not describe how to stop overriding. The
+             *     value is validated in the handler, as it is on the series metadata
+             *     endpoints.
+             * @example rtl
+             */
+            readingDirection?: string | null;
         };
         /**
          * @description PATCH request for updating series title

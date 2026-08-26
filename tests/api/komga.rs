@@ -6040,7 +6040,6 @@ async fn test_komga_series_reading_direction_honours_the_callers_override() {
         series.id,
         codex::models::reader_settings::SeriesReaderSettings {
             reading_direction: Some(codex::models::reading_direction::ReadingDirection::Rtl),
-            ..Default::default()
         },
     )
     .await
