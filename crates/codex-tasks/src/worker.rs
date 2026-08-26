@@ -38,6 +38,18 @@ use codex_services::export_storage::ExportStorage;
 use codex_services::plugin::PluginManager;
 use codex_services::{SettingsService, TaskMetricsService, ThumbnailService};
 
+/// How often the cleanup sweep runs, when no setting is available.
+const DEFAULT_CLEANUP_INTERVAL_SECS: u64 = 30;
+
+/// How long a finished task is kept, when no setting is available.
+///
+/// An hour: long enough that somebody who notices a scan went wrong can still
+/// find out why, and that a failed task can be listed and retried; short enough
+/// that a busy server's task table stays small. This was a hardcoded ten
+/// seconds, which is shorter than any client's poll interval, so four endpoints
+/// that read finished tasks could never see one.
+const DEFAULT_COMPLETED_RETENTION_SECS: u64 = 3600;
+
 /// RAII guard that increments the OTel in-flight task gauge on creation and
 /// decrements it on drop. Used by `process_next_task` to track currently-
 /// executing tasks across all exit paths (success, failure, `?` propagation).
@@ -597,19 +609,38 @@ impl TaskWorker {
         let cleanup_handle = tokio::spawn(async move {
             loop {
                 // Get cleanup interval from settings (hot-reload support)
-                let interval = if let Some(ref settings) = settings_clone {
-                    settings
-                        .get_uint("task.cleanup_interval_seconds", 30)
-                        .await
-                        .unwrap_or(30)
+                // Both are read every pass so they hot-reload together.
+                let (interval, retention) = if let Some(ref settings) = settings_clone {
+                    (
+                        settings
+                            .get_uint(
+                                "task.cleanup_interval_seconds",
+                                DEFAULT_CLEANUP_INTERVAL_SECS,
+                            )
+                            .await
+                            .unwrap_or(DEFAULT_CLEANUP_INTERVAL_SECS),
+                        settings
+                            .get_uint(
+                                "task.completed_retention_seconds",
+                                DEFAULT_COMPLETED_RETENTION_SECS,
+                            )
+                            .await
+                            .unwrap_or(DEFAULT_COMPLETED_RETENTION_SECS),
+                    )
                 } else {
-                    30
+                    (
+                        DEFAULT_CLEANUP_INTERVAL_SECS,
+                        DEFAULT_COMPLETED_RETENTION_SECS,
+                    )
                 };
 
                 tokio::select! {
                     _ = sleep(Duration::from_secs(interval)) => {
-                        // Clean up completed tasks older than 10 seconds
-                        match TaskRepository::purge_completed_tasks(&db_clone, 10).await {
+                        // How long a finished task stays readable. Anything
+                        // shorter than a client's poll interval deletes failures,
+                        // their `last_error`, and the scan rows `scan-status`
+                        // reads before anyone can see them.
+                        match TaskRepository::purge_completed_tasks(&db_clone, retention as i64).await {
                             Ok(count) if count > 0 => {
                                 debug!("Cleaned up {} completed tasks", count);
                             }

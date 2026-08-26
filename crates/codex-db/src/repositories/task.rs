@@ -1387,6 +1387,54 @@ mod tests {
     use super::*;
     use crate::test_helpers::setup_test_db;
 
+    /// The sweep's window is what decides whether anything can read a finished
+    /// task. It ran with a hardcoded ten seconds, shorter than any client's poll,
+    /// so failures and the scan rows `scan-status` reads were deleted before they
+    /// could be seen.
+    #[tokio::test]
+    async fn purge_completed_tasks_keeps_anything_inside_the_retention_window() {
+        use sea_orm::{ActiveModelTrait, Set};
+
+        let db = setup_test_db().await;
+        let task_id = TaskRepository::enqueue(&db, TaskType::CleanupPluginData, None)
+            .await
+            .unwrap();
+
+        // Put the row into the terminal state directly. `mark_failed` reschedules
+        // a first attempt rather than failing it, so it would leave the task
+        // pending with no `completed_at`, which the sweep ignores either way.
+        let task = TaskRepository::get_by_id(&db, task_id)
+            .await
+            .unwrap()
+            .unwrap();
+        let mut active: tasks::ActiveModel = task.into();
+        active.status = Set("failed".to_string());
+        active.last_error = Set(Some("boom".to_string()));
+        // A minute ago: purged by the old ten-second window, kept by an hour.
+        active.completed_at = Set(Some(Utc::now() - Duration::seconds(60)));
+        active.update(&db).await.unwrap();
+
+        let purged = TaskRepository::purge_completed_tasks(&db, 3600)
+            .await
+            .unwrap();
+        assert_eq!(
+            purged, 0,
+            "a task finished a minute ago must survive an hour-long window"
+        );
+        assert!(
+            TaskRepository::get_by_id(&db, task_id)
+                .await
+                .unwrap()
+                .is_some(),
+            "the failure and its last_error must still be readable",
+        );
+
+        let purged = TaskRepository::purge_completed_tasks(&db, 10)
+            .await
+            .unwrap();
+        assert_eq!(purged, 1, "the same task falls outside a ten-second window");
+    }
+
     /// `mark_failed` persists `result_data` so the web `TaskListener` can replay
     /// recorded events for failed tasks (distributed mode). Without this, events
     /// emitted during a failing task would be lost.

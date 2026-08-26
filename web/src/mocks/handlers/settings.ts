@@ -88,6 +88,15 @@ const mockSettings = [
     description: "Interval (in seconds) for cleaning up completed tasks",
     defaultValue: "30",
   }),
+  createSetting({
+    key: "task.completed_retention_seconds",
+    value: "3600",
+    valueType: "integer",
+    category: "Task",
+    description:
+      "How long a finished task is kept before the cleanup sweep deletes it",
+    defaultValue: "3600",
+  }),
   // Deduplication settings
   createSetting({
     key: "deduplication.enabled",

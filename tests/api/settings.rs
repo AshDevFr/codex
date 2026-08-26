@@ -449,6 +449,9 @@ async fn test_filter_settings_by_task_category() {
     let keys: Vec<&str> = settings.iter().map(|s| s.key.as_str()).collect();
     assert!(keys.contains(&"task.poll_interval_seconds"));
     assert!(keys.contains(&"task.cleanup_interval_seconds"));
+    // How long a finished task survives. It was a literal ten seconds in the
+    // cleanup loop, which deleted rows before anything could read them.
+    assert!(keys.contains(&"task.completed_retention_seconds"));
     // Note: task.prioritize_scans_over_analysis was removed in favor of TaskType::default_priority()
 }
 
