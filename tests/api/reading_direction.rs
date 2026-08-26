@@ -387,7 +387,7 @@ async fn reader_settings_start_empty_rather_than_missing() {
 }
 
 #[tokio::test]
-async fn a_null_clears_one_setting_and_leaves_the_others() {
+async fn a_null_clears_the_override_and_restores_inheritance() {
     let (db, _temp_dir) = setup_test_db().await;
     let state = create_test_auth_state(db.clone()).await;
     let (_id, token) = user_and_token(&db, &state, "reader", false).await;
@@ -398,7 +398,7 @@ async fn a_null_clears_one_setting_and_leaves_the_others() {
 
     let request = patch_json_request_with_auth(
         &format!("/api/v1/user/series/{}/reader-settings", series.id),
-        &json!({ "readingDirection": "rtl", "backgroundColor": "black" }),
+        &json!({ "readingDirection": "rtl" }),
         &token,
     );
     let (status, _): (StatusCode, Option<serde_json::Value>) =
@@ -408,17 +408,49 @@ async fn a_null_clears_one_setting_and_leaves_the_others() {
     let app = create_test_router(state).await;
     let request = patch_json_request_with_auth(
         &format!("/api/v1/user/series/{}/reader-settings", series.id),
-        &json!({ "backgroundColor": null }),
+        &json!({ "readingDirection": null }),
         &token,
     );
     let (status, response): (StatusCode, Option<serde_json::Value>) =
         make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::OK);
-    let body = response.unwrap();
-    // Undoing one override must not wipe the rest.
-    assert_eq!(body["readingDirection"], "rtl");
-    assert!(body.get("backgroundColor").is_none());
+    // Back to inheriting, and the record is gone rather than left as an empty
+    // husk claiming this user has overrides here.
+    assert_eq!(response.unwrap(), json!({}));
+}
+
+#[tokio::test]
+async fn a_patch_that_names_no_setting_changes_nothing() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_id, token) = user_and_token(&db, &state, "reader", false).await;
+    let app = create_test_router(state.clone()).await;
+
+    let library = create_test_library(&db, "Test Library", "/test/path").await;
+    let series = create_test_series(&db, &library, "Berserk").await;
+
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/user/series/{}/reader-settings", series.id),
+        &json!({ "readingDirection": "rtl" }),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // An absent key means "leave it alone", not "clear it".
+    let app = create_test_router(state).await;
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/user/series/{}/reader-settings", series.id),
+        &json!({}),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(response.unwrap()["readingDirection"], "rtl");
 }
 
 #[tokio::test]

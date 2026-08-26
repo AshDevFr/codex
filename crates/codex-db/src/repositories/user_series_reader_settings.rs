@@ -157,7 +157,6 @@ mod tests {
     use crate::entities::{series, users};
     use crate::repositories::{LibraryRepository, SeriesRepository, UserRepository};
     use crate::test_helpers::create_test_db;
-    use codex_models::reader_settings::{BackgroundColor, FitMode, PageLayout};
     use codex_models::reading_direction::ReadingDirection;
 
     async fn create_user(db: &DatabaseConnection, username: &str) -> users::Model {
@@ -189,7 +188,6 @@ mod tests {
     fn rtl() -> SeriesReaderSettings {
         SeriesReaderSettings {
             reading_direction: Some(ReadingDirection::Rtl),
-            ..Default::default()
         }
     }
 
@@ -212,9 +210,6 @@ mod tests {
                 .expect("the settings just written");
 
         assert_eq!(stored.reading_direction, Some(ReadingDirection::Rtl));
-        // The six untouched settings keep inheriting.
-        assert_eq!(stored.fit_mode, None);
-        assert_eq!(stored.background_color, None);
     }
 
     #[tokio::test]
@@ -246,8 +241,7 @@ mod tests {
         // The repository stores what it is given. Merging a PATCH onto the
         // existing record is the handler's job, so a second write replaces.
         let replacement = SeriesReaderSettings {
-            fit_mode: Some(FitMode::WidthShrink),
-            ..Default::default()
+            reading_direction: Some(ReadingDirection::Webtoon),
         };
         UserSeriesReaderSettingsRepository::upsert(conn, user.id, series.id, replacement)
             .await
@@ -259,8 +253,7 @@ mod tests {
                 .unwrap()
                 .unwrap();
 
-        assert_eq!(stored.fit_mode, Some(FitMode::WidthShrink));
-        assert_eq!(stored.reading_direction, None);
+        assert_eq!(stored.reading_direction, Some(ReadingDirection::Webtoon));
     }
 
     #[tokio::test]
@@ -335,7 +328,6 @@ mod tests {
             series.id,
             SeriesReaderSettings {
                 reading_direction: Some(ReadingDirection::Ltr),
-                ..Default::default()
             },
         )
         .await
@@ -485,25 +477,30 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn every_setting_survives_a_write_and_read() {
+    async fn device_settings_left_by_an_older_row_are_dropped_on_read() {
         let (db, _temp) = create_test_db().await;
         let conn = db.sea_orm_connection();
         let user = create_user(conn, "reader").await;
         let series = create_series(conn, "Berserk", "/berserk").await;
 
-        let all = SeriesReaderSettings {
-            fit_mode: Some(FitMode::Height),
-            webtoon_fit_mode: Some(codex_models::reader_settings::WebtoonFitMode::Original),
-            page_layout: Some(PageLayout::Double),
-            reading_direction: Some(ReadingDirection::Ttb),
-            background_color: Some(BackgroundColor::White),
-            double_page_show_wide_alone: Some(true),
-            double_page_start_on_odd: Some(false),
-        };
-
-        UserSeriesReaderSettingsRepository::upsert(conn, user.id, series.id, all)
-            .await
-            .unwrap();
+        // This record briefly held device settings too, before they moved back
+        // to the client where they belong. Such a row must still read cleanly.
+        let now = Utc::now();
+        user_series_reader_settings::ActiveModel {
+            id: Set(Uuid::new_v4()),
+            user_id: Set(user.id),
+            series_id: Set(series.id),
+            settings: Set(serde_json::json!({
+                "readingDirection": "rtl",
+                "fitMode": "width",
+                "backgroundColor": "black",
+            })),
+            created_at: Set(now),
+            updated_at: Set(now),
+        }
+        .insert(conn)
+        .await
+        .unwrap();
 
         let stored =
             UserSeriesReaderSettingsRepository::get_for_user_series(conn, user.id, series.id)
@@ -511,6 +508,21 @@ mod tests {
                 .unwrap()
                 .unwrap();
 
-        assert_eq!(stored, all);
+        assert_eq!(stored.reading_direction, Some(ReadingDirection::Rtl));
+
+        // Rewriting drops the keys this record no longer carries.
+        UserSeriesReaderSettingsRepository::upsert(conn, user.id, series.id, stored)
+            .await
+            .unwrap();
+        let row = UserSeriesReaderSettings::find()
+            .filter(user_series_reader_settings::Column::UserId.eq(user.id))
+            .one(conn)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            row.settings,
+            serde_json::json!({ "readingDirection": "rtl" })
+        );
     }
 }

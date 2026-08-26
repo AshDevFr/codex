@@ -8472,11 +8472,6 @@ export interface components {
             /** @description User-facing setup instructions for the plugin */
             userSetupInstructions?: string | null;
         };
-        /**
-         * @description Backdrop behind the page.
-         * @enum {string}
-         */
-        BackgroundColor: "black" | "gray" | "white";
         /** @description Series membership information */
         BelongsTo: {
             /** @description Series information */
@@ -12321,11 +12316,6 @@ export interface components {
         FilterPresetListResponse: {
             presets: components["schemas"]["FilterPresetDto"][];
         };
-        /**
-         * @description How a page is scaled to the viewport.
-         * @enum {string}
-         */
-        FitMode: "screen" | "width" | "width-shrink" | "height" | "original";
         /** @description Configuration for flat scanning strategy */
         FlatStrategyConfig: {
             /**
@@ -14753,11 +14743,6 @@ export interface components {
              */
             width?: number | null;
         };
-        /**
-         * @description How many pages are shown at once.
-         * @enum {string}
-         */
-        PageLayout: "single" | "double" | "continuous";
         /** @description Generic paginated response wrapper with HATEOAS links */
         PaginatedResponse: {
             /** @description The data items for this page */
@@ -15429,7 +15414,7 @@ export interface components {
             year?: number | null;
         };
         /**
-         * @description Partial update to a user's reader overrides for one series.
+         * @description Partial update to a user's content-setting overrides for one series.
          *
          *     Each field has three states, the usual PATCH semantics:
          *
@@ -15437,18 +15422,11 @@ export interface components {
          *     - `null`: clear the override, so the setting inherits again
          *     - a value: override the setting with it
          *
-         *     Per-key clearing matters because the record is sparse. Undoing one
-         *     override must not require wiping the rest and re-setting them; `DELETE`
-         *     on the same path is the all-at-once reset.
+         *     Clearing the last override removes the stored record entirely, which is the
+         *     same end state as `DELETE` on the same path.
          */
         PatchSeriesReaderSettingsRequest: {
-            backgroundColor?: components["schemas"]["BackgroundColor"];
-            doublePageShowWideAlone?: boolean | null;
-            doublePageStartOnOdd?: boolean | null;
-            fitMode?: components["schemas"]["FitMode"];
-            pageLayout?: components["schemas"]["PageLayout"];
             readingDirection?: components["schemas"]["ReadingDirection"];
-            webtoonFitMode?: components["schemas"]["WebtoonFitMode"];
         };
         /**
          * @description PATCH request for updating series title
@@ -18934,32 +18912,19 @@ export interface components {
             sort?: string | null;
         };
         /**
-         * @description A user's reader overrides for one series.
+         * @description A user's content-setting overrides for one series.
          *
          *     Sparse: a field is absent when the user has not overridden it, and the
-         *     reader inherits from the series metadata or the library default instead.
+         *     reader inherits instead. For reading direction that means the series
+         *     metadata and then the library default.
+         *
+         *     Settings that describe the device rather than the content, such as fit mode
+         *     and page layout, are deliberately not here. They belong to the screen in
+         *     front of the reader, not to the file, and each client keeps its own.
          */
         SeriesReaderSettingsResponse: {
-            /** @description Backdrop behind the page */
-            backgroundColor?: components["schemas"]["BackgroundColor"];
-            /**
-             * @description Whether a wide page is shown alone in double-page layout
-             * @example true
-             */
-            doublePageShowWideAlone?: boolean | null;
-            /**
-             * @description Whether double-page layout starts on an odd page
-             * @example false
-             */
-            doublePageStartOnOdd?: boolean | null;
-            /** @description How a page is scaled to the viewport */
-            fitMode?: components["schemas"]["FitMode"];
-            /** @description How many pages are shown at once */
-            pageLayout?: components["schemas"]["PageLayout"];
             /** @description Reading direction for this series, for this user only */
             readingDirection?: components["schemas"]["ReadingDirection"];
-            /** @description Fit mode for the webtoon reader */
-            webtoonFitMode?: components["schemas"]["WebtoonFitMode"];
         };
         /**
          * @description Series scanning strategy type for library organization
@@ -21293,11 +21258,6 @@ export interface components {
              */
             urlTemplate: string;
         };
-        /**
-         * @description Fit mode for the webtoon reader, where only width and original make sense.
-         * @enum {string}
-         */
-        WebtoonFitMode: "width" | "original";
     };
     responses: never;
     parameters: never;

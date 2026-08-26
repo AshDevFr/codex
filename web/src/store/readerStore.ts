@@ -268,7 +268,8 @@ export interface ReaderSettings {
   /**
    * Swipe-to-turn (finger-drag) paging on touch devices (paged comic modes).
    * When off, paging is tap-only. Global because it's an input preference, not
-   * a content characteristic (unlike reading direction or page layout). Default: on.
+   * a device preference rather than a fact about the file, like fit mode and
+   * page layout and unlike reading direction. Default: on.
    */
   swipeNavigation: boolean;
 

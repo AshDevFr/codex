@@ -1,64 +1,28 @@
 //! Per-user, per-series reader settings.
 //!
-//! These are the reader settings that vary by content rather than by taste:
-//! manga reads right to left, a webtoon scrolls continuously, an old two-page
-//! scan wants a different layout than a modern single-page one. A user can
-//! override them for one series without touching the series metadata that
-//! every other user sees.
+//! Only settings that describe the *content* live here. Reading direction is a
+//! fact about how a book was made: a manga reads right to left on every screen
+//! its reader owns, so the correction has to follow them between devices.
 //!
-//! The record is **sparse**: only the keys a user actually changed are stored.
-//! Anything absent keeps inheriting, so a later correction to the series
-//! metadata or the library default still reaches them. Storing a dense
-//! snapshot would freeze all seven settings the moment one was touched.
+//! Settings that describe the *device* deliberately stay client-side, in the
+//! reader's own storage. Fit mode, background, and page layout are about the
+//! screen in front of you rather than the file: double-page is natural on a
+//! desktop and unusable on a phone, so syncing it between the two would be
+//! wrong rather than convenient. The two double-page flags follow page layout
+//! for the same reason, since they only take effect in that mode.
 //!
-//! Only [`reading_direction`](SeriesReaderSettings::reading_direction) takes
-//! part in server-side resolution, because it is the only one with series and
-//! library layers beneath it. The rest are client-side rendering preferences
-//! that ride along so one fetch covers everything the reader needs.
+//! The record is **sparse**, and stored as JSON rather than as columns, so a
+//! later content-shaped setting can join it without a schema migration. An
+//! absent key means the setting is inherited, not that it is unset: for reading
+//! direction the layers beneath are the series metadata and then the library
+//! default.
 
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use crate::reading_direction::ReadingDirection;
 
-/// How a page is scaled to the viewport.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "kebab-case")]
-pub enum FitMode {
-    Screen,
-    Width,
-    WidthShrink,
-    Height,
-    Original,
-}
-
-/// Fit mode for the webtoon reader, where only width and original make sense.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "lowercase")]
-pub enum WebtoonFitMode {
-    Width,
-    Original,
-}
-
-/// How many pages are shown at once.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "lowercase")]
-pub enum PageLayout {
-    Single,
-    Double,
-    Continuous,
-}
-
-/// Backdrop behind the page.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "lowercase")]
-pub enum BackgroundColor {
-    Black,
-    Gray,
-    White,
-}
-
-/// A user's overrides for one series.
+/// A user's content-setting overrides for one series.
 ///
 /// Every field is optional and `None` means "inherit". Unknown keys are
 /// ignored rather than rejected, so a row written by a newer version does not
@@ -66,20 +30,9 @@ pub enum BackgroundColor {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase", default)]
 pub struct SeriesReaderSettings {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub fit_mode: Option<FitMode>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub webtoon_fit_mode: Option<WebtoonFitMode>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub page_layout: Option<PageLayout>,
+    /// Reading direction for this series, for this user only.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reading_direction: Option<ReadingDirection>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub background_color: Option<BackgroundColor>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub double_page_show_wide_alone: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub double_page_start_on_odd: Option<bool>,
 }
 
 impl SeriesReaderSettings {
@@ -89,13 +42,7 @@ impl SeriesReaderSettings {
     /// row rather than storing `{}`: a present row means "this user has
     /// overrides here", and an empty one would lie to every later query.
     pub fn is_empty(&self) -> bool {
-        self.fit_mode.is_none()
-            && self.webtoon_fit_mode.is_none()
-            && self.page_layout.is_none()
-            && self.reading_direction.is_none()
-            && self.background_color.is_none()
-            && self.double_page_show_wide_alone.is_none()
-            && self.double_page_start_on_odd.is_none()
+        self.reading_direction.is_none()
     }
 }
 
@@ -114,12 +61,9 @@ mod tests {
     fn only_set_keys_are_stored() {
         let settings = SeriesReaderSettings {
             reading_direction: Some(ReadingDirection::Rtl),
-            ..Default::default()
         };
 
         assert!(!settings.is_empty());
-        // A sparse record: the six untouched settings keep inheriting rather
-        // than being frozen at whatever they happened to be.
         assert_eq!(
             serde_json::to_string(&settings).unwrap(),
             r#"{"readingDirection":"rtl"}"#
@@ -129,13 +73,7 @@ mod tests {
     #[test]
     fn round_trips_through_json() {
         let settings = SeriesReaderSettings {
-            fit_mode: Some(FitMode::WidthShrink),
-            webtoon_fit_mode: Some(WebtoonFitMode::Original),
-            page_layout: Some(PageLayout::Continuous),
             reading_direction: Some(ReadingDirection::Webtoon),
-            background_color: Some(BackgroundColor::Gray),
-            double_page_show_wide_alone: Some(true),
-            double_page_start_on_odd: Some(false),
         };
 
         let json = serde_json::to_string(&settings).unwrap();
@@ -148,30 +86,22 @@ mod tests {
     #[test]
     fn keys_are_camel_case_to_match_the_api() {
         let settings = SeriesReaderSettings {
-            fit_mode: Some(FitMode::Screen),
-            double_page_start_on_odd: Some(true),
-            ..Default::default()
+            reading_direction: Some(ReadingDirection::Ttb),
         };
 
         let json = serde_json::to_value(settings).unwrap();
-        assert_eq!(json["fitMode"], "screen");
-        assert_eq!(json["doublePageStartOnOdd"], true);
-    }
-
-    #[test]
-    fn fit_mode_uses_the_hyphenated_wire_value() {
-        assert_eq!(
-            serde_json::to_string(&FitMode::WidthShrink).unwrap(),
-            r#""width-shrink""#
-        );
+        assert_eq!(json["readingDirection"], "ttb");
     }
 
     #[test]
     fn unknown_keys_are_ignored_rather_than_rejected() {
-        // A row written by a newer version must not break a rollback.
-        let parsed: SeriesReaderSettings =
-            serde_json::from_str(r#"{"readingDirection":"rtl","futureSetting":"whatever"}"#)
-                .unwrap();
+        // Two cases at once: a row written by a newer version that added a
+        // content setting, and a row written before the device settings were
+        // moved back out of this record.
+        let parsed: SeriesReaderSettings = serde_json::from_str(
+            r#"{"readingDirection":"rtl","fitMode":"width","futureSetting":"whatever"}"#,
+        )
+        .unwrap();
         assert_eq!(parsed.reading_direction, Some(ReadingDirection::Rtl));
     }
 
@@ -179,10 +109,6 @@ mod tests {
     fn invalid_values_are_rejected() {
         assert!(
             serde_json::from_str::<SeriesReaderSettings>(r#"{"readingDirection":"sideways"}"#)
-                .is_err()
-        );
-        assert!(
-            serde_json::from_str::<SeriesReaderSettings>(r#"{"backgroundColor":"chartreuse"}"#)
                 .is_err()
         );
     }

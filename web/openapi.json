@@ -23379,15 +23379,6 @@
           }
         }
       },
-      "BackgroundColor": {
-        "type": "string",
-        "description": "Backdrop behind the page.",
-        "enum": [
-          "black",
-          "gray",
-          "white"
-        ]
-      },
       "BelongsTo": {
         "type": "object",
         "description": "Series membership information",
@@ -30446,17 +30437,6 @@
           }
         }
       },
-      "FitMode": {
-        "type": "string",
-        "description": "How a page is scaled to the viewport.",
-        "enum": [
-          "screen",
-          "width",
-          "width-shrink",
-          "height",
-          "original"
-        ]
-      },
       "FlatStrategyConfig": {
         "type": "object",
         "description": "Configuration for flat scanning strategy",
@@ -34957,15 +34937,6 @@
           }
         }
       },
-      "PageLayout": {
-        "type": "string",
-        "description": "How many pages are shown at once.",
-        "enum": [
-          "single",
-          "double",
-          "continuous"
-        ]
-      },
       "PaginatedResponse": {
         "type": "object",
         "description": "Generic paginated response wrapper with HATEOAS links",
@@ -36109,34 +36080,10 @@
       },
       "PatchSeriesReaderSettingsRequest": {
         "type": "object",
-        "description": "Partial update to a user's reader overrides for one series.\n\nEach field has three states, the usual PATCH semantics:\n\n- absent: leave the setting as it is\n- `null`: clear the override, so the setting inherits again\n- a value: override the setting with it\n\nPer-key clearing matters because the record is sparse. Undoing one\noverride must not require wiping the rest and re-setting them; `DELETE`\non the same path is the all-at-once reset.",
+        "description": "Partial update to a user's content-setting overrides for one series.\n\nEach field has three states, the usual PATCH semantics:\n\n- absent: leave the setting as it is\n- `null`: clear the override, so the setting inherits again\n- a value: override the setting with it\n\nClearing the last override removes the stored record entirely, which is the\nsame end state as `DELETE` on the same path.",
         "properties": {
-          "backgroundColor": {
-            "$ref": "#/components/schemas/BackgroundColor"
-          },
-          "doublePageShowWideAlone": {
-            "type": [
-              "boolean",
-              "null"
-            ]
-          },
-          "doublePageStartOnOdd": {
-            "type": [
-              "boolean",
-              "null"
-            ]
-          },
-          "fitMode": {
-            "$ref": "#/components/schemas/FitMode"
-          },
-          "pageLayout": {
-            "$ref": "#/components/schemas/PageLayout"
-          },
           "readingDirection": {
             "$ref": "#/components/schemas/ReadingDirection"
-          },
-          "webtoonFitMode": {
-            "$ref": "#/components/schemas/WebtoonFitMode"
           }
         }
       },
@@ -42001,43 +41948,11 @@
       },
       "SeriesReaderSettingsResponse": {
         "type": "object",
-        "description": "A user's reader overrides for one series.\n\nSparse: a field is absent when the user has not overridden it, and the\nreader inherits from the series metadata or the library default instead.",
+        "description": "A user's content-setting overrides for one series.\n\nSparse: a field is absent when the user has not overridden it, and the\nreader inherits instead. For reading direction that means the series\nmetadata and then the library default.\n\nSettings that describe the device rather than the content, such as fit mode\nand page layout, are deliberately not here. They belong to the screen in\nfront of the reader, not to the file, and each client keeps its own.",
         "properties": {
-          "backgroundColor": {
-            "$ref": "#/components/schemas/BackgroundColor",
-            "description": "Backdrop behind the page"
-          },
-          "doublePageShowWideAlone": {
-            "type": [
-              "boolean",
-              "null"
-            ],
-            "description": "Whether a wide page is shown alone in double-page layout",
-            "example": true
-          },
-          "doublePageStartOnOdd": {
-            "type": [
-              "boolean",
-              "null"
-            ],
-            "description": "Whether double-page layout starts on an odd page",
-            "example": false
-          },
-          "fitMode": {
-            "$ref": "#/components/schemas/FitMode",
-            "description": "How a page is scaled to the viewport"
-          },
-          "pageLayout": {
-            "$ref": "#/components/schemas/PageLayout",
-            "description": "How many pages are shown at once"
-          },
           "readingDirection": {
             "$ref": "#/components/schemas/ReadingDirection",
             "description": "Reading direction for this series, for this user only"
-          },
-          "webtoonFitMode": {
-            "$ref": "#/components/schemas/WebtoonFitMode",
-            "description": "Fit mode for the webtoon reader"
           }
         }
       },
@@ -46496,14 +46411,6 @@
             "description": "URL template with config placeholders already substituted. The only\nremaining placeholder is `{externalId}`, filled client-side."
           }
         }
-      },
-      "WebtoonFitMode": {
-        "type": "string",
-        "description": "Fit mode for the webtoon reader, where only width and original make sense.",
-        "enum": [
-          "width",
-          "original"
-        ]
       }
     },
     "securitySchemes": {
