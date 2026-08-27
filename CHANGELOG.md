@@ -7,6 +7,27 @@ release. A patch release may fix an API bug; it may not add an operation, a para
 field, or a new behaviour on an existing route. A client may therefore treat the release a feature
 first appears under in the 🔌 API sections below as a floor it can rely on.
 
+## [2.4.0] - 2026-08-27
+
+### 🔌 API (breaking)
+
+- *(api)* [**breaking**] Sync only reading direction per series, not every reader setting
+
+### 🔌 API
+
+- *(api)* Give reading direction one vocabulary and validate every write
+- *(api)* Let any reader fix a series' reader settings for themselves
+- *(api)* Resolve reading direction per caller, not per series
+
+### 🚀 Features
+
+- *(db)* Store per-user reader settings for a series
+- *(web)* Carry per-series reading directions over to the account
+
+### 🐛 Bug Fixes
+
+- *(web)* Stop the reader rewriting a series for everyone who reads it
+
 ## [2.3.0] - 2026-08-26
 
 ### 🔌 API (breaking)
