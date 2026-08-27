@@ -515,6 +515,7 @@ impl SeriesRepository {
             )
             .group_by(series::Column::Id)
             .order_by(Expr::col(Alias::new("book_count")), order)
+            .order_by(series::Column::Id, Order::Asc)
             .offset(options.page * options.page_size)
             .limit(options.page_size)
             .into_model::<SeriesWithBookCount>()
@@ -670,6 +671,7 @@ impl SeriesRepository {
             .column_as(rating_expr, "sort_rating")
             .group_by(series::Column::Id)
             .order_by_with_nulls(Expr::col(Alias::new("sort_rating")), order, null_order)
+            .order_by(series::Column::Id, Order::Asc)
             .offset(options.page * options.page_size)
             .limit(options.page_size)
             .into_model::<SeriesWithRating>()
@@ -1165,6 +1167,7 @@ impl SeriesRepository {
                     )
                     .group_by(series::Column::Id)
                     .order_by(Expr::col(Alias::new("book_count")), order)
+                    .order_by(series::Column::Id, Order::Asc)
                     .offset(window.offset())
                     .limit(window.limit())
                     .into_model::<SeriesWithBookCount>()
@@ -1252,6 +1255,7 @@ impl SeriesRepository {
                     .column_as(rating_expr, "sort_rating")
                     .group_by(series::Column::Id)
                     .order_by_with_nulls(Expr::col(Alias::new("sort_rating")), order, null_order)
+                    .order_by(series::Column::Id, Order::Asc)
                     .offset(window.offset())
                     .limit(window.limit())
                     .into_model::<SeriesWithRating>()
@@ -3999,5 +4003,172 @@ mod tests {
         assert!(!owned.has_any_volume_metadata);
         assert_eq!(owned.volumes_owned_count, 0);
         assert!(owned.keys.is_empty());
+    }
+
+    // Tiebreaker regression tests.
+    //
+    // Book count and rating are aggregates over a small range, so they tie far
+    // harder than any timestamp: a library of equal-length series is a single
+    // tie group, and a rating scale has as many groups as it has values.
+
+    #[tokio::test]
+    async fn book_count_sort_breaks_ties_by_id() {
+        use crate::test_helpers::{
+            assert_exact_order, seed_library, seed_tied_series_by_book_count, setup_test_db,
+        };
+
+        let db = setup_test_db().await;
+        let library = seed_library(&db, "book-count-order").await;
+        let tied = seed_tied_series_by_book_count(&db, library.id, 6, 2).await;
+
+        let (series_list, total) = SeriesRepository::query(
+            &db,
+            SeriesQueryOptions {
+                library_id: Some(library.id),
+                sort: Some(SeriesQuerySort {
+                    field: SeriesSortFieldRepo::BookCount,
+                    ascending: false,
+                }),
+                page: 0,
+                page_size: 6,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(total, 6);
+        let actual: Vec<Uuid> = series_list.iter().map(|s| s.id).collect();
+        assert_exact_order(
+            &actual,
+            &tied.ids_ascending(),
+            "series sorted by book count, every series tied",
+        );
+    }
+
+    #[tokio::test]
+    async fn book_count_pages_do_not_drop_or_repeat() {
+        use crate::test_helpers::{
+            assert_pages_partition, seed_library, seed_tied_series_by_book_count, setup_test_db,
+        };
+
+        let db = setup_test_db().await;
+        let library = seed_library(&db, "book-count-pages").await;
+        let tied = seed_tied_series_by_book_count(&db, library.id, 6, 2).await;
+
+        let mut pages = Vec::new();
+        for page in 0..3 {
+            let (series_list, _) = SeriesRepository::query(
+                &db,
+                SeriesQueryOptions {
+                    library_id: Some(library.id),
+                    sort: Some(SeriesQuerySort {
+                        field: SeriesSortFieldRepo::BookCount,
+                        ascending: false,
+                    }),
+                    page,
+                    page_size: 2,
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+            pages.push(series_list.iter().map(|s| s.id).collect::<Vec<Uuid>>());
+        }
+
+        assert_pages_partition(
+            &pages,
+            &tied.ids_ascending(),
+            "book-count-sorted series paged two at a time",
+        );
+    }
+
+    #[tokio::test]
+    async fn rating_sort_breaks_ties_by_id_including_the_unrated_group() {
+        use crate::repositories::UserSeriesRatingRepository;
+        use crate::test_helpers::{
+            assert_exact_order, seed_library, seed_tied_series_by_book_count, seed_user,
+            setup_test_db,
+        };
+
+        let db = setup_test_db().await;
+        let library = seed_library(&db, "rating-order").await;
+        let user = seed_user(&db, "rater").await;
+        let tied = seed_tied_series_by_book_count(&db, library.id, 6, 1).await;
+
+        // Half share one rating, half are left unrated, so both the rated tie
+        // group and the null group have to be ordered.
+        let ids = tied.ids_ascending();
+        let (rated, unrated) = ids.split_at(3);
+        for series_id in rated {
+            UserSeriesRatingRepository::upsert(&db, user.id, *series_id, 7, None)
+                .await
+                .unwrap();
+        }
+
+        let (series_list, _) = SeriesRepository::query(
+            &db,
+            SeriesQueryOptions {
+                library_id: Some(library.id),
+                user_id: Some(user.id),
+                sort: Some(SeriesQuerySort {
+                    field: SeriesSortFieldRepo::Rating,
+                    ascending: false,
+                }),
+                page: 0,
+                page_size: 6,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        // Descending rating puts NULLs last, so the rated group comes first;
+        // within each group the id tiebreaker decides.
+        let mut expected: Vec<Uuid> = rated.to_vec();
+        expected.extend_from_slice(unrated);
+
+        let actual: Vec<Uuid> = series_list.iter().map(|s| s.id).collect();
+        assert_exact_order(
+            &actual,
+            &expected,
+            "series sorted by rating with a null group",
+        );
+    }
+
+    #[tokio::test]
+    async fn library_sorted_book_count_and_rating_break_ties_by_id() {
+        use codex_models::sort::{SeriesSortField, SeriesSortParam, SortDirection};
+
+        use crate::test_helpers::{
+            assert_exact_order, seed_library, seed_tied_series_by_book_count, setup_test_db,
+        };
+
+        let db = setup_test_db().await;
+        let library = seed_library(&db, "library-sorted").await;
+        let tied = seed_tied_series_by_book_count(&db, library.id, 6, 2).await;
+
+        for field in [SeriesSortField::BookCount, SeriesSortField::Rating] {
+            let series_list = SeriesRepository::list_by_library_sorted(
+                &db,
+                library.id,
+                &SeriesSortParam {
+                    field,
+                    direction: SortDirection::Desc,
+                },
+                None,
+                Window::from_offset(0, 6),
+                None,
+            )
+            .await
+            .unwrap();
+
+            let actual: Vec<Uuid> = series_list.iter().map(|s| s.id).collect();
+            assert_exact_order(
+                &actual,
+                &tied.ids_ascending(),
+                &format!("list_by_library_sorted by {field:?}, every series tied"),
+            );
+        }
     }
 }

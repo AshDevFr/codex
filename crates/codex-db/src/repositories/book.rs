@@ -305,7 +305,9 @@ impl BookRepository {
                     .order_by(book_metadata::Column::Title, order)
                     .order_by_asc(books::Column::FileName),
 
-                BookSortField::DateAdded => query.order_by(books::Column::CreatedAt, order),
+                BookSortField::DateAdded => query
+                    .order_by(books::Column::CreatedAt, order)
+                    .order_by_asc(books::Column::Id),
 
                 BookSortField::ReleaseDate => query
                     .order_by(book_metadata::Column::Year, order.clone())
@@ -1287,6 +1289,7 @@ impl BookRepository {
             }
             BookSortField::DateAdded => base_query
                 .order_by(books::Column::CreatedAt, order)
+                .order_by_asc(books::Column::Id)
                 .offset(offset)
                 .limit(limit)
                 .all(db)
@@ -1340,6 +1343,7 @@ impl BookRepository {
                 // Fall back to DateAdded sort; use BookRepository::query() for LastRead support
                 base_query
                     .order_by(books::Column::CreatedAt, order)
+                    .order_by_asc(books::Column::Id)
                     .offset(offset)
                     .limit(limit)
                     .all(db)
@@ -1400,6 +1404,7 @@ impl BookRepository {
         // Get paginated results, ordered by created_at descending (most recent first)
         let books = query
             .order_by_desc(books::Column::CreatedAt)
+            .order_by_asc(books::Column::Id)
             .offset(offset)
             .limit(limit)
             .all(db)
@@ -4487,5 +4492,128 @@ mod tests {
         assert_eq!(result.len(), 1);
         assert_eq!(result.get(&series.id).unwrap().len(), 1);
         assert_eq!(result.get(&series.id).unwrap()[0].id, book1.id);
+    }
+
+    // Tiebreaker regression tests.
+    //
+    // A scan stamps every book in a batch with one captured `Utc::now()`, so
+    // `created_at` ties across the whole batch and any list ordering on it has
+    // no defined total order until a unique column terminates the sort.
+
+    #[tokio::test]
+    async fn recently_added_orders_a_scan_batch_by_id() {
+        use crate::test_helpers::{
+            assert_exact_order, seed_library, seed_series, seed_tied_books, setup_test_db,
+        };
+
+        let db = setup_test_db().await;
+        let library = seed_library(&db, "recently-added-order").await;
+        let series = seed_series(&db, library.id, "Batch").await;
+        let tied = seed_tied_books(&db, library.id, series.id, 8).await;
+
+        let (books, total) = BookRepository::list_recently_added(
+            &db,
+            Some(library.id),
+            false,
+            Window::from_offset(0, 8),
+            None,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(total, 8);
+        let actual: Vec<Uuid> = books.iter().map(|b| b.id).collect();
+        assert_exact_order(
+            &actual,
+            &tied.ids_ascending(),
+            "recently-added over one scan batch",
+        );
+    }
+
+    #[tokio::test]
+    async fn recently_added_pages_do_not_drop_or_repeat_a_scan_batch() {
+        use crate::test_helpers::{
+            assert_pages_partition, seed_library, seed_series, seed_tied_books, setup_test_db,
+        };
+
+        let db = setup_test_db().await;
+        let library = seed_library(&db, "recently-added-pages").await;
+        let series = seed_series(&db, library.id, "Batch").await;
+        let tied = seed_tied_books(&db, library.id, series.id, 9).await;
+
+        let mut pages = Vec::new();
+        for offset in [0, 3, 6] {
+            let (books, _) = BookRepository::list_recently_added(
+                &db,
+                Some(library.id),
+                false,
+                Window::from_offset(offset, 3),
+                None,
+            )
+            .await
+            .unwrap();
+            pages.push(books.iter().map(|b| b.id).collect::<Vec<Uuid>>());
+        }
+
+        assert_pages_partition(
+            &pages,
+            &tied.ids_ascending(),
+            "recently-added paged three at a time",
+        );
+    }
+
+    #[tokio::test]
+    async fn date_added_sort_orders_a_scan_batch_by_id() {
+        use codex_models::sort::{BookSortParam, SortDirection};
+
+        use crate::test_helpers::{
+            assert_exact_order, seed_library, seed_series, seed_tied_books, setup_test_db,
+        };
+
+        let db = setup_test_db().await;
+        let library = seed_library(&db, "date-added-query").await;
+        let series = seed_series(&db, library.id, "Batch").await;
+        let tied = seed_tied_books(&db, library.id, series.id, 8).await;
+
+        let (books, _) = BookRepository::query(
+            &db,
+            BookQueryOptions {
+                library_id: Some(library.id),
+                sort: Some(BookQuerySort {
+                    field: BookSortField::DateAdded,
+                    ascending: false,
+                }),
+                page: 0,
+                page_size: 8,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        let actual: Vec<Uuid> = books.iter().map(|b| b.id).collect();
+        assert_exact_order(&actual, &tied.ids_ascending(), "query sorted by date added");
+
+        // The library-scoped path carries its own copy of the same sort.
+        let sorted = BookRepository::list_by_library_sorted(
+            &db,
+            library.id,
+            &BookSortParam {
+                field: codex_models::sort::BookSortField::DateAdded,
+                direction: SortDirection::Desc,
+            },
+            false,
+            Window::from_offset(0, 8),
+            None,
+        )
+        .await
+        .unwrap();
+
+        let actual: Vec<Uuid> = sorted.0.iter().map(|b| b.id).collect();
+        assert_exact_order(
+            &actual,
+            &tied.ids_ascending(),
+            "list_by_library_sorted by date added",
+        );
     }
 }

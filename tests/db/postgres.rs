@@ -435,3 +435,117 @@ async fn test_postgres_rating_sort() {
 
     db.close().await;
 }
+
+/// Grouped sorts must stay legal under PostgreSQL's `GROUP BY` strictness once a
+/// tiebreaker is appended.
+///
+/// Book count and rating sorts aggregate and group by `series.id`, so ordering
+/// by that same column is legal. SQLite accepts the query either way, so only
+/// PostgreSQL can catch a regression that makes the grouped query invalid, which
+/// is the point of running this here.
+///
+/// The ordering assertions below hold, but they are not what makes this test
+/// worth keeping: on a tie group this size PostgreSQL already returns the rows
+/// in id order without the tiebreaker, so the test passes with or without it.
+/// The discriminating coverage for the ordering itself lives in the codex-db
+/// unit tests, whose fixtures insert against id order on purpose.
+#[tokio::test]
+#[ignore]
+async fn test_postgres_grouped_sorts_break_ties_by_id() {
+    let db = create_test_postgres_db().await;
+    let conn = db.sea_orm_connection();
+
+    let library = LibraryRepository::create(
+        conn,
+        "Grouped Sort Tie Library",
+        "/test/grouped-sort-ties",
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    // Six series with one book each, so every series ties on book count.
+    let mut series_ids = Vec::new();
+    for i in 0..6 {
+        let series = SeriesRepository::create(conn, library.id, &format!("Tied {i}"), None)
+            .await
+            .unwrap();
+        let now = Utc::now();
+        let book = books::Model {
+            id: Uuid::new_v4(),
+            series_id: series.id,
+            library_id: library.id,
+            path: format!("/test/grouped-sort-ties/{}.cbz", Uuid::new_v4()),
+            file_name: format!("tied-{i}.cbz"),
+            file_size: 1024,
+            file_hash: format!("hash-{}", Uuid::new_v4()),
+            partial_hash: String::new(),
+            format: "cbz".to_string(),
+            page_count: 10,
+            deleted: false,
+            analyzed: true,
+            analysis_error: None,
+            analysis_errors: None,
+            modified_at: now,
+            created_at: now,
+            updated_at: now,
+            thumbnail_path: None,
+            thumbnail_generated_at: None,
+            koreader_hash: None,
+            epub_positions: None,
+            epub_spine_items: None,
+        };
+        BookRepository::create(conn, &book, None).await.unwrap();
+        series_ids.push(series.id);
+    }
+
+    let mut expected = series_ids.clone();
+    expected.sort();
+
+    for field in [SeriesSortField::BookCount, SeriesSortField::Rating] {
+        let sort = SeriesSortParam::new(field, SortDirection::Desc);
+
+        // Whole page: the query must run at all (GROUP BY strictness) and the
+        // tie group must come back in id order.
+        let sorted = SeriesRepository::list_by_library_sorted(
+            conn,
+            library.id,
+            &sort,
+            None,
+            Window::from_offset(0, 6),
+            None,
+        )
+        .await
+        .unwrap_or_else(|e| panic!("{field:?} sort must be valid PostgreSQL: {e:#}"));
+
+        let actual: Vec<Uuid> = sorted.iter().map(|s| s.id).collect();
+        assert_eq!(
+            actual, expected,
+            "{field:?} sort must order the tie group by id"
+        );
+
+        // Paged: the failure that costs rows. Two pages over one tie group must
+        // partition it, never dropping or repeating a series.
+        let mut paged = Vec::new();
+        for offset in [0, 3] {
+            let page = SeriesRepository::list_by_library_sorted(
+                conn,
+                library.id,
+                &sort,
+                None,
+                Window::from_offset(offset, 3),
+                None,
+            )
+            .await
+            .unwrap();
+            paged.extend(page.iter().map(|s| s.id));
+        }
+        assert_eq!(
+            paged, expected,
+            "{field:?} pages must partition the tie group"
+        );
+    }
+
+    LibraryRepository::delete(conn, library.id).await.unwrap();
+    db.close().await;
+}
