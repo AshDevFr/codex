@@ -481,6 +481,7 @@ impl ReadProgressRepository {
             .filter(read_progress::Column::UserId.eq(user_id))
             .filter(read_progress::Column::Completed.eq(false))
             .order_by_desc(read_progress::Column::UpdatedAt)
+            .order_by_asc(read_progress::Column::BookId)
             .limit(limit)
             .all(db)
             .await?;
@@ -497,7 +498,8 @@ impl ReadProgressRepository {
         let mut query = ReadProgress::find()
             .filter(read_progress::Column::UserId.eq(user_id))
             .filter(read_progress::Column::Completed.eq(true))
-            .order_by_desc(read_progress::Column::CompletedAt);
+            .order_by_desc(read_progress::Column::CompletedAt)
+            .order_by_asc(read_progress::Column::BookId);
 
         if let Some(limit_val) = limit {
             query = query.limit(limit_val);

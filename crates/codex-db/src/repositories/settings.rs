@@ -206,7 +206,8 @@ impl SettingsRepository {
         if let Some(s) = setting {
             let mut query = SettingHistory::find()
                 .filter(settings_history::Column::SettingId.eq(s.id))
-                .order_by_desc(settings_history::Column::ChangedAt);
+                .order_by_desc(settings_history::Column::ChangedAt)
+                .order_by_asc(settings_history::Column::Id);
 
             if let Some(l) = limit {
                 query = query.limit(l);

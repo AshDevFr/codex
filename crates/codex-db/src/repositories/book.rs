@@ -305,9 +305,7 @@ impl BookRepository {
                     .order_by(book_metadata::Column::Title, order)
                     .order_by_asc(books::Column::FileName),
 
-                BookSortField::DateAdded => query
-                    .order_by(books::Column::CreatedAt, order)
-                    .order_by_asc(books::Column::Id),
+                BookSortField::DateAdded => query.order_by(books::Column::CreatedAt, order),
 
                 BookSortField::ReleaseDate => query
                     .order_by(book_metadata::Column::Year, order.clone())
@@ -374,6 +372,12 @@ impl BookRepository {
                 .order_by(book_metadata::Column::Title, Order::Asc)
                 .order_by_asc(books::Column::FileName);
         }
+
+        // Every arm above orders on columns that can repeat, and an ORDER BY
+        // feeding OFFSET/LIMIT needs a unique key to have a defined total order.
+        // Appending once here rather than per arm means a new sort field cannot
+        // be added without one.
+        query = query.order_by_asc(books::Column::Id);
 
         // Apply pagination
         let books = query
@@ -834,6 +838,7 @@ impl BookRepository {
             .order_by_asc(book_metadata::Column::TitleSort)
             .order_by_asc(book_metadata::Column::Title)
             .order_by_asc(books::Column::FileName)
+            .order_by_asc(books::Column::Id)
             .offset(offset)
             .limit(limit)
             .all(db)
@@ -931,6 +936,7 @@ impl BookRepository {
             .order_by_asc(book_metadata::Column::TitleSort)
             .order_by_asc(book_metadata::Column::Title)
             .order_by_asc(books::Column::FileName)
+            .order_by_asc(books::Column::Id)
             .offset(offset)
             .limit(limit)
             .all(db)
@@ -1188,6 +1194,7 @@ impl BookRepository {
             .order_by_asc(book_metadata::Column::TitleSort)
             .order_by_asc(book_metadata::Column::Title)
             .order_by_asc(books::Column::FileName)
+            .order_by_asc(books::Column::Id)
             .offset(offset)
             .limit(limit)
             .all(db)
@@ -1265,6 +1272,7 @@ impl BookRepository {
                     .order_by(series_metadata::Column::Title, order.clone())
                     .order_by(book_metadata::Column::Number, Order::Asc)
                     .order_by(book_metadata::Column::Title, Order::Asc)
+                    .order_by_asc(books::Column::Id)
                     .offset(offset)
                     .limit(limit)
                     .all(db)
@@ -1281,6 +1289,7 @@ impl BookRepository {
                     .order_by(book_metadata::Column::TitleSort, order.clone())
                     .order_by(book_metadata::Column::Title, order)
                     .order_by_asc(books::Column::FileName)
+                    .order_by_asc(books::Column::Id)
                     .offset(offset)
                     .limit(limit)
                     .all(db)
@@ -1300,6 +1309,7 @@ impl BookRepository {
                 base_query
                     .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
                     .order_by(book_metadata::Column::Year, order)
+                    .order_by_asc(books::Column::Id)
                     .offset(offset)
                     .limit(limit)
                     .all(db)
@@ -1311,6 +1321,7 @@ impl BookRepository {
                 base_query
                     .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
                     .order_by(book_metadata::Column::Number, order)
+                    .order_by_asc(books::Column::Id)
                     .offset(offset)
                     .limit(limit)
                     .all(db)
@@ -1319,6 +1330,7 @@ impl BookRepository {
             }
             BookSortField::FileSize => base_query
                 .order_by(books::Column::FileSize, order)
+                .order_by_asc(books::Column::Id)
                 .offset(offset)
                 .limit(limit)
                 .all(db)
@@ -1326,6 +1338,7 @@ impl BookRepository {
                 .context("Failed to list books with file size sort")?,
             BookSortField::Filename => base_query
                 .order_by(books::Column::FileName, order)
+                .order_by_asc(books::Column::Id)
                 .offset(offset)
                 .limit(limit)
                 .all(db)
@@ -1333,6 +1346,7 @@ impl BookRepository {
                 .context("Failed to list books with filename sort")?,
             BookSortField::PageCount => base_query
                 .order_by(books::Column::PageCount, order)
+                .order_by_asc(books::Column::Id)
                 .offset(offset)
                 .limit(limit)
                 .all(db)
@@ -1447,6 +1461,7 @@ impl BookRepository {
 
         query
             .order_by_desc(read_progress::Column::UpdatedAt)
+            .order_by_asc(books::Column::Id)
             .limit(limit)
             .all(db)
             .await
@@ -1520,6 +1535,7 @@ impl BookRepository {
         // Get paginated results, ordered by most recently updated
         let books = base_query
             .order_by(Expr::col(Alias::new("last_read_at")), Order::Desc)
+            .order_by_asc(books::Column::Id)
             .offset(offset)
             .limit(limit)
             .all(db)
@@ -4615,5 +4631,129 @@ mod tests {
             &tied.ids_ascending(),
             "list_by_library_sorted by date added",
         );
+    }
+
+    #[tokio::test]
+    async fn in_progress_list_breaks_ties_by_id() {
+        use crate::test_helpers::{
+            assert_exact_order, assert_pages_partition, seed_library, seed_series, seed_tied_books,
+            seed_tied_progress, seed_user, setup_test_db,
+        };
+
+        let db = setup_test_db().await;
+        let library = seed_library(&db, "in-progress").await;
+        let series = seed_series(&db, library.id, "Batch").await;
+        let user = seed_user(&db, "reader").await;
+        let books = seed_tied_books(&db, library.id, series.id, 6).await;
+        let progress = seed_tied_progress(&db, user.id, &books.ids_as_inserted(), false).await;
+
+        let (listed, total) = BookRepository::list_with_progress(
+            &db,
+            user.id,
+            Some(library.id),
+            Some(false),
+            Window::from_offset(0, 6),
+            None,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(total, 6);
+        let actual: Vec<Uuid> = listed.iter().map(|b| b.id).collect();
+        assert_exact_order(
+            &actual,
+            &progress.book_ids_ascending(),
+            "in-progress over progress rows sharing a timestamp",
+        );
+
+        let mut pages = Vec::new();
+        for offset in [0, 2, 4] {
+            let (page, _) = BookRepository::list_with_progress(
+                &db,
+                user.id,
+                Some(library.id),
+                Some(false),
+                Window::from_offset(offset, 2),
+                None,
+            )
+            .await
+            .unwrap();
+            pages.push(page.iter().map(|b| b.id).collect::<Vec<Uuid>>());
+        }
+        assert_pages_partition(
+            &pages,
+            &progress.book_ids_ascending(),
+            "in-progress paged two at a time",
+        );
+    }
+
+    /// The title sort is the default for the main book list, and its previous
+    /// terminating key was `file_name`, which repeats freely across series.
+    #[tokio::test]
+    async fn title_sorted_book_lists_break_ties_by_id() {
+        use crate::test_helpers::{
+            assert_exact_order, seed_library, seed_series, seed_tied_books, setup_test_db,
+        };
+
+        let db = setup_test_db().await;
+        let library = seed_library(&db, "title-sort").await;
+        let series = seed_series(&db, library.id, "Batch").await;
+        let tied = seed_tied_books(&db, library.id, series.id, 6).await;
+        let expected = tied.ids_ascending();
+
+        // The default sort, taken when no sort is supplied.
+        let (books, _) = BookRepository::query(
+            &db,
+            BookQueryOptions {
+                library_id: Some(library.id),
+                page: 0,
+                page_size: 6,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        let actual: Vec<Uuid> = books.iter().map(|b| b.id).collect();
+        assert_exact_order(&actual, &expected, "query with no sort (default title)");
+
+        // The explicit title sort.
+        let (books, _) = BookRepository::query(
+            &db,
+            BookQueryOptions {
+                library_id: Some(library.id),
+                sort: Some(BookQuerySort {
+                    field: BookSortField::Title,
+                    ascending: true,
+                }),
+                page: 0,
+                page_size: 6,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        let actual: Vec<Uuid> = books.iter().map(|b| b.id).collect();
+        assert_exact_order(&actual, &expected, "query sorted by title");
+
+        // The three list helpers that pin their own title ordering.
+        let (books, _) =
+            BookRepository::list_by_library(&db, library.id, false, Window::from_offset(0, 6))
+                .await
+                .unwrap();
+        let actual: Vec<Uuid> = books.iter().map(|b| b.id).collect();
+        assert_exact_order(&actual, &expected, "list_by_library");
+
+        let (books, _) = BookRepository::list_all(&db, false, Window::from_offset(0, 6), None)
+            .await
+            .unwrap();
+        let actual: Vec<Uuid> = books.iter().map(|b| b.id).collect();
+        assert_exact_order(&actual, &expected, "list_all");
+
+        let (books, _) =
+            BookRepository::list_by_ids(&db, &expected, false, Window::from_offset(0, 6), None)
+                .await
+                .unwrap();
+        let actual: Vec<Uuid> = books.iter().map(|b| b.id).collect();
+        assert_exact_order(&actual, &expected, "list_by_ids");
     }
 }

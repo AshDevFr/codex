@@ -330,6 +330,12 @@ impl SeriesRepository {
             }
         };
 
+        // Every arm above orders on columns that can repeat, and an ORDER BY
+        // feeding OFFSET/LIMIT needs a unique key to have a defined total order.
+        // Appending once here rather than per arm means a new sort field cannot
+        // be added without one.
+        query = query.order_by(series::Column::Id, Order::Asc);
+
         // Apply pagination
         let series_list = query
             .offset(options.page * options.page_size)
@@ -429,6 +435,7 @@ impl SeriesRepository {
             )
             .group_by(series::Column::Id)
             .order_by(Expr::col(Alias::new("last_read_at")), order)
+            .order_by(series::Column::Id, Order::Asc)
             .offset(options.page * options.page_size)
             .limit(options.page_size)
             .into_model::<SeriesWithAggregates>()
@@ -1075,6 +1082,7 @@ impl SeriesRepository {
 
         query
             .order_by_desc(series::Column::CreatedAt)
+            .order_by(series::Column::Id, Order::Asc)
             .limit(limit)
             .all(db)
             .await
@@ -1103,6 +1111,7 @@ impl SeriesRepository {
 
         query
             .order_by_desc(series::Column::UpdatedAt)
+            .order_by(series::Column::Id, Order::Asc)
             .limit(limit)
             .all(db)
             .await
@@ -1152,6 +1161,7 @@ impl SeriesRepository {
                 base()
                     .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def())
                     .order_by(series_metadata::Column::Year, order)
+                    .order_by(series::Column::Id, Order::Asc)
                     .offset(window.offset())
                     .limit(window.limit())
                     .all(db)
@@ -1297,6 +1307,7 @@ impl SeriesRepository {
                 };
 
                 query
+                    .order_by(series::Column::Id, Order::Asc)
                     .offset(window.offset())
                     .limit(window.limit())
                     .all(db)
@@ -1707,6 +1718,7 @@ impl SeriesRepository {
             )
             .group_by(series::Column::Id)
             .order_by(Expr::col(Alias::new("last_read_at")), order)
+            .order_by(series::Column::Id, Order::Asc)
             .offset(window.offset())
             .limit(window.limit())
             .into_model::<SeriesWithAggregates>()
@@ -1832,6 +1844,7 @@ impl SeriesRepository {
 
             let results = base_query
                 .order_by_asc(series_metadata::Column::Title)
+                .order_by(series::Column::Id, Order::Asc)
                 .offset(offset)
                 .limit(limit)
                 .all(db)

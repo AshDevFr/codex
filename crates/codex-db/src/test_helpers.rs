@@ -196,6 +196,13 @@ pub async fn seed_user(db: &DatabaseConnection, username: &str) -> users::Model 
 /// rather than merely probable: a query with no tiebreaker returns SQLite's scan
 /// order, which is insertion order, and that can never coincide with the id
 /// ordering a correct query produces.
+///
+/// The books tie on every non-unique sort key, not just the timestamp: they
+/// share a `file_name` and are created without metadata, so `title_sort` and
+/// `title` are NULL for all of them. Only `path` and `id` differ, `path` being
+/// unique-constrained. That way a title sort has nothing to separate them
+/// either, and its tiebreaker is exercised rather than short-circuited by an
+/// incidentally distinct filename.
 pub async fn seed_tied_books(
     db: &DatabaseConnection,
     library_id: Uuid,
@@ -210,13 +217,13 @@ pub async fn seed_tied_books(
     ids.reverse();
 
     let mut inserted = Vec::with_capacity(count);
-    for (i, id) in ids.into_iter().enumerate() {
+    for id in ids {
         let model = books::Model {
             id,
             series_id,
             library_id,
             path: format!("/fixtures/tied/{id}.cbz"),
-            file_name: format!("tied-{i:04}.cbz"),
+            file_name: "tied.cbz".to_string(),
             file_size: 1024,
             file_hash: format!("hash-{id}"),
             partial_hash: String::new(),

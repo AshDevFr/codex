@@ -188,6 +188,7 @@ impl PluginFailuresRepository {
         let failures = PluginFailures::find()
             .filter(plugin_failures::Column::PluginId.eq(plugin_id))
             .order_by_desc(plugin_failures::Column::OccurredAt)
+            .order_by_asc(plugin_failures::Column::Id)
             .limit(limit)
             .all(db)
             .await?;
@@ -219,6 +220,7 @@ impl PluginFailuresRepository {
         let failures = PluginFailures::find()
             .filter(plugin_failures::Column::PluginId.eq(plugin_id))
             .order_by_desc(plugin_failures::Column::OccurredAt)
+            .order_by_asc(plugin_failures::Column::Id)
             .limit(limit)
             .offset(offset)
             .all(db)
