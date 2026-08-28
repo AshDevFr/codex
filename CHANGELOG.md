@@ -7,6 +7,18 @@ release. A patch release may fix an API bug; it may not add an operation, a para
 field, or a new behaviour on an existing route. A client may therefore treat the release a feature
 first appears under in the 🔌 API sections below as a floor it can rely on.
 
+## [2.4.1] - 2026-08-28
+
+### 🐛 Bug Fixes
+
+- *(db)* Give the sorts with guaranteed ties a defined order
+- *(db)* Finish giving every ordered list a defined total order
+- *(db)* Order on-deck and the error list past their ties
+
+### 🧪 Testing
+
+- *(db)* Add fixtures that make tied sort keys reproducible
+
 ## [2.4.0] - 2026-08-27
 
 ### 🔌 API (breaking)
