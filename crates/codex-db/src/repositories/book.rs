@@ -1696,7 +1696,24 @@ impl BookRepository {
             .into_iter()
             .filter(|s| on_deck_series.contains(s))
             .collect();
-        ordered_series.sort_by(|a, b| series_last_read.get(b).cmp(&series_last_read.get(a)));
+        // Sorting here rather than in SQL is deliberate. Eligibility is a set
+        // difference over three queries, so the complete eligible set is already
+        // in memory by this point; ordering it here sorts the *whole* set before
+        // paginating, which is what the sort-in-the-database rule exists to
+        // guarantee. Sorting a page after slicing would be the bug that rule
+        // prevents, and that is not what happens. Should on-deck ever collapse
+        // into a single SQL query, the tiebreaker below has to move with it.
+        //
+        // The series id settles ties. `sort_by` is stable, but the input arrives
+        // from a `GROUP BY` with no `ORDER BY`, so "stable" preserves an order
+        // the database never defined: series read in one sitting share a
+        // timestamp and would page differently between two identical calls.
+        ordered_series.sort_by(|a, b| {
+            series_last_read
+                .get(b)
+                .cmp(&series_last_read.get(a))
+                .then_with(|| a.cmp(b))
+        });
 
         let total = ordered_series.len() as u64;
         // `offset` is already a 0-indexed row offset. (The previous
@@ -2550,6 +2567,7 @@ impl BookRepository {
         let all_books: Vec<books::Model> = query
             .clone()
             .order_by_desc(books::Column::UpdatedAt)
+            .order_by_asc(books::Column::Id)
             .all(db)
             .await
             .context("Failed to list books with errors")?;
@@ -4755,5 +4773,125 @@ mod tests {
                 .unwrap();
         let actual: Vec<Uuid> = books.iter().map(|b| b.id).collect();
         assert_exact_order(&actual, &expected, "list_by_ids");
+    }
+
+    /// On-deck orders series in memory rather than in SQL, so its tiebreaker
+    /// lives in the comparator. Every eligible series here shares a last-read
+    /// timestamp, which is what marking several series read in one sitting
+    /// produces.
+    #[tokio::test]
+    async fn on_deck_breaks_ties_by_series_id() {
+        use crate::test_helpers::{
+            assert_exact_order, seed_library, seed_series, seed_tied_books, seed_tied_progress,
+            seed_user, setup_test_db,
+        };
+
+        let db = setup_test_db().await;
+        let library = seed_library(&db, "on-deck").await;
+        let user = seed_user(&db, "reader").await;
+
+        // Each series gets one completed book and one unread book, which is the
+        // shape on-deck selects for.
+        let mut series_ids = Vec::new();
+        let mut completed_books = Vec::new();
+        for i in 0..6 {
+            let series = seed_series(&db, library.id, &format!("On Deck {i}")).await;
+            let books = seed_tied_books(&db, library.id, series.id, 2).await;
+            completed_books.push(books.ids_ascending()[0]);
+            series_ids.push(series.id);
+        }
+        // One timestamp across every completed book, so no series is more recent.
+        seed_tied_progress(&db, user.id, &completed_books, true).await;
+
+        let mut expected = series_ids.clone();
+        expected.sort();
+
+        let (books, total) = BookRepository::list_on_deck(
+            &db,
+            user.id,
+            Some(library.id),
+            Window::from_offset(0, 6),
+            None,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(total, 6);
+        let actual: Vec<Uuid> = books.iter().map(|b| b.series_id).collect();
+        assert_exact_order(
+            &actual,
+            &expected,
+            "on-deck over series sharing a last read",
+        );
+
+        // Repeat calls must agree, which is the property the comparator buys.
+        let (again, _) = BookRepository::list_on_deck(
+            &db,
+            user.id,
+            Some(library.id),
+            Window::from_offset(0, 6),
+            None,
+        )
+        .await
+        .unwrap();
+        let repeated: Vec<Uuid> = again.iter().map(|b| b.series_id).collect();
+        assert_exact_order(&repeated, &expected, "on-deck repeated call");
+    }
+
+    /// `list_with_errors` sorts in SQL but slices in memory, and `updated_at` is
+    /// stamped once per scan batch, so the tie group spans the whole import.
+    #[tokio::test]
+    async fn books_with_errors_break_ties_by_id() {
+        use crate::entities::book_error::{BookError, BookErrorType};
+        use crate::test_helpers::{
+            assert_exact_order, assert_pages_partition, seed_library, seed_series, seed_tied_books,
+            setup_test_db,
+        };
+        use sea_orm::{ActiveModelTrait, IntoActiveModel, Set};
+
+        let db = setup_test_db().await;
+        let library = seed_library(&db, "book-errors").await;
+        let series = seed_series(&db, library.id, "Batch").await;
+        let tied = seed_tied_books(&db, library.id, series.id, 6).await;
+
+        let mut errors = std::collections::HashMap::new();
+        errors.insert(BookErrorType::Parser, BookError::new("could not open"));
+        let payload = serde_json::to_string(&errors).unwrap();
+        for book in &tied.inserted {
+            let mut active = book.clone().into_active_model();
+            active.analysis_errors = Set(Some(payload.clone()));
+            active.update(&db).await.unwrap();
+        }
+
+        let expected = tied.ids_ascending();
+
+        let (rows, total) = BookRepository::list_with_errors(
+            &db,
+            Some(library.id),
+            None,
+            None,
+            Window::from_offset(0, 6),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(total, 6);
+        let actual: Vec<Uuid> = rows.iter().map(|(b, _)| b.id).collect();
+        assert_exact_order(&actual, &expected, "books with errors over one scan batch");
+
+        let mut pages = Vec::new();
+        for offset in [0, 3] {
+            let (page, _) = BookRepository::list_with_errors(
+                &db,
+                Some(library.id),
+                None,
+                None,
+                Window::from_offset(offset, 3),
+            )
+            .await
+            .unwrap();
+            pages.push(page.iter().map(|(b, _)| b.id).collect::<Vec<Uuid>>());
+        }
+        assert_pages_partition(&pages, &expected, "books with errors paged three at a time");
     }
 }
