@@ -755,6 +755,36 @@ describe("ContinuousScrollReader", () => {
       const innerContainer = screen.getByTestId("continuous-scroll-inner");
       expect(innerContainer).toHaveStyle({ gap: "0" }); // DEFAULT_PAGE_GAP is 0
     });
+
+    it("should overlap consecutive pages by 1px when the gap is 0", () => {
+      // Page images render at fractional heights (width: 100% preserving
+      // aspect ratio), so without overlap some page boundaries land on
+      // fractional device pixels and a hairline of background bleeds through.
+      renderWithProviders(
+        <ContinuousScrollReader {...defaultProps} pageGap={0} />,
+      );
+
+      expect(screen.getByTestId("page-container-1")).not.toHaveStyle({
+        marginTop: "-1px",
+      });
+      for (let i = 2; i <= defaultProps.totalPages; i++) {
+        expect(screen.getByTestId(`page-container-${i}`)).toHaveStyle({
+          marginTop: "-1px",
+        });
+      }
+    });
+
+    it("should not overlap pages when a non-zero gap is set", () => {
+      renderWithProviders(
+        <ContinuousScrollReader {...defaultProps} pageGap={8} />,
+      );
+
+      for (let i = 1; i <= defaultProps.totalPages; i++) {
+        expect(screen.getByTestId(`page-container-${i}`)).not.toHaveStyle({
+          marginTop: "-1px",
+        });
+      }
+    });
   });
 
   describe("Image Loading States", () => {

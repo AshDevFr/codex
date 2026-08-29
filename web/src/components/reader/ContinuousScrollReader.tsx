@@ -693,6 +693,20 @@ export function ContinuousScrollReader({
               style={{
                 position: "relative",
                 width: "100%",
+                // Page images render at fractional heights (width: 100% with
+                // a preserved aspect ratio is almost never a whole number of
+                // pixels), so each page boundary lands on a fractional device
+                // pixel.  The browser snaps and antialiases each image edge
+                // independently, and wherever the rounding goes the wrong way
+                // a hairline of background bleeds through -- at different
+                // boundaries depending on zoom and device pixel ratio.  When
+                // the pages are meant to be seamless (gap 0), overlap each
+                // page 1px over the previous one; webtoon art is continuous,
+                // so the covered pixel row is invisible.
+                marginTop:
+                  effectivePageGap === 0 && page.pageNumber > 1
+                    ? -1
+                    : undefined,
                 minHeight: page.isLoaded ? undefined : reservedHeight,
                 display: "flex",
                 justifyContent: "center",
