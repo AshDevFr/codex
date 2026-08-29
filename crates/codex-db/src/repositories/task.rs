@@ -404,9 +404,20 @@ impl TaskRepository {
         let series_id = task.series_id();
         let book_id = task.book_id();
 
+        // A task that is already `processing` normally satisfies a new request,
+        // so folding into it is correct. A renumber pass does not: it reads the
+        // series at the top and cannot see a book whose analysis lands later,
+        // so a request made during one has to queue a successor. The
+        // `unique_pending_series` index carries the same exception.
+        let statuses: &[&str] = if task.dedups_against_processing() {
+            &["pending", "processing"]
+        } else {
+            &["pending"]
+        };
+
         let mut query = Tasks::find()
             .filter(tasks::Column::TaskType.eq(task_type))
-            .filter(tasks::Column::Status.is_in(["pending", "processing"]));
+            .filter(tasks::Column::Status.is_in(statuses.iter().copied()));
 
         // Match on the most specific entity identifier
         if let Some(bk_id) = book_id {

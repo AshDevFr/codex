@@ -275,6 +275,28 @@ fn default_mode() -> String {
 }
 
 impl TaskType {
+    /// Whether a task of this type that is already `processing` can stand in
+    /// for a new request, so enqueueing folds into it instead of queueing a
+    /// successor.
+    ///
+    /// True for almost everything: a running task observes the state the
+    /// caller wants acted on, so a second one would repeat its work.
+    ///
+    /// `RenumberSeries` is the exception. The pass reads the series once, at
+    /// the top, and skips any book with no `book_metadata` row yet, so a book
+    /// whose analysis finishes mid-pass is invisible to it. Folding that
+    /// book's request into the running pass drops it: the pass completes,
+    /// the queue is empty, and the book keeps a null number. Queue a
+    /// successor instead. Two passes over one series write the same numbers
+    /// from the same filenames, so an overlap is idempotent.
+    ///
+    /// The `unique_pending_series` partial index encodes the same rule, and
+    /// the two have to agree: relaxing only this check leaves the insert to
+    /// fail on the constraint and fall back to the running task anyway.
+    pub fn dedups_against_processing(&self) -> bool {
+        !matches!(self, TaskType::RenumberSeries { .. })
+    }
+
     /// Returns the default priority for this task type.
     ///
     /// Higher values = more urgent; the worker claims tasks in descending
@@ -1119,6 +1141,25 @@ mod tests {
         assert_eq!(book_id, None);
         // RenumberSeries has no special params, so params should be None (empty object)
         assert!(params.is_none());
+    }
+
+    #[test]
+    fn test_only_renumber_series_declines_to_dedup_against_processing() {
+        let series_id = Uuid::new_v4();
+
+        // A pass that is already running may have read the series before this
+        // book existed, so a request made during it needs its own task.
+        assert!(!TaskType::RenumberSeries { series_id }.dedups_against_processing());
+
+        // Everything else is satisfied by the in-flight task.
+        assert!(TaskType::AnalyzeSeries { series_id }.dedups_against_processing());
+        assert!(
+            TaskType::RenumberSeriesBatch {
+                series_ids: Some(vec![series_id]),
+            }
+            .dedups_against_processing()
+        );
+        assert!(TaskType::FindDuplicates.dedups_against_processing());
     }
 
     #[test]

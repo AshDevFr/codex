@@ -284,17 +284,17 @@ async fn analyze_single_book(
         .and_then(|ci| ci.number.as_ref())
         .and_then(|n| n.parse::<f32>().ok());
 
-    // Resolve book number using the library's number strategy
+    // Resolve book number using the library's number strategy.
+    //
+    // `needs_renumber` says the file itself supplied nothing and the renumber
+    // pass owns this book's number. That makes any number already on the row
+    // better than the None analysis would write: blanking it leaves a deep
+    // scan showing a numberless library until the pass catches up, and loses
+    // the number outright for a book whose pass is missed.
     let ResolvedNumber {
         number: resolved_number,
         needs_renumber,
     } = resolve_book_number(db, &book, &metadata, metadata_number).await;
-
-    // Strategies that number by position need the whole series in view, which
-    // analysis never has. Hand that off to a renumber pass.
-    if needs_renumber {
-        queue_renumber(db, book.series_id).await;
-    }
 
     // Resolve book title using the library's book metadata strategy.
     // Note: title and number are now stored in book_metadata, not books table.
@@ -304,7 +304,6 @@ async fn analyze_single_book(
         resolve_book_classification(db, &book, &metadata, resolved_number).await;
     let resolved_number_decimal =
         resolved_number.map(|n| Decimal::from_f64_retain(n as f64).unwrap_or_default());
-
     // Recompute KOReader hash during analysis
     let path_clone = path.clone();
     let koreader_hash = tokio::task::spawn_blocking(move || {
@@ -455,7 +454,7 @@ async fn analyze_single_book(
                 } else {
                     None // title_sort is typically user-set, not auto-generated
                 },
-                number: if existing.number_lock {
+                number: if existing.number_lock || needs_renumber {
                     existing.number
                 } else {
                     resolved_number_decimal
@@ -765,7 +764,7 @@ async fn analyze_single_book(
                 search_title: normalize_for_search(effective_title.as_deref().unwrap_or("")),
                 title: effective_title,
                 title_sort: existing.title_sort.clone(),
-                number: if existing.number_lock {
+                number: if existing.number_lock || needs_renumber {
                     existing.number
                 } else {
                     resolved_number_decimal
@@ -942,6 +941,18 @@ async fn analyze_single_book(
                 series_title
             );
         }
+    }
+
+    // Strategies that number by position need the whole series in view, which
+    // analysis never has. Hand that off to a renumber pass.
+    //
+    // This has to come after the metadata row is written, not after the number
+    // is resolved. A pass claimed before the row exists reads a series in which
+    // this book has no metadata to number, skips it, and completes, spending
+    // the very task that was queued for it. Queue only once the row a pass
+    // needs is there to be found.
+    if needs_renumber {
+        queue_renumber(db, book.series_id).await;
     }
 
     // Read Mylar series.json sidecar if present in the book's parent directory

@@ -91,6 +91,19 @@ async fn insert_and_analyze(
     series_id: Uuid,
     path: &Path,
 ) -> Result<books::Model> {
+    let created = insert_book(db, library_id, series_id, path).await?;
+    analyze_book(db.sea_orm_connection(), created.id, false, None).await?;
+    Ok(created)
+}
+
+/// Insert a book row the way a scan does, without analyzing it. The book has no
+/// `book_metadata` row until analysis creates one.
+async fn insert_book(
+    db: &codex::db::Database,
+    library_id: Uuid,
+    series_id: Uuid,
+    path: &Path,
+) -> Result<books::Model> {
     let conn = db.sea_orm_connection();
     let file_name = path.file_name().unwrap().to_string_lossy().to_string();
 
@@ -120,7 +133,6 @@ async fn insert_and_analyze(
     };
 
     let created = BookRepository::create(conn, &book, None).await?;
-    analyze_book(conn, created.id, false, None).await?;
     Ok(created)
 }
 
@@ -279,6 +291,100 @@ async fn test_smart_keeps_file_derived_number_without_renumber_task() -> Result<
             .iter()
             .any(|t| t.task_type == "renumber_series" && t.series_id == Some(series.id)),
         "no renumber needed when the file itself supplied the number"
+    );
+
+    Ok(())
+}
+
+/// A renumber pass reads the series once, at the top, and skips any book that
+/// has no `book_metadata` row yet. A book whose analysis finishes while that
+/// pass is in flight is therefore invisible to it, and the follow-up pass the
+/// analysis tries to queue is swallowed by the dedup on (task type, series),
+/// which matches tasks in `processing` as well as `pending`. Nothing runs
+/// afterwards, so the book keeps a null number for good.
+///
+/// The visible symptom is a series numbered 1, 2, 5, 6, 7 with two books
+/// showing no number at all — gaps that never fill in, not even on a rescan
+/// that finds nothing new.
+#[tokio::test]
+async fn test_book_analyzed_during_a_renumber_pass_still_ends_up_numbered() -> Result<()> {
+    let (db, _db_dir) = setup_test_db_wrapper().await;
+    let files = TempDir::new()?;
+    let conn = db.sea_orm_connection();
+    let (library, series) = setup_library(&db, NumberStrategy::FileOrder).await?;
+
+    // Five books already analyzed and numbered by a pass that ran to completion.
+    for i in 1..=5 {
+        let name = format!("Staged Series - ch {:03}.cbz", i);
+        let path = write_bare_cbz(files.path(), &name);
+        insert_and_analyze(&db, library.id, series.id, &path).await?;
+    }
+    drain_tasks(conn).await;
+
+    // A sixth book lands. The scan inserts the row and queues the pass; its
+    // analysis has not run yet, so it has no metadata row.
+    let path = write_bare_cbz(files.path(), "Staged Series - ch 006.cbz");
+    let late = insert_book(&db, library.id, series.id, &path).await?;
+    TaskRepository::enqueue(
+        conn,
+        codex::tasks::types::TaskType::RenumberSeries {
+            series_id: series.id,
+        },
+        None,
+    )
+    .await?;
+
+    // The worker claims the pass and runs it. `ch 006` has no metadata row at
+    // this point, so the pass leaves it alone.
+    let claimed = TaskRepository::claim_next(conn, "worker-renumber", 60)
+        .await?
+        .expect("the renumber task should be claimable");
+    assert_eq!(claimed.task_type, "renumber_series");
+    codex::scanner::renumber_series_books(conn, series.id, library.id).await?;
+
+    // The late book's analysis finishes while the pass is still marked
+    // `processing`, which is exactly the window the scanner leaves open.
+    analyze_book(conn, late.id, false, None).await?;
+
+    TaskRepository::mark_completed(conn, claimed.id, None).await?;
+
+    // Whatever the queue holds now must be enough to finish the job.
+    drain_tasks(conn).await;
+
+    assert_eq!(
+        number_of(&db, late.id).await,
+        Some(6.0),
+        "a book analyzed during a renumber pass must still get numbered"
+    );
+
+    Ok(())
+}
+
+/// Re-analysis must not blank a number the renumber pass already assigned.
+///
+/// A positional strategy resolves nothing from the file alone, so analysis has
+/// nothing better to write than the number already there. Writing null instead
+/// makes every book in a deep scan show no number until the pass catches up,
+/// and loses the number outright for any book whose follow-up pass is missed.
+#[tokio::test]
+async fn test_reanalysis_keeps_the_number_the_pass_assigned() -> Result<()> {
+    let (db, _db_dir) = setup_test_db_wrapper().await;
+    let files = TempDir::new()?;
+    let conn = db.sea_orm_connection();
+    let (library, series) = setup_library(&db, NumberStrategy::FileOrder).await?;
+
+    let path = write_bare_cbz(files.path(), "Staged Series - ch 001.cbz");
+    let book = insert_and_analyze(&db, library.id, series.id, &path).await?;
+    drain_tasks(conn).await;
+    assert_eq!(number_of(&db, book.id).await, Some(1.0));
+
+    // A deep scan re-analyzes every book.
+    analyze_book(conn, book.id, true, None).await?;
+
+    assert_eq!(
+        number_of(&db, book.id).await,
+        Some(1.0),
+        "re-analysis must leave the assigned number alone, not blank it until a pass runs"
     );
 
     Ok(())
