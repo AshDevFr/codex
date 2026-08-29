@@ -32,6 +32,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockHasPermission = vi.fn(() => false);
   useReaderStore.setState({
+    readingDirectionOverride: null,
     settings: {
       ...useReaderStore.getState().settings,
       pdfMode: "streaming",
@@ -271,6 +272,9 @@ describe("ReaderSettings", () => {
       vi.mocked(userSeriesReaderSettingsApi.get).mockResolvedValueOnce({
         readingDirection: "rtl",
       });
+      // What the reader is looking at, as ComicReader seeds it from the
+      // server-resolved direction on the book. Promoting publishes that.
+      useReaderStore.setState({ readingDirectionOverride: "rtl" });
       const user = userEvent.setup();
       renderWithProviders(
         <ReaderSettings
@@ -301,6 +305,139 @@ describe("ReaderSettings", () => {
           { readingDirection: true },
         );
       });
+    });
+
+    it("offers no reset while the user is already inheriting", async () => {
+      vi.mocked(userSeriesReaderSettingsApi.get).mockResolvedValueOnce({
+        inheritedReadingDirection: "rtl",
+        inheritedReadingDirectionSource: "series",
+      });
+      renderWithProviders(
+        <ReaderSettings
+          opened={true}
+          onClose={vi.fn()}
+          seriesId="test-series-123"
+        />,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText("Reading mode")).toBeInTheDocument();
+      });
+      expect(screen.queryByText(/Use series default/)).not.toBeInTheDocument();
+    });
+
+    it("names the value and the layer a reset falls back to", async () => {
+      vi.mocked(userSeriesReaderSettingsApi.get).mockResolvedValueOnce({
+        readingDirection: "ltr",
+        inheritedReadingDirection: "rtl",
+        inheritedReadingDirectionSource: "series",
+      });
+      renderWithProviders(
+        <ReaderSettings
+          opened={true}
+          onClose={vi.fn()}
+          seriesId="test-series-123"
+        />,
+      );
+
+      // Naming the value is the point: a book response carries the direction
+      // already resolved, so without this the reader cannot tell what dropping
+      // the override would leave them with.
+      expect(
+        await screen.findByText("Use series default (Right to Left)"),
+      ).toBeInTheDocument();
+    });
+
+    it("names the library when that is the layer beneath", async () => {
+      vi.mocked(userSeriesReaderSettingsApi.get).mockResolvedValueOnce({
+        readingDirection: "ltr",
+        inheritedReadingDirection: "webtoon",
+        inheritedReadingDirectionSource: "library",
+      });
+      renderWithProviders(
+        <ReaderSettings
+          opened={true}
+          onClose={vi.fn()}
+          seriesId="test-series-123"
+        />,
+      );
+
+      expect(
+        await screen.findByText("Use library default (Webtoon)"),
+      ).toBeInTheDocument();
+    });
+
+    it("words the reset honestly when no layer holds a direction", async () => {
+      vi.mocked(userSeriesReaderSettingsApi.get).mockResolvedValueOnce({
+        readingDirection: "rtl",
+      });
+      renderWithProviders(
+        <ReaderSettings
+          opened={true}
+          onClose={vi.fn()}
+          seriesId="test-series-123"
+        />,
+      );
+
+      expect(await screen.findByText("Reset to default")).toBeInTheDocument();
+    });
+
+    it("offers the reset to a user without series:write", async () => {
+      // Dropping a personal override touches nobody else, so it is not gated
+      // the way promoting to the series is.
+      mockHasPermission = vi.fn(() => false);
+      vi.mocked(userSeriesReaderSettingsApi.get).mockResolvedValueOnce({
+        readingDirection: "ltr",
+        inheritedReadingDirection: "rtl",
+        inheritedReadingDirectionSource: "series",
+      });
+      renderWithProviders(
+        <ReaderSettings
+          opened={true}
+          onClose={vi.fn()}
+          seriesId="test-series-123"
+        />,
+      );
+
+      expect(
+        await screen.findByText("Use series default (Right to Left)"),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByText("Save as series default for everyone"),
+      ).not.toBeInTheDocument();
+    });
+
+    it("clears the override without touching the series metadata", async () => {
+      mockHasPermission = vi.fn(() => true);
+      vi.mocked(userSeriesReaderSettingsApi.get).mockResolvedValueOnce({
+        readingDirection: "ltr",
+        inheritedReadingDirection: "rtl",
+        inheritedReadingDirectionSource: "series",
+      });
+      const user = userEvent.setup();
+      renderWithProviders(
+        <ReaderSettings
+          opened={true}
+          onClose={vi.fn()}
+          seriesId="test-series-123"
+        />,
+      );
+
+      await user.click(
+        await screen.findByText("Use series default (Right to Left)"),
+      );
+
+      await waitFor(() => {
+        expect(userSeriesReaderSettingsApi.patch).toHaveBeenCalledWith(
+          "test-series-123",
+          { readingDirection: null },
+        );
+      });
+      expect(seriesMetadataApi.patchMetadata).not.toHaveBeenCalled();
+      expect(seriesMetadataApi.updateLocks).not.toHaveBeenCalled();
+      // The open book re-renders in the inherited direction at once, rather
+      // than waiting for a refetch that would not re-seed it anyway.
+      expect(useReaderStore.getState().readingDirectionOverride).toBe("rtl");
     });
 
     it("does not call any API without series context", async () => {

@@ -39,6 +39,33 @@ import { PERMISSIONS } from "@/types/permissions";
 import { useSeriesReaderSettings } from "./hooks/useSeriesReaderSettings";
 import { useSeriesReadingDirection } from "./hooks/useSeriesReadingDirection";
 
+/**
+ * The reading modes, with two labels each.
+ *
+ * `label` disambiguates in the dropdown, where the reader is choosing between
+ * all four. `shortLabel` reads as a value inside a sentence, where the
+ * parentheticals would nest ugly: "Use series default (Right to Left)", not
+ * "Use series default (Right to Left (Manga))".
+ */
+const READING_MODES: {
+  value: ReadingDirection;
+  label: string;
+  shortLabel: string;
+}[] = [
+  { value: "ltr", label: "Left to Right", shortLabel: "Left to Right" },
+  {
+    value: "rtl",
+    label: "Right to Left (Manga)",
+    shortLabel: "Right to Left",
+  },
+  { value: "ttb", label: "Vertical", shortLabel: "Vertical" },
+  {
+    value: "webtoon",
+    label: "Webtoon (Continuous Scroll)",
+    shortLabel: "Webtoon",
+  },
+];
+
 interface ReaderSettingsProps {
   /** Whether the modal is open */
   opened: boolean;
@@ -132,8 +159,26 @@ export function ReaderSettings({
   // Reading direction, unlike the display settings below it, is a property of
   // how the book was made rather than of this screen. It is stored server-side
   // per user and resolves against the series metadata and library default.
-  const { userDirection, setUserDirection, promoteToSeries, isPromoting } =
-    useSeriesReadingDirection(seriesId);
+  const {
+    userDirection,
+    inheritedDirection,
+    inheritedSource,
+    setUserDirection,
+    clearUserDirection,
+    promoteToSeries,
+    isPromoting,
+  } = useSeriesReadingDirection(seriesId);
+
+  // What dropping the personal override would leave the reader with. Named
+  // rather than left implicit, because the reader cannot see it anywhere else:
+  // a book response carries the direction already resolved.
+  const inheritedLabel = READING_MODES.find(
+    (mode) => mode.value === inheritedDirection,
+  )?.shortLabel;
+  const resetLabel =
+    inheritedLabel && inheritedSource
+      ? `Use ${inheritedSource} default (${inheritedLabel})`
+      : "Reset to default";
 
   const { hasPermission } = usePermissions();
   const canWriteSeries = hasPermission(PERMISSIONS.SERIES_WRITE);
@@ -261,12 +306,7 @@ export function ReaderSettings({
             onChange={(value) =>
               value && handleReadingModeChange(value as ReadingDirection)
             }
-            data={[
-              { label: "Left to Right", value: "ltr" },
-              { label: "Right to Left (Manga)", value: "rtl" },
-              { label: "Vertical", value: "ttb" },
-              { label: "Webtoon (Continuous Scroll)", value: "webtoon" },
-            ]}
+            data={READING_MODES.map(({ value, label }) => ({ value, label }))}
           />
           <Text size="xs" c="dimmed" mt={4}>
             {seriesId
@@ -274,20 +314,35 @@ export function ReaderSettings({
               : "Session only"}
           </Text>
 
-          {/* Promoting to the series is deliberate and permissioned, so that
-              reading a mis-tagged volume in the right direction cannot rewrite
-              and lock the field for everyone by accident. */}
-          {seriesId && canWriteSeries && userDirection && (
-            <Button
-              mt="xs"
-              size="xs"
-              variant="light"
-              leftSection={<IconUsers size={14} />}
-              loading={isPromoting}
-              onClick={() => promoteToSeries(effectiveReadingDirection)}
-            >
-              Save as series default for everyone
-            </Button>
+          {/* Both actions are about an override, so neither exists without one. */}
+          {seriesId && userDirection && (
+            <Group gap="xs" mt="xs">
+              {/* Dropping a personal override changes nothing for anyone else,
+                  so unlike promoting it is offered at every role. */}
+              <Button
+                size="xs"
+                variant="subtle"
+                leftSection={<IconRefresh size={14} />}
+                onClick={clearUserDirection}
+              >
+                {resetLabel}
+              </Button>
+
+              {/* Promoting is deliberate and permissioned, so that reading a
+                  mis-tagged volume in the right direction cannot rewrite and
+                  lock the field for everyone by accident. */}
+              {canWriteSeries && (
+                <Button
+                  size="xs"
+                  variant="light"
+                  leftSection={<IconUsers size={14} />}
+                  loading={isPromoting}
+                  onClick={() => promoteToSeries(effectiveReadingDirection)}
+                >
+                  Save as series default for everyone
+                </Button>
+              )}
+            </Group>
           )}
         </Box>
 

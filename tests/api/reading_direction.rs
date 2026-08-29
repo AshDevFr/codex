@@ -383,7 +383,11 @@ async fn reader_settings_start_empty_rather_than_missing() {
         make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(response.unwrap(), json!({}));
+    // A user with no overrides gets a 200 describing what it inherits, never a
+    // 404 and never a value it did not set.
+    let body = response.unwrap();
+    assert!(body.get("readingDirection").is_none());
+    assert_eq!(body["inheritedReadingDirectionSource"], "library");
 }
 
 #[tokio::test]
@@ -417,7 +421,9 @@ async fn a_null_clears_the_override_and_restores_inheritance() {
     assert_eq!(status, StatusCode::OK);
     // Back to inheriting, and the record is gone rather than left as an empty
     // husk claiming this user has overrides here.
-    assert_eq!(response.unwrap(), json!({}));
+    let body = response.unwrap();
+    assert!(body.get("readingDirection").is_none());
+    assert_eq!(body["inheritedReadingDirection"], "ltr");
 }
 
 #[tokio::test]
@@ -490,7 +496,9 @@ async fn deleting_reader_settings_restores_full_inheritance() {
     let (status, response): (StatusCode, Option<serde_json::Value>) =
         make_json_request(app, request).await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(response.unwrap(), json!({}));
+    let body = response.unwrap();
+    assert!(body.get("readingDirection").is_none());
+    assert_eq!(body["inheritedReadingDirection"], "ltr");
 }
 
 #[tokio::test]
@@ -605,7 +613,7 @@ async fn one_users_reader_settings_are_invisible_to_another() {
         make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(response.unwrap(), json!({}));
+    assert!(response.unwrap().get("readingDirection").is_none());
 }
 
 // ============================================================================
@@ -853,4 +861,211 @@ async fn an_override_applies_only_to_its_own_series() {
 
     assert_eq!(manga_response.unwrap()["book"]["readingDirection"], "rtl");
     assert_eq!(comic_response.unwrap()["book"]["readingDirection"], "ltr");
+}
+
+// ============================================================================
+// The inherited direction, reported so a reader can drop an override
+// ============================================================================
+//
+// A book response carries the direction already resolved, so the layer beneath
+// a user's override is invisible from a client. The settings endpoint reports
+// it, which is what lets the reader UI say what resetting would fall back to.
+
+#[tokio::test]
+async fn reader_settings_report_the_direction_inherited_from_the_series() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_id, token) = user_and_token(&db, &state, "reader", false).await;
+    let app = create_test_router(state).await;
+
+    let mut library = create_test_library(&db, "Test Library", "/test/path").await;
+    library.default_reading_direction = "ltr".to_string();
+    LibraryRepository::update(&db, &library).await.unwrap();
+
+    let series = create_test_series(&db, &library, "Berserk").await;
+    SeriesMetadataRepository::update_reading_direction(&db, series.id, Some("rtl".to_string()))
+        .await
+        .unwrap();
+
+    let request = get_request_with_auth(
+        &format!("/api/v1/user/series/{}/reader-settings", series.id),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body = response.unwrap();
+    // The series metadata wins over the library default, and the caller is told
+    // which layer answered so it can name it.
+    assert_eq!(body["inheritedReadingDirection"], "rtl");
+    assert_eq!(body["inheritedReadingDirectionSource"], "series");
+    assert!(body.get("readingDirection").is_none());
+}
+
+#[tokio::test]
+async fn reader_settings_fall_back_to_the_library_default_when_the_series_has_none() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_id, token) = user_and_token(&db, &state, "reader", false).await;
+    let app = create_test_router(state).await;
+
+    let mut library = create_test_library(&db, "Test Library", "/test/path").await;
+    library.default_reading_direction = "webtoon".to_string();
+    LibraryRepository::update(&db, &library).await.unwrap();
+
+    let series = create_test_series(&db, &library, "Tower of God").await;
+
+    let request = get_request_with_auth(
+        &format!("/api/v1/user/series/{}/reader-settings", series.id),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body = response.unwrap();
+    assert_eq!(body["inheritedReadingDirection"], "webtoon");
+    assert_eq!(body["inheritedReadingDirectionSource"], "library");
+}
+
+#[tokio::test]
+async fn reader_settings_report_no_inherited_direction_when_no_layer_resolves() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_id, token) = user_and_token(&db, &state, "reader", false).await;
+    let app = create_test_router(state).await;
+
+    let mut library = create_test_library(&db, "Test Library", "/test/path").await;
+    library.default_reading_direction = String::new();
+    LibraryRepository::update(&db, &library).await.unwrap();
+
+    let series = create_test_series(&db, &library, "Bone").await;
+
+    let request = get_request_with_auth(
+        &format!("/api/v1/user/series/{}/reader-settings", series.id),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    // Nothing to inherit is reported as nothing, not as a guessed default: the
+    // UI has to be able to word the reset honestly.
+    assert_eq!(response.unwrap(), json!({}));
+}
+
+#[tokio::test]
+async fn an_unparseable_stored_direction_is_reported_as_nothing_inherited() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_id, token) = user_and_token(&db, &state, "reader", false).await;
+    let app = create_test_router(state).await;
+
+    // A library predating validation, still holding the Komga vocabulary.
+    let mut library = create_test_library(&db, "Test Library", "/test/path").await;
+    library.default_reading_direction = "LEFT_TO_RIGHT".to_string();
+    LibraryRepository::update(&db, &library).await.unwrap();
+
+    let series = create_test_series(&db, &library, "Berserk").await;
+    SeriesMetadataRepository::update_reading_direction(
+        &db,
+        series.id,
+        Some("sideways".to_string()),
+    )
+    .await
+    .unwrap();
+
+    let request = get_request_with_auth(
+        &format!("/api/v1/user/series/{}/reader-settings", series.id),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    // Junk degrades the same way it does on the book path: skipped, not shown.
+    assert_eq!(response.unwrap(), json!({}));
+}
+
+#[tokio::test]
+async fn the_inherited_direction_is_reported_alongside_an_active_override() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_id, token) = user_and_token(&db, &state, "reader", false).await;
+    let app = create_test_router(state.clone()).await;
+
+    let library = create_test_library(&db, "Test Library", "/test/path").await;
+    let series = create_test_series(&db, &library, "Berserk").await;
+    SeriesMetadataRepository::update_reading_direction(&db, series.id, Some("rtl".to_string()))
+        .await
+        .unwrap();
+
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/user/series/{}/reader-settings", series.id),
+        &json!({ "readingDirection": "ltr" }),
+        &token,
+    );
+    let (status, patched): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // The response to the write carries the inherited pair too. The client
+    // writes this straight into its cache, so a leaner response here would
+    // blank the reset affordance until the next refetch.
+    let patched = patched.unwrap();
+    assert_eq!(patched["readingDirection"], "ltr");
+    assert_eq!(patched["inheritedReadingDirection"], "rtl");
+    assert_eq!(patched["inheritedReadingDirectionSource"], "series");
+
+    let app = create_test_router(state).await;
+    let request = get_request_with_auth(
+        &format!("/api/v1/user/series/{}/reader-settings", series.id),
+        &token,
+    );
+    let (status, fetched): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    // An override does not hide the layer beneath it.
+    assert_eq!(fetched.unwrap(), patched);
+}
+
+#[tokio::test]
+async fn one_users_override_is_not_reported_as_anothers_inheritance() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_id, reader_token) = user_and_token(&db, &state, "reader", false).await;
+    let (_other_id, other_token) = user_and_token(&db, &state, "other", false).await;
+    let app = create_test_router(state.clone()).await;
+
+    let mut library = create_test_library(&db, "Test Library", "/test/path").await;
+    library.default_reading_direction = "ltr".to_string();
+    LibraryRepository::update(&db, &library).await.unwrap();
+    let series = create_test_series(&db, &library, "Berserk").await;
+
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/user/series/{}/reader-settings", series.id),
+        &json!({ "readingDirection": "rtl" }),
+        &reader_token,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let app = create_test_router(state).await;
+    let request = get_request_with_auth(
+        &format!("/api/v1/user/series/{}/reader-settings", series.id),
+        &other_token,
+    );
+    let (status, response): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body = response.unwrap();
+    // The user layer is per-user by definition, so it can never be what another
+    // user inherits.
+    assert_eq!(body["inheritedReadingDirection"], "ltr");
+    assert_eq!(body["inheritedReadingDirectionSource"], "library");
+    assert!(body.get("readingDirection").is_none());
 }

@@ -2,8 +2,11 @@ import { notifications } from "@mantine/notifications";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { seriesMetadataApi } from "@/api/seriesMetadata";
-import { userSeriesReaderSettingsApi } from "@/api/userSeriesReaderSettings";
-import type { ReadingDirection } from "@/store/readerStore";
+import {
+  type InheritedFrom,
+  userSeriesReaderSettingsApi,
+} from "@/api/userSeriesReaderSettings";
+import { type ReadingDirection, useReaderStore } from "@/store/readerStore";
 
 export const SERIES_READER_SETTINGS_KEY = "seriesReaderSettings";
 
@@ -15,6 +18,16 @@ export function seriesReaderSettingsKey(seriesId: string) {
 export interface UseSeriesReadingDirectionReturn {
   /** This user's direction for the series, or null when inheriting. */
   userDirection: ReadingDirection | null;
+
+  /**
+   * The direction this user would get with no override, or null when no layer
+   * holds one. Resolved server-side, because a book response carries the
+   * direction already resolved and so hides the layers beneath it.
+   */
+  inheritedDirection: ReadingDirection | null;
+
+  /** Which layer `inheritedDirection` came from, for naming it in the UI. */
+  inheritedSource: InheritedFrom | null;
 
   /** Save a direction for this series, for this user only. */
   setUserDirection: (direction: ReadingDirection) => void;
@@ -47,6 +60,9 @@ export function useSeriesReadingDirection(
   seriesId: string | null | undefined,
 ): UseSeriesReadingDirectionReturn {
   const queryClient = useQueryClient();
+  const setReadingDirectionOverride = useReaderStore(
+    (state) => state.setReadingDirectionOverride,
+  );
 
   const { data } = useQuery({
     queryKey: seriesReaderSettingsKey(seriesId ?? ""),
@@ -120,10 +136,21 @@ export function useSeriesReadingDirection(
     [seriesId, saveMutation],
   );
 
+  const inheritedDirection =
+    (data?.inheritedReadingDirection as ReadingDirection) ?? null;
+
   const clearUserDirection = useCallback(() => {
     if (!seriesId) return;
+
+    // Apply the inherited value to the open book immediately, rather than only
+    // clearing the store. Two reasons it cannot be left to a refetch: the store
+    // falls back to this reader's *global* preference, which is a different
+    // setting entirely, and ComicReader seeds the direction once per book and
+    // will not re-seed the one already on screen. Without this the page would
+    // keep rendering the direction that was just dropped.
+    setReadingDirectionOverride(inheritedDirection);
     saveMutation.mutate(null);
-  }, [seriesId, saveMutation]);
+  }, [seriesId, saveMutation, setReadingDirectionOverride, inheritedDirection]);
 
   const promoteToSeries = useCallback(
     (direction: ReadingDirection) => {
@@ -135,6 +162,8 @@ export function useSeriesReadingDirection(
 
   return {
     userDirection: (data?.readingDirection as ReadingDirection) ?? null,
+    inheritedDirection,
+    inheritedSource: data?.inheritedReadingDirectionSource ?? null,
     setUserDirection,
     clearUserDirection,
     promoteToSeries,

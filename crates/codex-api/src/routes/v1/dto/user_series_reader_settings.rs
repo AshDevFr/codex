@@ -8,11 +8,26 @@ use codex_models::reading_direction::ReadingDirection;
 
 use super::patch::PatchValue;
 
-/// A user's content-setting overrides for one series.
+/// Which layer supplied a value the user is inheriting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum InheritedFrom {
+    /// The series metadata, which an editor set for everyone
+    Series,
+    /// The library default, which applies to every series in it
+    Library,
+}
+
+/// A user's content-setting overrides for one series, and what lies beneath them.
 ///
-/// Sparse: a field is absent when the user has not overridden it, and the
+/// Sparse: an override field is absent when the user has not set it, and the
 /// reader inherits instead. For reading direction that means the series
 /// metadata and then the library default.
+///
+/// The `inherited*` fields report that lower value whether or not an override
+/// is present. They exist because a book response carries the direction already
+/// resolved, so a client holding an override cannot otherwise see what dropping
+/// it would fall back to, and cannot word the offer to drop it.
 ///
 /// Settings that describe the device rather than the content, such as fit mode
 /// and page layout, are deliberately not here. They belong to the screen in
@@ -24,12 +39,37 @@ pub struct SeriesReaderSettingsResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(example = "rtl")]
     pub reading_direction: Option<ReadingDirection>,
+
+    /// Direction this user would inherit with no override of their own.
+    ///
+    /// Read-only, and absent when no layer holds a usable value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "ltr")]
+    pub inherited_reading_direction: Option<ReadingDirection>,
+
+    /// Which layer [`Self::inherited_reading_direction`] came from.
+    ///
+    /// Always present and absent together with it, because the two are set from
+    /// one resolved pair.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub inherited_reading_direction_source: Option<InheritedFrom>,
 }
 
-impl From<SeriesReaderSettings> for SeriesReaderSettingsResponse {
-    fn from(settings: SeriesReaderSettings) -> Self {
+impl SeriesReaderSettingsResponse {
+    /// Build a response from this user's overrides and the layer beneath them.
+    ///
+    /// `inherited` pairs the value with its source rather than taking two
+    /// arguments, so a caller cannot report a direction from one layer while
+    /// naming another. This replaces a `From<SeriesReaderSettings>` impl, which
+    /// could not see the series or library state the inherited value needs.
+    pub fn new(
+        overrides: SeriesReaderSettings,
+        inherited: Option<(ReadingDirection, InheritedFrom)>,
+    ) -> Self {
         Self {
-            reading_direction: settings.reading_direction,
+            reading_direction: overrides.reading_direction,
+            inherited_reading_direction: inherited.map(|(direction, _)| direction),
+            inherited_reading_direction_source: inherited.map(|(_, source)| source),
         }
     }
 }
@@ -147,6 +187,42 @@ mod tests {
         assert_eq!(merged.reading_direction, None);
         // The repository turns an empty record into no row at all.
         assert!(merged.is_empty());
+    }
+
+    #[test]
+    fn a_response_omits_every_absent_field() {
+        let response = SeriesReaderSettingsResponse::new(SeriesReaderSettings::default(), None);
+
+        assert_eq!(serde_json::to_string(&response).unwrap(), "{}");
+    }
+
+    #[test]
+    fn a_response_reports_the_inherited_value_with_its_source() {
+        let response = SeriesReaderSettingsResponse::new(
+            SeriesReaderSettings::default(),
+            Some((ReadingDirection::Rtl, InheritedFrom::Series)),
+        );
+
+        let json = serde_json::to_value(response).unwrap();
+        assert_eq!(json["inheritedReadingDirection"], "rtl");
+        assert_eq!(json["inheritedReadingDirectionSource"], "series");
+        // No override of this user's own, so the field stays out.
+        assert!(json.get("readingDirection").is_none());
+    }
+
+    #[test]
+    fn an_override_does_not_hide_the_layer_beneath_it() {
+        let response = SeriesReaderSettingsResponse::new(
+            SeriesReaderSettings {
+                reading_direction: Some(ReadingDirection::Ltr),
+            },
+            Some((ReadingDirection::Rtl, InheritedFrom::Library)),
+        );
+
+        let json = serde_json::to_value(response).unwrap();
+        assert_eq!(json["readingDirection"], "ltr");
+        assert_eq!(json["inheritedReadingDirection"], "rtl");
+        assert_eq!(json["inheritedReadingDirectionSource"], "library");
     }
 
     #[test]

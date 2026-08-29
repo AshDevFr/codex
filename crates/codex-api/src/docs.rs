@@ -827,6 +827,7 @@ The following paths are exempt from rate limiting:
             // Per-user, per-series reader settings
             v1::dto::SeriesReaderSettingsResponse,
             v1::dto::PatchSeriesReaderSettingsRequest,
+            v1::dto::InheritedFrom,
 
             // Series Export DTOs
             v1::dto::series_export::CreateSeriesExportRequest,

@@ -18246,7 +18246,7 @@
           "User Reader Settings"
         ],
         "summary": "Get the authenticated user's reader overrides for a series",
-        "description": "The response is sparse: a field is absent when the user has not overridden\nit, and the reader inherits from the series metadata or the library default\ninstead. A user with no overrides gets an empty object, not a 404.\n\nReading direction also arrives already resolved on the book responses, so a\nclient rendering a book does not need this endpoint for that field. It is\nhere for the settings UI, which has to show which values are overridden and\nwhich are inherited.",
+        "description": "The response is sparse: an override field is absent when the user has not\nset it, and the reader inherits from the series metadata or the library\ndefault instead. A user with no overrides gets a 200, not a 404.\n\nThe `inherited*` fields report what the user would get with no override,\nwhether or not one is set. Book responses carry the direction already\nresolved, so this is the only way a client can see the layer beneath its own\noverride, and the only way it can offer to drop it by name.",
         "operationId": "get_series_reader_settings",
         "parameters": [
           {
@@ -31298,6 +31298,14 @@
           }
         }
       },
+      "InheritedFrom": {
+        "type": "string",
+        "description": "Which layer supplied a value the user is inheriting.",
+        "enum": [
+          "series",
+          "library"
+        ]
+      },
       "InitializeSetupRequest": {
         "type": "object",
         "description": "Initialize setup request - creates first admin user",
@@ -41953,8 +41961,16 @@
       },
       "SeriesReaderSettingsResponse": {
         "type": "object",
-        "description": "A user's content-setting overrides for one series.\n\nSparse: a field is absent when the user has not overridden it, and the\nreader inherits instead. For reading direction that means the series\nmetadata and then the library default.\n\nSettings that describe the device rather than the content, such as fit mode\nand page layout, are deliberately not here. They belong to the screen in\nfront of the reader, not to the file, and each client keeps its own.",
+        "description": "A user's content-setting overrides for one series, and what lies beneath them.\n\nSparse: an override field is absent when the user has not set it, and the\nreader inherits instead. For reading direction that means the series\nmetadata and then the library default.\n\nThe `inherited*` fields report that lower value whether or not an override\nis present. They exist because a book response carries the direction already\nresolved, so a client holding an override cannot otherwise see what dropping\nit would fall back to, and cannot word the offer to drop it.\n\nSettings that describe the device rather than the content, such as fit mode\nand page layout, are deliberately not here. They belong to the screen in\nfront of the reader, not to the file, and each client keeps its own.",
         "properties": {
+          "inheritedReadingDirection": {
+            "$ref": "#/components/schemas/ReadingDirection",
+            "description": "Direction this user would inherit with no override of their own.\n\nRead-only, and absent when no layer holds a usable value."
+          },
+          "inheritedReadingDirectionSource": {
+            "$ref": "#/components/schemas/InheritedFrom",
+            "description": "Which layer [`Self::inherited_reading_direction`] came from.\n\nAlways present and absent together with it, because the two are set from\none resolved pair."
+          },
           "readingDirection": {
             "$ref": "#/components/schemas/ReadingDirection",
             "description": "Reading direction for this series, for this user only"

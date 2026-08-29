@@ -6,14 +6,21 @@
 //! series correctly for themselves. Changing what *every* user sees is a
 //! separate, permissioned act against the series metadata.
 
-use super::super::dto::{PatchSeriesReaderSettingsRequest, SeriesReaderSettingsResponse};
+use super::super::dto::{
+    InheritedFrom, PatchSeriesReaderSettingsRequest, SeriesReaderSettingsResponse,
+};
 use crate::{AppState, error::ApiError, extractors::AuthContext};
 use axum::{
     Json,
     extract::{Path, State},
     http::StatusCode,
 };
-use codex_db::repositories::{SeriesRepository, UserSeriesReaderSettingsRepository};
+use codex_db::entities::series;
+use codex_db::repositories::{
+    LibraryRepository, SeriesMetadataRepository, SeriesRepository,
+    UserSeriesReaderSettingsRepository,
+};
+use codex_models::reading_direction::ReadingDirection;
 use std::sync::Arc;
 use utoipa::OpenApi;
 use uuid::Uuid;
@@ -28,6 +35,7 @@ use uuid::Uuid;
     components(schemas(
         SeriesReaderSettingsResponse,
         PatchSeriesReaderSettingsRequest,
+        InheritedFrom,
     )),
     tags(
         (name = "User Reader Settings", description = "Per-user, per-series reader overrides")
@@ -38,24 +46,71 @@ pub struct UserSeriesReaderSettingsApi;
 
 /// Confirm the series exists, so a typo returns 404 rather than silently
 /// storing settings against an id that means nothing.
-async fn ensure_series_exists(state: &Arc<AppState>, series_id: Uuid) -> Result<(), ApiError> {
+///
+/// Returns the series because the caller needs its `library_id` to resolve what
+/// the user inherits, and re-fetching it would be a second query for a row
+/// already in hand.
+async fn require_series(state: &Arc<AppState>, series_id: Uuid) -> Result<series::Model, ApiError> {
     SeriesRepository::get_by_id(&state.db, series_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?
-        .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
-    Ok(())
+        .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))
+}
+
+/// The reading direction this user would see with no override of their own.
+///
+/// The layers below the user, in the same precedence the book responses use:
+/// series metadata, then the library default. A layer holding an unparseable
+/// legacy value is skipped rather than surfaced, exactly as
+/// [`ReadingDirection::resolve`] skips it on the book path.
+///
+/// This resolves one layer short of that chain on purpose: the user's own
+/// override is what a caller is deciding whether to drop, so including it would
+/// report the value being replaced as the value replacing it.
+///
+/// The source travels with the value instead of being derived a second time,
+/// so the two cannot disagree about which layer answered.
+async fn inherited_reading_direction(
+    state: &Arc<AppState>,
+    series: &series::Model,
+) -> Result<Option<(ReadingDirection, InheritedFrom)>, ApiError> {
+    let metadata = SeriesMetadataRepository::get_by_series_id(&state.db, series.id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
+    let library = LibraryRepository::get_by_id(&state.db, series.library_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
+
+    let layers = [
+        (
+            metadata
+                .as_ref()
+                .and_then(|m| m.reading_direction.as_deref()),
+            InheritedFrom::Series,
+        ),
+        (
+            library
+                .as_ref()
+                .map(|l| l.default_reading_direction.as_str()),
+            InheritedFrom::Library,
+        ),
+    ];
+
+    Ok(layers
+        .into_iter()
+        .find_map(|(raw, source)| ReadingDirection::parse_stored(raw).map(|d| (d, source))))
 }
 
 /// Get the authenticated user's reader overrides for a series
 ///
-/// The response is sparse: a field is absent when the user has not overridden
-/// it, and the reader inherits from the series metadata or the library default
-/// instead. A user with no overrides gets an empty object, not a 404.
+/// The response is sparse: an override field is absent when the user has not
+/// set it, and the reader inherits from the series metadata or the library
+/// default instead. A user with no overrides gets a 200, not a 404.
 ///
-/// Reading direction also arrives already resolved on the book responses, so a
-/// client rendering a book does not need this endpoint for that field. It is
-/// here for the settings UI, which has to show which values are overridden and
-/// which are inherited.
+/// The `inherited*` fields report what the user would get with no override,
+/// whether or not one is set. Book responses carry the direction already
+/// resolved, so this is the only way a client can see the layer beneath its own
+/// override, and the only way it can offer to drop it by name.
 #[utoipa::path(
     get,
     path = "/api/v1/user/series/{series_id}/reader-settings",
@@ -78,7 +133,7 @@ pub async fn get_series_reader_settings(
     auth: AuthContext,
     Path(series_id): Path<Uuid>,
 ) -> Result<Json<SeriesReaderSettingsResponse>, ApiError> {
-    ensure_series_exists(&state, series_id).await?;
+    let series = require_series(&state, series_id).await?;
 
     let settings =
         UserSeriesReaderSettingsRepository::get_for_user_series(&state.db, auth.user_id, series_id)
@@ -86,7 +141,9 @@ pub async fn get_series_reader_settings(
             .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?
             .unwrap_or_default();
 
-    Ok(Json(settings.into()))
+    let inherited = inherited_reading_direction(&state, &series).await?;
+
+    Ok(Json(SeriesReaderSettingsResponse::new(settings, inherited)))
 }
 
 /// Update the authenticated user's reader overrides for a series
@@ -127,7 +184,7 @@ pub async fn patch_series_reader_settings(
     Path(series_id): Path<Uuid>,
     Json(request): Json<PatchSeriesReaderSettingsRequest>,
 ) -> Result<Json<SeriesReaderSettingsResponse>, ApiError> {
-    ensure_series_exists(&state, series_id).await?;
+    let series = require_series(&state, series_id).await?;
 
     let current =
         UserSeriesReaderSettingsRepository::get_for_user_series(&state.db, auth.user_id, series_id)
@@ -147,7 +204,12 @@ pub async fn patch_series_reader_settings(
         .await
         .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
-    Ok(Json(merged.into()))
+    // The client writes this response straight into its cache, so it has to
+    // carry the inherited layer too: a leaner response here would blank the
+    // reset affordance until the next refetch.
+    let inherited = inherited_reading_direction(&state, &series).await?;
+
+    Ok(Json(SeriesReaderSettingsResponse::new(merged, inherited)))
 }
 
 /// Clear all of the authenticated user's reader overrides for a series
@@ -176,7 +238,7 @@ pub async fn delete_series_reader_settings(
     auth: AuthContext,
     Path(series_id): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {
-    ensure_series_exists(&state, series_id).await?;
+    require_series(&state, series_id).await?;
 
     UserSeriesReaderSettingsRepository::delete(&state.db, auth.user_id, series_id)
         .await

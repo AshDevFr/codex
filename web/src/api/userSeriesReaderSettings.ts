@@ -16,6 +16,12 @@ export type SeriesReaderSettings =
   components["schemas"]["SeriesReaderSettingsResponse"];
 
 /**
+ * Which layer supplied a value the user is inheriting: the series metadata an
+ * editor set for everyone, or the default on the library holding it.
+ */
+export type InheritedFrom = components["schemas"]["InheritedFrom"];
+
+/**
  * A partial update. A key set to `null` clears that override so the setting
  * inherits again; a key left out is not touched.
  */
