@@ -7,6 +7,12 @@ release. A patch release may fix an API bug; it may not add an operation, a para
 field, or a new behaviour on an existing route. A client may therefore treat the release a feature
 first appears under in the 🔌 API sections below as a floor it can rely on.
 
+## [2.4.3] - 2026-08-29
+
+### 🚀 Features
+
+- *(web)* Let a reader drop a series reading direction back to the inherited one
+
 ## [2.4.2] - 2026-08-29
 
 ### 🐛 Bug Fixes
