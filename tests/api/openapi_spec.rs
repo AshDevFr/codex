@@ -559,6 +559,96 @@ fn unreferenced_components_are_all_accounted_for() {
     );
 }
 
+/// The fn names (or explicit `operation_id` overrides) of every
+/// `#[utoipa::path]`-annotated handler in a v1 handler source file.
+fn annotated_operation_ids(source: &str) -> Vec<String> {
+    let mut ids = Vec::new();
+    let mut rest = source;
+    while let Some(attr) = rest.find("#[utoipa::path") {
+        // Skip attributes sitting in comments (line or doc).
+        let line_start = rest[..attr].rfind('\n').map_or(0, |i| i + 1);
+        let commented = rest[line_start..attr].trim_start().starts_with("//");
+        let after_attr = &rest[attr..];
+        // The attribute ends where its handler starts; utoipa places
+        // `operation_id = "..."` only inside the attribute, so searching up to
+        // the `fn` keyword cannot pick up a stray one.
+        let Some(fn_offset) = after_attr.find("fn ") else {
+            break;
+        };
+        if !commented {
+            let attribute = &after_attr[..fn_offset];
+            let id = attribute
+                .split_once("operation_id")
+                .and_then(|(_, tail)| tail.split('"').nth(1))
+                .map(str::to_string)
+                .or_else(|| {
+                    after_attr[fn_offset + 3..]
+                        .split(|c: char| !c.is_alphanumeric() && c != '_')
+                        .next()
+                        .map(str::to_string)
+                });
+            ids.extend(id);
+        }
+        rest = &after_attr[fn_offset..];
+    }
+    ids
+}
+
+/// A handler with a full `#[utoipa::path]` annotation is still invisible to
+/// every spec consumer until it is also named in the merged `ApiDoc` `paths()`
+/// list in `crates/codex-api/src/docs.rs` — the per-file `#[derive(OpenApi)]`
+/// structs look authoritative and are not. That drift shipped three separate
+/// times (want-to-read reorder, the R2 progression pair, the book genre/tag
+/// CRUD), each discovered by a client team generating against a spec that
+/// lacked an endpoint the server already served. This walks the v1 handler
+/// sources and requires every annotated handler's operationId to appear in the
+/// served document.
+#[test]
+fn every_annotated_v1_handler_reaches_the_served_document() {
+    let spec = spec();
+    let served: std::collections::BTreeSet<&str> = operations(&spec)
+        .filter_map(|(_, op)| op.get("operationId").and_then(Value::as_str))
+        .collect();
+
+    let handlers = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("crates/codex-api/src/routes/v1/handlers");
+    let mut annotated = 0usize;
+    let mut missing: Vec<String> = Vec::new();
+    for entry in std::fs::read_dir(&handlers).expect("v1 handlers directory") {
+        let path = entry.expect("directory entry").path();
+        if path.extension().and_then(|e| e.to_str()) != Some("rs") {
+            continue;
+        }
+        let source = std::fs::read_to_string(&path).expect("handler source");
+        let file = path.file_name().expect("file name").to_string_lossy();
+        for id in annotated_operation_ids(&source) {
+            annotated += 1;
+            if !served.contains(id.as_str()) {
+                missing.push(format!("{}: {}", file, id));
+            }
+        }
+    }
+    missing.sort();
+
+    // The scan is textual; if a refactor moved the handlers or changed the
+    // attribute shape, it would find nothing and this test would pass forever.
+    assert!(
+        annotated > 300,
+        "only {} annotated handlers found under {} — the source scan is broken, \
+         not the spec",
+        annotated,
+        handlers.display()
+    );
+
+    assert!(
+        missing.is_empty(),
+        "these handlers are annotated (and presumably mounted) but absent from \
+         the merged ApiDoc in crates/codex-api/src/docs.rs, so no generated \
+         client can see them — add them to the paths() list: {:#?}",
+        missing
+    );
+}
+
 /// utoipa renders a generic instantiation by expanding its type argument inline
 /// rather than referencing the argument's own component, even when that
 /// component is registered. The document stays correct, but every generator

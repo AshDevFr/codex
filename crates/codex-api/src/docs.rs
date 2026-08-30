@@ -333,6 +333,18 @@ The following paths are exempt from rate limiting:
         v1::handlers::update_book_metadata_locks,
         v1::handlers::upload_book_cover,
 
+        // Book genre endpoints
+        v1::handlers::get_book_genres,
+        v1::handlers::set_book_genres,
+        v1::handlers::add_book_genre,
+        v1::handlers::remove_book_genre,
+
+        // Book tag endpoints
+        v1::handlers::get_book_tags,
+        v1::handlers::set_book_tags,
+        v1::handlers::add_book_tag,
+        v1::handlers::remove_book_tag,
+
         // Book external IDs endpoints
         v1::handlers::list_book_external_ids,
         v1::handlers::create_book_external_id,
@@ -368,6 +380,10 @@ The following paths are exempt from rate limiting:
         v1::handlers::mark_series_as_read,
         v1::handlers::mark_series_as_unread,
 
+        // EPUB position sync (Readium R2 progression locators)
+        v1::handlers::get_progression,
+        v1::handlers::put_progression,
+
         // Read completion history endpoints
         v1::handlers::get_book_read_history,
         v1::handlers::clear_book_read_history,
@@ -380,6 +396,7 @@ The following paths are exempt from rate limiting:
         v1::handlers::list_want_to_read,
         v1::handlers::add_want_to_read,
         v1::handlers::bulk_add_want_to_read,
+        v1::handlers::reorder_want_to_read,
         v1::handlers::remove_want_to_read_series,
         v1::handlers::remove_want_to_read_book,
 
@@ -543,6 +560,8 @@ The following paths are exempt from rate limiting:
         v1::handlers::plugin_actions::enqueue_auto_match_task,
         v1::handlers::plugin_actions::enqueue_bulk_auto_match_tasks,
         v1::handlers::plugin_actions::enqueue_library_auto_match_tasks,
+        v1::handlers::plugin_actions::preview_book_metadata,
+        v1::handlers::plugin_actions::apply_book_metadata,
 
         // User Plugin endpoints
         v1::handlers::user_plugins::list_user_plugins,
@@ -803,6 +822,8 @@ The following paths are exempt from rate limiting:
             v1::dto::GenreListResponse,
             v1::dto::SetSeriesGenresRequest,
             v1::dto::AddSeriesGenreRequest,
+            v1::dto::SetBookGenresRequest,
+            v1::dto::AddBookGenreRequest,
             v1::dto::TaxonomyCleanupResponse,
 
             // Tag DTOs
@@ -810,6 +831,8 @@ The following paths are exempt from rate limiting:
             v1::dto::TagListResponse,
             v1::dto::SetSeriesTagsRequest,
             v1::dto::AddSeriesTagRequest,
+            v1::dto::SetBookTagsRequest,
+            v1::dto::AddBookTagRequest,
 
             // User Rating DTOs
             v1::dto::UserSeriesRatingDto,
@@ -1040,6 +1063,7 @@ The following paths are exempt from rate limiting:
             v1::dto::AddWantToReadRequest,
             v1::dto::BulkAddWantToReadRequest,
             v1::dto::BulkAddWantToReadResponse,
+            v1::dto::ReorderWantToReadRequest,
             v1::dto::WantToReadItemType,
 
             // Collections DTOs

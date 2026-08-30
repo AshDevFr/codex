@@ -28,6 +28,10 @@ const DEFAULT_WINDOW_DAYS: i64 = 90;
 const MAX_SERIES_LIMIT: u64 = 50;
 const DEFAULT_SERIES_LIMIT: u64 = 10;
 
+/// Real UTC offsets run from UTC-12:00 to UTC+14:00. Anything outside that is
+/// a client bug, and bucketing by a nonsense day would hide it.
+const MAX_TZ_OFFSET_MINUTES: i32 = 14 * 60;
+
 #[derive(OpenApi)]
 #[openapi(
     paths(get_reading_stats),
@@ -95,6 +99,13 @@ pub async fn get_reading_stats(
         ));
     }
 
+    let tz_offset_minutes = query.tz_offset_minutes.unwrap_or(0);
+    if tz_offset_minutes.abs() > MAX_TZ_OFFSET_MINUTES {
+        return Err(ApiError::BadRequest(format!(
+            "tzOffsetMinutes must be between -{MAX_TZ_OFFSET_MINUTES} and {MAX_TZ_OFFSET_MINUTES}"
+        )));
+    }
+
     let granularity = query.granularity.unwrap_or(ReadingStatsGranularity::Day);
     let sort = query.sort.unwrap_or(ReadingStatsSort::Time).into();
     let series_limit = query
@@ -112,9 +123,15 @@ pub async fn get_reading_stats(
     let summary = ReadingStatsRepository::summary(&state.db, user_id, window)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to summarise reading: {}", e)))?;
-    let periods = ReadingStatsRepository::by_period(&state.db, user_id, window, granularity.into())
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to bucket reading: {}", e)))?;
+    let periods = ReadingStatsRepository::by_period(
+        &state.db,
+        user_id,
+        window,
+        granularity.into(),
+        tz_offset_minutes,
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to bucket reading: {}", e)))?;
     let devices = ReadingStatsRepository::by_device(&state.db, user_id, window, sort)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to group by device: {}", e)))?;

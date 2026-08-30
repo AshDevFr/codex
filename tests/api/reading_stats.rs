@@ -478,6 +478,61 @@ async fn statistics_require_authentication() {
     assert_eq!(status, StatusCode::UNAUTHORIZED);
 }
 
+/// The original bug: a reader seven hours behind UTC finishing a book at 22:36
+/// their time is already past midnight in UTC, and without the offset their
+/// evening showed up on tomorrow's calendar.
+#[tokio::test]
+async fn the_viewers_offset_decides_which_day_a_sitting_belongs_to() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let book = book_in_series(&db, "Berserk", "cbz").await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_user_id, token) = admin_and_token(&db, &state, "reader").await;
+
+    // 05:36 UTC on June 4th is 22:36 on June 3rd at UTC-7.
+    let late_evening = Utc.with_ymd_and_hms(2026, 6, 4, 5, 36, 0).unwrap();
+    record_session(state.clone(), &token, book.id, "phone", 84, late_evening).await;
+
+    let window = format!("?from={}&to={}&tzOffsetMinutes=-420", q(at(1)), q(at(30)));
+    let (status, response) = fetch_stats(state, &token, &window).await;
+    let stats = response.expect("expected a JSON body");
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(stats.periods.len(), 1);
+    assert_eq!(stats.periods[0].bucket, "2026-06-03");
+}
+
+/// Without the parameter the buckets stay UTC days, so a client that predates
+/// the parameter keeps getting exactly what it got before.
+#[tokio::test]
+async fn buckets_default_to_utc_days_when_no_offset_is_sent() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let book = book_in_series(&db, "Berserk", "cbz").await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_user_id, token) = admin_and_token(&db, &state, "reader").await;
+
+    let late_evening = Utc.with_ymd_and_hms(2026, 6, 4, 5, 36, 0).unwrap();
+    record_session(state.clone(), &token, book.id, "phone", 84, late_evening).await;
+
+    let window = format!("?from={}&to={}", q(at(1)), q(at(30)));
+    let (_status, response) = fetch_stats(state, &token, &window).await;
+    let stats = response.expect("expected a JSON body");
+
+    assert_eq!(stats.periods[0].bucket, "2026-06-04");
+}
+
+/// No place on Earth is more than fourteen hours from UTC. Anything wilder is
+/// a client bug, and refusing it loudly beats bucketing by a nonsense day.
+#[tokio::test]
+async fn an_impossible_offset_is_rejected() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_user_id, token) = admin_and_token(&db, &state, "reader").await;
+
+    let (status, _response) = fetch_stats(state, &token, "?tzOffsetMinutes=1000").await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
 /// The response echoes the window it actually used, so a client that sent no
 /// bounds knows what it got back.
 #[tokio::test]

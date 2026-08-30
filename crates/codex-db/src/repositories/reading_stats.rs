@@ -32,23 +32,54 @@ pub enum StatsGranularity {
 }
 
 impl StatsGranularity {
-    /// The SQL expression that truncates a timestamp to this bucket.
+    /// The SQL expression that truncates a timestamp to this bucket, as seen
+    /// from `tz_offset_minutes` east of UTC.
     ///
     /// Both engines are asked for an ISO date string rather than a native date,
     /// so a bucket key means the same thing whichever database is underneath
     /// and the API contract does not depend on the deployment.
-    fn bucket_expr(self, backend: DatabaseBackend) -> &'static str {
-        match (backend, self) {
-            // `%W` weeks start on Monday and the offset lands the key on that
-            // Monday, so a week bucket is a real date rather than an ordinal.
-            (DatabaseBackend::Sqlite, Self::Day) => "strftime('%Y-%m-%d', rs.client_started_at)",
-            (DatabaseBackend::Sqlite, Self::Week) => {
-                "date(rs.client_started_at, 'weekday 1', '-7 days')"
+    ///
+    /// Timestamps are stored in UTC, but "a day of reading" means the reader's
+    /// day: without the shift, everything an American reads after dinner lands
+    /// on tomorrow's calendar. The offset is one fixed number for the whole
+    /// window rather than a zone name because SQLite has no timezone database;
+    /// the cost is that sittings within an hour of midnight on the far side of
+    /// a DST change can still land a day off.
+    ///
+    /// The offset is interpolated rather than bound because the expression also
+    /// has to appear in `GROUP BY`. It is an `i32` formatted by us, so it can
+    /// only ever render as an integer; the caller-facing API layer additionally
+    /// rejects offsets outside the real range of UTC offsets.
+    fn bucket_expr(self, backend: DatabaseBackend, tz_offset_minutes: i32) -> String {
+        match backend {
+            DatabaseBackend::Sqlite => {
+                let shift = format!("'{tz_offset_minutes} minutes'");
+                match self {
+                    Self::Day => {
+                        format!("strftime('%Y-%m-%d', rs.client_started_at, {shift})")
+                    }
+                    // `weekday 0` advances to the following Sunday (staying put
+                    // on a Sunday), so six days back is always the Monday of
+                    // the sitting's own week. The tempting `weekday 1, -7 days`
+                    // leaves a Monday unchanged and then rewinds it a whole
+                    // week.
+                    Self::Week => {
+                        format!("date(rs.client_started_at, {shift}, 'weekday 0', '-6 days')")
+                    }
+                    Self::Month => {
+                        format!("strftime('%Y-%m-01', rs.client_started_at, {shift})")
+                    }
+                }
             }
-            (DatabaseBackend::Sqlite, Self::Month) => "strftime('%Y-%m-01', rs.client_started_at)",
-            (_, Self::Day) => "to_char(date_trunc('day', rs.client_started_at), 'YYYY-MM-DD')",
-            (_, Self::Week) => "to_char(date_trunc('week', rs.client_started_at), 'YYYY-MM-DD')",
-            (_, Self::Month) => "to_char(date_trunc('month', rs.client_started_at), 'YYYY-MM-DD')",
+            _ => {
+                let local =
+                    format!("(rs.client_started_at + interval '1 minute' * {tz_offset_minutes})");
+                match self {
+                    Self::Day => format!("to_char(date_trunc('day', {local}), 'YYYY-MM-DD')"),
+                    Self::Week => format!("to_char(date_trunc('week', {local}), 'YYYY-MM-DD')"),
+                    Self::Month => format!("to_char(date_trunc('month', {local}), 'YYYY-MM-DD')"),
+                }
+            }
         }
     }
 }
@@ -346,14 +377,19 @@ impl ReadingStatsRepository {
     /// Empty buckets are omitted rather than zero-filled: the caller knows the
     /// window it asked for and can fill gaps for display, and sending a row per
     /// silent day of a multi-year range would dwarf the answer.
+    ///
+    /// `tz_offset_minutes` is the viewer's offset east of UTC, and decides
+    /// where one bucket ends and the next begins: days are the viewer's days,
+    /// not UTC's. Pass `0` for UTC buckets.
     pub async fn by_period<C: ConnectionTrait>(
         db: &C,
         user_id: Uuid,
         window: StatsWindow,
         granularity: StatsGranularity,
+        tz_offset_minutes: i32,
     ) -> Result<Vec<ReadingPeriod>> {
         let backend = db.get_database_backend();
-        let bucket = granularity.bucket_expr(backend);
+        let bucket = granularity.bucket_expr(backend, tz_offset_minutes);
         let sql = format!(
             "SELECT {bucket} AS bucket, \
                     {MEASURED_SUM} AS measured_ms, \
@@ -1117,10 +1153,15 @@ mod tests {
         )
         .await;
 
-        let periods =
-            ReadingStatsRepository::by_period(&db, user.id, whole_of_june(), StatsGranularity::Day)
-                .await
-                .unwrap();
+        let periods = ReadingStatsRepository::by_period(
+            &db,
+            user.id,
+            whole_of_june(),
+            StatsGranularity::Day,
+            0,
+        )
+        .await
+        .unwrap();
 
         assert_eq!(periods.len(), 2);
         assert_eq!(periods[0].bucket, "2026-06-03");
@@ -1152,10 +1193,15 @@ mod tests {
         )
         .await;
 
-        let periods =
-            ReadingStatsRepository::by_period(&db, user.id, whole_of_june(), StatsGranularity::Day)
-                .await
-                .unwrap();
+        let periods = ReadingStatsRepository::by_period(
+            &db,
+            user.id,
+            whole_of_june(),
+            StatsGranularity::Day,
+            0,
+        )
+        .await
+        .unwrap();
 
         assert_eq!(periods.len(), 2);
     }
@@ -1186,6 +1232,7 @@ mod tests {
             user.id,
             whole_of_june(),
             StatsGranularity::Month,
+            0,
         )
         .await
         .unwrap();
@@ -1193,6 +1240,164 @@ mod tests {
         assert_eq!(periods.len(), 1);
         assert_eq!(periods[0].bucket, "2026-06-01");
         assert_eq!(periods[0].duration.measured_ms, 20 * MINUTE_MS);
+    }
+
+    /// The reader's evening is not UTC's evening. A viewer seven hours behind
+    /// UTC reading at 22:36 their time is already past midnight in UTC, and
+    /// without the offset that sitting shows up on tomorrow's calendar.
+    #[tokio::test]
+    async fn daily_buckets_follow_the_viewers_utc_offset() {
+        let db = setup_test_db().await;
+        let user = create_user(&db, "reader").await;
+        let book = create_book(&db, "Berserk", "cbz").await;
+
+        // 05:36 UTC on June 4th is 22:36 on June 3rd for a viewer at UTC-7.
+        insert(
+            &db,
+            user.id,
+            book.id,
+            SessionSpec::measured(
+                "phone",
+                30,
+                Utc.with_ymd_and_hms(2026, 6, 4, 5, 36, 0).unwrap(),
+            ),
+        )
+        .await;
+
+        let periods = ReadingStatsRepository::by_period(
+            &db,
+            user.id,
+            whole_of_june(),
+            StatsGranularity::Day,
+            -420,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(periods.len(), 1);
+        assert_eq!(periods[0].bucket, "2026-06-03");
+    }
+
+    /// The mirror case: a viewer ahead of UTC reading late in UTC's evening is
+    /// already into their own next day.
+    #[tokio::test]
+    async fn an_eastern_viewer_sees_utc_evening_reading_on_their_next_day() {
+        let db = setup_test_db().await;
+        let user = create_user(&db, "reader").await;
+        let book = create_book(&db, "Berserk", "cbz").await;
+
+        // 22:30 UTC on June 3rd is 00:30 on June 4th for a viewer at UTC+2.
+        insert(
+            &db,
+            user.id,
+            book.id,
+            SessionSpec::measured(
+                "phone",
+                30,
+                Utc.with_ymd_and_hms(2026, 6, 3, 22, 30, 0).unwrap(),
+            ),
+        )
+        .await;
+
+        let periods = ReadingStatsRepository::by_period(
+            &db,
+            user.id,
+            whole_of_june(),
+            StatsGranularity::Day,
+            120,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(periods[0].bucket, "2026-06-04");
+    }
+
+    /// The offset can move a sitting across a week boundary, not just a day.
+    #[tokio::test]
+    async fn weekly_buckets_follow_the_viewers_utc_offset() {
+        let db = setup_test_db().await;
+        let user = create_user(&db, "reader").await;
+        let book = create_book(&db, "Berserk", "cbz").await;
+
+        // Monday June 1st, 04:00 UTC is Sunday May 31st for a viewer at UTC-7,
+        // which belongs to the week of Monday May 25th.
+        insert(
+            &db,
+            user.id,
+            book.id,
+            SessionSpec::measured("phone", 30, at(1, 4)),
+        )
+        .await;
+
+        let window = StatsWindow {
+            from: Utc.with_ymd_and_hms(2026, 5, 1, 0, 0, 0).unwrap(),
+            to: at(30, 23),
+        };
+        let periods =
+            ReadingStatsRepository::by_period(&db, user.id, window, StatsGranularity::Week, -420)
+                .await
+                .unwrap();
+
+        assert_eq!(periods[0].bucket, "2026-05-25");
+    }
+
+    /// And across a month boundary.
+    #[tokio::test]
+    async fn monthly_buckets_follow_the_viewers_utc_offset() {
+        let db = setup_test_db().await;
+        let user = create_user(&db, "reader").await;
+        let book = create_book(&db, "Berserk", "cbz").await;
+
+        insert(
+            &db,
+            user.id,
+            book.id,
+            SessionSpec::measured("phone", 30, at(1, 4)),
+        )
+        .await;
+
+        let window = StatsWindow {
+            from: Utc.with_ymd_and_hms(2026, 5, 1, 0, 0, 0).unwrap(),
+            to: at(30, 23),
+        };
+        let periods =
+            ReadingStatsRepository::by_period(&db, user.id, window, StatsGranularity::Month, -420)
+                .await
+                .unwrap();
+
+        assert_eq!(periods[0].bucket, "2026-05-01");
+    }
+
+    /// A sitting on a Monday belongs to that Monday's week. SQLite's `weekday`
+    /// modifier leaves a date already on the target weekday unchanged, so the
+    /// old `'weekday 1', '-7 days'` idiom sent Monday reading a week into the
+    /// past while PostgreSQL kept it in place.
+    #[tokio::test]
+    async fn a_monday_sitting_stays_in_its_own_week() {
+        let db = setup_test_db().await;
+        let user = create_user(&db, "reader").await;
+        let book = create_book(&db, "Berserk", "cbz").await;
+
+        // 2026-06-01 is a Monday.
+        insert(
+            &db,
+            user.id,
+            book.id,
+            SessionSpec::measured("phone", 30, at(1, 9)),
+        )
+        .await;
+
+        let periods = ReadingStatsRepository::by_period(
+            &db,
+            user.id,
+            whole_of_june(),
+            StatsGranularity::Week,
+            0,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(periods[0].bucket, "2026-06-01");
     }
 
     /// Weeks start on Monday and the key is that Monday's date, so the bucket
@@ -1224,6 +1429,7 @@ mod tests {
             user.id,
             whole_of_june(),
             StatsGranularity::Week,
+            0,
         )
         .await
         .unwrap();
@@ -1464,7 +1670,7 @@ mod tests {
 
         let window = whole_of_june();
         let periods =
-            ReadingStatsRepository::by_period(&db, user.id, window, StatsGranularity::Day)
+            ReadingStatsRepository::by_period(&db, user.id, window, StatsGranularity::Day, 0)
                 .await
                 .unwrap();
         let series = ReadingStatsRepository::by_series(&db, user.id, window, StatsSort::Time, 10)
@@ -1740,7 +1946,7 @@ mod benchmarks {
         let summary_ms = started.elapsed();
 
         let started = std::time::Instant::now();
-        ReadingStatsRepository::by_period(&db, user, window, StatsGranularity::Day)
+        ReadingStatsRepository::by_period(&db, user, window, StatsGranularity::Day, 0)
             .await
             .unwrap();
         let period_ms = started.elapsed();

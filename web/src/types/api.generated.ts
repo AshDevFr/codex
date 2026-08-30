@@ -1616,6 +1616,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/books/{book_id}/genres": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get genres for a book */
+        get: operations["get_book_genres"];
+        /** Set genres for a book (replaces existing) */
+        put: operations["set_book_genres"];
+        /** Add a single genre to a book */
+        post: operations["add_book_genre"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/{book_id}/genres/{genre_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a genre from a book */
+        delete: operations["remove_book_genre"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/books/{book_id}/metadata": {
         parameters: {
             query?: never;
@@ -1740,6 +1776,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/books/{book_id}/progression": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get book progression (R2Progression / Readium standard)
+         * @description Returns the stored R2Progression JSON for EPUB reading position sync.
+         *     Returns 200 with the progression data, or 204 if no progression exists.
+         */
+        get: operations["get_progression"];
+        /**
+         * Update book progression (R2Progression / Readium standard)
+         * @description Stores R2Progression JSON and also updates the underlying read progress
+         *     (current_page, progress_percentage, completed) for backwards compatibility.
+         */
+        put: operations["put_progression"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/books/{book_id}/read": {
         parameters: {
             query?: never;
@@ -1845,6 +1907,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/books/{book_id}/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get tags for a book */
+        get: operations["get_book_tags"];
+        /** Set tags for a book (replaces existing) */
+        put: operations["set_book_tags"];
+        /** Add a single tag to a book */
+        post: operations["add_book_tag"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/{book_id}/tags/{tag_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a tag from a book */
+        delete: operations["remove_book_tag"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/books/{book_id}/thumbnail": {
         parameters: {
             query?: never;
@@ -1901,6 +1999,48 @@ export interface paths {
         put?: never;
         /** Mark a book as unread (removes reading progress) */
         post: operations["mark_book_as_unread"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/{id}/metadata/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply metadata from a plugin to a book
+         * @description Fetches metadata from a plugin and applies it to the book, respecting
+         *     RBAC permissions and field locks.
+         */
+        post: operations["apply_book_metadata"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/{id}/metadata/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview metadata from a plugin for a book
+         * @description Fetches metadata from a plugin and computes a field-by-field diff with the current
+         *     book metadata, showing which fields will be applied, locked, or denied by RBAC.
+         */
+        post: operations["preview_book_metadata"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6375,6 +6515,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/want-to-read/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set the manual (`custom`) order of the authenticated user's queue.
+         * @description Positions are assigned by index of `entryIds`; entries not listed keep
+         *     their old positions and unknown IDs are ignored. The order is visible via
+         *     `GET /want-to-read?sort=custom`.
+         */
+        put: operations["reorder_want_to_read"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/want-to-read/series/{series_id}": {
         parameters: {
             query?: never;
@@ -8179,6 +8341,22 @@ export interface components {
              * @example library-staff
              */
             oidcGroupName: string;
+        };
+        /** @description Request to add a single genre to a book */
+        AddBookGenreRequest: {
+            /**
+             * @description Genre name to add
+             * @example Action
+             */
+            name: string;
+        };
+        /** @description Request to add a single tag to a book */
+        AddBookTagRequest: {
+            /**
+             * @description Tag name to add
+             * @example favorite
+             */
+            name: string;
         };
         /** @description Request to add one or more books to a read list. */
         AddBooksToReadListRequest: {
@@ -17441,6 +17619,17 @@ export interface components {
              */
             bookIds: string[];
         };
+        /** @description Request to set the manual (`custom`) order of the queue. */
+        ReorderWantToReadRequest: {
+            /**
+             * @description Every entry ID of the queue in the desired order. Entries not listed
+             *     keep their old positions; unknown IDs are ignored.
+             * @example [
+             *       "550e8400-e29b-41d4-a716-446655440001"
+             *     ]
+             */
+            entryIds: string[];
+        };
         /**
          * @description PUT request for full replacement of book metadata
          *
@@ -19045,6 +19234,30 @@ export interface components {
              * @example 2024-01-15T10:30:00Z
              */
             updatedAt: string;
+        };
+        /** @description Request to set all genres for a book (replaces existing) */
+        SetBookGenresRequest: {
+            /**
+             * @description List of genre names to assign to the book
+             * @example [
+             *       "Action",
+             *       "Comedy",
+             *       "Drama"
+             *     ]
+             */
+            genres: string[];
+        };
+        /** @description Request to set all tags for a book (replaces existing) */
+        SetBookTagsRequest: {
+            /**
+             * @description List of tag names to assign to the book
+             * @example [
+             *       "completed",
+             *       "favorite",
+             *       "to-read"
+             *     ]
+             */
+            tags: string[];
         };
         /** @description Request to set a single preference value */
         SetPreferenceRequest: {
@@ -25014,6 +25227,162 @@ export interface operations {
             };
         };
     };
+    get_book_genres: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Book ID */
+                book_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of genres for the book */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenreListResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Book not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    set_book_genres: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Book ID */
+                book_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetBookGenresRequest"];
+            };
+        };
+        responses: {
+            /** @description Genres updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenreListResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Book not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    add_book_genre: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Book ID */
+                book_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddBookGenreRequest"];
+            };
+        };
+        responses: {
+            /** @description Genre added */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenreDto"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Book not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    remove_book_genre: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Book ID */
+                book_id: string;
+                /** @description Genre ID */
+                genre_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Genre removed from book */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Book or genre link not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     replace_book_metadata: {
         parameters: {
             query?: never;
@@ -25391,6 +25760,87 @@ export interface operations {
             };
         };
     };
+    get_progression: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Progression data */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description No progression exists */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Book not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    put_progression: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": unknown;
+            };
+        };
+        responses: {
+            /** @description Progression updated successfully */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Book not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     mark_book_as_read: {
         parameters: {
             query?: never;
@@ -25653,6 +26103,162 @@ export interface operations {
             };
         };
     };
+    get_book_tags: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Book ID */
+                book_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of tags for the book */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagListResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Book not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    set_book_tags: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Book ID */
+                book_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetBookTagsRequest"];
+            };
+        };
+        responses: {
+            /** @description Tags updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagListResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Book not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    add_book_tag: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Book ID */
+                book_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddBookTagRequest"];
+            };
+        };
+        responses: {
+            /** @description Tag added */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagDto"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Book not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    remove_book_tag: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Book ID */
+                book_id: string;
+                /** @description Tag ID */
+                tag_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tag removed from book */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Book or tag link not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     get_book_thumbnail: {
         parameters: {
             query?: never;
@@ -25765,6 +26371,116 @@ export interface operations {
             };
             /** @description Forbidden */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    apply_book_metadata: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Book ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MetadataApplyRequest"];
+            };
+        };
+        responses: {
+            /** @description Metadata applied */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetadataApplyResponse"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No permission to edit books */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Book or plugin not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    preview_book_metadata: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Book ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MetadataPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Preview computed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetadataPreviewResponse"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No permission to edit books */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Book or plugin not found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -28636,6 +29352,16 @@ export interface operations {
                 seriesLimit?: number | null;
                 /** @description Ranking key for the breakdowns. Defaults to `time`. */
                 sort?: components["schemas"]["ReadingStatsSort"];
+                /**
+                 * @description The viewer's UTC offset in minutes east of UTC (UTC-7 is `-420`), used
+                 *     to cut the time series into the viewer's days rather than UTC's.
+                 *     Defaults to 0, which keeps the buckets UTC days.
+                 *
+                 *     One fixed offset covers the whole window, so sittings within an hour of
+                 *     midnight on the far side of a DST change can land a day off; a zone
+                 *     database is not portable across the supported databases.
+                 */
+                tzOffsetMinutes?: number | null;
             };
             header?: never;
             path?: never;
@@ -35865,6 +36591,35 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["BulkAddWantToReadResponse"];
                 };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reorder_want_to_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReorderWantToReadRequest"];
+            };
+        };
+        responses: {
+            /** @description Order updated */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Unauthorized */
             401: {

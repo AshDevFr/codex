@@ -201,7 +201,7 @@ async fn exercise_reading_stats(db: &DatabaseConnection) {
     assert_eq!(summary.sessions_without_duration, 1);
 
     // ---- Bucketing: entirely different SQL per engine ----
-    let daily = ReadingStatsRepository::by_period(db, user, june(), StatsGranularity::Day)
+    let daily = ReadingStatsRepository::by_period(db, user, june(), StatsGranularity::Day, 0)
         .await
         .expect("daily buckets must decode on this engine");
     assert_eq!(daily.len(), 2, "two calendar days of reading");
@@ -209,7 +209,7 @@ async fn exercise_reading_stats(db: &DatabaseConnection) {
     assert_eq!(daily[0].duration.total_ms(), 50 * MINUTE_MS);
     assert_eq!(daily[1].bucket, "2026-06-25");
 
-    let monthly = ReadingStatsRepository::by_period(db, user, june(), StatsGranularity::Month)
+    let monthly = ReadingStatsRepository::by_period(db, user, june(), StatsGranularity::Month, 0)
         .await
         .expect("monthly buckets must decode on this engine");
     assert_eq!(monthly.len(), 1);
@@ -219,13 +219,24 @@ async fn exercise_reading_stats(db: &DatabaseConnection) {
     );
 
     // 2026-06-03 is a Wednesday, so its week starts Monday 2026-06-01.
-    let weekly = ReadingStatsRepository::by_period(db, user, june(), StatsGranularity::Week)
+    let weekly = ReadingStatsRepository::by_period(db, user, june(), StatsGranularity::Week, 0)
         .await
         .expect("weekly buckets must decode on this engine");
     assert_eq!(
         weekly[0].bucket, "2026-06-01",
         "a week bucket is keyed on its Monday, on both engines"
     );
+
+    // ---- Viewer offset: the shifted bucket SQL differs per engine ----
+    // 09:00 UTC is 23:00 the previous evening at UTC-10, so both 09:00
+    // sittings slide back a day while the afternoon ones stay put.
+    let shifted = ReadingStatsRepository::by_period(db, user, june(), StatsGranularity::Day, -600)
+        .await
+        .expect("offset buckets must decode on this engine");
+    assert_eq!(shifted.len(), 3);
+    assert_eq!(shifted[0].bucket, "2026-06-02");
+    assert_eq!(shifted[1].bucket, "2026-06-03");
+    assert_eq!(shifted[2].bucket, "2026-06-24");
 
     // ---- Breakdowns: each carries its own aggregate expressions ----
     let devices = ReadingStatsRepository::by_device(db, user, june(), StatsSort::Time)
@@ -319,7 +330,7 @@ async fn exercise_empty_log(db: &DatabaseConnection) {
     assert_eq!(summary.duration.total_ms(), 0);
     assert_eq!(summary.sessions, 0);
     assert!(
-        ReadingStatsRepository::by_period(db, user, june(), StatsGranularity::Day)
+        ReadingStatsRepository::by_period(db, user, june(), StatsGranularity::Day, 0)
             .await
             .unwrap()
             .is_empty()

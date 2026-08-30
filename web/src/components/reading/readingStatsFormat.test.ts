@@ -10,12 +10,26 @@ import {
   resolveRange,
   rollUpIntoMonths,
   rollUpIntoWeeks,
+  viewerTzOffsetMinutes,
   windowFor,
   yearsCovered,
 } from "./readingStatsFormat";
 
+// These helpers do local-day arithmetic, so the process timezone is part of
+// every expectation. Pin it west of UTC, the side where the original bug lived:
+// evening reading crossing midnight in UTC and showing up on tomorrow's
+// calendar. Vitest runs each file in its own process, so this leaks nowhere.
+process.env.TZ = "America/Los_Angeles";
+
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
+
+/** The viewer-local calendar date of an instant, `YYYY-MM-DD`. */
+function localDate(d: Date): string {
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${month}-${day}`;
+}
 
 function period(bucket: string, minutes: number): ReadingPeriodDto {
   return {
@@ -62,8 +76,8 @@ describe("buildCalendar", () => {
   it("fills days the API left out", () => {
     const days = buildCalendar(
       [period("2026-06-01", 30), period("2026-06-04", 45)],
-      new Date("2026-06-01T00:00:00Z"),
-      new Date("2026-06-05T00:00:00Z"),
+      new Date("2026-06-01T00:00:00-07:00"),
+      new Date("2026-06-05T00:00:00-07:00"),
     );
 
     expect(days).toHaveLength(5);
@@ -92,21 +106,22 @@ describe("buildCalendar", () => {
           sessions: 1,
         },
       ],
-      new Date("2026-06-01T00:00:00Z"),
-      new Date("2026-06-01T00:00:00Z"),
+      new Date("2026-06-01T00:00:00-07:00"),
+      new Date("2026-06-01T00:00:00-07:00"),
     );
 
     expect(days[0].measuredMs).toBe(10 * MINUTE);
     expect(days[0].inferredMs).toBe(5 * MINUTE);
   });
 
-  /// Buckets are UTC dates, so the walk has to be in UTC or a viewer behind
-  /// UTC sees the whole calendar shifted by a day.
-  it("walks in UTC regardless of the viewer's timezone", () => {
+  /// Buckets are the reader's days, so the walk has to be over local dates: an
+  /// evening instant that is already tomorrow in UTC still belongs to today.
+  it("walks the viewer's local days, not UTC days", () => {
+    // 22:30 on June 1st in Los Angeles is 05:30 UTC on June 2nd.
     const days = buildCalendar(
       [],
-      new Date("2026-06-01T23:30:00Z"),
-      new Date("2026-06-02T00:30:00Z"),
+      new Date("2026-06-01T22:30:00-07:00"),
+      new Date("2026-06-02T00:30:00-07:00"),
     );
 
     expect(days.map((d) => d.date)).toEqual(["2026-06-01", "2026-06-02"]);
@@ -115,8 +130,8 @@ describe("buildCalendar", () => {
   it("handles a window with no reading at all", () => {
     const days = buildCalendar(
       [],
-      new Date("2026-06-01T00:00:00Z"),
-      new Date("2026-06-03T00:00:00Z"),
+      new Date("2026-06-01T00:00:00-07:00"),
+      new Date("2026-06-03T00:00:00-07:00"),
     );
 
     expect(days).toHaveLength(3);
@@ -297,6 +312,7 @@ describe("rollUpIntoMonths", () => {
 });
 
 describe("windowFor", () => {
+  // 07:30 in Los Angeles on August 16th.
   const now = new Date("2026-08-16T14:30:00Z");
   const coverage = { firstReadAt: "2024-03-04T18:22:11Z", lastReadAt: null };
 
@@ -307,9 +323,26 @@ describe("windowFor", () => {
       now,
     );
 
-    expect(from.toISOString().slice(0, 10)).toBe("2026-07-18");
-    expect(to.toISOString().slice(0, 10)).toBe("2026-08-16");
+    expect(localDate(from)).toBe("2026-07-18");
+    expect(localDate(to)).toBe("2026-08-16");
     expect(bars).toBe("day");
+  });
+
+  /// The window's edges are the reader's midnights, not UTC's: with UTC edges
+  /// a viewer behind UTC sees "today" start at five in the afternoon, and last
+  /// night's reading counts against tomorrow.
+  it("cuts the window at the viewer's midnight, not UTC's", () => {
+    const { from, to } = windowFor(
+      { kind: "relative", days: 30 },
+      coverage,
+      now,
+    );
+
+    expect([from.getHours(), from.getMinutes()]).toEqual([0, 0]);
+    expect([to.getHours(), to.getMinutes()]).toEqual([23, 59]);
+    // Local midnight in Los Angeles is 07:00 UTC in August; UTC midnight
+    // would leave these at zero.
+    expect(from.getUTCHours()).not.toBe(0);
   });
 
   /// A year of daily bars is unreadable, so the long ranges widen the bucket.
@@ -329,15 +362,15 @@ describe("windowFor", () => {
   it("covers a whole calendar year", () => {
     const { from, to } = windowFor({ kind: "year", year: 2025 }, coverage, now);
 
-    expect(from.toISOString().slice(0, 10)).toBe("2025-01-01");
-    expect(to.toISOString().slice(0, 10)).toBe("2025-12-31");
+    expect(localDate(from)).toBe("2025-01-01");
+    expect(localDate(to)).toBe("2025-12-31");
   });
 
   it("starts all-time at the reader's first recorded reading", () => {
     const { from, to } = windowFor({ kind: "all" }, coverage, now);
 
-    expect(from.toISOString().slice(0, 10)).toBe("2024-03-04");
-    expect(to.toISOString().slice(0, 10)).toBe("2026-08-16");
+    expect(localDate(from)).toBe("2024-03-04");
+    expect(localDate(to)).toBe("2026-08-16");
   });
 
   /// Nothing read yet is not an error: all-time collapses to today rather than
@@ -349,8 +382,21 @@ describe("windowFor", () => {
       now,
     );
 
-    expect(from.toISOString().slice(0, 10)).toBe("2026-08-16");
-    expect(to.toISOString().slice(0, 10)).toBe("2026-08-16");
+    expect(localDate(from)).toBe("2026-08-16");
+    expect(localDate(to)).toBe("2026-08-16");
+  });
+});
+
+describe("viewerTzOffsetMinutes", () => {
+  /// The sign convention is the server's (and RFC 3339's): minutes east of
+  /// UTC, so Los Angeles is negative. `getTimezoneOffset` uses the opposite
+  /// sign, which is exactly the mistake this helper exists to bury.
+  it("reports minutes east of UTC", () => {
+    expect(viewerTzOffsetMinutes(new Date("2026-08-16T12:00:00Z"))).toBe(-420);
+  });
+
+  it("follows daylight saving into winter", () => {
+    expect(viewerTzOffsetMinutes(new Date("2026-01-16T12:00:00Z"))).toBe(-480);
   });
 });
 
@@ -409,8 +455,8 @@ describe("groupIntoWeeks", () => {
   it("pads the first column so days land on their real weekday", () => {
     const days = buildCalendar(
       [],
-      new Date("2026-06-03T00:00:00Z"),
-      new Date("2026-06-07T00:00:00Z"),
+      new Date("2026-06-03T00:00:00-07:00"),
+      new Date("2026-06-07T00:00:00-07:00"),
     );
 
     const weeks = groupIntoWeeks(days);
@@ -424,8 +470,8 @@ describe("groupIntoWeeks", () => {
   it("pads the final column so every week is seven rows", () => {
     const days = buildCalendar(
       [],
-      new Date("2026-06-01T00:00:00Z"),
-      new Date("2026-06-09T00:00:00Z"),
+      new Date("2026-06-01T00:00:00-07:00"),
+      new Date("2026-06-09T00:00:00-07:00"),
     );
 
     const weeks = groupIntoWeeks(days);

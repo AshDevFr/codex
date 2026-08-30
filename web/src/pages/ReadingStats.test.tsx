@@ -7,6 +7,13 @@ import { useReadingStatsPreferencesStore } from "@/store/readingStatsPreferences
 import { renderWithProviders } from "@/test/utils";
 import { ReadingStats } from "./ReadingStats";
 
+// The page cuts its window at the viewer's midnights and labels calendar days
+// with the viewer's dates, so the process timezone is part of what these tests
+// assert. Pin it west of UTC, where the original bug lived (evening reading
+// showing up on tomorrow's calendar). Vitest gives each file its own process,
+// so this leaks nowhere.
+process.env.TZ = "America/Los_Angeles";
+
 const MINUTE = 60_000;
 
 /** Granularities the page asked for, newest last. */
@@ -16,8 +23,17 @@ let requestedSorts: (string | null)[] = [];
 /** Windows the page asked for, newest last. */
 let requestedWindows: { from: string | null; to: string | null }[] = [];
 
+/** The viewer-local calendar date of an instant, `YYYY-MM-DD`. */
+function localDate(d: Date): string {
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${month}-${day}`;
+}
+
+// The local date, not the UTC one: buckets are the viewer's days now, and the
+// UTC date is already tomorrow for a whole evening of every western day.
 function today(): string {
-  return new Date().toISOString().slice(0, 10);
+  return localDate(new Date());
 }
 
 const server = setupServer(
@@ -325,8 +341,11 @@ describe("ReadingStats", () => {
 
     await waitFor(() => {
       const window = requestedWindows[requestedWindows.length - 1];
-      expect(window.from).toContain("2025-01-01");
-      expect(window.to).toContain("2025-12-31");
+      // The wire carries UTC instants; the year's edges are the viewer's
+      // midnights, so it is the local reading of those instants that must
+      // land on January 1st and December 31st.
+      expect(localDate(new Date(window.from ?? ""))).toBe("2025-01-01");
+      expect(localDate(new Date(window.to ?? ""))).toBe("2025-12-31");
     });
     expect(await screen.findByText("Time per week")).toBeInTheDocument();
   });

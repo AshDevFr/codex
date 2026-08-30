@@ -42,6 +42,7 @@ import {
   resolveRange,
   rollUpIntoMonths,
   rollUpIntoWeeks,
+  viewerTzOffsetMinutes,
   windowFor,
   yearsCovered,
 } from "@/components/reading/readingStatsFormat";
@@ -92,6 +93,11 @@ export function ReadingStats() {
   // series limit: ranking by pages here would sort a top-8 chosen by time.
   const sort = sortForMetric(metric);
 
+  // Days on the dashboard are the viewer's days: the server cuts its buckets
+  // at this offset's midnights, and the window above is already built from
+  // local midnights, so the two agree about where a day ends.
+  const tzOffsetMinutes = viewerTzOffsetMinutes(today);
+
   const { data, isLoading, error } = useQuery({
     // The window is part of the key, not just the range's name. All-time's
     // window comes from the coverage request, so it changes after the first
@@ -103,6 +109,7 @@ export function ReadingStats() {
       from.toISOString(),
       to.toISOString(),
       sort,
+      tzOffsetMinutes,
     ],
     queryFn: () =>
       readingStatsApi.get({
@@ -111,6 +118,7 @@ export function ReadingStats() {
         granularity: "day",
         seriesLimit: 8,
         sort,
+        tzOffsetMinutes,
       }),
     // All-time cannot be asked for until coverage says where history starts.
     // Without this it fetches a one-day placeholder window first and discards

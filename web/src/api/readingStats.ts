@@ -25,6 +25,12 @@ export interface ReadingStatsParams {
    * limit, so it belongs in the request rather than in a client-side sort.
    */
   sort?: ReadingStatsSort;
+  /**
+   * The viewer's UTC offset in minutes east of UTC (UTC-7 is `-420`). Cuts
+   * the time series into the viewer's days rather than UTC's; omitted, the
+   * server keeps UTC days.
+   */
+  tzOffsetMinutes?: number;
 }
 
 export const readingStatsApi = {
@@ -44,6 +50,8 @@ export const readingStatsApi = {
     if (params.granularity) query.granularity = params.granularity;
     if (params.seriesLimit) query.seriesLimit = String(params.seriesLimit);
     if (params.sort) query.sort = params.sort;
+    if (params.tzOffsetMinutes !== undefined)
+      query.tzOffsetMinutes = String(params.tzOffsetMinutes);
 
     const response = await api.get<ReadingStatsResponse>("/reading-stats", {
       params: query,

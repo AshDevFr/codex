@@ -95,12 +95,14 @@ export function buildCalendar(
   const byDate = new Map(periods.map((p) => [p.bucket, p]));
   const days: CalendarDay[] = [];
 
-  // Iterate in UTC. Buckets are UTC dates, so walking in local time would drift
-  // a day whenever the viewer is behind UTC.
+  // Buckets are the viewer's days (the request says which offset), so the walk
+  // reads the local calendar date of each endpoint. The cursor itself is a UTC
+  // container holding date-only values: pure date arithmetic, immune to the
+  // walk itself crossing a DST change.
   const cursor = new Date(
-    Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate()),
+    Date.UTC(from.getFullYear(), from.getMonth(), from.getDate()),
   );
-  const end = Date.UTC(to.getUTCFullYear(), to.getUTCMonth(), to.getUTCDate());
+  const end = Date.UTC(to.getFullYear(), to.getMonth(), to.getDate());
 
   while (cursor.getTime() <= end) {
     const date = cursor.toISOString().slice(0, 10);
@@ -209,15 +211,20 @@ export function windowFor(
   coverage: ReadingCoverage,
   now: Date,
 ): { from: Date; to: Date; bars: "day" | "week" | "month" } {
+  // The window's edges are the viewer's midnights, not UTC's. With UTC edges
+  // a viewer behind UTC sees "today" begin mid-afternoon, and last night's
+  // reading counts against tomorrow; that was the original day-attribution
+  // bug, and the server-side bucket offset only finishes the fix if the
+  // window agrees with it.
   const endOfToday = new Date(now);
-  endOfToday.setUTCHours(23, 59, 59, 999);
+  endOfToday.setHours(23, 59, 59, 999);
 
   if (range.kind === "all") {
     // Nothing read yet collapses to today rather than asking for every date
     // since the epoch.
     const first = coverage.firstReadAt ? new Date(coverage.firstReadAt) : now;
     const from = new Date(first);
-    from.setUTCHours(0, 0, 0, 0);
+    from.setHours(0, 0, 0, 0);
     return { from, to: endOfToday, bars: "month" };
   }
 
@@ -225,16 +232,28 @@ export function windowFor(
     // The whole calendar year, not the year so far: a part-year grid changes
     // shape as the year goes on, and the empty cells at the end are honest.
     return {
-      from: new Date(Date.UTC(range.year, 0, 1, 0, 0, 0, 0)),
-      to: new Date(Date.UTC(range.year, 11, 31, 23, 59, 59, 999)),
+      from: new Date(range.year, 0, 1, 0, 0, 0, 0),
+      to: new Date(range.year, 11, 31, 23, 59, 59, 999),
       bars: "week",
     };
   }
 
   const from = new Date(endOfToday);
-  from.setUTCDate(from.getUTCDate() - (range.days - 1));
-  from.setUTCHours(0, 0, 0, 0);
+  from.setDate(from.getDate() - (range.days - 1));
+  from.setHours(0, 0, 0, 0);
   return { from, to: endOfToday, bars: range.days > 90 ? "week" : "day" };
+}
+
+/**
+ * The viewer's UTC offset in minutes east of UTC, the sign the server (and
+ * RFC 3339) uses: Los Angeles is negative, Paris positive.
+ *
+ * Exists because `getTimezoneOffset` uses the opposite sign, which is exactly
+ * the sort of silent inversion that put evening reading on tomorrow's
+ * calendar in the first place.
+ */
+export function viewerTzOffsetMinutes(at: Date): number {
+  return -at.getTimezoneOffset();
 }
 
 /**

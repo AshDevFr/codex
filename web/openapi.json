@@ -4887,6 +4887,213 @@
         ]
       }
     },
+    "/api/v1/books/{book_id}/genres": {
+      "get": {
+        "tags": [
+          "Books"
+        ],
+        "summary": "Get genres for a book",
+        "operationId": "get_book_genres",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "description": "Book ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of genres for the book",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenreListResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Book not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Books"
+        ],
+        "summary": "Set genres for a book (replaces existing)",
+        "operationId": "set_book_genres",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "description": "Book ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetBookGenresRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Genres updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenreListResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Book not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Books"
+        ],
+        "summary": "Add a single genre to a book",
+        "operationId": "add_book_genre",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "description": "Book ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddBookGenreRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Genre added",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenreDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Book not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/books/{book_id}/genres/{genre_id}": {
+      "delete": {
+        "tags": [
+          "Books"
+        ],
+        "summary": "Remove a genre from a book",
+        "operationId": "remove_book_genre",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "description": "Book ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "genre_id",
+            "in": "path",
+            "description": "Genre ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Genre removed from book"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Book or genre link not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/books/{book_id}/metadata": {
       "put": {
         "tags": [
@@ -5371,6 +5578,98 @@
         ]
       }
     },
+    "/api/v1/books/{book_id}/progression": {
+      "get": {
+        "tags": [
+          "Reading Progress"
+        ],
+        "summary": "Get book progression (R2Progression / Readium standard)",
+        "description": "Returns the stored R2Progression JSON for EPUB reading position sync.\nReturns 200 with the progression data, or 204 if no progression exists.",
+        "operationId": "get_progression",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Progression data",
+            "content": {
+              "application/json": {}
+            }
+          },
+          "204": {
+            "description": "No progression exists"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Book not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Reading Progress"
+        ],
+        "summary": "Update book progression (R2Progression / Readium standard)",
+        "description": "Stores R2Progression JSON and also updates the underlying read progress\n(current_page, progress_percentage, completed) for backwards compatibility.",
+        "operationId": "put_progression",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {}
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Progression updated successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Book not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/books/{book_id}/read": {
       "post": {
         "tags": [
@@ -5678,6 +5977,213 @@
         ]
       }
     },
+    "/api/v1/books/{book_id}/tags": {
+      "get": {
+        "tags": [
+          "Books"
+        ],
+        "summary": "Get tags for a book",
+        "operationId": "get_book_tags",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "description": "Book ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of tags for the book",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TagListResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Book not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Books"
+        ],
+        "summary": "Set tags for a book (replaces existing)",
+        "operationId": "set_book_tags",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "description": "Book ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetBookTagsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Tags updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TagListResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Book not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Books"
+        ],
+        "summary": "Add a single tag to a book",
+        "operationId": "add_book_tag",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "description": "Book ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddBookTagRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Tag added",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TagDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Book not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/books/{book_id}/tags/{tag_id}": {
+      "delete": {
+        "tags": [
+          "Books"
+        ],
+        "summary": "Remove a tag from a book",
+        "operationId": "remove_book_tag",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "description": "Book ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tag_id",
+            "in": "path",
+            "description": "Tag ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Tag removed from book"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Book or tag link not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/books/{book_id}/thumbnail": {
       "get": {
         "tags": [
@@ -5810,6 +6316,134 @@
           },
           "403": {
             "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/books/{id}/metadata/apply": {
+      "post": {
+        "tags": [
+          "Plugin Actions"
+        ],
+        "summary": "Apply metadata from a plugin to a book",
+        "description": "Fetches metadata from a plugin and applies it to the book, respecting\nRBAC permissions and field locks.",
+        "operationId": "apply_book_metadata",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Book ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MetadataApplyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Metadata applied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetadataApplyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "No permission to edit books"
+          },
+          "404": {
+            "description": "Book or plugin not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/books/{id}/metadata/preview": {
+      "post": {
+        "tags": [
+          "Plugin Actions"
+        ],
+        "summary": "Preview metadata from a plugin for a book",
+        "description": "Fetches metadata from a plugin and computes a field-by-field diff with the current\nbook metadata, showing which fields will be applied, locked, or denied by RBAC.",
+        "operationId": "preview_book_metadata",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Book ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MetadataPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Preview computed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetadataPreviewResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "No permission to edit books"
+          },
+          "404": {
+            "description": "Book or plugin not found"
           }
         },
         "security": [
@@ -9717,6 +10351,19 @@
             "required": false,
             "schema": {
               "$ref": "#/components/schemas/ReadingStatsSort"
+            }
+          },
+          {
+            "name": "tzOffsetMinutes",
+            "in": "query",
+            "description": "The viewer's UTC offset in minutes east of UTC (UTC-7 is `-420`), used\nto cut the time series into the viewer's days rather than UTC's.\nDefaults to 0, which keeps the buckets UTC days.\n\nOne fixed offset covers the whole window, so sittings within an hour of\nmidnight on the far side of a DST change can land a day off; a zone\ndatabase is not portable across the supported databases.",
+            "required": false,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int32"
             }
           }
         ],
@@ -19098,6 +19745,42 @@
         ]
       }
     },
+    "/api/v1/want-to-read/order": {
+      "put": {
+        "tags": [
+          "Want to Read"
+        ],
+        "summary": "Set the manual (`custom`) order of the authenticated user's queue.",
+        "description": "Positions are assigned by index of `entryIds`; entries not listed keep\ntheir old positions and unknown IDs are ignored. The order is visible via\n`GET /want-to-read?sort=custom`.",
+        "operationId": "reorder_want_to_read",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReorderWantToReadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Order updated"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/want-to-read/series/{series_id}": {
       "delete": {
         "tags": [
@@ -22914,6 +23597,34 @@
             "type": "string",
             "description": "OIDC group name from the IdP",
             "example": "library-staff"
+          }
+        }
+      },
+      "AddBookGenreRequest": {
+        "type": "object",
+        "description": "Request to add a single genre to a book",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Genre name to add",
+            "example": "Action"
+          }
+        }
+      },
+      "AddBookTagRequest": {
+        "type": "object",
+        "description": "Request to add a single tag to a book",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Tag name to add",
+            "example": "favorite"
           }
         }
       },
@@ -39537,6 +40248,26 @@
           }
         }
       },
+      "ReorderWantToReadRequest": {
+        "type": "object",
+        "description": "Request to set the manual (`custom`) order of the queue.",
+        "required": [
+          "entryIds"
+        ],
+        "properties": {
+          "entryIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Every entry ID of the queue in the desired order. Entries not listed\nkeep their old positions; unknown IDs are ignored.",
+            "example": [
+              "550e8400-e29b-41d4-a716-446655440001"
+            ]
+          }
+        }
+      },
       "ReplaceBookMetadataRequest": {
         "type": "object",
         "description": "PUT request for full replacement of book metadata\n\nAll metadata fields will be replaced with the values in this request.\nOmitting a field (or setting it to null) will clear that field.",
@@ -42101,6 +42832,48 @@
             "format": "date-time",
             "description": "Last update timestamp",
             "example": "2024-01-15T10:30:00Z"
+          }
+        }
+      },
+      "SetBookGenresRequest": {
+        "type": "object",
+        "description": "Request to set all genres for a book (replaces existing)",
+        "required": [
+          "genres"
+        ],
+        "properties": {
+          "genres": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of genre names to assign to the book",
+            "example": [
+              "Action",
+              "Comedy",
+              "Drama"
+            ]
+          }
+        }
+      },
+      "SetBookTagsRequest": {
+        "type": "object",
+        "description": "Request to set all tags for a book (replaces existing)",
+        "required": [
+          "tags"
+        ],
+        "properties": {
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of tag names to assign to the book",
+            "example": [
+              "completed",
+              "favorite",
+              "to-read"
+            ]
           }
         }
       },

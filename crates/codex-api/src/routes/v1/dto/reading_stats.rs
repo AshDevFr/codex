@@ -71,6 +71,14 @@ pub struct ReadingStatsQuery {
     pub series_limit: Option<u64>,
     /// Ranking key for the breakdowns. Defaults to `time`.
     pub sort: Option<ReadingStatsSort>,
+    /// The viewer's UTC offset in minutes east of UTC (UTC-7 is `-420`), used
+    /// to cut the time series into the viewer's days rather than UTC's.
+    /// Defaults to 0, which keeps the buckets UTC days.
+    ///
+    /// One fixed offset covers the whole window, so sittings within an hour of
+    /// midnight on the far side of a DST change can land a day off; a zone
+    /// database is not portable across the supported databases.
+    pub tz_offset_minutes: Option<i32>,
 }
 
 /// Reading time split by how it was arrived at.
