@@ -12,7 +12,7 @@ const appVersion = packageJson.version;
 const config: Config = {
   title: 'Codex',
   tagline: 'A next-generation digital library server for comics, manga, and ebooks',
-  favicon: 'img/codex-logo-color.svg',
+  favicon: 'img/favicon.ico',
 
   // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future
   future: {
@@ -125,7 +125,7 @@ const config: Config = {
       title: 'Codex',
       logo: {
         alt: 'Codex Logo',
-        src: 'img/codex-logo-color.svg',
+        src: 'img/codex-icon.png',
       },
       items: [
         {
