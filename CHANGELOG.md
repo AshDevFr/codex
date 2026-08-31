@@ -7,6 +7,12 @@ release. A patch release may fix an API bug; it may not add an operation, a para
 field, or a new behaviour on an existing route. A client may therefore treat the release a feature
 first appears under in the 🔌 API sections below as a floor it can rely on.
 
+## [2.4.6] - 2026-08-31
+
+### 🚀 Features
+
+- *(web)* Switch the app icon to the ice+ember branding
+
 ## [2.4.5] - 2026-08-31
 
 ### 🐛 Bug Fixes
