@@ -3,7 +3,7 @@
 Codex Reader is the native iOS app for Codex. This page covers what the app needs, what it can
 open, and where to ask for help.
 
-:::info Beta
+:::info[Beta]
 Codex Reader is currently in a private beta through TestFlight and is not yet available on the
 App Store.
 :::
