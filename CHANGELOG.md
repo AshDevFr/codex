@@ -7,6 +7,16 @@ release. A patch release may fix an API bug; it may not add an operation, a para
 field, or a new behaviour on an existing route. A client may therefore treat the release a feature
 first appears under in the 🔌 API sections below as a floor it can rely on.
 
+## [2.4.7] - 2026-09-01
+
+### 🐛 Bug Fixes
+
+- *(web)* Keep 8-bit alpha in the favicon's 16px frame
+
+### 📚 Documentation
+
+- Add Codex Reader (iOS) support page and privacy policy
+
 ## [2.4.6] - 2026-08-31
 
 ### 🚀 Features
