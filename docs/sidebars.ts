@@ -96,6 +96,7 @@ const sidebars: SidebarsConfig = {
           ],
         },
         "opds",
+        "ios-app",
         "third-party-apps",
         "tsundoku",
         "exports",

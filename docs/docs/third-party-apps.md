@@ -6,6 +6,8 @@ sidebar_position: 15
 
 Codex supports integration with third-party reading apps through its Komga-compatible API. This allows you to use popular mobile apps designed for Komga with your Codex server.
 
+Looking for the native iOS app instead? See [Codex Reader (iOS)](./ios-app.md).
+
 ## Supported Apps
 
 ### Komic (iOS)

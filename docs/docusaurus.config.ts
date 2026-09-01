@@ -204,6 +204,10 @@ const config: Config = {
               label: 'Documentation',
               href: 'https://codex.4sh.dev',
             },
+            {
+              label: 'Privacy Policy',
+              to: '/privacy',
+            },
           ],
         },
       ],
