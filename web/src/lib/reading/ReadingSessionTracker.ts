@@ -187,7 +187,13 @@ export class ReadingSessionTracker {
    */
   pause(): void {
     if (!this.current || !this.running) return;
-    this.accrue(this.now());
+    const now = this.now();
+    this.accrue(now);
+    // The dwell up to this instant was just credited as reading, so the pause
+    // is the reference point for how long the reader was away. Left at the
+    // last page turn, a seconds-long interruption late in a quiet dwell would
+    // read as an idle gap and split the sitting in {@link resume}.
+    this.current.lastActivityAt = now;
     this.running = false;
     this.writeCheckpoint();
   }

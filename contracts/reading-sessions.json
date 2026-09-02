@@ -142,6 +142,28 @@
       }
     },
     {
+      "name": "a short interruption after a quiet dwell does not split the sitting",
+      "group": "measuring active time",
+      "why": "Pausing credits the quiet dwell as reading, so the away gap must be measured from the pause itself. Judging it from the last page turn closes the session after a seconds-long glance at another tab and drops everything read until the next page turn.",
+      "events": [
+        { "kind": "start", "atMs": 0, "page": 1 },
+        { "kind": "pause", "atMs": 240000 },
+        { "kind": "resume", "atMs": 330000 },
+        { "kind": "activity", "atMs": 480000, "page": 2 },
+        { "kind": "stop", "atMs": 481000 }
+      ],
+      "expect": {
+        "sessions": [
+          {
+            "kind": "progress",
+            "activeDurationMs": 391000,
+            "toPage": 2,
+            "pagesRead": 2
+          }
+        ]
+      }
+    },
+    {
       "name": "a pause outlasting the idle timeout closes the session",
       "group": "measuring active time",
       "events": [
