@@ -75,7 +75,7 @@ pub async fn record_reading_sessions(
     auth: AuthContext,
     Json(request): Json<RecordReadingSessionsRequest>,
 ) -> Result<Json<RecordReadingSessionsResponse>, ApiError> {
-    auth.require_permission(&Permission::BooksRead)?;
+    auth.require_permission(&Permission::ProgressWrite)?;
 
     if request.sessions.len() > MAX_BATCH_SIZE {
         return Err(ApiError::BadRequest(format!(

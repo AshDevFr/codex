@@ -44,6 +44,7 @@ mod plugin_metrics;
 mod plugin_web_links;
 mod plugins;
 mod pool_contention;
+mod progress_permissions;
 mod rate_limit;
 mod read_history;
 mod read_progress;

@@ -2955,7 +2955,7 @@ pub async fn mark_series_as_read(
     auth: AuthContext,
     Path(series_id): Path<Uuid>,
 ) -> Result<Json<MarkReadResponse>, ApiError> {
-    require_permission!(auth, Permission::BooksRead)?;
+    require_permission!(auth, Permission::ProgressWrite)?;
 
     // Verify series exists
     let _series = SeriesRepository::get_by_id(&state.db, series_id)
@@ -3015,7 +3015,7 @@ pub async fn mark_series_as_unread(
     auth: AuthContext,
     Path(series_id): Path<Uuid>,
 ) -> Result<Json<MarkReadResponse>, ApiError> {
-    require_permission!(auth, Permission::BooksRead)?;
+    require_permission!(auth, Permission::ProgressWrite)?;
 
     // Verify series exists
     let _series = SeriesRepository::get_by_id(&state.db, series_id)

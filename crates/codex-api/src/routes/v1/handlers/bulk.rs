@@ -52,7 +52,7 @@ pub async fn bulk_mark_books_as_read(
     auth: AuthContext,
     Json(request): Json<BulkBooksRequest>,
 ) -> Result<Json<MarkReadResponse>, ApiError> {
-    require_permission!(auth, Permission::BooksRead)?;
+    require_permission!(auth, Permission::ProgressWrite)?;
 
     if request.book_ids.is_empty() {
         return Ok(Json(MarkReadResponse {
@@ -111,7 +111,7 @@ pub async fn bulk_mark_books_as_unread(
     auth: AuthContext,
     Json(request): Json<BulkBooksRequest>,
 ) -> Result<Json<MarkReadResponse>, ApiError> {
-    require_permission!(auth, Permission::BooksRead)?;
+    require_permission!(auth, Permission::ProgressWrite)?;
 
     if request.book_ids.is_empty() {
         return Ok(Json(MarkReadResponse {
@@ -225,7 +225,7 @@ pub async fn bulk_mark_series_as_read(
     auth: AuthContext,
     Json(request): Json<BulkSeriesRequest>,
 ) -> Result<Json<MarkReadResponse>, ApiError> {
-    require_permission!(auth, Permission::BooksRead)?;
+    require_permission!(auth, Permission::ProgressWrite)?;
 
     if request.series_ids.is_empty() {
         return Ok(Json(MarkReadResponse {
@@ -303,7 +303,7 @@ pub async fn bulk_mark_series_as_unread(
     auth: AuthContext,
     Json(request): Json<BulkSeriesRequest>,
 ) -> Result<Json<MarkReadResponse>, ApiError> {
-    require_permission!(auth, Permission::BooksRead)?;
+    require_permission!(auth, Permission::ProgressWrite)?;
 
     if request.series_ids.is_empty() {
         return Ok(Json(MarkReadResponse {

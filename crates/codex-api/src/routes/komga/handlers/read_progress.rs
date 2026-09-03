@@ -67,7 +67,7 @@ pub async fn update_progress(
     Path(book_id): Path<Uuid>,
     axum::Json(request): axum::Json<KomgaReadProgressUpdateDto>,
 ) -> Result<StatusCode, ApiError> {
-    require_permission!(auth, Permission::BooksRead)?;
+    require_permission!(auth, Permission::ProgressWrite)?;
 
     let user_id = auth.user_id;
 
@@ -153,7 +153,7 @@ pub async fn delete_progress(
     headers: axum::http::HeaderMap,
     Path(book_id): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {
-    require_permission!(auth, Permission::BooksRead)?;
+    require_permission!(auth, Permission::ProgressWrite)?;
 
     let user_id = auth.user_id;
 
@@ -250,7 +250,7 @@ pub async fn get_progression(
     FlexibleAuthContext(auth): FlexibleAuthContext,
     Path(book_id): Path<Uuid>,
 ) -> Result<Response, ApiError> {
-    require_permission!(auth, Permission::BooksRead)?;
+    require_permission!(auth, Permission::ProgressRead)?;
 
     // Verify book exists
     BookRepository::get_by_id(&state.db, book_id)
@@ -311,7 +311,7 @@ pub async fn put_progression(
     Path(book_id): Path<Uuid>,
     axum::Json(body): axum::Json<serde_json::Value>,
 ) -> Result<StatusCode, ApiError> {
-    require_permission!(auth, Permission::BooksRead)?;
+    require_permission!(auth, Permission::ProgressWrite)?;
 
     let book = BookRepository::get_by_id(&state.db, book_id)
         .await
@@ -444,7 +444,7 @@ pub async fn mark_series_as_read(
     FlexibleAuthContext(auth): FlexibleAuthContext,
     Path(series_id): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {
-    require_permission!(auth, Permission::BooksRead)?;
+    require_permission!(auth, Permission::ProgressWrite)?;
 
     let user_id = auth.user_id;
 
@@ -509,7 +509,7 @@ pub async fn mark_series_as_unread(
     FlexibleAuthContext(auth): FlexibleAuthContext,
     Path(series_id): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {
-    require_permission!(auth, Permission::BooksRead)?;
+    require_permission!(auth, Permission::ProgressWrite)?;
 
     let user_id = auth.user_id;
 

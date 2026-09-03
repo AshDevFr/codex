@@ -74,7 +74,7 @@ pub async fn update_reading_progress(
     Json(request): Json<UpdateProgressRequest>,
 ) -> Result<Json<ReadProgressResponse>, ApiError> {
     // Check permission - users can manage their own reading progress
-    auth.require_permission(&Permission::BooksRead)?;
+    auth.require_permission(&Permission::ProgressWrite)?;
 
     // Look up the book to get its page count for auto-completion detection
     let book = BookRepository::get_by_id(&state.db, book_id)
@@ -138,7 +138,7 @@ pub async fn get_reading_progress(
     Path(book_id): Path<Uuid>,
 ) -> Result<Response, ApiError> {
     // Check permission
-    auth.require_permission(&Permission::BooksRead)?;
+    auth.require_permission(&Permission::ProgressRead)?;
 
     // Verify the book exists
     BookRepository::get_by_id(&state.db, book_id)
@@ -183,7 +183,7 @@ pub async fn delete_reading_progress(
     Path(book_id): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {
     // Check permission
-    auth.require_permission(&Permission::BooksRead)?;
+    auth.require_permission(&Permission::ProgressWrite)?;
 
     // Delete progress
     ReadProgressRepository::delete_with_device(
@@ -218,7 +218,7 @@ pub async fn get_user_progress(
     auth: AuthContext,
 ) -> Result<Json<ReadProgressListResponse>, ApiError> {
     // Check permission
-    auth.require_permission(&Permission::BooksRead)?;
+    auth.require_permission(&Permission::ProgressRead)?;
 
     // Get all progress for user
     let progress_list = ReadProgressRepository::get_by_user(&state.db, auth.user_id)
@@ -254,7 +254,7 @@ pub async fn mark_book_as_read(
     Path(book_id): Path<Uuid>,
 ) -> Result<Json<ReadProgressResponse>, ApiError> {
     // Check permission
-    auth.require_permission(&Permission::BooksRead)?;
+    auth.require_permission(&Permission::ProgressWrite)?;
 
     // Get the book to get its page count
     let book = BookRepository::get_by_id(&state.db, book_id)
@@ -299,7 +299,7 @@ pub async fn mark_book_as_unread(
     Path(book_id): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {
     // Check permission
-    auth.require_permission(&Permission::BooksRead)?;
+    auth.require_permission(&Permission::ProgressWrite)?;
 
     // Mark as unread (delete progress)
     ReadProgressRepository::delete_with_device(
@@ -338,7 +338,7 @@ pub async fn get_progression(
     auth: AuthContext,
     Path(book_id): Path<Uuid>,
 ) -> Result<Response, ApiError> {
-    auth.require_permission(&Permission::BooksRead)?;
+    auth.require_permission(&Permission::ProgressRead)?;
 
     BookRepository::get_by_id(&state.db, book_id)
         .await
@@ -385,7 +385,7 @@ pub async fn put_progression(
     Path(book_id): Path<Uuid>,
     Json(body): Json<serde_json::Value>,
 ) -> Result<StatusCode, ApiError> {
-    auth.require_permission(&Permission::BooksRead)?;
+    auth.require_permission(&Permission::ProgressWrite)?;
 
     let book = BookRepository::get_by_id(&state.db, book_id)
         .await
@@ -523,7 +523,7 @@ pub async fn get_book_read_history(
     auth: AuthContext,
     Path(book_id): Path<Uuid>,
 ) -> Result<Json<ReadHistoryResponse>, ApiError> {
-    auth.require_permission(&Permission::BooksRead)?;
+    auth.require_permission(&Permission::ProgressRead)?;
 
     BookRepository::get_by_id(&state.db, book_id)
         .await
@@ -566,7 +566,7 @@ pub async fn clear_book_read_history(
     auth: AuthContext,
     Path(book_id): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {
-    auth.require_permission(&Permission::BooksRead)?;
+    auth.require_permission(&Permission::ProgressWrite)?;
 
     BookRepository::get_by_id(&state.db, book_id)
         .await
@@ -615,7 +615,7 @@ pub async fn delete_book_read_history_entry(
     auth: AuthContext,
     Path((book_id, completion_id)): Path<(Uuid, Uuid)>,
 ) -> Result<StatusCode, ApiError> {
-    auth.require_permission(&Permission::BooksRead)?;
+    auth.require_permission(&Permission::ProgressWrite)?;
 
     BookRepository::get_by_id(&state.db, book_id)
         .await
@@ -665,7 +665,7 @@ pub async fn get_series_read_history(
     auth: AuthContext,
     Path(series_id): Path<Uuid>,
 ) -> Result<Json<ReadHistoryResponse>, ApiError> {
-    auth.require_permission(&Permission::SeriesRead)?;
+    auth.require_permission(&Permission::ProgressRead)?;
 
     SeriesRepository::get_by_id(&state.db, series_id)
         .await
@@ -716,7 +716,7 @@ pub async fn clear_series_read_history(
     auth: AuthContext,
     Path(series_id): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {
-    auth.require_permission(&Permission::SeriesRead)?;
+    auth.require_permission(&Permission::ProgressWrite)?;
 
     SeriesRepository::get_by_id(&state.db, series_id)
         .await
@@ -750,6 +750,8 @@ pub async fn clear_my_read_history(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
 ) -> Result<StatusCode, ApiError> {
+    auth.require_permission(&Permission::ProgressWrite)?;
+
     ReadCompletionRepository::delete_all_for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to clear read history: {}", e)))?;
