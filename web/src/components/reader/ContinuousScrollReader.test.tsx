@@ -774,6 +774,34 @@ describe("ContinuousScrollReader", () => {
       }
     });
 
+    it("should widen the overlap when a device pixel is larger than a CSS pixel", () => {
+      // Browser zoom below 100% (or an OS scale below 1) makes 1 CSS px less
+      // than one device pixel, so a 1px overlap can round away entirely and
+      // the seam comes back. The overlap must cover at least one full device
+      // pixel: ceil(1 / devicePixelRatio).
+      const original = window.devicePixelRatio;
+      Object.defineProperty(window, "devicePixelRatio", {
+        value: 0.8,
+        configurable: true,
+      });
+      try {
+        renderWithProviders(
+          <ContinuousScrollReader {...defaultProps} pageGap={0} />,
+        );
+
+        for (let i = 2; i <= defaultProps.totalPages; i++) {
+          expect(screen.getByTestId(`page-container-${i}`)).toHaveStyle({
+            marginTop: "-2px",
+          });
+        }
+      } finally {
+        Object.defineProperty(window, "devicePixelRatio", {
+          value: original,
+          configurable: true,
+        });
+      }
+    });
+
     it("should not overlap pages when a non-zero gap is set", () => {
       renderWithProviders(
         <ContinuousScrollReader {...defaultProps} pageGap={8} />,

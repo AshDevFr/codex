@@ -701,11 +701,21 @@ export function ContinuousScrollReader({
                 // a hairline of background bleeds through -- at different
                 // boundaries depending on zoom and device pixel ratio.  When
                 // the pages are meant to be seamless (gap 0), overlap each
-                // page 1px over the previous one; webtoon art is continuous,
-                // so the covered pixel row is invisible.
+                // page over the previous one; webtoon art is continuous, so
+                // the covered pixel rows are invisible.  The overlap must
+                // span at least one full DEVICE pixel: below 100% browser
+                // zoom (or an OS scale under 1) a CSS pixel is smaller than
+                // a device pixel, so a fixed 1px overlap can round away and
+                // the seam comes back.  devicePixelRatio already folds in
+                // browser zoom, and a zoom change resizes the container,
+                // which re-renders through the ResizeObserver above, so the
+                // value read here is always current.
                 marginTop:
                   effectivePageGap === 0 && page.pageNumber > 1
-                    ? -1
+                    ? -Math.max(
+                        1,
+                        Math.ceil(1 / (window.devicePixelRatio || 1)),
+                      )
                     : undefined,
                 minHeight: page.isLoaded ? undefined : reservedHeight,
                 display: "flex",
