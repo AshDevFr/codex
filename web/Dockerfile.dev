@@ -6,10 +6,13 @@ WORKDIR /app
 # Copy package files first for better caching
 COPY package.json package-lock.json ./
 
-# Install dependencies inside the container
-# Delete package-lock and use npm install to work around npm optional deps bug on musl
-# https://github.com/npm/cli/issues/4828
-RUN rm -f package-lock.json && npm install
+# Install dependencies from the lockfile. This used to delete the lockfile to
+# work around npm/cli#4828 (optional platform deps missing on musl), but that
+# bug is fixed: the lockfile records every platform's optional dependencies.
+# A fresh `npm install` resolution is also what crashes npm 10 against some
+# registry states ("Cannot read properties of null (reading 'edgesOut')"),
+# so the lockfile install is both reproducible and the reliable option.
+RUN npm ci
 
 # Copy the rest of the source code
 COPY . .
