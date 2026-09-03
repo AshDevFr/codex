@@ -562,9 +562,18 @@ jobs:
           npm run build
       # Auth via npm Trusted Publishing (OIDC). NODE_AUTH_TOKEN is intentionally
       # absent: its presence would force npm into token auth and bypass OIDC.
+      # Idempotent: a re-run of the whole workflow (e.g. after an npm registry
+      # incident) must not fail on the versions that already made it out.
       - name: Publish to npm
         working-directory: plugins/sdk-typescript
-        run: npm publish --access public
+        run: |
+          NAME=$(jq -r .name package.json)
+          V=$(jq -r .version package.json)
+          if [ -n "$(npm view "$NAME@$V" version 2>/dev/null)" ]; then
+            echo "$NAME@$V is already on the registry; skipping publish"
+            exit 0
+          fi
+          npm publish --access public
 
   # Publish plugins to npm (only for releases, after SDK is published)
   publish-plugins:
@@ -663,9 +672,18 @@ jobs:
         run: npm run build
       # Auth via npm Trusted Publishing (OIDC). NODE_AUTH_TOKEN is intentionally
       # absent: its presence would force npm into token auth and bypass OIDC.
+      # Idempotent: a re-run of the whole workflow (e.g. after an npm registry
+      # incident) must not fail on the versions that already made it out.
       - name: Publish to npm
         working-directory: plugins/${{ matrix.plugin }}
-        run: npm publish --access public
+        run: |
+          NAME=$(jq -r .name package.json)
+          V=$(jq -r .version package.json)
+          if [ -n "$(npm view "$NAME@$V" version 2>/dev/null)" ]; then
+            echo "$NAME@$V is already on the registry; skipping publish"
+            exit 0
+          fi
+          npm publish --access public
 
   announce:
     needs:
