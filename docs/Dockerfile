@@ -6,8 +6,9 @@ WORKDIR /app
 # Copy package files
 COPY docs/package*.json ./
 
-# Install dependencies
-RUN npm install
+# Install dependencies from the lockfile, so the build cannot drift or break
+# with registry state the way a fresh `npm install` resolution can.
+RUN npm ci
 
 # Copy docs source files
 COPY docs/ ./

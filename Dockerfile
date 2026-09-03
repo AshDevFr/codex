@@ -5,11 +5,14 @@ FROM node:22-alpine AS frontend-builder
 WORKDIR /web
 
 # Copy package files
-# COPY web/package*.json ./
-COPY web/package.json ./
+COPY web/package*.json ./
 
-# Install dependencies
-RUN npm install
+# Install dependencies from the lockfile. A bare `npm install` from
+# package.json alone re-resolves the whole tree against the live registry on
+# every build, so a build can break with no change in the repo (npm 10's
+# arborist crashes with "Cannot read properties of null (reading 'edgesOut')"
+# on some registry states). `npm ci` is reproducible and matches web CI.
+RUN npm ci
 
 # Copy frontend source
 COPY web/ ./
