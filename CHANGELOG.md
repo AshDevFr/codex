@@ -7,6 +7,12 @@ release. A patch release may fix an API bug; it may not add an operation, a para
 field, or a new behaviour on an existing route. A client may therefore treat the release a feature
 first appears under in the 🔌 API sections below as a floor it can rely on.
 
+## [2.4.11] - 2026-09-03
+
+### 🐛 Bug Fixes
+
+- *(docker)* Use the lockfile in the cross-build image too
+
 ## [2.4.10] - 2026-09-03
 
 ### 🐛 Bug Fixes
