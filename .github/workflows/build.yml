@@ -545,12 +545,16 @@ jobs:
         with:
           node-version: "22"
           registry-url: "https://registry.npmjs.org"
-      # npm Trusted Publishing requires npm >= 11.5.1 (Node 22 ships 10.9.7).
-      # Pinned to 11.5.1 to (a) avoid the Node 22.22.2 self-upgrade regression
-      # that breaks `npm install -g npm@latest` with a missing promise-retry
-      # module (nodejs/node#62425), and (b) keep the publish step reproducible.
-      - name: Install npm 11.5.1 (minimum for Trusted Publishing)
-        run: npm install -g npm@11.5.1
+      # npm Trusted Publishing requires npm >= 11.5.1 (Node 22 ships 10.x).
+      # Pinned to an exact version rather than `npm@latest` to (a) avoid the
+      # Node 22.22.2 self-upgrade regression that breaks `npm install -g
+      # npm@latest` with a missing promise-retry module (nodejs/node#62425),
+      # and (b) keep the publish step reproducible. 12.0.2 rather than 11.x
+      # because npm 10/11's arborist crashes with "Cannot read properties of
+      # null (reading 'edgesOut')" resolving the vitest 4/5 peer graph, which
+      # broke every plugin publish; npm 12 resolves the same tree cleanly.
+      - name: Install npm 12.0.2 (Trusted Publishing needs >= 11.5.1)
+        run: npm install -g npm@12.0.2
       - name: Install dependencies and build
         working-directory: plugins/sdk-typescript
         run: |
@@ -597,12 +601,16 @@ jobs:
         with:
           node-version: "22"
           registry-url: "https://registry.npmjs.org"
-      # npm Trusted Publishing requires npm >= 11.5.1 (Node 22 ships 10.9.7).
-      # Pinned to 11.5.1 to (a) avoid the Node 22.22.2 self-upgrade regression
-      # that breaks `npm install -g npm@latest` with a missing promise-retry
-      # module (nodejs/node#62425), and (b) keep the publish step reproducible.
-      - name: Install npm 11.5.1 (minimum for Trusted Publishing)
-        run: npm install -g npm@11.5.1
+      # npm Trusted Publishing requires npm >= 11.5.1 (Node 22 ships 10.x).
+      # Pinned to an exact version rather than `npm@latest` to (a) avoid the
+      # Node 22.22.2 self-upgrade regression that breaks `npm install -g
+      # npm@latest` with a missing promise-retry module (nodejs/node#62425),
+      # and (b) keep the publish step reproducible. 12.0.2 rather than 11.x
+      # because npm 10/11's arborist crashes with "Cannot read properties of
+      # null (reading 'edgesOut')" resolving the vitest 4/5 peer graph, which
+      # broke every plugin publish; npm 12 resolves the same tree cleanly.
+      - name: Install npm 12.0.2 (Trusted Publishing needs >= 11.5.1)
+        run: npm install -g npm@12.0.2
       # Update SDK dependency from file: to published npm version before install
       - name: Update SDK dependency for publish
         working-directory: plugins/${{ matrix.plugin }}
