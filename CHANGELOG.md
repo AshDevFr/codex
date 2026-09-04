@@ -7,6 +7,24 @@ release. A patch release may fix an API bug; it may not add an operation, a para
 field, or a new behaviour on an existing route. A client may therefore treat the release a feature
 first appears under in the 🔌 API sections below as a floor it can rely on.
 
+## [2.4.13] - 2026-09-04
+
+### 🔌 API
+
+- *(api)* Gate progress endpoints on the progress permissions
+- *(api)* Require series:read on want-to-read, recommendations, and series exports
+- *(api)* Unify the permission wire format and expose plugins-manage in the picker
+- *(api)* Accept API keys as Bearer tokens
+
+### 🐛 Bug Fixes
+
+- *(ci)* Skip npm publishes for versions already on the registry
+- *(docker)* Install the dev frontend from the lockfile too
+
+### 📚 Documentation
+
+- Correct permission names and document the progress permission model
+
 ## [2.4.12] - 2026-09-03
 
 ### 🐛 Bug Fixes
