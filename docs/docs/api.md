@@ -124,7 +124,7 @@ curl -X POST http://localhost:8080/api/v1/api-keys \
   -H "Content-Type: application/json" \
   -d '{
     "name": "My Script Key",
-    "permissions": ["LibrariesRead", "BooksRead", "PagesRead"]
+    "permissions": ["libraries-read", "books-read", "pages-read"]
   }'
 ```
 
@@ -136,7 +136,7 @@ Response:
   "name": "My Script Key",
   "key": "codex_abc12345_xyzSecretPart123456",
   "key_prefix": "abc12345",
-  "permissions": ["LibrariesRead", "BooksRead", "PagesRead"],
+  "permissions": ["libraries-read", "books-read", "pages-read"],
   "created_at": "2024-01-15T10:30:00Z"
 }
 ```
@@ -636,30 +636,47 @@ All errors follow a consistent format:
 
 ## Permissions
 
-API endpoints require specific permissions:
+API endpoints require specific permissions. Names on the wire are
+kebab-case (the colon form `libraries:read` is also accepted in requests):
 
 | Permission | Description |
 |------------|-------------|
-| `LibrariesRead` | View libraries |
-| `LibrariesWrite` | Create/update libraries |
-| `LibrariesDelete` | Delete libraries |
-| `SeriesRead` | View series |
-| `SeriesWrite` | Update series |
-| `SeriesDelete` | Delete series |
-| `BooksRead` | View books |
-| `BooksWrite` | Update books/progress |
-| `BooksDelete` | Delete books |
-| `PagesRead` | View page images |
-| `UsersRead` | View users (admin) |
-| `UsersWrite` | Manage users (admin) |
-| `UsersDelete` | Delete users (admin) |
-| `ApiKeysRead` | View API keys |
-| `ApiKeysWrite` | Manage API keys |
-| `ApiKeysDelete` | Delete API keys |
-| `TasksRead` | View tasks |
-| `TasksWrite` | Manage tasks |
-| `SystemHealth` | View metrics |
-| `SystemAdmin` | Full admin access |
+| `libraries-read` | View libraries |
+| `libraries-write` | Create/update libraries |
+| `libraries-delete` | Delete libraries |
+| `series-read` | View series, want-to-read, recommendations, exports |
+| `series-write` | Update series |
+| `series-delete` | Delete series |
+| `books-read` | View books |
+| `books-write` | Update book metadata |
+| `books-delete` | Delete books |
+| `collections-read` | Browse collections |
+| `collections-write` | Manage collections |
+| `collections-delete` | Delete collections |
+| `read-lists-read` | Browse read lists |
+| `read-lists-write` | Manage read lists |
+| `read-lists-delete` | Delete read lists |
+| `pages-read` | View page images |
+| `progress-read` | View reading progress, history, and stats |
+| `progress-write` | Update progress, mark read/unread, record sessions |
+| `users-read` | View users (admin) |
+| `users-write` | Manage users (admin) |
+| `users-delete` | Delete users (admin) |
+| `api-keys-read` | View API keys |
+| `api-keys-write` | Manage API keys |
+| `api-keys-delete` | Delete API keys |
+| `tasks-read` | View tasks |
+| `tasks-write` | Manage tasks |
+| `plugins-manage` | Manage metadata plugins (admin) |
+| `system-health` | View metrics |
+| `system-admin` | Full admin access |
+
+Reading progress endpoints are gated on the progress permissions, not the
+book permissions: a key needs `progress-write` to update progress or mark
+books read, and `progress-read` alone is enough for a stats-only
+integration against `/api/v1/reading-stats`.
+
+See [Permissions & Roles](./users/permissions) for the full model.
 
 ## Code Examples
 

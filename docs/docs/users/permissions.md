@@ -35,10 +35,12 @@ The default role for new users. Readers can:
 - Manage their own API keys
 - Check system health
 
-**Permissions (8 total):**
-- `LibrariesRead`, `SeriesRead`, `BooksRead`, `PagesRead`
-- `ApiKeysRead`, `ApiKeysWrite`, `ApiKeysDelete`
-- `SystemHealth`
+**Permissions (12 total):**
+- `libraries-read`, `series-read`, `books-read`, `pages-read`
+- `progress-read`, `progress-write`
+- `collections-read`, `read-lists-read`
+- `api-keys-read`, `api-keys-write`, `api-keys-delete`
+- `system-health`
 
 ### Maintainer Role
 
@@ -50,11 +52,13 @@ For users who manage content but not system settings. Maintainers can do everyth
 - Create, edit, and delete collections and read lists
 - View and manage background tasks
 
-**Additional Permissions (7 more, 15 total):**
-- `LibrariesWrite`
-- `SeriesWrite`, `SeriesDelete`
-- `BooksWrite`, `BooksDelete`
-- `TasksRead`, `TasksWrite`
+**Additional Permissions (11 more, 23 total):**
+- `libraries-write`
+- `series-write`, `series-delete`
+- `books-write`, `books-delete`
+- `collections-write`, `collections-delete`
+- `read-lists-write`, `read-lists-delete`
+- `tasks-read`, `tasks-write`
 
 ### Admin Role
 
@@ -62,39 +66,56 @@ Full system access for server administrators. Admins can do everything Maintaine
 
 - Delete libraries
 - Manage all users
+- Manage metadata plugins
 - Access system administration features
 - Manage sharing tags and content restrictions
 
-**Additional Permissions (5 more, 20 total):**
-- `LibrariesDelete`
-- `UsersRead`, `UsersWrite`, `UsersDelete`
-- `SystemAdmin`
+**Additional Permissions (6 more, 29 total):**
+- `libraries-delete`
+- `users-read`, `users-write`, `users-delete`
+- `plugins-manage`
+- `system-admin`
 
 ## All Permissions
+
+Permission names on the wire are kebab-case (`libraries-read`). The API also
+accepts the colon form (`libraries:read`) in requests, but always serves and
+stores the kebab-case names.
 
 ### Library Permissions
 
 | Permission | Description |
 |------------|-------------|
-| `LibrariesRead` | View libraries and their settings |
-| `LibrariesWrite` | Create and update libraries, trigger scans |
-| `LibrariesDelete` | Delete libraries (Admin only) |
+| `libraries-read` | View libraries and their settings |
+| `libraries-write` | Create and update libraries, trigger scans |
+| `libraries-delete` | Delete libraries (Admin only) |
 
 ### Series Permissions
 
 | Permission | Description |
 |------------|-------------|
-| `SeriesRead` | View series and metadata |
-| `SeriesWrite` | Update series metadata, manage covers |
-| `SeriesDelete` | Delete series |
+| `series-read` | View series and metadata; browse the want-to-read queue, recommendations, and series exports |
+| `series-write` | Update series metadata, manage covers |
+| `series-delete` | Delete series |
 
 ### Book Permissions
 
 | Permission | Description |
 |------------|-------------|
-| `BooksRead` | View books, metadata, and reading progress |
-| `BooksWrite` | Update book metadata, mark as read |
-| `BooksDelete` | Delete books |
+| `books-read` | View books and metadata |
+| `books-write` | Update book metadata |
+| `books-delete` | Delete books |
+
+### Progress Permissions
+
+Reading progress is user-scoped data with its own permission pair. A key
+with only `progress-read` is the recipe for a stats-only integration: it can
+call `/api/v1/reading-stats` and read progress and history, and nothing else.
+
+| Permission | Description |
+|------------|-------------|
+| `progress-read` | View reading progress, read history, and reading stats |
+| `progress-write` | Update progress, mark books/series read or unread, record reading sessions, clear history |
 
 ### Collection & Read List Permissions
 
@@ -102,48 +123,54 @@ Shared groupings of series (collections) and books (read lists). See [Collection
 
 | Permission | Description |
 |------------|-------------|
-| `CollectionsRead` | Browse collections |
-| `CollectionsWrite` | Create, rename, and manage collection members |
-| `CollectionsDelete` | Delete collections |
-| `ReadListsRead` | Browse read lists |
-| `ReadListsWrite` | Create, edit, and manage read list members |
-| `ReadListsDelete` | Delete read lists |
+| `collections-read` | Browse collections |
+| `collections-write` | Create, rename, and manage collection members |
+| `collections-delete` | Delete collections |
+| `read-lists-read` | Browse read lists |
+| `read-lists-write` | Create, edit, and manage read list members |
+| `read-lists-delete` | Delete read lists |
 
 ### Page Permissions
 
 | Permission | Description |
 |------------|-------------|
-| `PagesRead` | View page images and thumbnails |
+| `pages-read` | View page images and thumbnails |
 
 ### User Permissions
 
 | Permission | Description |
 |------------|-------------|
-| `UsersRead` | View user list and details (Admin only) |
-| `UsersWrite` | Create and update users (Admin only) |
-| `UsersDelete` | Delete users (Admin only) |
+| `users-read` | View user list and details (Admin only) |
+| `users-write` | Create and update users (Admin only) |
+| `users-delete` | Delete users (Admin only) |
 
 ### API Key Permissions
 
 | Permission | Description |
 |------------|-------------|
-| `ApiKeysRead` | View own API keys |
-| `ApiKeysWrite` | Create API keys |
-| `ApiKeysDelete` | Revoke API keys |
+| `api-keys-read` | View own API keys |
+| `api-keys-write` | Create API keys |
+| `api-keys-delete` | Revoke API keys |
 
 ### Task Permissions
 
 | Permission | Description |
 |------------|-------------|
-| `TasksRead` | View background tasks and queue status |
-| `TasksWrite` | Cancel tasks, trigger operations |
+| `tasks-read` | View background tasks and queue status |
+| `tasks-write` | Cancel tasks, trigger operations |
+
+### Plugin Permissions
+
+| Permission | Description |
+|------------|-------------|
+| `plugins-manage` | Install, configure, and manage metadata plugins (Admin only) |
 
 ### System Permissions
 
 | Permission | Description |
 |------------|-------------|
-| `SystemHealth` | View health status and metrics |
-| `SystemAdmin` | Full administrative access, server settings |
+| `system-health` | View health status and metrics |
+| `system-admin` | Full administrative access, server settings |
 
 ## Effective Permissions
 
@@ -155,17 +182,17 @@ Effective Permissions = Role Permissions ∪ Custom Permissions
 
 ### Custom Permissions
 
-Custom permissions allow extending a user's access beyond their role. For example, a Reader could be granted `TasksRead` to monitor scan progress without being promoted to Maintainer.
+Custom permissions allow extending a user's access beyond their role. For example, a Reader could be granted `tasks-read` to monitor scan progress without being promoted to Maintainer.
 
 ```json
 {
   "username": "power-reader",
   "role": "reader",
-  "permissions": ["TasksRead"]
+  "permissions": ["tasks-read"]
 }
 ```
 
-This user would have all Reader permissions plus `TasksRead`.
+This user would have all Reader permissions plus `tasks-read`.
 
 :::tip
 Custom permissions extend roles - they never restrict. To limit access, use [Sharing Tags](./sharing-tags) for content-level restrictions.
@@ -194,11 +221,11 @@ An Admin creating a read-only token for OPDS readers:
 ```json
 {
   "name": "OPDS Reader",
-  "permissions": ["LibrariesRead", "SeriesRead", "BooksRead", "PagesRead"]
+  "permissions": ["libraries-read", "series-read", "books-read", "pages-read"]
 }
 ```
 
-Even though the Admin has all 20 permissions, this token only grants read access.
+Even though the Admin has all 29 permissions, this token only grants read access.
 
 ## Permission Presets
 
@@ -247,7 +274,7 @@ curl -X POST http://localhost:8080/api/v1/users \
     "email": "power@example.com",
     "password": "secure-password",
     "role": "reader",
-    "permissions": ["TasksRead"]
+    "permissions": ["tasks-read"]
   }'
 ```
 
@@ -278,7 +305,7 @@ Response includes role and permissions:
   "id": "uuid",
   "username": "user",
   "role": "maintainer",
-  "permissions": ["TasksRead"]
+  "permissions": ["tasks-read"]
 }
 ```
 

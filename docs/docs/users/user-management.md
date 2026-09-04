@@ -74,7 +74,7 @@ curl -X PUT http://localhost:8080/api/v1/users/{id} \
   -H "Content-Type: application/json" \
   -d '{
     "email": "newemail@example.com",
-    "permissions": ["LibrariesRead", "BooksRead"]
+    "permissions": ["libraries-read", "books-read"]
   }'
 ```
 

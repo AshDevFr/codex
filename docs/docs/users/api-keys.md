@@ -37,7 +37,7 @@ curl -X POST http://localhost:8080/api/v1/api-keys \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Automation Script",
-    "permissions": ["LibrariesRead", "BooksRead", "PagesRead"]
+    "permissions": ["libraries-read", "books-read", "pages-read"]
   }'
 ```
 
@@ -49,7 +49,7 @@ Response:
   "name": "Automation Script",
   "key": "codex_abc12345_secretpart123456789",
   "key_prefix": "codex_abc12345",
-  "permissions": ["LibrariesRead", "BooksRead", "PagesRead"],
+  "permissions": ["libraries-read", "books-read", "pages-read"],
   "expires_at": null,
   "created_at": "2024-01-15T10:00:00Z"
 }
@@ -69,15 +69,15 @@ API keys are constrained by your effective permissions:
 Token Effective Permissions = (Your Role ∪ Your Custom) ∩ Token Requested
 ```
 
-**Example:** A Maintainer (15 permissions) cannot create a key with `UsersRead` because that permission is Admin-only.
+**Example:** A Maintainer (15 permissions) cannot create a key with `users-read` because that permission is Admin-only.
 
 ### Keys Are Validated at Request Time
 
 If your role is downgraded, your existing keys are automatically constrained:
 
-1. Admin creates key with `UsersRead` permission
+1. Admin creates key with `users-read` permission
 2. Admin is demoted to Maintainer
-3. Key requests to `/api/v1/users` now fail - `UsersRead` is no longer in the user's effective permissions
+3. Key requests to `/api/v1/users` now fail - `users-read` is no longer in the user's effective permissions
 
 This ensures keys never grant more access than the user currently has.
 
@@ -146,11 +146,11 @@ Permissions for e-reader apps, OPDS clients, and KOReader sync:
 ```json
 {
   "name": "OPDS Reader",
-  "permissions": ["LibrariesRead", "SeriesRead", "BooksRead", "PagesRead", "ProgressRead", "ProgressWrite"]
+  "permissions": ["libraries-read", "series-read", "books-read", "pages-read", "progress-read", "progress-write"]
 }
 ```
 
-`ProgressRead` and `ProgressWrite` are needed for apps that sync reading progress (e.g., KOReader).
+`progress-read` and `progress-write` are needed for apps that sync reading progress (e.g., KOReader).
 
 ### Automation Script
 
@@ -160,10 +160,10 @@ For scripts that trigger scans and monitor progress:
 {
   "name": "Scanner Script",
   "permissions": [
-    "LibrariesRead",
-    "LibrariesWrite",
-    "TasksRead",
-    "TasksWrite"
+    "libraries-read",
+    "libraries-write",
+    "tasks-read",
+    "tasks-write"
   ]
 }
 ```
@@ -176,11 +176,11 @@ Full reading experience with progress tracking:
 {
   "name": "Mobile App",
   "permissions": [
-    "LibrariesRead",
-    "SeriesRead",
-    "BooksRead",
-    "BooksWrite",
-    "PagesRead"
+    "libraries-read",
+    "series-read",
+    "books-read",
+    "books-write",
+    "pages-read"
   ]
 }
 ```
@@ -193,11 +193,11 @@ For tools that update metadata:
 {
   "name": "Metadata Tool",
   "permissions": [
-    "LibrariesRead",
-    "SeriesRead",
-    "SeriesWrite",
-    "BooksRead",
-    "BooksWrite"
+    "libraries-read",
+    "series-read",
+    "series-write",
+    "books-read",
+    "books-write"
   ]
 }
 ```
@@ -219,7 +219,7 @@ Response shows key metadata (not the secret):
     "id": "uuid",
     "name": "OPDS Reader",
     "key_prefix": "codex_abc12345",
-    "permissions": ["LibrariesRead", "BooksRead"],
+    "permissions": ["libraries-read", "books-read"],
     "last_used_at": "2024-01-15T12:30:00Z",
     "expires_at": null,
     "created_at": "2024-01-01T10:00:00Z"
@@ -244,7 +244,7 @@ curl -X POST http://localhost:8080/api/v1/api-keys \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Temporary Access",
-    "permissions": ["LibrariesRead", "BooksRead"],
+    "permissions": ["libraries-read", "books-read"],
     "expires_at": "2024-02-01T00:00:00Z"
   }'
 ```

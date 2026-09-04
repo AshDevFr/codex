@@ -81,7 +81,7 @@ curl -X POST http://localhost:8080/api/v1/api-keys \
   -H "Content-Type: application/json" \
   -d '{
     "name": "OPDS Reader",
-    "permissions": ["LibrariesRead", "SeriesRead", "BooksRead", "PagesRead"]
+    "permissions": ["libraries-read", "series-read", "books-read", "pages-read", "progress-read", "progress-write"]
   }'
 ```
 
@@ -258,7 +258,7 @@ server {
 ### No Books Showing
 
 1. **Scan library**: Ensure library has been scanned
-2. **Check permissions**: User needs `BooksRead` permission
+2. **Check permissions**: User needs the `books-read` permission
 3. **Check filters**: Some apps filter by format
 
 ### Downloads Failing
@@ -341,7 +341,7 @@ Create API keys with minimal permissions for OPDS access:
 ```json
 {
   "name": "OPDS Reader",
-  "permissions": ["LibrariesRead", "SeriesRead", "BooksRead", "PagesRead"]
+  "permissions": ["libraries-read", "series-read", "books-read", "pages-read", "progress-read", "progress-write"]
 }
 ```
 
