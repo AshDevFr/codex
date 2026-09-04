@@ -373,21 +373,17 @@ pub async fn update_user(
     }
 
     if let Some(permissions) = request.permissions {
-        // Validate permissions - accept both colon format (e.g., "api-keys:read")
-        // and kebab-case (e.g., "api-keys-read") from the frontend
+        // Accept every wire format (canonical kebab-case, colon form, legacy
+        // dash form), but store only canonical serde names: the auth
+        // extractor deserializes this column as Vec<Permission>, so any
+        // other spelling stored here breaks that user's authentication.
+        let mut canonical = Vec::with_capacity(permissions.len());
         for perm in &permissions {
-            let is_valid = perm.parse::<Permission>().is_ok() || {
-                let quoted = format!("\"{}\"", perm);
-                serde_json::from_str::<Permission>(&quoted).is_ok()
-            };
-            if !is_valid {
-                return Err(ApiError::BadRequest(format!(
-                    "Invalid permission: {}",
-                    perm
-                )));
-            }
+            let parsed = Permission::parse_lenient(perm)
+                .map_err(|e| ApiError::BadRequest(format!("Invalid permission: {e}")))?;
+            canonical.push(parsed.canonical_name());
         }
-        user.permissions = serde_json::json!(permissions);
+        user.permissions = serde_json::json!(canonical);
     }
 
     user.updated_at = Utc::now();

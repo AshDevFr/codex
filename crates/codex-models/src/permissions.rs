@@ -166,7 +166,77 @@ impl Permission {
             Permission::SystemAdmin => "system:admin",
         }
     }
+
+    /// Parse a permission from any wire format a client may reasonably send:
+    ///
+    /// 1. The canonical serde kebab-case name (`"read-lists-read"`,
+    ///    `"api-keys-read"`), which is what the API serves and stores.
+    /// 2. The colon display format (`"readlists:read"`, `"api-keys:read"`).
+    /// 3. The legacy dash form of the colon names (`"readlists-read"`,
+    ///    `"system-health"`), which older frontends sent.
+    ///
+    /// A naive `replace('-', ":")` cannot do this: it turns
+    /// `"api-keys-read"` into `"api:keys:read"`, so multi-word resources
+    /// were rejected. Callers accepting user input should use this instead
+    /// of `FromStr` and store the canonical serde name.
+    pub fn parse_lenient(s: &str) -> Result<Self, String> {
+        if let Ok(perm) = serde_json::from_value(serde_json::Value::String(s.to_string())) {
+            return Ok(perm);
+        }
+        if let Ok(perm) = s.parse::<Permission>() {
+            return Ok(perm);
+        }
+        if let Some((resource, action)) = s.rsplit_once('-')
+            && let Ok(perm) = format!("{resource}:{action}").parse::<Permission>()
+        {
+            return Ok(perm);
+        }
+        Err(format!("Unknown permission: {}", s))
+    }
+
+    /// The canonical serde kebab-case name (`"read-lists-read"`), the format
+    /// the API serves and stores.
+    pub fn canonical_name(&self) -> String {
+        serde_json::to_value(self)
+            .ok()
+            .and_then(|v| v.as_str().map(str::to_string))
+            .unwrap_or_else(|| self.as_str().to_string())
+    }
 }
+
+/// Every permission variant, for exhaustive iteration (catalog exports,
+/// round-trip tests).
+pub const ALL_PERMISSIONS_LIST: &[Permission] = &[
+    Permission::LibrariesRead,
+    Permission::LibrariesWrite,
+    Permission::LibrariesDelete,
+    Permission::SeriesRead,
+    Permission::SeriesWrite,
+    Permission::SeriesDelete,
+    Permission::BooksRead,
+    Permission::BooksWrite,
+    Permission::BooksDelete,
+    Permission::CollectionsRead,
+    Permission::CollectionsWrite,
+    Permission::CollectionsDelete,
+    Permission::ReadListsRead,
+    Permission::ReadListsWrite,
+    Permission::ReadListsDelete,
+    Permission::PagesRead,
+    Permission::ProgressRead,
+    Permission::ProgressWrite,
+    Permission::UsersRead,
+    Permission::UsersWrite,
+    Permission::UsersDelete,
+    Permission::ApiKeysRead,
+    Permission::ApiKeysWrite,
+    Permission::ApiKeysDelete,
+    Permission::TasksRead,
+    Permission::TasksWrite,
+    Permission::PluginsManage,
+    Permission::SystemHealth,
+    Permission::SystemAdmin,
+];
 
 impl FromStr for Permission {
     type Err = String;
@@ -344,6 +414,64 @@ mod tests {
             Permission::PluginsManage
         );
         assert!(Permission::from_str("invalid:permission").is_err());
+    }
+
+    #[test]
+    fn test_parse_lenient_accepts_all_wire_formats() {
+        // Canonical serde kebab-case, as stored and as served by the API.
+        assert_eq!(
+            Permission::parse_lenient("read-lists-read").unwrap(),
+            Permission::ReadListsRead
+        );
+        assert_eq!(
+            Permission::parse_lenient("api-keys-read").unwrap(),
+            Permission::ApiKeysRead
+        );
+        assert_eq!(
+            Permission::parse_lenient("plugins-manage").unwrap(),
+            Permission::PluginsManage
+        );
+        // Colon display format.
+        assert_eq!(
+            Permission::parse_lenient("readlists:read").unwrap(),
+            Permission::ReadListsRead
+        );
+        assert_eq!(
+            Permission::parse_lenient("api-keys:write").unwrap(),
+            Permission::ApiKeysWrite
+        );
+        // Legacy frontend dash form where the resource had no inner dash.
+        assert_eq!(
+            Permission::parse_lenient("readlists-read").unwrap(),
+            Permission::ReadListsRead
+        );
+        assert_eq!(
+            Permission::parse_lenient("system-health").unwrap(),
+            Permission::SystemHealth
+        );
+        assert!(Permission::parse_lenient("not-a-permission").is_err());
+        assert!(Permission::parse_lenient("").is_err());
+    }
+
+    #[test]
+    fn test_parse_lenient_round_trips_every_canonical_name() {
+        // Every serde-serialized name must parse back to the same variant.
+        for perm in ALL_PERMISSIONS_LIST.iter() {
+            let canonical = serde_json::to_value(perm).unwrap();
+            let canonical = canonical.as_str().unwrap();
+            assert_eq!(
+                &Permission::parse_lenient(canonical).unwrap(),
+                perm,
+                "canonical name {canonical} must round-trip"
+            );
+            // And the colon display form must parse too.
+            assert_eq!(
+                &Permission::parse_lenient(perm.as_str()).unwrap(),
+                perm,
+                "colon name {} must round-trip",
+                perm.as_str()
+            );
+        }
     }
 
     #[test]

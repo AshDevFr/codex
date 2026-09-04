@@ -716,6 +716,12 @@ The following paths are exempt from rate limiting:
     ),
     components(
         schemas(
+            // Permission catalog. Not referenced by any DTO (API key
+            // permissions travel as plain strings), but exported so the
+            // frontend can verify its hand-maintained permission list
+            // against the backend enum.
+            crate::permissions::Permission,
+
             // App info
             v1::dto::AppInfoDto,
 

@@ -207,12 +207,10 @@ pub async fn create_api_key(
         // Parse provided permissions
         let mut perms = HashSet::new();
         for perm_str in perm_strings {
-            // Normalize permission string: convert kebab-case to colon format
-            // e.g., "libraries-read" -> "libraries:read"
-            let normalized = perm_str.replace('-', ":");
-            let perm = normalized.parse::<Permission>().map_err(|e| {
-                ApiError::BadRequest(format!("Invalid permission: {} ({})", perm_str, e))
-            })?;
+            // Accept every wire format (canonical kebab-case, colon form,
+            // legacy dash form); storage below serializes the canonical name.
+            let perm = Permission::parse_lenient(&perm_str)
+                .map_err(|e| ApiError::BadRequest(format!("Invalid permission: {e}")))?;
             // Users can only grant permissions they have
             // (Admins have all permissions via their role, so no special case needed)
             if !auth.has_permission(&perm) {
@@ -320,12 +318,10 @@ pub async fn update_api_key(
         // Parse provided permissions
         let mut perms = HashSet::new();
         for perm_str in perm_strings {
-            // Normalize permission string: convert kebab-case to colon format
-            // e.g., "libraries-read" -> "libraries:read"
-            let normalized = perm_str.replace('-', ":");
-            let perm = normalized.parse::<Permission>().map_err(|e| {
-                ApiError::BadRequest(format!("Invalid permission: {} ({})", perm_str, e))
-            })?;
+            // Accept every wire format (canonical kebab-case, colon form,
+            // legacy dash form); storage below serializes the canonical name.
+            let perm = Permission::parse_lenient(&perm_str)
+                .map_err(|e| ApiError::BadRequest(format!("Invalid permission: {e}")))?;
             // Users can only grant permissions they have
             // (Admins have all permissions via their role, so no special case needed)
             if !auth.has_permission(&perm) {

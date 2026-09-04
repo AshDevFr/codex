@@ -378,6 +378,12 @@ fn filter_conditions_reference_their_grammar() {
 /// cheap; adding one without reading which group it belongs in is how this list
 /// stops meaning anything.
 const ACCEPTED_UNREFERENCED_COMPONENTS: &[&str] = &[
+    // -- Deliberate catalog exports -----------------------------------------
+    // The permission enum is exported for the frontend's catalog parity test
+    // (web/src/types/permissions.test.ts), not for any operation: API key and
+    // user DTOs carry permissions as plain strings for backwards
+    // compatibility, so no schema references it.
+    "Permission",
     // -- The generic wrapper's own base -------------------------------------
     // Rendered from `PaginatedResponse<T>`'s `ToSchema` derive rather than from
     // any reference. Every operation names a concrete instantiation, so nothing

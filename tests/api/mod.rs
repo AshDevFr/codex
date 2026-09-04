@@ -40,6 +40,7 @@ mod opds2;
 mod openapi_spec;
 mod pages;
 mod pdf_cache;
+mod permission_formats;
 mod plugin_metrics;
 mod plugin_web_links;
 mod plugins;

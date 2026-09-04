@@ -24,9 +24,9 @@ export const PERMISSIONS = {
   COLLECTIONS_DELETE: "collections-delete",
 
   // Read lists (shared groupings of books)
-  READLISTS_READ: "readlists-read",
-  READLISTS_WRITE: "readlists-write",
-  READLISTS_DELETE: "readlists-delete",
+  READLISTS_READ: "read-lists-read",
+  READLISTS_WRITE: "read-lists-write",
+  READLISTS_DELETE: "read-lists-delete",
 
   // Pages (image serving)
   PAGES_READ: "pages-read",
@@ -48,6 +48,9 @@ export const PERMISSIONS = {
   // Tasks
   TASKS_READ: "tasks-read",
   TASKS_WRITE: "tasks-write",
+
+  // Plugins (admin configuration)
+  PLUGINS_MANAGE: "plugins-manage",
 
   // System
   SYSTEM_HEALTH: "system-health",
@@ -118,12 +121,12 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       {
         value: PERMISSIONS.PROGRESS_READ,
         label: "Read Progress",
-        description: "View reading progress",
+        description: "View reading progress, history, and stats",
       },
       {
         value: PERMISSIONS.PROGRESS_WRITE,
         label: "Write Progress",
-        description: "Update reading progress",
+        description: "Update reading progress and history",
       },
     ],
   },
@@ -217,6 +220,17 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
         value: PERMISSIONS.TASKS_WRITE,
         label: "Write Tasks",
         description: "Trigger scans and manage tasks",
+      },
+    ],
+  },
+  {
+    label: "Plugins",
+    description: "Manage metadata plugins (admin only)",
+    permissions: [
+      {
+        value: PERMISSIONS.PLUGINS_MANAGE,
+        label: "Manage Plugins",
+        description: "Install, configure, and manage plugins",
       },
     ],
   },
