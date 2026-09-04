@@ -442,6 +442,7 @@ pub async fn put_progression(
 pub async fn mark_series_as_read(
     State(state): State<Arc<AuthState>>,
     FlexibleAuthContext(auth): FlexibleAuthContext,
+    headers: axum::http::HeaderMap,
     Path(series_id): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {
     require_permission!(auth, Permission::ProgressWrite)?;
@@ -462,10 +463,16 @@ pub async fn mark_series_as_read(
     // Build list of (book_id, page_count) tuples for marking as read
     let book_data: Vec<(Uuid, i32)> = books.iter().map(|b| (b.id, b.page_count)).collect();
 
-    // Mark all books as read
-    ReadProgressRepository::mark_series_as_read(&state.db, user_id, book_data)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to mark series as read: {}", e)))?;
+    // Mark all books as read, attributed to the requesting device so the
+    // events do not pile up on the anonymous catch-all in the statistics.
+    ReadProgressRepository::mark_series_as_read_with_device(
+        &state.db,
+        user_id,
+        book_data,
+        &komga_device(&auth, &headers),
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to mark series as read: {}", e)))?;
 
     // Komga returns 204 No Content on success
     Ok(StatusCode::NO_CONTENT)
@@ -507,6 +514,7 @@ pub async fn mark_series_as_read(
 pub async fn mark_series_as_unread(
     State(state): State<Arc<AuthState>>,
     FlexibleAuthContext(auth): FlexibleAuthContext,
+    headers: axum::http::HeaderMap,
     Path(series_id): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {
     require_permission!(auth, Permission::ProgressWrite)?;
@@ -527,10 +535,16 @@ pub async fn mark_series_as_unread(
     // Get book IDs for deletion
     let book_ids: Vec<Uuid> = books.iter().map(|b| b.id).collect();
 
-    // Delete all reading progress for these books
-    ReadProgressRepository::mark_series_as_unread(&state.db, user_id, book_ids)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to mark series as unread: {}", e)))?;
+    // Delete all reading progress for these books, attributing the reset
+    // events to the requesting device.
+    ReadProgressRepository::mark_series_as_unread_with_device(
+        &state.db,
+        user_id,
+        book_ids,
+        &komga_device(&auth, &headers),
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to mark series as unread: {}", e)))?;
 
     // Komga returns 204 No Content on success
     Ok(StatusCode::NO_CONTENT)

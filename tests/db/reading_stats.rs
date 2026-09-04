@@ -173,6 +173,24 @@ async fn exercise_reading_stats(db: &DatabaseConnection) {
     )
     .await;
 
+    // The ebook's finish reported a second time by another surface. Finishes
+    // are counted as distinct (book, pass), and the composite expression
+    // behind that leans on uuid-to-text casting that each engine spells the
+    // same but executes differently, so the collapsed value is asserted here
+    // on both.
+    seed(
+        db,
+        user,
+        ebook,
+        "opds",
+        "completed",
+        "unknown",
+        0,
+        0,
+        at(25, 9),
+    )
+    .await;
+
     // A reset is bookkeeping, not reading, and must not inflate the counts.
     seed(
         db,
@@ -196,9 +214,13 @@ async fn exercise_reading_stats(db: &DatabaseConnection) {
     assert_eq!(summary.duration.inferred_ms, 20 * MINUTE_MS);
     assert_eq!(summary.duration.total_ms(), 95 * MINUTE_MS);
     assert_eq!(summary.pages_read, 65);
-    assert_eq!(summary.sessions, 4, "the reset is not a sitting");
+    assert_eq!(summary.sessions, 5, "the reset is not a sitting");
     assert_eq!(summary.books, 2);
-    assert_eq!(summary.sessions_without_duration, 1);
+    assert_eq!(
+        summary.books_finished, 1,
+        "two reports of one finish collapse to one"
+    );
+    assert_eq!(summary.sessions_without_duration, 2);
 
     // ---- Bucketing: entirely different SQL per engine ----
     let daily = ReadingStatsRepository::by_period(db, user, june(), StatsGranularity::Day, 0)
@@ -252,6 +274,11 @@ async fn exercise_reading_stats(db: &DatabaseConnection) {
     assert_eq!(series.len(), 2);
     assert_eq!(series[0].series_name, "Berserk");
     assert_eq!(series[0].duration.total_ms(), 50 * MINUTE_MS);
+    assert_eq!(series[1].series_name, "Dune");
+    assert_eq!(
+        series[1].books_finished, 1,
+        "the duplicated finish collapses in the series breakdown too"
+    );
 
     let formats = ReadingStatsRepository::by_format(db, user, june(), StatsSort::Time)
         .await
@@ -285,7 +312,7 @@ async fn exercise_reading_stats(db: &DatabaseConnection) {
     assert!(coverage.last_read_at >= coverage.first_read_at);
 
     let rows = ReadingStatsRepository::row_count(db, user).await.unwrap();
-    assert_eq!(rows, 5, "the reset is still a row, just not a sitting");
+    assert_eq!(rows, 6, "the reset is still a row, just not a sitting");
 }
 
 /// One user's statistics must never include another's, on either engine.

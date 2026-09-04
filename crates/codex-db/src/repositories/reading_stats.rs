@@ -144,7 +144,9 @@ pub struct ReadingSummary {
     /// Distinct sittings, after coalescing.
     pub sessions: i64,
     pub books: i64,
-    /// Books finished in the window, from `completed` events.
+    /// Books finished in the window: distinct `(book, pass)` among `completed`
+    /// events, so duplicate completion reports collapse and a genuine re-read
+    /// still counts.
     pub books_finished: i64,
     /// Sessions whose producer could report neither measured nor reconstructed
     /// time. Surfaced so a suspiciously low total has a visible explanation.
@@ -239,8 +241,21 @@ const PAGES_SUM: &str = "CAST(COALESCE(SUM(COALESCE(rs.pages_read, 0)), 0) AS BI
 /// cutover. Backfilled rows carry no duration and no page count, so time and
 /// pages are silent about everything a reader did before time tracking; a
 /// completion is a completion either way.
-const COMPLETIONS_SUM: &str =
-    "CAST(COALESCE(SUM(CASE WHEN rs.kind = 'completed' THEN 1 ELSE 0 END), 0) AS BIGINT)";
+///
+/// Counted as distinct `(book, pass)` rather than as rows, matching what the
+/// fold considers a finish. Completed events never coalesce in the log (the
+/// fold needs to see each transition), so one real finish routinely leaves
+/// several rows behind: the client's measured session, an unattributed
+/// progress write reaching the last page, a mark-read on an already-read
+/// book. A re-read still counts, because marking a book unread starts a new
+/// pass. `CAST(... AS TEXT)` is the one uuid-to-string spelling both engines
+/// accept; the composite string only has to be distinct, never parsed back.
+///
+/// The known concession: in the per-period breakdown the distinct set is per
+/// bucket, so a completion re-asserted across a bucket boundary lands in both
+/// buckets. The summary and the other breakdowns are exact.
+const COMPLETIONS_SUM: &str = "CAST(COUNT(DISTINCT CASE WHEN rs.kind = 'completed' \
+     THEN CAST(rs.book_id AS TEXT) || ':' || CAST(rs.pass AS TEXT) END) AS BIGINT)";
 
 /// Measured and reconstructed time together, for ranking.
 ///
@@ -776,6 +791,7 @@ mod tests {
         source: DurationSource,
         pages: Option<i32>,
         started: DateTime<Utc>,
+        pass: i32,
     }
 
     impl SessionSpec {
@@ -788,6 +804,7 @@ mod tests {
                 source: DurationSource::Measured,
                 pages: Some(10),
                 started,
+                pass: 1,
             }
         }
 
@@ -821,6 +838,11 @@ mod tests {
             self.pages = Some(pages);
             self
         }
+
+        fn pass(mut self, pass: i32) -> Self {
+            self.pass = pass;
+            self
+        }
     }
 
     async fn insert(db: &DatabaseConnection, user_id: Uuid, book_id: Uuid, spec: SessionSpec) {
@@ -830,7 +852,7 @@ mod tests {
             book_id: Set(book_id),
             device_id: Set(spec.device.to_string()),
             device_name: Set(spec.device_name.map(str::to_string)),
-            pass: Set(1),
+            pass: Set(spec.pass),
             kind: Set(spec.kind.to_string()),
             to_page: Set(Some(1)),
             to_percentage: Set(None),
@@ -1652,6 +1674,87 @@ mod tests {
 
         assert_eq!(summary.sessions, 2, "the reset is not a sitting");
         assert_eq!(summary.books_finished, 1);
+    }
+
+    /// One finish, however many clients reported it. A reader closing a book
+    /// can leave several `completed` events behind (the measured session, an
+    /// unattributed progress write, a mark-read), and completions never
+    /// coalesce in the log, so the statistics must collapse them by
+    /// (book, pass) rather than counting rows.
+    #[tokio::test]
+    async fn duplicate_completion_events_for_one_pass_count_one_finish() {
+        let db = setup_test_db().await;
+        let user = create_user(&db, "reader").await;
+        let book = create_book(&db, "Berserk", "cbz").await;
+
+        insert(
+            &db,
+            user.id,
+            book.id,
+            SessionSpec::measured("phone", 30, at(1, 9)).kind("completed"),
+        )
+        .await;
+        insert(
+            &db,
+            user.id,
+            book.id,
+            SessionSpec::without_duration("legacy", at(1, 10)).kind("completed"),
+        )
+        .await;
+        insert(
+            &db,
+            user.id,
+            book.id,
+            SessionSpec::without_duration("legacy", at(1, 20)).kind("completed"),
+        )
+        .await;
+
+        let summary = ReadingStatsRepository::summary(&db, user.id, whole_of_june())
+            .await
+            .unwrap();
+        let series =
+            ReadingStatsRepository::by_series(&db, user.id, whole_of_june(), StatsSort::Time, 10)
+                .await
+                .unwrap();
+
+        assert_eq!(summary.books_finished, 1, "one book finished once");
+        assert_eq!(series[0].books_finished, 1);
+        assert_eq!(
+            summary.sessions, 3,
+            "the duplicate events are still sittings"
+        );
+    }
+
+    /// A genuine re-read starts a new pass (marking the book unread bumps it),
+    /// and each finished pass in the window is its own finish.
+    #[tokio::test]
+    async fn a_re_read_counts_each_completed_pass() {
+        let db = setup_test_db().await;
+        let user = create_user(&db, "reader").await;
+        let book = create_book(&db, "Berserk", "cbz").await;
+
+        insert(
+            &db,
+            user.id,
+            book.id,
+            SessionSpec::measured("phone", 30, at(1, 9)).kind("completed"),
+        )
+        .await;
+        insert(
+            &db,
+            user.id,
+            book.id,
+            SessionSpec::measured("phone", 30, at(10, 9))
+                .kind("completed")
+                .pass(2),
+        )
+        .await;
+
+        let summary = ReadingStatsRepository::summary(&db, user.id, whole_of_june())
+            .await
+            .unwrap();
+
+        assert_eq!(summary.books_finished, 2, "two passes, two finishes");
     }
 
     #[tokio::test]

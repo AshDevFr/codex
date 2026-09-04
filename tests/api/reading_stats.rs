@@ -413,6 +413,93 @@ async fn finished_books_are_reported_everywhere() {
     assert_eq!(stats.formats[0].books_finished, 1);
 }
 
+/// One finish, however many surfaces reported it. A client that measures its
+/// own sessions can also write a completing progress update that arrives
+/// unattributed (no device header); the two events describe the same
+/// read-through and must count as one finish, not two.
+#[tokio::test]
+async fn a_finish_reported_by_several_surfaces_counts_once() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_user_id, token) = admin_and_token(&db, &state, "reader").await;
+
+    let book = book_in_series(&db, "Berserk", "cbz").await;
+    record_reading(
+        state.clone(),
+        &token,
+        book.id,
+        "phone",
+        20,
+        10,
+        "completed",
+        at(3),
+    )
+    .await;
+
+    // The same finish again, as an unattributed progress write reaching the
+    // last page (no x-codex-device-id header, so it lands on the catch-all).
+    let app = create_test_router(state.clone()).await;
+    let request = put_json_request_with_auth(
+        &format!("/api/v1/books/{}/progress", book.id),
+        &serde_json::json!({"currentPage": 100, "completed": true}),
+        &token,
+    );
+    let (status, _body) = make_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let window = format!(
+        "?from={}&to={}",
+        q(at(1)),
+        q(Utc::now() + Duration::days(1))
+    );
+    let (_, body) = fetch_stats(state, &token, &window).await;
+    let stats = body.expect("expected a JSON body");
+
+    assert_eq!(
+        stats.summary.books_finished, 1,
+        "two reports of one finish must not count twice"
+    );
+    assert_eq!(stats.series[0].books_finished, 1);
+}
+
+/// Marking a series read is attributed to the device the request declares,
+/// and re-marking it changes nothing: the books are already finished.
+#[tokio::test]
+async fn marking_a_series_read_is_attributed_and_idempotent() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_user_id, token) = admin_and_token(&db, &state, "reader").await;
+    let book = book_in_series(&db, "Berserk", "cbz").await;
+
+    let mark = || async {
+        let app = create_test_router(state.clone()).await;
+        let mut request =
+            post_request_with_auth(&format!("/api/v1/series/{}/read", book.series_id), &token);
+        request
+            .headers_mut()
+            .insert("x-codex-device-id", "browser-abc".parse().unwrap());
+        let (status, _body) = make_request(app, request).await;
+        assert_eq!(status, StatusCode::OK);
+    };
+    mark().await;
+    mark().await;
+
+    let window = format!(
+        "?from={}&to={}",
+        q(Utc::now() - Duration::days(1)),
+        q(Utc::now() + Duration::days(1))
+    );
+    let (_, body) = fetch_stats(state.clone(), &token, &window).await;
+    let stats = body.expect("expected a JSON body");
+
+    assert_eq!(stats.summary.books_finished, 1);
+    assert_eq!(stats.devices.len(), 1, "one device, no anonymous catch-all");
+    assert_eq!(
+        stats.devices[0].device_id, "browser-abc",
+        "the completion belongs to the declared device"
+    );
+}
+
 /// Coverage exists so a client knows which years it can offer. It must ignore
 /// the window, which is exactly why it is not a field on the statistics
 /// response.

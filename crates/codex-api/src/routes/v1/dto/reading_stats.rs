@@ -123,8 +123,10 @@ pub struct ReadingSummaryDto {
     pub sessions: i64,
     #[schema(example = 12)]
     pub books: i64,
-    /// Books finished in the window. Unlike time and pages, this is populated
-    /// for reading that predates session tracking.
+    /// Books finished in the window, counted once per read-through: however
+    /// many clients reported the same finish, it is one finish, and a genuine
+    /// re-read counts again. Unlike time and pages, this is populated for
+    /// reading that predates session tracking.
     #[schema(example = 5)]
     pub books_finished: i64,
     /// Sittings whose client could report no time at all. A large number here
@@ -225,6 +227,8 @@ pub struct ReadingBySeriesDto {
     pub sessions: i64,
     /// Distinct books of the series read in the window.
     pub books: i64,
+    /// Read-throughs finished in the window. Can exceed `books` only when a
+    /// book was genuinely re-read inside the window.
     pub books_finished: i64,
 }
 

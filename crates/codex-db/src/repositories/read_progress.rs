@@ -588,7 +588,14 @@ impl ReadProgressRepository {
     /// shared is the commit: a series can run to several hundred volumes, and a
     /// commit each turns one click into hundreds of round trips and fsyncs.
     ///
-    /// All of them carry the same timestamp, which is also the more honest
+    /// Books whose current pass is already finished are skipped outright.
+    /// Re-marking them would say nothing new about the reader, but every
+    /// appended `completed` event is a finish in the statistics, so the no-op
+    /// has to be a no-op in the log and not just in the projections. A genuine
+    /// re-read goes through a reset first, which starts a new pass and makes
+    /// the book markable again.
+    ///
+    /// All events carry the same timestamp, which is also the more honest
     /// description of what happened: the reader marked the series in one go.
     async fn mark_series_as_read_txn(
         db: &DatabaseConnection,
@@ -600,8 +607,24 @@ impl ReadProgressRepository {
         let now = Utc::now();
         let mut count = 0;
 
+        let already_finished: std::collections::HashSet<Uuid> = ReadProgress::find()
+            .filter(read_progress::Column::UserId.eq(user_id))
+            .filter(
+                read_progress::Column::BookId
+                    .is_in(book_ids.iter().map(|&(id, _)| id).collect::<Vec<_>>()),
+            )
+            .filter(read_progress::Column::Completed.eq(true))
+            .all(&txn)
+            .await?
+            .into_iter()
+            .map(|p| p.book_id)
+            .collect();
+
         // page_count is 1-indexed, so the last page is the page count itself.
         for &(book_id, page_count) in book_ids {
+            if already_finished.contains(&book_id) {
+                continue;
+            }
             Self::upsert_in(
                 &txn, user_id, book_id, page_count, None, true, None, device, now,
             )
@@ -1328,6 +1351,57 @@ mod tests {
             "re-marking an already-read series must not inflate the log"
         );
         assert_eq!(completion_count(&db, user.id, second.id).await, 1);
+    }
+
+    /// Re-marking an already-read series is a no-op for the log itself, not
+    /// just for the banked completions: every appended `completed` event counts
+    /// as a finish in the statistics, so a book whose current pass is already
+    /// finished must be skipped rather than re-completed.
+    #[tokio::test]
+    async fn re_marking_a_read_series_appends_nothing() {
+        let db = setup_test_db().await;
+        let user = create_test_user(&db).await;
+        let read = create_test_book(&db).await;
+        let unread = create_test_book(&db).await;
+
+        let marked = ReadProgressRepository::mark_series_as_read(&db, user.id, vec![(read.id, 50)])
+            .await
+            .unwrap();
+        assert_eq!(marked, 1);
+        let rows_after_first = session_count(&db, user.id).await;
+
+        // The second mark covers one finished book and one fresh one: only the
+        // fresh one is an event.
+        let marked = ReadProgressRepository::mark_series_as_read(
+            &db,
+            user.id,
+            vec![(read.id, 50), (unread.id, 50)],
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(marked, 1, "only the unread book was marked");
+        assert_eq!(
+            session_count(&db, user.id).await,
+            rows_after_first + 1,
+            "the already-finished book must not gain another completed event"
+        );
+
+        // The skipped book's projection is untouched and still completed.
+        let progress = ReadProgressRepository::get_by_user_and_book(&db, user.id, read.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(progress.completed);
+    }
+
+    async fn session_count(db: &DatabaseConnection, user_id: Uuid) -> u64 {
+        use sea_orm::PaginatorTrait;
+        crate::entities::reading_sessions::Entity::find()
+            .filter(crate::entities::reading_sessions::Column::UserId.eq(user_id))
+            .count(db)
+            .await
+            .unwrap()
     }
 
     /// The series-level unread path also spares the log, and a subsequent

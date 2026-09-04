@@ -1,6 +1,6 @@
 {
   "name": "@ashdev/codex-plugin-sync-anilist",
-  "version": "2.4.13",
+  "version": "2.4.14",
   "description": "AniList reading progress sync plugin for Codex",
   "main": "dist/index.js",
   "bin": "dist/index.js",

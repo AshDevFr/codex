@@ -7,7 +7,7 @@
       "name": "MIT",
       "url": "https://opensource.org/licenses/MIT"
     },
-    "version": "2.4.13"
+    "version": "2.4.14"
   },
   "paths": {
     "/api/v1/access-groups": {
@@ -39050,7 +39050,8 @@
           },
           "booksFinished": {
             "type": "integer",
-            "format": "int64"
+            "format": "int64",
+            "description": "Read-throughs finished in the window. Can exceed `books` only when a\nbook was genuinely re-read inside the window."
           },
           "duration": {
             "$ref": "#/components/schemas/DurationBreakdownDto"
@@ -39390,7 +39391,7 @@
           "booksFinished": {
             "type": "integer",
             "format": "int64",
-            "description": "Books finished in the window. Unlike time and pages, this is populated\nfor reading that predates session tracking.",
+            "description": "Books finished in the window, counted once per read-through: however\nmany clients reported the same finish, it is one finish, and a genuine\nre-read counts again. Unlike time and pages, this is populated for\nreading that predates session tracking.",
             "example": 5
           },
           "duration": {

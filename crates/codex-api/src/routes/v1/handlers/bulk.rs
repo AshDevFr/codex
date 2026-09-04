@@ -50,6 +50,7 @@ use uuid::Uuid;
 pub async fn bulk_mark_books_as_read(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
+    headers: axum::http::HeaderMap,
     Json(request): Json<BulkBooksRequest>,
 ) -> Result<Json<MarkReadResponse>, ApiError> {
     require_permission!(auth, Permission::ProgressWrite)?;
@@ -76,10 +77,16 @@ pub async fn bulk_mark_books_as_read(
         }));
     }
 
-    // Mark all books as read
-    let count = ReadProgressRepository::mark_series_as_read(&state.db, auth.user_id, book_data)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to mark books as read: {}", e)))?;
+    // Mark all books as read, attributed to the requesting device so the
+    // events do not pile up on the anonymous catch-all in the statistics.
+    let count = ReadProgressRepository::mark_series_as_read_with_device(
+        &state.db,
+        auth.user_id,
+        book_data,
+        &auth.client_device_context(&headers),
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to mark books as read: {}", e)))?;
 
     Ok(Json(MarkReadResponse {
         count,
@@ -109,6 +116,7 @@ pub async fn bulk_mark_books_as_read(
 pub async fn bulk_mark_books_as_unread(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
+    headers: axum::http::HeaderMap,
     Json(request): Json<BulkBooksRequest>,
 ) -> Result<Json<MarkReadResponse>, ApiError> {
     require_permission!(auth, Permission::ProgressWrite)?;
@@ -120,11 +128,16 @@ pub async fn bulk_mark_books_as_unread(
         }));
     }
 
-    // Mark all books as unread (delete progress records)
-    let count =
-        ReadProgressRepository::mark_series_as_unread(&state.db, auth.user_id, request.book_ids)
-            .await
-            .map_err(|e| ApiError::Internal(format!("Failed to mark books as unread: {}", e)))?;
+    // Mark all books as unread (delete progress records), attributing the
+    // reset events to the requesting device.
+    let count = ReadProgressRepository::mark_series_as_unread_with_device(
+        &state.db,
+        auth.user_id,
+        request.book_ids,
+        &auth.client_device_context(&headers),
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to mark books as unread: {}", e)))?;
 
     Ok(Json(MarkReadResponse {
         count: count as usize,
@@ -223,6 +236,7 @@ pub async fn bulk_analyze_books(
 pub async fn bulk_mark_series_as_read(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
+    headers: axum::http::HeaderMap,
     Json(request): Json<BulkSeriesRequest>,
 ) -> Result<Json<MarkReadResponse>, ApiError> {
     require_permission!(auth, Permission::ProgressWrite)?;
@@ -263,8 +277,14 @@ pub async fn bulk_mark_series_as_read(
             .map(|book| (book.id, book.page_count))
             .collect();
 
-        // Mark all books as read
-        match ReadProgressRepository::mark_series_as_read(&state.db, auth.user_id, book_data).await
+        // Mark all books as read, attributed to the requesting device.
+        match ReadProgressRepository::mark_series_as_read_with_device(
+            &state.db,
+            auth.user_id,
+            book_data,
+            &auth.client_device_context(&headers),
+        )
+        .await
         {
             Ok(count) => total_count += count,
             Err(e) => {
@@ -301,6 +321,7 @@ pub async fn bulk_mark_series_as_read(
 pub async fn bulk_mark_series_as_unread(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
+    headers: axum::http::HeaderMap,
     Json(request): Json<BulkSeriesRequest>,
 ) -> Result<Json<MarkReadResponse>, ApiError> {
     require_permission!(auth, Permission::ProgressWrite)?;
@@ -337,8 +358,15 @@ pub async fn bulk_mark_series_as_unread(
 
         let book_ids: Vec<Uuid> = books.iter().map(|book| book.id).collect();
 
-        // Mark all books as unread
-        match ReadProgressRepository::mark_series_as_unread(&state.db, auth.user_id, book_ids).await
+        // Mark all books as unread, attributing the reset events to the
+        // requesting device.
+        match ReadProgressRepository::mark_series_as_unread_with_device(
+            &state.db,
+            auth.user_id,
+            book_ids,
+            &auth.client_device_context(&headers),
+        )
+        .await
         {
             Ok(count) => total_count += count,
             Err(e) => {

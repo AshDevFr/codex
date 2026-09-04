@@ -16909,7 +16909,11 @@ export interface components {
              * @description Distinct books of the series read in the window.
              */
             books: number;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Read-throughs finished in the window. Can exceed `books` only when a
+             *     book was genuinely re-read inside the window.
+             */
             booksFinished: number;
             duration: components["schemas"]["DurationBreakdownDto"];
             /** Format: int64 */
@@ -17128,8 +17132,10 @@ export interface components {
             books: number;
             /**
              * Format: int64
-             * @description Books finished in the window. Unlike time and pages, this is populated
-             *     for reading that predates session tracking.
+             * @description Books finished in the window, counted once per read-through: however
+             *     many clients reported the same finish, it is one finish, and a genuine
+             *     re-read counts again. Unlike time and pages, this is populated for
+             *     reading that predates session tracking.
              * @example 5
              */
             booksFinished: number;

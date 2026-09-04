@@ -116,9 +116,13 @@ async fn count_arrivals(
     }
 }
 
+// The `_postgres` name suffix is load-bearing: nextest serialises tests
+// matching `test(~postgres)` into one group because `setup_test_db_postgres`
+// truncates a database shared by the whole run. A PostgreSQL test without the
+// suffix runs in parallel and deletes other tests' fixtures mid-flight.
 #[tokio::test]
 #[ignore] // Requires PostgreSQL test database
-async fn entity_event_reaches_a_sibling_replica() {
+async fn entity_event_reaches_a_sibling_replica_postgres() {
     let Some(db) = setup_test_db_postgres().await else {
         eprintln!("PostgreSQL test database not available, skipping");
         return;
@@ -153,7 +157,7 @@ async fn entity_event_reaches_a_sibling_replica() {
 /// subscribers.
 #[tokio::test]
 #[ignore] // Requires PostgreSQL test database
-async fn author_replica_does_not_receive_its_own_event_twice() {
+async fn author_replica_does_not_receive_its_own_event_twice_postgres() {
     let Some(db) = setup_test_db_postgres().await else {
         eprintln!("PostgreSQL test database not available, skipping");
         return;
