@@ -593,3 +593,100 @@ async fn test_register_succeeds_when_enabled() {
         .unwrap();
     assert!(user.is_some(), "User should be created in database");
 }
+
+// ============================================================================
+// API keys as Bearer tokens
+// ============================================================================
+//
+// `Authorization: Bearer <api-key>` is the de-facto convention for API keys
+// (GitHub, OpenAI, Stripe), and clients assume it. Codex keys carry the
+// distinctive `codex_` prefix, so the extractor routes them to API key
+// verification by prefix; everything else stays on the JWT/OIDC path.
+
+/// Create a user plus an API key with the libraries-read permission,
+/// returning the plaintext key.
+async fn user_with_bearer_test_key(db: &sea_orm::DatabaseConnection) -> String {
+    use codex::api::permissions::{Permission, serialize_permissions};
+    use codex::db::repositories::ApiKeyRepository;
+    use std::collections::HashSet;
+
+    let password_hash = password::hash_password("user123").unwrap();
+    let user = create_test_user("bearer_user", "bearer@example.com", &password_hash, false);
+    let user = UserRepository::create(db, &user).await.unwrap();
+
+    let plain_key = "codex_bearer_secret123";
+    let key_hash = password::hash_password(plain_key).unwrap();
+    let mut permissions = HashSet::new();
+    permissions.insert(Permission::LibrariesRead);
+    let api_key = create_test_api_key(
+        user.id,
+        "Bearer Key",
+        &key_hash,
+        "codex_bearer",
+        serde_json::from_str(&serialize_permissions(&permissions)).unwrap(),
+    );
+    ApiKeyRepository::create(db, &api_key).await.unwrap();
+    plain_key.to_string()
+}
+
+#[tokio::test]
+async fn test_api_key_works_as_bearer_token() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let plain_key = user_with_bearer_test_key(&db).await;
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router(state).await;
+
+    // Same header shape a JWT client uses, but carrying the API key.
+    let request = get_request_with_auth("/api/v1/libraries", &plain_key);
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_bearer_api_key_still_enforces_permissions() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let plain_key = user_with_bearer_test_key(&db).await;
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router(state).await;
+
+    // The key has libraries:read only; a progress endpoint must refuse it.
+    let request = get_request_with_auth("/api/v1/progress", &plain_key);
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn test_invalid_bearer_api_key_gets_an_api_key_error() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router(state).await;
+
+    let request = get_request_with_auth("/api/v1/libraries", "codex_nosuch_key");
+    let (status, response): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    let message = response.unwrap().message;
+    assert!(
+        message.contains("API key"),
+        "a codex_-prefixed bearer credential must fail as an API key, got: {message}"
+    );
+}
+
+#[tokio::test]
+async fn test_non_codex_bearer_token_still_fails_as_jwt() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router(state).await;
+
+    let request = get_request_with_auth("/api/v1/libraries", "not-a-jwt-and-not-a-key");
+    let (status, response): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    let message = response.unwrap().message;
+    assert!(
+        message.contains("JWT") || message.contains("token"),
+        "non-codex bearer credentials keep the JWT error path, got: {message}"
+    );
+}

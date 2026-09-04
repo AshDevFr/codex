@@ -484,3 +484,24 @@ async fn komga_progress_endpoints_follow_the_same_gates() {
     .await;
     assert_eq!(status, StatusCode::NO_CONTENT);
 }
+
+#[tokio::test]
+async fn komga_accepts_the_api_key_as_a_bearer_token() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let (_series_id, book) = library_series_book(&db).await;
+    let keys = user_with_keys(&db).await;
+    let (_state, app) = setup_test_app_with_komga(db).await;
+
+    // Komga clients commonly send API keys as Bearer credentials; the
+    // FlexibleAuthContext extractor routes the codex_ prefix to API key
+    // verification just like the main extractor.
+    let request = Request::builder()
+        .method("PATCH")
+        .uri(format!("/komga/api/v1/books/{}/read-progress", book.id))
+        .header("authorization", format!("Bearer {}", keys.progress_write))
+        .header("content-type", "application/json")
+        .body(r#"{"page": 7, "completed": false}"#.to_string())
+        .unwrap();
+    let (status, _) = make_raw_request(app, request).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+}

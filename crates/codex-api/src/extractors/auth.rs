@@ -402,8 +402,17 @@ impl FromRequestParts<Arc<AppState>> for AuthContext {
         if let Some(auth_header) = parts.headers.get("authorization")
             && let Ok(auth_str) = auth_header.to_str()
         {
-            // Try JWT Bearer token
             if let Some(token) = auth_str.strip_prefix("Bearer ") {
+                // API keys as Bearer tokens: the de-facto convention for API
+                // keys (GitHub, OpenAI, Stripe), and what clients assume.
+                // Routing is by the distinctive `codex_` key prefix, not
+                // try-and-fallback, mirroring how the JWT path routes local
+                // vs IdP tokens by header algorithm; a JWT can never start
+                // with `codex_`, so no ambiguity is possible.
+                if token.starts_with("codex_") {
+                    return extract_from_api_key(token, state).await;
+                }
+                // Try JWT Bearer token
                 return extract_from_jwt(token, state).await;
             }
             // Try HTTP Basic authentication
@@ -763,8 +772,14 @@ impl FromRequestParts<Arc<AppState>> for FlexibleAuthContext {
         if let Some(auth_header) = parts.headers.get("authorization")
             && let Ok(auth_str) = auth_header.to_str()
         {
-            // Try JWT Bearer token
+            // Bearer token: `codex_`-prefixed credentials are API keys
+            // (same prefix routing as AuthContext), anything else a JWT.
             if let Some(token) = auth_str.strip_prefix("Bearer ") {
+                if token.starts_with("codex_") {
+                    return extract_from_api_key(token, state)
+                        .await
+                        .map(FlexibleAuthContext);
+                }
                 return extract_from_jwt(token, state)
                     .await
                     .map(FlexibleAuthContext);
