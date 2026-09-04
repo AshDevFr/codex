@@ -9,7 +9,7 @@ use super::super::dto::recommendations::{
     RecommendationSourceDto, RecommendationsRefreshResponse, RecommendationsResponse,
 };
 use crate::extractors::auth::AuthContext;
-use crate::{error::ApiError, extractors::AppState};
+use crate::{error::ApiError, extractors::AppState, permissions::Permission};
 use axum::{
     Json,
     extract::{Path, State},
@@ -109,6 +109,8 @@ pub async fn get_recommendations(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
 ) -> Result<Json<RecommendationsResponse>, ApiError> {
+    auth.require_permission(&Permission::SeriesRead)?;
+
     let instances = find_recommendation_plugins(&state.db, auth.user_id).await?;
 
     let mut all_recommendations: Vec<RecommendationDto> = Vec::new();
@@ -337,6 +339,8 @@ pub async fn refresh_recommendations(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
 ) -> Result<Json<RecommendationsRefreshResponse>, ApiError> {
+    auth.require_permission(&Permission::SeriesRead)?;
+
     let instances = find_recommendation_plugins(&state.db, auth.user_id).await?;
 
     // Enqueue a refresh for every instance that doesn't already have one
@@ -566,6 +570,8 @@ pub async fn dismiss_recommendation(
     Path(external_id): Path<String>,
     Json(request): Json<DismissRecommendationRequest>,
 ) -> Result<Json<DismissRecommendationResponse>, ApiError> {
+    auth.require_permission(&Permission::SeriesRead)?;
+
     let instances = find_recommendation_plugins(&state.db, auth.user_id).await?;
 
     debug!(

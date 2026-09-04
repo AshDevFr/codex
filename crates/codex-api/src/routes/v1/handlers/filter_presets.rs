@@ -2,6 +2,10 @@
 //!
 //! Powers both the library list-page saved-filter dropdowns (`scope = "list"`)
 //! and the advanced search page (`scope = "search"`).
+//!
+//! Deliberately auth-only: presets are per-user UI state (names and filter
+//! parameters), with no library content in them, so no permission gate
+//! applies beyond authentication.
 
 use axum::{
     Json,

@@ -12,6 +12,7 @@ use uuid::Uuid;
 
 use crate::error::ApiError;
 use crate::extractors::auth::{AppState, AuthContext};
+use crate::permissions::Permission;
 use codex_db::repositories::{SeriesExportRepository, TaskRepository};
 use codex_services::book_export_collector::BookExportField;
 use codex_services::series_export_collector::ExportField;
@@ -45,6 +46,8 @@ pub async fn create_export(
     auth: AuthContext,
     Json(request): Json<CreateSeriesExportRequest>,
 ) -> Result<(StatusCode, Json<SeriesExportDto>), ApiError> {
+    auth.require_permission(&Permission::SeriesRead)?;
+
     let user_id = auth.user_id;
 
     // Validate format
@@ -180,6 +183,8 @@ pub async fn list_exports(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
 ) -> Result<Json<SeriesExportListResponse>, ApiError> {
+    auth.require_permission(&Permission::SeriesRead)?;
+
     let exports = SeriesExportRepository::list_by_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to list exports: {e}")))?;
@@ -206,6 +211,8 @@ pub async fn get_export(
     auth: AuthContext,
     Path(id): Path<Uuid>,
 ) -> Result<Json<SeriesExportDto>, ApiError> {
+    auth.require_permission(&Permission::SeriesRead)?;
+
     let export = SeriesExportRepository::find_by_id_and_user(&state.db, id, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to get export: {e}")))?
@@ -239,6 +246,8 @@ pub async fn download_export(
     auth: AuthContext,
     Path(id): Path<Uuid>,
 ) -> Result<Response, ApiError> {
+    auth.require_permission(&Permission::SeriesRead)?;
+
     let export = SeriesExportRepository::find_by_id_and_user(&state.db, id, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to get export: {e}")))?
@@ -308,6 +317,8 @@ pub async fn delete_export(
     auth: AuthContext,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {
+    auth.require_permission(&Permission::SeriesRead)?;
+
     let export = SeriesExportRepository::find_by_id_and_user(&state.db, id, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to get export: {e}")))?

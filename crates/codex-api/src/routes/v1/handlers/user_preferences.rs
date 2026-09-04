@@ -1,4 +1,7 @@
 //! User Preferences API handlers
+//!
+//! Deliberately auth-only: preferences are per-user UI state with no library
+//! content in them, so no permission gate applies beyond authentication.
 
 use super::super::dto::{
     BulkSetPreferencesRequest, DeletePreferenceResponse, SetPreferenceRequest,

@@ -1,15 +1,16 @@
 //! Handlers for the per-user want-to-read queue.
 //!
-//! The queue is personal: every handler scopes to `auth.user_id`. Being
-//! authenticated is sufficient (no extra permission) — a user only ever manages
-//! their own queue.
+//! The queue is personal: every handler scopes to `auth.user_id`, so a user
+//! only ever manages their own queue. It still exposes series and book
+//! metadata, so every handler requires `series:read`; a key without content
+//! access (for example a stats-only key) must not see what is in the queue.
 
 use super::super::dto::{
     AddWantToReadRequest, BulkAddWantToReadRequest, BulkAddWantToReadResponse,
     ReorderWantToReadRequest, WantToReadEntryDto, WantToReadItemType, WantToReadListQuery,
     WantToReadListResponse,
 };
-use crate::{AppState, error::ApiError, extractors::AuthContext};
+use crate::{AppState, error::ApiError, extractors::AuthContext, permissions::Permission};
 use axum::{
     Json,
     extract::{Path, Query, State},
@@ -66,6 +67,8 @@ pub async fn list_want_to_read(
     auth: AuthContext,
     Query(query): Query<WantToReadListQuery>,
 ) -> Result<Json<WantToReadListResponse>, ApiError> {
+    auth.require_permission(&Permission::SeriesRead)?;
+
     let entries = WantToReadRepository::list(&state.db, auth.user_id, query.order())
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to list want-to-read queue: {e}")))?;
@@ -100,6 +103,8 @@ pub async fn add_want_to_read(
     auth: AuthContext,
     Json(request): Json<AddWantToReadRequest>,
 ) -> Result<(StatusCode, Json<WantToReadEntryDto>), ApiError> {
+    auth.require_permission(&Permission::SeriesRead)?;
+
     let entry = match (request.series_id, request.book_id) {
         (Some(series_id), None) => {
             SeriesRepository::get_by_id(&state.db, series_id)
@@ -155,6 +160,8 @@ pub async fn bulk_add_want_to_read(
     auth: AuthContext,
     Json(request): Json<BulkAddWantToReadRequest>,
 ) -> Result<Json<BulkAddWantToReadResponse>, ApiError> {
+    auth.require_permission(&Permission::SeriesRead)?;
+
     let mut added = 0;
     let mut already_present = 0;
 
@@ -227,6 +234,8 @@ pub async fn reorder_want_to_read(
     auth: AuthContext,
     Json(request): Json<ReorderWantToReadRequest>,
 ) -> Result<StatusCode, ApiError> {
+    auth.require_permission(&Permission::SeriesRead)?;
+
     WantToReadRepository::reorder(&state.db, auth.user_id, &request.entry_ids)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to reorder want-to-read queue: {e}")))?;
@@ -252,6 +261,8 @@ pub async fn remove_want_to_read_series(
     auth: AuthContext,
     Path(series_id): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {
+    auth.require_permission(&Permission::SeriesRead)?;
+
     WantToReadRepository::remove_series(&state.db, auth.user_id, series_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to remove series: {e}")))?;
@@ -277,6 +288,8 @@ pub async fn remove_want_to_read_book(
     auth: AuthContext,
     Path(book_id): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {
+    auth.require_permission(&Permission::SeriesRead)?;
+
     WantToReadRepository::remove_book(&state.db, auth.user_id, book_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to remove book: {e}")))?;
