@@ -218,23 +218,6 @@ async fn book_list_all_honors_deny() {
 }
 
 #[tokio::test]
-async fn book_list_by_ids_honors_deny() {
-    let (db, _temp) = setup_test_db().await;
-    let fx = build_fixture(&db).await;
-    let vis = deny_only(&fx);
-
-    let ids = vec![fx.visible_book.id, fx.hidden_book.id];
-    let (books, total) =
-        BookRepository::list_by_ids(&db, &ids, false, Window::from_offset(0, 10), Some(&vis))
-            .await
-            .unwrap();
-
-    assert_eq!(total, 1);
-    assert_eq!(books.len(), 1);
-    assert_eq!(books[0].id, fx.visible_book.id);
-}
-
-#[tokio::test]
 async fn book_list_by_ids_sorted_honors_deny() {
     let (db, _temp) = setup_test_db().await;
     let fx = build_fixture(&db).await;

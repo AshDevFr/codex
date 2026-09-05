@@ -5363,6 +5363,125 @@ async fn test_list_books_full_text_search_honors_sort() {
     );
 }
 
+/// The condition-only path (no full-text search) routed through `list_by_ids`,
+/// which takes no sort parameter and pins its own `ORDER BY title_sort ASC`.
+/// The handler's resolved sort was computed and then dropped, so every sort
+/// produced the same order. This is the path the book list page always takes:
+/// the web client injects a `libraryId` condition for any specific library.
+/// Asserting only `title,asc` would pass against the bug, so this checks that
+/// reversing the direction actually reverses the result.
+#[tokio::test]
+async fn test_list_books_condition_only_honors_sort() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Series", None)
+        .await
+        .unwrap();
+
+    for i in 1..=4 {
+        create_test_book_with_metadata(
+            &db,
+            series.id,
+            library.id,
+            &format!("/daredevil-{i:02}.cbz"),
+            &format!("daredevil-{i:02}.cbz"),
+            Some(format!("Daredevil {i:02}")),
+        )
+        .await;
+    }
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let titles_for = |app: axum::Router, token: String, sort: &'static str| async move {
+        let body = BookListRequest {
+            condition: Some(BookCondition::LibraryId {
+                library_id: UuidOperator::Is { value: library.id },
+            }),
+            ..Default::default()
+        };
+        let uri = format!("/api/v1/books/list?page=1&pageSize=10&sort={sort}");
+        let (status, response): (StatusCode, Option<BookListResponse>) =
+            make_json_request(app, post_json_request_with_auth(&uri, &body, &token)).await;
+        assert_eq!(status, StatusCode::OK, "sort={sort}");
+        response
+            .unwrap()
+            .data
+            .into_iter()
+            .map(|b| b.title)
+            .collect::<Vec<_>>()
+    };
+
+    let ascending = titles_for(app.clone(), token.clone(), "title,asc").await;
+    let descending = titles_for(app, token, "title,desc").await;
+
+    assert_eq!(ascending.len(), 4, "all four books should match");
+    assert_eq!(
+        descending,
+        ascending.iter().rev().cloned().collect::<Vec<_>>(),
+        "sort=title,desc must reverse sort=title,asc, got {descending:?} against {ascending:?}",
+    );
+}
+
+/// The no-condition, no-search path routed through `list_all`, which also pins
+/// its own `ORDER BY title_sort ASC` and drops the resolved sort. This is the
+/// path the "All Libraries" books tab takes when no filters are active.
+#[tokio::test]
+async fn test_list_books_no_condition_honors_sort() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Series", None)
+        .await
+        .unwrap();
+
+    for i in 1..=4 {
+        create_test_book_with_metadata(
+            &db,
+            series.id,
+            library.id,
+            &format!("/vol-{i:02}.cbz"),
+            &format!("vol-{i:02}.cbz"),
+            Some(format!("Volume {i:02}")),
+        )
+        .await;
+    }
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let titles_for = |app: axum::Router, token: String, sort: &'static str| async move {
+        let body = BookListRequest::default();
+        let uri = format!("/api/v1/books/list?page=1&pageSize=10&sort={sort}");
+        let (status, response): (StatusCode, Option<BookListResponse>) =
+            make_json_request(app, post_json_request_with_auth(&uri, &body, &token)).await;
+        assert_eq!(status, StatusCode::OK, "sort={sort}");
+        response
+            .unwrap()
+            .data
+            .into_iter()
+            .map(|b| b.title)
+            .collect::<Vec<_>>()
+    };
+
+    let ascending = titles_for(app.clone(), token.clone(), "title,asc").await;
+    let descending = titles_for(app, token, "title,desc").await;
+
+    assert_eq!(ascending.len(), 4, "all four books should be listed");
+    assert_eq!(
+        descending,
+        ascending.iter().rev().cloned().collect::<Vec<_>>(),
+        "sort=title,desc must reverse sort=title,asc, got {descending:?} against {ascending:?}",
+    );
+}
+
 /// `list_by_library_sorted` had the same offset/page-index mismatch as the
 /// search path: the handler computes a row offset and the repository multiplied
 /// it by the page size again. Page 1 was correct by coincidence.

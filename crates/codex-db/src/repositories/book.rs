@@ -848,6 +848,34 @@ impl BookRepository {
         Ok((books, total))
     }
 
+    /// List all books with database-level sorting.
+    ///
+    /// The sorted counterpart of `list_all`, used by the unfiltered book list
+    /// so the requested sort is applied at the SQL layer rather than silently
+    /// replaced by a pinned title order.
+    pub async fn list_all_sorted(
+        db: &DatabaseConnection,
+        sort: &codex_models::sort::BookSortParam,
+        user_id: Option<Uuid>,
+        include_deleted: bool,
+        window: Window,
+        visibility: Option<&SeriesVisibility>,
+    ) -> Result<(Vec<books::Model>, u64)> {
+        if let Some(v) = visibility
+            && v.is_empty_whitelist()
+        {
+            return Ok((vec![], 0));
+        }
+
+        let mut base_query = Books::find();
+        if !include_deleted {
+            base_query = base_query.filter(books::Column::Deleted.eq(false));
+        }
+        base_query = apply_book_visibility(base_query, visibility);
+
+        Self::paginate_sorted(db, base_query, sort, user_id, window).await
+    }
+
     /// Hydrate a pre-ranked list of book IDs into models, preserving the
     /// caller's order.
     ///
@@ -893,57 +921,6 @@ impl BookRepository {
             }
         }
         Ok(ordered)
-    }
-
-    /// List books by their IDs with pagination
-    pub async fn list_by_ids(
-        db: &DatabaseConnection,
-        ids: &[Uuid],
-        include_deleted: bool,
-        window: Window,
-        visibility: Option<&SeriesVisibility>,
-    ) -> Result<(Vec<books::Model>, u64)> {
-        let (offset, limit) = (window.offset(), window.limit());
-        if ids.is_empty() {
-            return Ok((vec![], 0));
-        }
-        if let Some(v) = visibility
-            && v.is_empty_whitelist()
-        {
-            return Ok((vec![], 0));
-        }
-
-        // Get paginated results
-        let mut query = Books::find().filter(books::Column::Id.is_in(ids.to_vec()));
-
-        if !include_deleted {
-            query = query.filter(books::Column::Deleted.eq(false));
-        }
-        query = apply_book_visibility(query, visibility);
-
-        // Count after applying visibility so totals reflect what the caller sees.
-        let total = query
-            .clone()
-            .count(db)
-            .await
-            .context("Failed to count books by IDs")?;
-
-        use crate::entities::book_metadata;
-        use sea_orm::JoinType;
-
-        let books = query
-            .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
-            .order_by_asc(book_metadata::Column::TitleSort)
-            .order_by_asc(book_metadata::Column::Title)
-            .order_by_asc(books::Column::FileName)
-            .order_by_asc(books::Column::Id)
-            .offset(offset)
-            .limit(limit)
-            .all(db)
-            .await
-            .context("Failed to list books by IDs")?;
-
-        Ok((books, total))
     }
 
     /// List books by their IDs with database-level sorting.
@@ -4753,7 +4730,7 @@ mod tests {
         let actual: Vec<Uuid> = books.iter().map(|b| b.id).collect();
         assert_exact_order(&actual, &expected, "query sorted by title");
 
-        // The three list helpers that pin their own title ordering.
+        // The two list helpers that pin their own title ordering.
         let (books, _) =
             BookRepository::list_by_library(&db, library.id, false, Window::from_offset(0, 6))
                 .await
@@ -4766,13 +4743,6 @@ mod tests {
             .unwrap();
         let actual: Vec<Uuid> = books.iter().map(|b| b.id).collect();
         assert_exact_order(&actual, &expected, "list_all");
-
-        let (books, _) =
-            BookRepository::list_by_ids(&db, &expected, false, Window::from_offset(0, 6), None)
-                .await
-                .unwrap();
-        let actual: Vec<Uuid> = books.iter().map(|b| b.id).collect();
-        assert_exact_order(&actual, &expected, "list_by_ids");
     }
 
     /// On-deck orders series in memory rather than in SQL, so its tiebreaker

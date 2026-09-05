@@ -1187,9 +1187,11 @@ pub async fn list_books_filtered(
                 (vec![], 0)
             } else {
                 let id_vec: Vec<Uuid> = ids.iter().cloned().collect();
-                BookRepository::list_by_ids(
+                BookRepository::list_by_ids_sorted(
                     &state.db,
                     &id_vec,
+                    &sort,
+                    Some(auth.user_id),
                     request.include_deleted,
                     Window::from_offset(offset, page_size),
                     visibility.as_ref(),
@@ -1199,8 +1201,10 @@ pub async fn list_books_filtered(
             }
         }
         // No filter and no full-text search
-        (None, _) => BookRepository::list_all(
+        (None, _) => BookRepository::list_all_sorted(
             &state.db,
+            &sort,
+            Some(auth.user_id),
             request.include_deleted,
             Window::from_offset(offset, page_size),
             visibility.as_ref(),
