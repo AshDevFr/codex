@@ -7,6 +7,12 @@ release. A patch release may fix an API bug; it may not add an operation, a para
 field, or a new behaviour on an existing route. A client may therefore treat the release a feature
 first appears under in the 🔌 API sections below as a floor it can rely on.
 
+## [2.4.15] - 2026-09-05
+
+### 🔌 API
+
+- *(api)* Honor the sort parameter on unsearched book lists
+
 ## [2.4.14] - 2026-09-04
 
 ## [2.4.13] - 2026-09-04
