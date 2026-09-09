@@ -79,6 +79,8 @@ interface Checkpoint {
   pagesRead: number;
   page?: number;
   percentage?: number;
+  /** Whether this device has seen the reader move since the session opened. */
+  moved: boolean;
 }
 
 export class ReadingSessionTracker {
@@ -129,7 +131,20 @@ export class ReadingSessionTracker {
       this.recordActivity(position);
       return;
     }
+    // Opening a book is not the reader moving: the position came from wherever
+    // it was restored from. See {@link begin}.
+    this.begin(position, false);
+  }
 
+  /**
+   * Open a session at `position`.
+   *
+   * `moved` says whether that position is something this device watched the
+   * reader arrive at. It is false when a book is merely opened somewhere, and
+   * true when an idle gap splits a sitting, because the page turn that split it
+   * is a real move that happens to land in the new session.
+   */
+  private begin(position: ReadingPosition, moved: boolean): void {
     const now = this.now();
     this.current = {
       id: this.newId(),
@@ -140,6 +155,7 @@ export class ReadingSessionTracker {
       lastActivityAt: now,
       activeMs: 0,
       pagesRead: 0,
+      moved,
       ...positionFields(position),
     };
     this.seenPages.clear();
@@ -167,12 +183,13 @@ export class ReadingSessionTracker {
     if (now - this.current.lastActivityAt > this.options.idleTimeoutMs) {
       // The user was away. Close what they actually read, then start fresh.
       this.finish("progress");
-      this.start(position);
+      this.begin(position, true);
       return;
     }
 
     this.accrue(now);
     this.current.lastActivityAt = now;
+    if (hasMoved(this.current, position)) this.current.moved = true;
     Object.assign(this.current, positionFields(position));
     this.notePage(position);
     this.maybeCheckpoint();
@@ -267,12 +284,31 @@ export class ReadingSessionTracker {
   /** The running session as it would be emitted right now, or null. */
   peek(): ReadingSessionPayload | null {
     if (!this.current) return null;
-    return toPayload(this.current, "progress", this.now());
+    return toPayload(this.current, "progress", this.endedAt(this.now()));
   }
 
   // ----------------------------------------------------------------
   // Internals
   // ----------------------------------------------------------------
+
+  /**
+   * The instant this session's reading ended, which is not necessarily now.
+   *
+   * A reader closed an hour after the last page turn stopped reading an hour
+   * ago; the close is only when the client got round to reporting it. The
+   * server orders positions by `clientEndedAt` because that is when the
+   * reading happened, so stamping the report time would put a stale position
+   * after everything the reader did on another device in between, and drag
+   * them back to where this client was left. Same reasoning as {@link accrue}
+   * refusing to credit the gap, and as a recovered checkpoint ending at the
+   * checkpoint rather than at recovery.
+   */
+  private endedAt(now: number): number {
+    if (!this.current) return now;
+    if (!this.running) return this.current.lastActivityAt;
+    const gap = now - this.current.lastActivityAt;
+    return gap > this.options.idleTimeoutMs ? this.current.lastActivityAt : now;
+  }
 
   /**
    * Add elapsed time up to `now` to the running total.
@@ -333,7 +369,7 @@ export class ReadingSessionTracker {
     const now = this.now();
     if (this.running) this.accrue(now);
 
-    const payload = toPayload(this.current, kind, now);
+    const payload = toPayload(this.current, kind, this.endedAt(now));
     this.current = null;
     this.running = false;
     this.seenPages.clear();
@@ -385,7 +421,14 @@ export function recoverOrphanedSessions(
         continue;
       }
       recovered.push(
-        toPayload(checkpoint, "progress", checkpoint.lastActivityAt),
+        toPayload(
+          // A checkpoint written before this field existed says nothing about
+          // movement. Reporting its position is the older behaviour, and
+          // losing a real one to a crash is the worse of the two mistakes.
+          { ...checkpoint, moved: checkpoint.moved ?? true },
+          "progress",
+          checkpoint.lastActivityAt,
+        ),
       );
     } catch {
       // Unparseable: drop it rather than retry forever.
@@ -422,6 +465,23 @@ function checkpointKey(bookId: string): string {
   return `${CHECKPOINT_KEY_PREFIX}${bookId}`;
 }
 
+/**
+ * Whether `position` differs from where the session currently sits.
+ *
+ * Movement, not the final value, is what makes a position worth reporting: a
+ * reader who turns a page and taps straight back has moved, and this device is
+ * the one that knows where they ended up.
+ */
+function hasMoved(checkpoint: Checkpoint, position: ReadingPosition): boolean {
+  if (typeof position.page === "number" && position.page !== checkpoint.page) {
+    return true;
+  }
+  return (
+    typeof position.percentage === "number" &&
+    position.percentage !== checkpoint.percentage
+  );
+}
+
 function positionFields(position: ReadingPosition): Partial<Checkpoint> {
   const fields: Partial<Checkpoint> = {};
   if (typeof position.page === "number") fields.page = position.page;
@@ -451,9 +511,17 @@ function toPayload(
     ).toISOString(),
   };
   if (checkpoint.deviceName) payload.deviceName = checkpoint.deviceName;
-  if (typeof checkpoint.page === "number") payload.toPage = checkpoint.page;
-  if (typeof checkpoint.percentage === "number") {
-    payload.toPercentage = checkpoint.percentage;
+  // A device reports where it saw the reader go, not where it happens to be
+  // parked. A tab left open at page 20 while the reader moves to page 60 on a
+  // phone has witnessed nothing, and the server orders positions by when the
+  // reading happened: claiming page 20 would win on recency and drag the reader
+  // back 40 pages. Completions are exempt, since finishing a book is itself the
+  // claim.
+  if (kind === "completed" || checkpoint.moved) {
+    if (typeof checkpoint.page === "number") payload.toPage = checkpoint.page;
+    if (typeof checkpoint.percentage === "number") {
+      payload.toPercentage = checkpoint.percentage;
+    }
   }
   if (checkpoint.activeMs > 0) payload.activeDurationMs = checkpoint.activeMs;
   if (checkpoint.pagesRead > 0) payload.pagesRead = checkpoint.pagesRead;

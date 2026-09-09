@@ -234,7 +234,7 @@ describe("reading-session contract", () => {
   });
 
   it("is the version the tracker's defaults were written for", () => {
-    expect(contract.version).toBe(1);
+    expect(contract.version).toBe(2);
     expect(contract.thresholds.idleTimeoutMs).toBe(DEFAULT_IDLE_TIMEOUT_MS);
     expect(contract.thresholds.checkpointIntervalMs).toBe(
       DEFAULT_CHECKPOINT_INTERVAL_MS,

@@ -34,6 +34,28 @@ That mapping is each client's business, and a native client with real lifecycle 
 be more precise about *when* it emits `pause` than the web reader can be. Also unconstrained: how a
 checkpoint is persisted, and what an id looks like beyond being unique within a case.
 
+### Two rules that exist because clients get them wrong
+
+Both come from the same place: a client reports what it measured, and the server orders those
+reports by when the reading happened.
+
+**A session ends when its reading ended, not when the client got round to reporting it.** A reader
+left open and closed an hour later stopped reading an hour ago. `clientEndedAt` is the last
+instant the client credited as reading: the pause, the last activity, or now if still reading.
+Stamping the report time instead orders a stale session after everything the reader did elsewhere
+in the meantime.
+
+**A device reports the position it saw the reader reach, and otherwise none at all.** The
+position a session opens at came from wherever the book was restored from, not from watching the
+reader arrive there, so a session that never sees a page turn sends no `toPage` or
+`toPercentage`. It still reports the time it measured. Two exceptions: a completion always
+carries its position, since finishing a book is itself the claim, and an idle gap that splits a
+sitting carries the page turn that split it into the new session, because that turn is a real
+move.
+
+Together they are what stops a browser tab parked on page 20 from dragging a reader back forty
+pages after they read on to page 60 on a phone.
+
 That line is where the earlier open question lands. Pause and resume *are* in the contract, because
 they are modelled as events rather than as platform occurrences. What a client detects, and how
 promptly, is latitude. What it does once it has detected it is not.

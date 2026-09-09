@@ -1,6 +1,6 @@
 {
   "$comment": "The shared behavioural contract for reading-session measurement. See contracts/README.md.",
-  "version": 1,
+  "version": 2,
   "subject": {
     "bookId": "book-1",
     "deviceId": "device-1",
@@ -62,13 +62,15 @@
             "kind": "progress",
             "activeDurationMs": 60000,
             "toPage": 2,
-            "pagesRead": 2
+            "pagesRead": 2,
+            "spanMs": 60000
           },
           {
             "kind": "progress",
             "activeDurationMs": null,
             "toPage": 3,
-            "pagesRead": 1
+            "pagesRead": 1,
+            "spanMs": 0
           }
         ]
       }
@@ -166,6 +168,7 @@
     {
       "name": "a pause outlasting the idle timeout closes the session",
       "group": "measuring active time",
+      "why": "The session ends at the pause, where the reading ended, not at the moment the client noticed. Stamping it at the report would order this session after anything the reader did on another device in between.",
       "events": [
         { "kind": "start", "atMs": 0, "page": 1 },
         { "kind": "pause", "atMs": 60000 },
@@ -177,8 +180,9 @@
           {
             "kind": "progress",
             "activeDurationMs": 60000,
-            "toPage": 1,
-            "pagesRead": 1
+            "toPage": null,
+            "pagesRead": 1,
+            "spanMs": 60000
           }
         ]
       }
@@ -199,8 +203,67 @@
           {
             "kind": "progress",
             "activeDurationMs": 60000,
-            "toPage": 1,
-            "pagesRead": 1
+            "toPage": null,
+            "pagesRead": 1,
+            "spanMs": 60000
+          }
+        ]
+      }
+    },
+    {
+      "name": "a reader left open and closed an hour later reports nothing",
+      "group": "when the reading happened",
+      "why": "Two rules meet here. The session ended when the reading did, not when the client got round to reporting it, and a device that never saw the reader move has no position to report. What is left is no measured time and no claim, which is not worth a row.",
+      "events": [
+        { "kind": "start", "atMs": 0, "page": 20 },
+        { "kind": "stop", "atMs": 3660000 }
+      ],
+      "expect": {
+        "tracking": false,
+        "sessions": []
+      }
+    },
+    {
+      "name": "a reader parked on one device while another reads on claims no position",
+      "group": "when the reading happened",
+      "why": "The reader opens page 20 here, reads to page 60 on a phone, then comes back. This device saw no page turn, so it reports the time it measured and nothing about where the reader is. Claiming page 20 would win on recency and drag them back 40 pages.",
+      "events": [
+        { "kind": "start", "atMs": 0, "page": 20 },
+        { "kind": "pause", "atMs": 60000 },
+        { "kind": "resume", "atMs": 3660000 },
+        { "kind": "stop", "atMs": 3720000 }
+      ],
+      "expect": {
+        "tracking": false,
+        "sessions": [
+          {
+            "kind": "progress",
+            "activeDurationMs": 60000,
+            "toPage": null,
+            "toPercentage": null,
+            "pagesRead": 1,
+            "spanMs": 60000
+          }
+        ]
+      }
+    },
+    {
+      "name": "a position reached and then returned from is still reported",
+      "group": "when the reading happened",
+      "why": "The suppression is about movement the device witnessed, not about the final value differing from the opening one. A reader who turns a page and taps back has moved, and this device is the one that knows where they are.",
+      "events": [
+        { "kind": "start", "atMs": 0, "page": 20 },
+        { "kind": "activity", "atMs": 60000, "page": 21 },
+        { "kind": "activity", "atMs": 120000, "page": 20 },
+        { "kind": "stop", "atMs": 120000 }
+      ],
+      "expect": {
+        "sessions": [
+          {
+            "kind": "progress",
+            "activeDurationMs": 120000,
+            "toPage": 20,
+            "pagesRead": 2
           }
         ]
       }
@@ -318,7 +381,7 @@
           {
             "kind": "progress",
             "activeDurationMs": 60000,
-            "toPage": 20,
+            "toPage": null,
             "pagesRead": 1
           },
           {
@@ -356,7 +419,7 @@
           {
             "kind": "progress",
             "activeDurationMs": 60000,
-            "toPage": 1,
+            "toPage": null,
             "pagesRead": 1
           }
         ]
@@ -375,7 +438,7 @@
           {
             "kind": "progress",
             "activeDurationMs": 120000,
-            "toPage": 1,
+            "toPage": null,
             "pagesRead": 1
           }
         ]
@@ -395,13 +458,13 @@
           {
             "kind": "progress",
             "activeDurationMs": 60000,
-            "toPage": 1,
+            "toPage": null,
             "pagesRead": 1
           },
           {
             "kind": "progress",
             "activeDurationMs": 60000,
-            "toPage": 2,
+            "toPage": null,
             "pagesRead": 1
           }
         ]
@@ -419,7 +482,7 @@
           {
             "kind": "progress",
             "activeDurationMs": 60000,
-            "toPage": 1,
+            "toPage": null,
             "pagesRead": 1,
             "spanMs": 60000
           }
@@ -481,7 +544,7 @@
             {
               "kind": "progress",
               "activeDurationMs": 60000,
-              "toPage": 5,
+              "toPage": null,
               "pagesRead": 1,
               "spanMs": 60000
             }
@@ -527,7 +590,7 @@
           {
             "kind": "progress",
             "activeDurationMs": 60000,
-            "toPage": 1,
+            "toPage": null,
             "pagesRead": 1
           }
         ]
@@ -551,7 +614,7 @@
             {
               "kind": "progress",
               "activeDurationMs": 60000,
-              "toPage": 1,
+              "toPage": null,
               "pagesRead": 1,
               "spanMs": 60000
             }
@@ -587,7 +650,7 @@
           {
             "kind": "progress",
             "activeDurationMs": 60000,
-            "toPage": 1,
+            "toPage": null,
             "pagesRead": 1
           }
         ]
