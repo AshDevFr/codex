@@ -19,6 +19,25 @@ function setViewportMatchesMobile(isMobile: boolean) {
 }
 
 describe("FilterBuilder", () => {
+  it("keeps the JSON panel out of the way until it is asked for", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(
+      <FilterBuilder
+        condition={{ title: { operator: "is", value: "Berserk" } }}
+        target="series"
+        onChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByLabelText(/rule json/i)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /json/i }));
+
+    const editor = await screen.findByLabelText(/rule json/i);
+    expect(JSON.parse((editor as HTMLTextAreaElement).value)).toEqual({
+      title: { operator: "is", value: "Berserk" },
+    });
+  });
   it("renders an empty state for a fresh builder", () => {
     renderWithProviders(
       <FilterBuilder

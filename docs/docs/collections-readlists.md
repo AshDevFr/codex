@@ -64,6 +64,19 @@ Some rules describe **you**: your own rating, your reading progress, whether you
 
 Codex labels these with a **Personal** badge on the collection card and detail page, and warns you in the form while you are building the rule. Nothing prevents you from creating one: it is a useful thing to have, as long as everyone knows.
 
+#### Copying a rule to another collection
+
+Under the rule builder there is a **JSON** section, collapsed by default. Expand it and you get the rule exactly as Codex stores it, updating as you edit the rows above. **Copy** puts it on your clipboard; paste it into the same box on another collection, press **Apply**, and the builder rebuilds every row and group from it. The same panel is on the [advanced search page](./filtering.md), so a search you have tuned can become a collection without being rebuilt by hand.
+
+It is also the quickest way to show somebody a rule that is not behaving, in a bug report or a forum post, without a screenshot of fifteen dropdowns.
+
+Two things to know before you edit the JSON by hand:
+
+- **Ratings use the stored 1-100 scale.** A rule you built as *my rating is at least 7.5* appears as `75`. Typing `7.5` there means "at least 0.75 out of 10", which matches nearly everything.
+- **Libraries are referenced by id, not by name.** A rule copied to a *different Codex server* names libraries that do not exist there, so it would match nothing. The panel checks and tells you which ids it cannot find; pick the right library in the row above to fix it. Within one server, copying between collections is exact.
+
+A rule that does not fit the filter grammar is refused with the offending part named, rather than being half-applied.
+
 #### What automatic collections deliberately do not do
 
 - **No member count in the collections list.** Counting one means running its rule; showing counts for a page of them would mean running every rule on the server. The count appears on the collection's own page, where the members are loaded anyway.

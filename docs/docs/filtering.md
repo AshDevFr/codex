@@ -120,6 +120,11 @@ The page offers:
   list-page panels. Rating filters (**My rating**, **Community rating**) live
   here only; they take a 0-10 value with one decimal, and are stored on the
   1-100 scale described under [Rating scale](#rating-scale).
+- A **JSON** section under the builder, collapsed by default. It shows the rule
+  as Codex stores it, and accepts a pasted one: **Copy** it to move a tuned
+  filter to a [collection rule](./collections-readlists.md#copying-a-rule-to-another-collection)
+  or into a bug report, paste and **Apply** to rebuild the rows from someone
+  else's. A rule outside the grammar is refused with the offending part named.
 - A **sort selector**. When a text query is present, a "Relevance (best match)"
   option appears at the top; clearing the selector returns to the default sort.
 - **Series / Books tabs** with live counts. Both tabs fetch in parallel so the

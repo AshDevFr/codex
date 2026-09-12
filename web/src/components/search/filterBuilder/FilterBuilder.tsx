@@ -24,6 +24,7 @@ import {
   Box,
   Button,
   Card,
+  Collapse,
   Group,
   Menu,
   SegmentedControl,
@@ -33,6 +34,7 @@ import {
 } from "@mantine/core";
 import {
   IconChevronDown,
+  IconChevronRight,
   IconFolderPlus,
   IconGripVertical,
   IconPlus,
@@ -64,6 +66,7 @@ import {
   findField,
 } from "./fieldCatalog";
 import { LeafEditor } from "./LeafEditor";
+import { RuleJsonPanel } from "./RuleJsonPanel";
 
 interface FilterBuilderProps {
   condition: Condition | undefined;
@@ -119,45 +122,88 @@ export function FilterBuilder({
   const activePath = activeId ? dragIdToPath(activeId) : null;
   const activeCondition = activePath ? conditionAtPath(root, activePath) : null;
 
+  const [jsonOpen, setJsonOpen] = useState(false);
+  // Mount the panel on first open and leave it mounted, so the close still
+  // animates while someone who never opens it never pays for the library
+  // lookup behind its unresolved-library warning.
+  const [jsonMounted, setJsonMounted] = useState(false);
+
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={siblingCollisionDetection}
-      onDragStart={({ active }: DragStartEvent) =>
-        setActiveId(String(active.id))
-      }
-      onDragEnd={handleDragEnd}
-      onDragCancel={() => setActiveId(null)}
-    >
-      <GroupNodeView
-        condition={root}
-        path={[]}
-        target={target}
-        depth={0}
-        onChange={emitRoot}
-      />
-      {/* No drop animation: dnd-kit flies the overlay to the dragged node's
-          rect, but rows are keyed by index so that node never moves. The
-          overlay would glide back to the slot the row was picked up from
-          while the list below already shows the new order, which reads as
-          the move reverting and then happening again. */}
-      <DragOverlay dropAnimation={null}>
-        {activeCondition && activePath ? (
-          <DragPreviewRow>
-            {/* Inert copy: the overlay renders inside a nullified dnd context,
-                so nothing here registers as a droppable. */}
-            <ChildRow
-              child={activeCondition}
-              target={target}
-              depth={activePath.length - 1}
-              path={[]}
-              onChange={noop}
-              onRemove={noop}
+    <Stack gap="xs">
+      <DndContext
+        sensors={sensors}
+        collisionDetection={siblingCollisionDetection}
+        onDragStart={({ active }: DragStartEvent) =>
+          setActiveId(String(active.id))
+        }
+        onDragEnd={handleDragEnd}
+        onDragCancel={() => setActiveId(null)}
+      >
+        <GroupNodeView
+          condition={root}
+          path={[]}
+          target={target}
+          depth={0}
+          onChange={emitRoot}
+        />
+        {/* No drop animation: dnd-kit flies the overlay to the dragged node's
+            rect, but rows are keyed by index so that node never moves. The
+            overlay would glide back to the slot the row was picked up from
+            while the list below already shows the new order, which reads as
+            the move reverting and then happening again. */}
+        <DragOverlay dropAnimation={null}>
+          {activeCondition && activePath ? (
+            <DragPreviewRow>
+              {/* Inert copy: the overlay renders inside a nullified dnd context,
+                  so nothing here registers as a droppable. */}
+              <ChildRow
+                child={activeCondition}
+                target={target}
+                depth={activePath.length - 1}
+                path={[]}
+                onChange={noop}
+                onRemove={noop}
+              />
+            </DragPreviewRow>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
+
+      <Box>
+        <Button
+          variant="subtle"
+          size="xs"
+          color="gray"
+          aria-expanded={jsonOpen}
+          onClick={() => {
+            setJsonOpen((open) => !open);
+            setJsonMounted(true);
+          }}
+          leftSection={
+            <IconChevronRight
+              size={14}
+              style={{
+                transform: jsonOpen ? "rotate(90deg)" : undefined,
+                transition: "transform 150ms ease",
+              }}
             />
-          </DragPreviewRow>
-        ) : null}
-      </DragOverlay>
-    </DndContext>
+          }
+        >
+          JSON
+        </Button>
+        <Collapse in={jsonOpen}>
+          {jsonMounted && (
+            <Box pt="xs">
+              <RuleJsonPanel
+                condition={condition}
+                target={target}
+                onChange={emitRoot}
+              />
+            </Box>
+          )}
+        </Collapse>
+      </Box>
+    </Stack>
   );
 }
 
