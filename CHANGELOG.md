@@ -7,6 +7,14 @@ release. A patch release may fix an API bug; it may not add an operation, a para
 field, or a new behaviour on an existing route. A client may therefore treat the release a feature
 first appears under in the 🔌 API sections below as a floor it can rely on.
 
+## [2.5.0] - 2026-09-12
+
+### 🚀 Features
+
+- *(web)* Validate a hand-written filter condition against the field catalog
+- *(web)* Add a JSON view of the filter rule, with copy and paste
+- *(web)* Show the rule JSON panel under the filter builder
+
 ## [2.4.16] - 2026-09-09
 
 ### 🐛 Bug Fixes
