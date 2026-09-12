@@ -10,6 +10,7 @@ import {
   type FieldDef,
   type FieldTarget,
   findField,
+  findFieldAnyTarget,
   type OperatorType,
 } from "./fieldCatalog";
 
@@ -597,4 +598,239 @@ export function normalizeForEmit(
 export function ensureRoot(c: Condition | undefined): Condition {
   if (!c) return emptyRoot();
   return isGroup(c) ? c : makeGroup({ mode: "allOf", children: [c] });
+}
+
+/**
+ * Parse a condition written by hand (or pasted from another rule) into a tree
+ * the builder can edit.
+ *
+ * `JSON.parse` alone is not enough: the builder renders a leaf by looking its
+ * field up in the catalog and reading a known operator off it, so a
+ * syntactically valid but out-of-grammar rule would produce rows that render
+ * blank and a request the API rejects with an opaque 422. Every node is
+ * checked against the same catalog the builder draws from, and rejections name
+ * the offending node so a typo is findable in a large rule.
+ *
+ * Value checks mirror what the API will accept, not merely what TypeScript
+ * types allow: uuids must look like uuids, dates must parse, and a closed enum
+ * must hold one of its own values. Empty groups are rejected rather than
+ * dropped - `{"allOf": []}` matches the entire library, which is never what
+ * someone pasting a rule meant, and silently discarding it would hide the
+ * mistake instead of showing it.
+ */
+export type ParseConditionResult =
+  | { ok: true; condition: Condition }
+  | { ok: false; error: string };
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Unwound by `parseCondition` into a failed result. */
+class ConditionParseError extends Error {}
+
+function fail(path: string, message: string): never {
+  throw new ConditionParseError(path ? `At ${path}: ${message}` : message);
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function isFilledString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function checkLeaf(
+  field: FieldDef,
+  key: string,
+  node: unknown,
+  path: string,
+): void {
+  if (typeof node !== "object" || node === null || Array.isArray(node)) {
+    fail(path, `"${key}" must be an object carrying an "operator"`);
+  }
+  const leaf = node as Record<string, unknown>;
+  const operator = leaf.operator;
+  if (typeof operator !== "string") {
+    fail(path, `"${key}" is missing a string "operator"`);
+  }
+  if (!operatorsForField(field).includes(operator)) {
+    fail(path, `"${key}" does not support operator "${operator}"`);
+  }
+  // Valueless operators across every family.
+  if (
+    operator === "isNull" ||
+    operator === "isNotNull" ||
+    operator === "isTrue" ||
+    operator === "isFalse"
+  ) {
+    return;
+  }
+
+  const requireString = (prop: string): string => {
+    const value = leaf[prop];
+    if (!isFilledString(value)) {
+      fail(
+        path,
+        `"${key}" with operator "${operator}" needs a non-empty string "${prop}"`,
+      );
+    }
+    return value;
+  };
+
+  switch (field.operatorType) {
+    case "field": {
+      const value = requireString("value");
+      if (
+        field.enumValues &&
+        !field.enumValues.some((e) => e.value === value)
+      ) {
+        const allowed = field.enumValues.map((e) => e.value).join(", ");
+        fail(
+          path,
+          `"${key}" has no value "${value}" (expected one of ${allowed})`,
+        );
+      }
+      return;
+    }
+    case "uuid": {
+      if (isUuidListOperator(operator)) {
+        const values = leaf.values;
+        if (!Array.isArray(values)) {
+          fail(
+            path,
+            `"${key}" with operator "${operator}" needs an array "values"`,
+          );
+        }
+        if (values.length === 0) {
+          fail(
+            path,
+            `"${key}" with operator "${operator}" needs at least one uuid`,
+          );
+        }
+        for (const value of values) {
+          if (typeof value !== "string" || !UUID_PATTERN.test(value)) {
+            fail(
+              path,
+              `"${key}" lists ${JSON.stringify(value)}, which is not a uuid`,
+            );
+          }
+        }
+        return;
+      }
+      const value = requireString("value");
+      if (!UUID_PATTERN.test(value)) {
+        fail(path, `"${key}" value "${value}" is not a uuid`);
+      }
+      return;
+    }
+    case "bool":
+      // Every bool operator is valueless and returned above.
+      return;
+    case "number": {
+      if (operator === "between") {
+        const { min, max } = leaf;
+        if (min != null && !isFiniteNumber(min)) {
+          fail(path, `"${key}" has a non-numeric "min"`);
+        }
+        if (max != null && !isFiniteNumber(max)) {
+          fail(path, `"${key}" has a non-numeric "max"`);
+        }
+        if (!isFiniteNumber(min) && !isFiniteNumber(max)) {
+          fail(path, `"${key}" between needs at least one of "min" / "max"`);
+        }
+        return;
+      }
+      if (!isFiniteNumber(leaf.value)) {
+        fail(
+          path,
+          `"${key}" with operator "${operator}" needs a number "value"`,
+        );
+      }
+      return;
+    }
+    case "date": {
+      const isDate = (value: unknown): value is string =>
+        isFilledString(value) && !Number.isNaN(Date.parse(value));
+      if (operator === "between") {
+        const { start, end } = leaf;
+        if (start != null && !isDate(start)) {
+          fail(path, `"${key}" has a "start" that is not an ISO-8601 date`);
+        }
+        if (end != null && !isDate(end)) {
+          fail(path, `"${key}" has an "end" that is not an ISO-8601 date`);
+        }
+        if (!isDate(start) && !isDate(end)) {
+          fail(path, `"${key}" between needs at least one of "start" / "end"`);
+        }
+        return;
+      }
+      const value = requireString("value");
+      if (!isDate(value)) {
+        fail(path, `"${key}" value "${value}" is not an ISO-8601 date`);
+      }
+      return;
+    }
+  }
+}
+
+function checkNode(node: unknown, target: FieldTarget, path: string): void {
+  if (typeof node !== "object" || node === null || Array.isArray(node)) {
+    fail(path, "a condition must be a JSON object");
+  }
+  const keys = Object.keys(node as object);
+  if (keys.length !== 1) {
+    const found = keys.length === 0 ? "none" : keys.join(", ");
+    fail(path, `a condition must have exactly one key, found ${found}`);
+  }
+  const key = keys[0];
+  const value = (node as Record<string, unknown>)[key];
+
+  if (key === "allOf" || key === "anyOf") {
+    if (!Array.isArray(value)) {
+      fail(path, `"${key}" must be an array of conditions`);
+    }
+    if (value.length === 0) {
+      // An empty group imposes no constraint, so it would quietly match every
+      // series in the library.
+      fail(path, `"${key}" must contain at least one condition`);
+    }
+    value.forEach((child, index) => {
+      const step = `${key}[${index}]`;
+      checkNode(child, target, path ? `${path}.${step}` : step);
+    });
+    return;
+  }
+
+  const field = findField(target, key);
+  if (!field) {
+    if (findFieldAnyTarget(key)) {
+      fail(path, `"${key}" is not available on ${target}`);
+    }
+    fail(path, `Unknown field "${key}"`);
+  }
+  checkLeaf(field, key, value, path);
+}
+
+export function parseCondition(
+  text: string,
+  target: FieldTarget,
+): ParseConditionResult {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch (e) {
+    return {
+      ok: false,
+      error: `Invalid JSON: ${e instanceof Error ? e.message : String(e)}`,
+    };
+  }
+  try {
+    checkNode(parsed, target, "");
+  } catch (e) {
+    if (e instanceof ConditionParseError)
+      return { ok: false, error: e.message };
+    throw e;
+  }
+  return { ok: true, condition: parsed as Condition };
 }

@@ -17,6 +17,7 @@ import {
   moveAtPath,
   newLeaf,
   normalizeForEmit,
+  parseCondition,
   removeAtPath,
   replaceAtPath,
   updateLeafOperator,
@@ -524,5 +525,197 @@ describe("conditionUtils — ensureRoot", () => {
 
   it("returns an empty root when given undefined", () => {
     expect(ensureRoot(undefined)).toEqual({ allOf: [] });
+  });
+});
+
+describe("parseCondition", () => {
+  /** Shorthand: parse and fail the test with the real error if it rejected. */
+  const parsed = (value: unknown, target: "series" | "books" = "series") => {
+    const result = parseCondition(JSON.stringify(value), target);
+    if (!result.ok) throw new Error(`expected ok, got: ${result.error}`);
+    return result.condition;
+  };
+
+  /** Shorthand: parse and return the rejection message. */
+  const rejected = (value: unknown, target: "series" | "books" = "series") => {
+    const result = parseCondition(
+      typeof value === "string" ? value : JSON.stringify(value),
+      target,
+    );
+    if (result.ok) throw new Error("expected a rejection, got ok");
+    return result.error;
+  };
+
+  it("round-trips a leaf of every operator family", () => {
+    const leaves: SeriesCondition[] = [
+      { title: { operator: "contains", value: "batman" } },
+      { title: { operator: "isNull" } },
+      { status: { operator: "is", value: "ongoing" } },
+      {
+        libraryId: {
+          operator: "is",
+          value: "018f4b2c-0000-4000-8000-000000000001",
+        },
+      },
+      {
+        libraryId: {
+          operator: "in",
+          values: [
+            "018f4b2c-0000-4000-8000-000000000001",
+            "018f4b2c-0000-4000-8000-000000000002",
+          ],
+        },
+      },
+      { completion: { operator: "isTrue" } },
+      { year: { operator: "gte", value: 2000 } },
+      { year: { operator: "between", min: 1990, max: null } },
+      { userRating: { operator: "gte", value: 75 } },
+      { dateAdded: { operator: "onOrAfter", value: "2026-01-01T00:00:00Z" } },
+      {
+        dateAdded: {
+          operator: "between",
+          start: null,
+          end: "2026-01-01T00:00:00Z",
+        },
+      },
+    ];
+    for (const leaf of leaves) {
+      expect(parsed(leaf)).toEqual(leaf);
+    }
+  });
+
+  it("round-trips a nested group tree", () => {
+    const rule: SeriesCondition = {
+      allOf: [
+        {
+          libraryId: {
+            operator: "is",
+            value: "018f4b2c-0000-4000-8000-000000000001",
+          },
+        },
+        { year: { operator: "gte", value: 2000 } },
+        {
+          anyOf: [
+            { genre: { operator: "is", value: "Action" } },
+            { genre: { operator: "is", value: "Adventure" } },
+          ],
+        },
+      ],
+    };
+    expect(parsed(rule)).toEqual(rule);
+  });
+
+  it("accepts a books-target condition on its own fields", () => {
+    const rule: BookCondition = { pageCount: { operator: "lt", value: 50 } };
+    expect(parsed(rule, "books")).toEqual(rule);
+  });
+
+  it("rejects text that is not JSON", () => {
+    expect(rejected("{ nope")).toMatch(/^Invalid JSON/);
+  });
+
+  it("rejects a non-object root", () => {
+    expect(rejected([])).toMatch(/must be a JSON object/);
+    expect(rejected(null)).toMatch(/must be a JSON object/);
+    expect(rejected("42")).toMatch(/must be a JSON object/);
+  });
+
+  it("rejects a node that is not exactly one key", () => {
+    expect(rejected({})).toMatch(/exactly one key/);
+    expect(
+      rejected({
+        title: { operator: "is", value: "a" },
+        year: { operator: "eq", value: 1 },
+      }),
+    ).toMatch(/exactly one key/);
+  });
+
+  it("rejects an unknown field", () => {
+    expect(rejected({ nonsense: { operator: "is", value: "x" } })).toMatch(
+      /Unknown field "nonsense"/,
+    );
+  });
+
+  it("names the target when a field exists but not on this one", () => {
+    const error = rejected({ completion: { operator: "isTrue" } }, "books");
+    expect(error).toContain('"completion"');
+    expect(error).toContain("books");
+    expect(error).not.toMatch(/Unknown field/);
+  });
+
+  it("rejects an operator the field does not support", () => {
+    expect(rejected({ year: { operator: "contains", value: "20" } })).toMatch(
+      /"year" does not support operator "contains"/,
+    );
+  });
+
+  it("rejects an operand of the wrong type", () => {
+    expect(rejected({ year: { operator: "gte", value: "2000" } })).toMatch(
+      /number/,
+    );
+    expect(rejected({ title: { operator: "is", value: 5 } })).toMatch(/string/);
+    expect(rejected({ year: { operator: "gte" } })).toMatch(/number/);
+  });
+
+  it("rejects a value outside a closed enum", () => {
+    const error = rejected({ status: { operator: "is", value: "bogus" } });
+    expect(error).toContain('"bogus"');
+    expect(error).toContain("ongoing");
+  });
+
+  it("rejects a malformed uuid", () => {
+    expect(rejected({ libraryId: { operator: "is", value: "manga" } })).toMatch(
+      /uuid/i,
+    );
+    expect(
+      rejected({ libraryId: { operator: "in", values: ["manga"] } }),
+    ).toMatch(/uuid/i);
+  });
+
+  it("rejects an empty uuid list", () => {
+    expect(rejected({ libraryId: { operator: "in", values: [] } })).toMatch(
+      /at least one/,
+    );
+  });
+
+  it("rejects a between with neither bound set", () => {
+    expect(
+      rejected({ year: { operator: "between", min: null, max: null } }),
+    ).toMatch(/at least one/);
+    expect(
+      rejected({ dateAdded: { operator: "between", start: null, end: null } }),
+    ).toMatch(/at least one/);
+  });
+
+  it("rejects an unparseable date", () => {
+    expect(
+      rejected({ dateAdded: { operator: "onOrAfter", value: "last tuesday" } }),
+    ).toMatch(/date/i);
+  });
+
+  it("rejects a group whose value is not an array", () => {
+    expect(
+      rejected({ allOf: { title: { operator: "is", value: "a" } } }),
+    ).toMatch(/must be an array/);
+  });
+
+  it("rejects an empty group, which would match the whole library", () => {
+    expect(rejected({ allOf: [] })).toMatch(/at least one condition/);
+  });
+
+  it("points at the offending node inside a tree", () => {
+    const error = rejected({
+      allOf: [
+        { year: { operator: "gte", value: 2000 } },
+        {
+          anyOf: [
+            { genre: { operator: "is", value: "Action" } },
+            { bogus: {} },
+          ],
+        },
+      ],
+    });
+    expect(error).toContain("allOf[1].anyOf[1]");
+    expect(error).toContain('"bogus"');
   });
 });
