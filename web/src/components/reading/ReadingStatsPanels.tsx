@@ -11,7 +11,7 @@
  */
 
 import { Anchor, Box, Group, Paper, Stack, Text, Tooltip } from "@mantine/core";
-import { useLayoutEffect, useRef } from "react";
+import { type ReactNode, useLayoutEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import type {
   ReadingByDeviceDto,
@@ -20,6 +20,7 @@ import type {
 } from "@/api/readingStats";
 import type { ReadingMetric } from "@/store/readingStatsPreferencesStore";
 import classes from "./ReadingStatsCharts.module.css";
+import { RemovedHistoryPurge } from "./RemovedHistoryPurge";
 import {
   type CalendarDay,
   formatDayLabel,
@@ -402,11 +403,16 @@ function deviceLabel(device: ReadingByDeviceDto): string {
   return device.deviceName ?? device.deviceId;
 }
 
+/** How the series and format panels name reading of since-deleted books. */
+const REMOVED_LABEL = "Removed from library";
+
 /** A labelled row with a proportional bar. Used for series, devices, formats. */
 function RankedRow({
   label,
   href,
   sublabel,
+  muted = false,
+  action,
   measuredMs,
   inferredMs,
   value,
@@ -416,6 +422,9 @@ function RankedRow({
   label: string;
   href?: string;
   sublabel?: string;
+  /** Set for a row that is not a real item, so it cannot pass for one. */
+  muted?: boolean;
+  action?: ReactNode;
   measuredMs: number;
   inferredMs: number;
   value: number;
@@ -444,17 +453,26 @@ function RankedRow({
             {label}
           </Anchor>
         ) : (
-          <Text size="sm" truncate style={{ minWidth: 0 }}>
+          <Text
+            size="sm"
+            truncate
+            fs={muted ? "italic" : undefined}
+            c={muted ? "dimmed" : undefined}
+            style={{ minWidth: 0 }}
+          >
             {label}
           </Text>
         )}
-        <Text
-          size="sm"
-          c="dimmed"
-          style={{ fontVariantNumeric: "tabular-nums", flex: "none" }}
-        >
-          {formatMetric(value, metric)}
-        </Text>
+        <Group gap="xs" wrap="nowrap" style={{ flex: "none" }}>
+          {action}
+          <Text
+            size="sm"
+            c="dimmed"
+            style={{ fontVariantNumeric: "tabular-nums" }}
+          >
+            {formatMetric(value, metric)}
+          </Text>
+        </Group>
       </Group>
       <div className={classes.track}>
         <div
@@ -495,19 +513,37 @@ export function TopSeries({
 
   return (
     <Stack gap="md">
-      {read.map((s) => (
-        <RankedRow
-          key={s.seriesId}
-          label={s.seriesName}
-          href={`/series/${s.seriesId}`}
-          sublabel={`${s.pagesRead} pages across ${s.books} ${s.books === 1 ? "book" : "books"}`}
-          measuredMs={s.duration.measuredMs}
-          inferredMs={s.duration.inferredMs}
-          value={rowValue(s, metric)}
-          metric={metric}
-          max={max}
-        />
-      ))}
+      {read.map((s) =>
+        s.removedFromLibrary ? (
+          // Reading of books since deleted from the server. It still counts,
+          // but there is no series to link to or name, and its book counts
+          // are always zero because deleted books cannot be told apart.
+          <RankedRow
+            key="removed-from-library"
+            label={REMOVED_LABEL}
+            muted
+            action={<RemovedHistoryPurge />}
+            sublabel={`${s.sessions} ${s.sessions === 1 ? "sitting" : "sittings"} of books no longer on the server`}
+            measuredMs={s.duration.measuredMs}
+            inferredMs={s.duration.inferredMs}
+            value={rowValue(s, metric)}
+            metric={metric}
+            max={max}
+          />
+        ) : (
+          <RankedRow
+            key={s.seriesId ?? s.seriesName}
+            label={s.seriesName ?? ""}
+            href={`/series/${s.seriesId}`}
+            sublabel={`${s.pagesRead} pages across ${s.books} ${s.books === 1 ? "book" : "books"}`}
+            measuredMs={s.duration.measuredMs}
+            inferredMs={s.duration.inferredMs}
+            value={rowValue(s, metric)}
+            metric={metric}
+            max={max}
+          />
+        ),
+      )}
     </Stack>
   );
 }
@@ -563,10 +599,20 @@ export function FormatBreakdown({
   return (
     <Group gap="lg" wrap="wrap">
       {read.map((f) => (
-        <Stack key={f.format} gap={2} style={{ minWidth: 90 }}>
-          <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-            {f.format}
-          </Text>
+        <Stack
+          key={f.removedFromLibrary ? "removed-from-library" : f.format}
+          gap={2}
+          style={{ minWidth: 90 }}
+        >
+          {f.removedFromLibrary ? (
+            <Text size="xs" c="dimmed" fs="italic" fw={600}>
+              {REMOVED_LABEL}
+            </Text>
+          ) : (
+            <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+              {f.format}
+            </Text>
+          )}
           <Text fw={600} style={{ fontVariantNumeric: "tabular-nums" }}>
             {formatMetric(rowValue(f, metric), metric)}
           </Text>

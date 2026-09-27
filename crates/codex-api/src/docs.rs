@@ -369,6 +369,7 @@ The following paths are exempt from rate limiting:
         v1::handlers::record_reading_sessions,
         v1::handlers::get_reading_stats,
         v1::handlers::get_reading_coverage,
+        v1::handlers::get_orphaned_reading_history,
         v1::handlers::purge_orphaned_reading_history,
 
         // Reading progress endpoints
@@ -1047,6 +1048,7 @@ The following paths are exempt from rate limiting:
             v1::dto::ReadingStatsGranularity,
             v1::dto::ReadingStatsSort,
             v1::dto::ReadingCoverageDto,
+            v1::dto::OrphanedHistoryDto,
             v1::dto::PurgedOrphanedHistoryDto,
 
             // Reading session DTOs

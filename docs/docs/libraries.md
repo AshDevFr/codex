@@ -300,6 +300,12 @@ Deleted files are soft-deleted in the database:
 - Can be restored if file returns
 - Permanent deletion available via API
 
+Permanent deletion (purging deleted books, or deleting the library) removes the
+book for good, including your current progress in it. Your reading time and
+finished read-throughs are kept and still count in your statistics, under a
+**Removed from library** line; see
+[Reading Progress](./reading-progress.md#when-a-book-is-deleted-from-the-server).
+
 ### Moving Files
 
 If you move files:

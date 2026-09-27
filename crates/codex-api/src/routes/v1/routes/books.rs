@@ -190,7 +190,8 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
         // otherwise.
         .route(
             "/reading-stats/orphaned",
-            delete(handlers::purge_orphaned_reading_history),
+            get(handlers::get_orphaned_reading_history)
+                .delete(handlers::purge_orphaned_reading_history),
         )
         // Mark as read/unread routes
         .route("/books/{book_id}/read", post(handlers::mark_book_as_read))

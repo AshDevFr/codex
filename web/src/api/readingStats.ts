@@ -14,6 +14,9 @@ export type ReadingStatsGranularity =
   components["schemas"]["ReadingStatsGranularity"];
 export type ReadingStatsSort = components["schemas"]["ReadingStatsSort"];
 export type ReadingCoverage = components["schemas"]["ReadingCoverageDto"];
+export type OrphanedHistory = components["schemas"]["OrphanedHistoryDto"];
+export type PurgedOrphanedHistory =
+  components["schemas"]["PurgedOrphanedHistoryDto"];
 
 export interface ReadingStatsParams {
   from?: Date;
@@ -67,6 +70,24 @@ export const readingStatsApi = {
    */
   coverage: async (): Promise<ReadingCoverage> => {
     const response = await api.get<ReadingCoverage>("/reading-stats/coverage");
+    return response.data;
+  },
+
+  /**
+   * Totals of the reader's history whose book has since been deleted, across
+   * every date. Exactly what `purgeOrphaned` would remove, which the windowed
+   * "removed from library" row cannot say.
+   */
+  orphaned: async (): Promise<OrphanedHistory> => {
+    const response = await api.get<OrphanedHistory>("/reading-stats/orphaned");
+    return response.data;
+  },
+
+  /** Permanently delete the reader's history whose book has been deleted. */
+  purgeOrphaned: async (): Promise<PurgedOrphanedHistory> => {
+    const response = await api.delete<PurgedOrphanedHistory>(
+      "/reading-stats/orphaned",
+    );
     return response.data;
   },
 };

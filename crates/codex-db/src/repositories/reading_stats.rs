@@ -21,8 +21,8 @@ use crate::entities::{read_completions, reading_sessions};
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use sea_orm::{
-    ColumnTrait, ConnectionTrait, DatabaseBackend, EntityTrait, FromQueryResult, QueryFilter,
-    Statement, TransactionTrait, Value,
+    ColumnTrait, ConnectionTrait, DatabaseBackend, EntityTrait, FromQueryResult, PaginatorTrait,
+    QueryFilter, Statement, TransactionTrait, Value,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -220,6 +220,15 @@ pub struct ReadingCoverage {
     /// When this reader first read anything, or `None` if they never have.
     pub first_read_at: Option<DateTime<Utc>>,
     pub last_read_at: Option<DateTime<Utc>>,
+}
+
+/// The caller's reading history whose book has been hard-deleted, in total.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OrphanedHistory {
+    pub duration: DurationBreakdown,
+    pub pages_read: i64,
+    pub sessions: i64,
+    pub completions: u64,
 }
 
 /// What [`ReadingStatsRepository::purge_orphaned`] removed.
@@ -662,6 +671,66 @@ impl ReadingStatsRepository {
                 last_read_at: r.last_read_at,
             }),
         )
+    }
+
+    /// Everything [`Self::purge_orphaned`] would delete for this user, across
+    /// their whole history rather than any window.
+    ///
+    /// A purge is not windowed, so the confirmation in front of it cannot be
+    /// either: the removed-from-library row on the dashboard covers only the
+    /// dates on screen and would understate what is about to go.
+    pub async fn orphaned_totals<C: ConnectionTrait>(
+        db: &C,
+        user_id: Uuid,
+    ) -> Result<OrphanedHistory> {
+        #[derive(Debug, FromQueryResult)]
+        struct OrphanRow {
+            measured_ms: i64,
+            inferred_ms: i64,
+            pages_read: i64,
+            sessions: i64,
+        }
+
+        let backend = db.get_database_backend();
+        // Counts every orphaned row, reading or not: a purge removes `reset`
+        // rows too, and the count has to match what it reports afterwards.
+        let sql = format!(
+            "SELECT {MEASURED_SUM} AS measured_ms, \
+                    {INFERRED_SUM} AS inferred_ms, \
+                    {PAGES_SUM} AS pages_read, \
+                    COUNT(*) AS sessions \
+             FROM reading_sessions rs \
+             WHERE rs.user_id = $1 AND rs.book_id IS NULL"
+        );
+        let row = OrphanRow::find_by_statement(Statement::from_sql_and_values(
+            backend,
+            &sql,
+            [Value::Uuid(Some(Box::new(user_id)))],
+        ))
+        .one(db)
+        .await?;
+
+        let completions = read_completions::Entity::find()
+            .filter(read_completions::Column::UserId.eq(user_id))
+            .filter(read_completions::Column::BookId.is_null())
+            .count(db)
+            .await?;
+
+        Ok(row.map_or_else(
+            || OrphanedHistory {
+                completions,
+                ..OrphanedHistory::default()
+            },
+            |r| OrphanedHistory {
+                duration: DurationBreakdown {
+                    measured_ms: r.measured_ms,
+                    inferred_ms: r.inferred_ms,
+                },
+                pages_read: r.pages_read,
+                sessions: r.sessions,
+                completions,
+            },
+        ))
     }
 
     /// Delete the caller's reading history whose book has been hard-deleted,
