@@ -397,6 +397,7 @@ const ACCEPTED_UNREFERENCED_COMPONENTS: &[&str] = &[
     // because they are also registered in `docs.rs` `schemas()`, which is
     // unnecessary but harmless.
     "BooksPaginationQuery",
+    "ExportReadingProgressQuery",
     "ListFilterPresetsQuery",
     "ListSettingsQuery",
     "OrphanStatsQuery",

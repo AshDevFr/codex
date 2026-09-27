@@ -372,6 +372,11 @@ The following paths are exempt from rate limiting:
         v1::handlers::get_orphaned_reading_history,
         v1::handlers::purge_orphaned_reading_history,
 
+        // Reading progress export/import: carrying reading state across a
+        // library reorganisation or an instance move
+        v1::handlers::export_reading_progress,
+        v1::handlers::import_reading_progress,
+
         // Reading progress endpoints
         v1::handlers::update_reading_progress,
         v1::handlers::get_reading_progress,
@@ -1067,6 +1072,27 @@ The following paths are exempt from rate limiting:
             v1::dto::ReadCompletionDto,
             v1::dto::ReadHistoryResponse,
 
+            // Reading progress export/import DTOs
+            v1::dto::ExportReadingProgressQuery,
+            v1::dto::ReadingProgressExportDocument,
+            v1::dto::ExportSeriesDto,
+            v1::dto::ExportBookDto,
+            v1::dto::ExportExternalIdDto,
+            v1::dto::ExportProgressDto,
+            v1::dto::ExportCompletionDto,
+            v1::dto::ExportSessionDto,
+            v1::dto::ImportReadingProgressRequest,
+            v1::dto::ImportReadingProgressResponse,
+            v1::dto::HashMode,
+            v1::dto::ConflictPolicy,
+            v1::dto::SeriesDisposition,
+            v1::dto::BookDisposition,
+            v1::dto::FieldOutcome,
+            v1::dto::WriteCounts,
+            v1::dto::ImportSeriesReport,
+            v1::dto::ImportBookReport,
+            v1::dto::ImportSummary,
+
             // Want to read (per-user queue) DTOs
             v1::dto::WantToReadEntryDto,
             v1::dto::WantToReadListResponse,
@@ -1330,6 +1356,7 @@ The following paths are exempt from rate limiting:
         (name = "User Reader Settings", description = "Per-user, per-series reader overrides"),
         (name = "Filter Presets", description = "Saved filter combinations for list pages and the advanced search page"),
         (name = "Reading Progress", description = "Reading progress tracking"),
+        (name = "Reading Progress Transfer", description = "Exporting and importing reading state across a library reorganisation or an instance move"),
 
         // Background Jobs
         (name = "Task Queue", description = "Background job queue management"),

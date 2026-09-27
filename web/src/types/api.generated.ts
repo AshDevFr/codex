@@ -3276,6 +3276,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reading-progress/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export the authenticated user's reading progress
+         * @description Produces the whole `read_progress` / `read_completions` / `reading_sessions`
+         *     / `user_series_ratings` state for the caller, keyed by external ids and
+         *     series-relative paths instead of database ids so it can be matched back
+         *     against a differently organised library (or a different Codex instance
+         *     entirely) by `POST /api/v1/reading-progress/import`.
+         *
+         *     Take this export **before** deleting an old library during a split: the
+         *     underlying rows survive a hard delete as orphans, but nothing except this
+         *     file can say which book an orphan used to belong to.
+         */
+        get: operations["export_reading_progress"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reading-progress/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import reading progress from an export document
+         * @description Resolves the file's series and books against the current library through
+         *     the same access-group / sharing-tag visibility that an ordinary read
+         *     respects: a book the importing user cannot see resolves as `unmatched`,
+         *     never as a permission error that would confirm it exists, and nothing is
+         *     ever written against it.
+         *
+         *     Matching never guesses: any step (external id, path, file name, or, under
+         *     `hash_mode = "match"`, hash) that finds more than one candidate reports
+         *     `ambiguous` and writes nothing for that series or book. `dry_run: true`
+         *     returns the identical response shape without writing anything, which is
+         *     what makes it safe to preview before committing.
+         *
+         *     Each series is applied in its own transaction; the response's per-series
+         *     `committed` field says which ones actually landed. `read_completions` and
+         *     `reading_sessions` reuse their exported ids on insert, so importing the
+         *     same file twice leaves row counts unchanged rather than duplicating
+         *     history.
+         */
+        post: operations["import_reading_progress"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/reading-sessions": {
         parameters: {
             query?: never;
@@ -8935,6 +8999,12 @@ export interface components {
             /** @description Optional metadata from ComicInfo.xml or similar */
             metadata?: components["schemas"]["BookMetadataDto"];
         };
+        /**
+         * @description Why a book in the import file could not be resolved to exactly one book
+         *     in its matched series.
+         * @enum {string}
+         */
+        BookDisposition: "matched" | "stem_match" | "ambiguous" | "unmatched" | "hash_mismatch";
         /** @description Book data transfer object */
         BookDto: {
             /**
@@ -11103,6 +11173,11 @@ export interface components {
             /** @description Number of settings configured */
             settingsConfigured: number;
         };
+        /**
+         * @description How a conflict between an imported value and an existing row is resolved.
+         * @enum {string}
+         */
+        ConflictPolicy: "newest" | "furthest" | "skip_existing" | "overwrite";
         /** @description Contributor information (author, artist, etc.) */
         Contributor: {
             /** @description Name of the contributor */
@@ -12207,6 +12282,58 @@ export interface components {
             /** @description Whether the execution succeeded */
             success: boolean;
         };
+        /**
+         * @description One book inside a series, keyed for matching by path, name, and hash
+         *     rather than by id: the whole point of the file is that ids on the far side
+         *     are expected to be different.
+         */
+        ExportBookDto: {
+            completions?: components["schemas"]["ExportCompletionDto"][];
+            /**
+             * @description Empty when the book was never analyzed; never treated as a value to
+             *     match on in that case.
+             */
+            file_hash?: string;
+            /** @example v01.cbz */
+            file_name: string;
+            partial_hash?: string;
+            /**
+             * @description Relative to the series folder, so a series move does not invalidate it.
+             * @example Vol 01/v01.cbz
+             */
+            path: string;
+            progress?: components["schemas"]["ExportProgressDto"];
+            /**
+             * @description Omitted entirely (not an empty array) when the export was taken with
+             *     `include_sessions=false`.
+             */
+            sessions?: components["schemas"]["ExportSessionDto"][] | null;
+        };
+        /**
+         * @description One finished read-through. Keeps its original id so re-importing the same
+         *     file is a no-op rather than a duplicate.
+         */
+        ExportCompletionDto: {
+            /** Format: date-time */
+            completed_at: string;
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            started_at: string;
+        };
+        /**
+         * @description One external identifier attached to a series (a plugin match, a ComicInfo
+         *     value, or a manual entry).
+         */
+        ExportExternalIdDto: {
+            /** @example 12345 */
+            id: string;
+            /**
+             * @description `plugin:<name>`, `comicinfo`, `epub`, or `manual`.
+             * @example plugin:mangabaka
+             */
+            source: string;
+        };
         /** @description Response for the field catalog */
         ExportFieldCatalogResponse: {
             /** @description Book export fields */
@@ -12230,6 +12357,85 @@ export interface components {
             llmSelect: string[];
             /** @description LLM-friendly book field preset */
             llmSelectBooks: string[];
+        };
+        /**
+         * @description The live resume position for one book. Retains `r2_progression`: it is the
+         *     only place the EPUB locator survives, since sessions strip it.
+         */
+        ExportProgressDto: {
+            completed: boolean;
+            /** Format: date-time */
+            completed_at?: string | null;
+            /** Format: int32 */
+            current_page: number;
+            /** Format: double */
+            progress_percentage?: number | null;
+            r2_progression?: string | null;
+            /** Format: date-time */
+            started_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        /** @description Query parameters for `GET /api/v1/reading-progress/export`. */
+        ExportReadingProgressQuery: {
+            /**
+             * @description Sessions are opt-out: they are the only source of every reading
+             *     statistic, so leaving them out is easy to do by accident and hard to
+             *     notice until the numbers are gone.
+             */
+            include_sessions?: boolean;
+        };
+        /** @description One series and everything the exporting user recorded against its books. */
+        ExportSeriesDto: {
+            books?: components["schemas"]["ExportBookDto"][];
+            external_ids?: components["schemas"]["ExportExternalIdDto"][];
+            /**
+             * @description The series path as stored, relative to the library root.
+             * @example shonen/Naruto
+             */
+            library_relative_path: string;
+            /** @example Naruto */
+            name: string;
+            notes?: string | null;
+            /** Format: int32 */
+            rating?: number | null;
+        };
+        /**
+         * @description One row from the reading-session log. `r2_progression` is deliberately
+         *     absent: nothing reads a session's historical locator, and it is the only
+         *     non-scalar column on the row.
+         */
+        ExportSessionDto: {
+            /** Format: int64 */
+            active_duration_ms?: number | null;
+            /** Format: date-time */
+            client_ended_at: string;
+            /** Format: date-time */
+            client_started_at: string;
+            device_id: string;
+            device_name?: string | null;
+            /**
+             * @description `"measured"`, `"inferred"`, or `"unknown"`.
+             * @example measured
+             */
+            duration_source: string;
+            /** Format: uuid */
+            id: string;
+            /**
+             * @description `"progress"`, `"completed"`, or `"reset"`.
+             * @example progress
+             */
+            kind: string;
+            /** Format: int32 */
+            pages_read?: number | null;
+            /** Format: int32 */
+            pass: number;
+            /** Format: date-time */
+            server_recorded_at: string;
+            /** Format: int32 */
+            to_page?: number | null;
+            /** Format: double */
+            to_percentage?: number | null;
         };
         /**
          * @description External ID context for template evaluation.
@@ -12480,6 +12686,12 @@ export interface components {
             operator: "endsWith";
             value: string;
         };
+        /**
+         * @description What happened to one scalar field write (progress or rating) under the
+         *     active conflict policy.
+         * @enum {string}
+         */
+        FieldOutcome: "inserted" | "updated" | "skipped";
         /**
          * @example {
          *       "isDirectory": true,
@@ -13024,6 +13236,11 @@ export interface components {
             publications?: components["schemas"]["Publication"][] | null;
         };
         /**
+         * @description How aggressively hashes are used to match a book.
+         * @enum {string}
+         */
+        HashMode: "off" | "verify" | "match";
+        /**
          * @description Image link with optional dimensions
          *
          *     Used for cover images and thumbnails in publications.
@@ -13043,6 +13260,122 @@ export interface components {
              * @description Width in pixels
              */
             width?: number | null;
+        };
+        /** @description The outcome for one book in the import file. */
+        ImportBookReport: {
+            /**
+             * @description Whether any writes were attempted for this book. False for every
+             *     disposition except `matched`, and except `stem_match` when
+             *     `accept_stem_matches` is off.
+             */
+            applied: boolean;
+            completions: components["schemas"]["WriteCounts"];
+            disposition: components["schemas"]["BookDisposition"];
+            file_name: string;
+            /** Format: uuid */
+            matched_book_id?: string | null;
+            path: string;
+            progress?: components["schemas"]["FieldOutcome"];
+            sessions: components["schemas"]["WriteCounts"];
+        };
+        /** @description `POST /api/v1/reading-progress/import` request body. */
+        ImportReadingProgressRequest: {
+            /**
+             * @description A stem match (`v01.cbr` renamed to `v01.cbz`) is reported either way,
+             *     but only written when this is set: two files can share a stem, and
+             *     applying it silently risks writing progress onto the wrong one.
+             */
+            accept_stem_matches?: boolean;
+            conflict_policy?: components["schemas"]["ConflictPolicy"];
+            /** @description Compute and report the outcome without writing anything. */
+            dry_run?: boolean;
+            file: components["schemas"]["ReadingProgressExportDocument"];
+            hash_mode?: components["schemas"]["HashMode"];
+            /**
+             * @description When a session or completion's id collides with an existing row whose
+             *     `book_id` is `NULL` (the book was hard-deleted after export), adopt it
+             *     by setting `book_id` instead of skipping it as a duplicate.
+             */
+            reattach_sessions?: boolean;
+            /**
+             * @description External-id sources to try, in order, before falling back to path and
+             *     then normalized name. An empty list skips straight to path matching.
+             */
+            source_preference?: string[];
+        };
+        /**
+         * @description The response for both a real import and a dry run: the shape is identical
+         *     either way, so a client cannot tell from the response alone whether
+         *     anything was written. Only `dry_run` (and the DB) says that.
+         */
+        ImportReadingProgressResponse: {
+            dry_run: boolean;
+            /**
+             * @description Informational notes about the request, e.g. `reattach_sessions` having
+             *     no effect because the file carries no sessions.
+             */
+            notices?: string[];
+            series: components["schemas"]["ImportSeriesReport"][];
+            sessions_in_file: boolean;
+            summary: components["schemas"]["ImportSummary"];
+        };
+        /** @description The outcome for one series in the import file. */
+        ImportSeriesReport: {
+            /**
+             * @description Whether book/rating processing was attempted at all (only when
+             *     `disposition == matched`).
+             */
+            attempted: boolean;
+            books: components["schemas"]["ImportBookReport"][];
+            /**
+             * @description Whether this series' transaction was committed. Always `false` in a
+             *     dry run, and `false` if `attempted` but a write failed.
+             */
+            committed: boolean;
+            disposition: components["schemas"]["SeriesDisposition"];
+            error?: string | null;
+            library_relative_path: string;
+            /** Format: uuid */
+            matched_series_id?: string | null;
+            name: string;
+            rating?: components["schemas"]["FieldOutcome"];
+        };
+        /** @description Totals across every series in the file, for a one-line summary. */
+        ImportSummary: {
+            /** Format: int32 */
+            books_ambiguous: number;
+            /** Format: int32 */
+            books_hash_mismatch: number;
+            /** Format: int32 */
+            books_matched: number;
+            /** Format: int32 */
+            books_stem_matched: number;
+            /** Format: int32 */
+            books_total: number;
+            /** Format: int32 */
+            books_unmatched: number;
+            /** Format: int32 */
+            completions_inserted: number;
+            /** Format: int32 */
+            completions_reattached: number;
+            /** Format: int32 */
+            progress_written: number;
+            /** Format: int32 */
+            ratings_written: number;
+            /** Format: int32 */
+            series_ambiguous: number;
+            /** Format: int32 */
+            series_committed: number;
+            /** Format: int32 */
+            series_matched: number;
+            /** Format: int32 */
+            series_total: number;
+            /** Format: int32 */
+            series_unmatched: number;
+            /** Format: int32 */
+            sessions_inserted: number;
+            /** Format: int32 */
+            sessions_reattached: number;
         };
         /**
          * @description Which layer supplied a value the user is inheriting.
@@ -17091,6 +17424,23 @@ export interface components {
              */
             totalPages: number;
         };
+        /**
+         * @description The whole export: one user's reading state, self-describing enough to be
+         *     matched back against a differently organised library.
+         */
+        ReadingProgressExportDocument: {
+            /** Format: date-time */
+            exported_at: string;
+            /** @example codex-reading-progress */
+            format: string;
+            includes_sessions: boolean;
+            series?: components["schemas"]["ExportSeriesDto"][];
+            /**
+             * Format: int32
+             * @example 1
+             */
+            version: number;
+        };
         /** @description One reading session measured by a client. */
         ReadingSessionDto: {
             /**
@@ -18591,6 +18941,12 @@ export interface components {
             /** @description List of covers */
             covers: components["schemas"]["SeriesCoverDto"][];
         };
+        /**
+         * @description Why a series in the import file could not be resolved to exactly one
+         *     series in the current library.
+         * @enum {string}
+         */
+        SeriesDisposition: "matched" | "ambiguous" | "unmatched";
         /** @description Series data transfer object */
         SeriesDto: {
             /**
@@ -21597,6 +21953,25 @@ export interface components {
              *     remaining placeholder is `{externalId}`, filled client-side.
              */
             urlTemplate: string;
+        };
+        /**
+         * @description Insert/reattach/skip counts for an append-only table (completions or
+         *     sessions) within one book.
+         */
+        WriteCounts: {
+            /** Format: int32 */
+            inserted: number;
+            /**
+             * Format: int32
+             * @description Adopted an orphaned row (`book_id IS NULL`) rather than inserting a
+             *     new one.
+             */
+            reattached: number;
+            /**
+             * Format: int32
+             * @description Already present with the same book attached; re-importing is a no-op.
+             */
+            skipped: number;
         };
     };
     responses: never;
@@ -29370,6 +29745,88 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ReadProgressListResponse"];
                 };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    export_reading_progress: {
+        parameters: {
+            query?: {
+                /** @description Include the reading-session log (default: true). Sessions are the only source of every reading statistic, so this is opt-out rather than opt-in. */
+                include_sessions?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The export document */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingProgressExportDocument"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    import_reading_progress: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportReadingProgressRequest"];
+            };
+        };
+        responses: {
+            /** @description Import processed (or, for a dry run, previewed) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportReadingProgressResponse"];
+                };
+            };
+            /** @description Unknown export format, or a version newer than this server supports */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Unauthorized */
             401: {
