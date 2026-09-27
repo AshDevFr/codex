@@ -3367,7 +3367,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * The caller's reading history for books that no longer exist, in total
+         * @description Unwindowed: exactly what `DELETE /api/v1/reading-stats/orphaned` would
+         *     remove, so a client can say so before asking the reader to confirm.
+         */
+        get: operations["get_orphaned_reading_history"];
         put?: never;
         post?: never;
         /**
@@ -14904,6 +14909,25 @@ export interface components {
              * @example 25600
              */
             sizeBytes: number;
+        };
+        /**
+         * @description The caller's reading history whose book has since been deleted, across
+         *     every date. What a purge would remove.
+         */
+        OrphanedHistoryDto: {
+            /**
+             * Format: int64
+             * @description Finished read-throughs.
+             */
+            completions: number;
+            duration: components["schemas"]["DurationBreakdownDto"];
+            /** Format: int64 */
+            pagesRead: number;
+            /**
+             * Format: int64
+             * @description Session rows, including bookkeeping rows such as a mark-unread.
+             */
+            sessions: number;
         };
         /** @description Page data transfer object */
         PageDto: {
@@ -29488,6 +29512,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReadingCoverageDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_orphaned_reading_history: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Totals of the detached history */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrphanedHistoryDto"];
                 };
             };
             /** @description Unauthorized */

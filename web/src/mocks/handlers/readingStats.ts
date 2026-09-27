@@ -209,6 +209,22 @@ export const readingStatsHandlers = [
     });
   }),
 
+  // Nothing in the mock library has been deleted, so there is nothing to purge.
+  http.get("*/api/v1/reading-stats/orphaned", async () => {
+    await delay(80);
+    return HttpResponse.json({
+      duration: { measuredMs: 0, inferredMs: 0, totalMs: 0 },
+      pagesRead: 0,
+      sessions: 0,
+      completions: 0,
+    });
+  }),
+
+  http.delete("*/api/v1/reading-stats/orphaned", async () => {
+    await delay(80);
+    return HttpResponse.json({ sessionsRemoved: 0, completionsRemoved: 0 });
+  }),
+
   http.get("*/api/v1/reading-stats", async ({ request }) => {
     await delay(150);
 
@@ -245,6 +261,7 @@ export const readingStatsHandlers = [
         return {
           seriesId: source.id,
           seriesName: source.title,
+          removedFromLibrary: false,
           duration: durationOf(days),
           pagesRead: days.reduce((sum, d) => sum + d.pagesRead, 0),
           sessions: days.reduce((sum, d) => sum + d.sessions, 0),
@@ -274,6 +291,7 @@ export const readingStatsHandlers = [
     ]
       .map(([format, days]) => ({
         format,
+        removedFromLibrary: false,
         duration: durationOf(days),
         pagesRead: days.reduce((sum, d) => sum + d.pagesRead, 0),
         sessions: days.reduce((sum, d) => sum + d.sessions, 0),

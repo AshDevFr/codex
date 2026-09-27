@@ -1,9 +1,10 @@
 //! Reading statistics, aggregated from the session log.
 
 use super::super::dto::{
-    DurationBreakdownDto, PurgedOrphanedHistoryDto, ReadingByDeviceDto, ReadingByFormatDto,
-    ReadingBySeriesDto, ReadingCoverageDto, ReadingPeriodDto, ReadingStatsGranularity,
-    ReadingStatsQuery, ReadingStatsResponse, ReadingStatsSort, ReadingSummaryDto,
+    DurationBreakdownDto, OrphanedHistoryDto, PurgedOrphanedHistoryDto, ReadingByDeviceDto,
+    ReadingByFormatDto, ReadingBySeriesDto, ReadingCoverageDto, ReadingPeriodDto,
+    ReadingStatsGranularity, ReadingStatsQuery, ReadingStatsResponse, ReadingStatsSort,
+    ReadingSummaryDto,
 };
 use crate::{AppState, error::ApiError, extractors::AuthContext, permissions::Permission};
 use axum::{
@@ -34,7 +35,11 @@ const MAX_TZ_OFFSET_MINUTES: i32 = 14 * 60;
 
 #[derive(OpenApi)]
 #[openapi(
-    paths(get_reading_stats, purge_orphaned_reading_history),
+    paths(
+        get_reading_stats,
+        get_orphaned_reading_history,
+        purge_orphaned_reading_history
+    ),
     components(schemas(
         ReadingStatsResponse,
         ReadingSummaryDto,
@@ -44,6 +49,7 @@ const MAX_TZ_OFFSET_MINUTES: i32 = 14 * 60;
         ReadingByFormatDto,
         DurationBreakdownDto,
         ReadingStatsGranularity,
+        OrphanedHistoryDto,
         PurgedOrphanedHistoryDto,
     )),
     tags(
@@ -186,6 +192,37 @@ pub async fn get_reading_coverage(
         .map_err(|e| ApiError::Internal(format!("Failed to read coverage: {}", e)))?;
 
     Ok(Json(coverage.into()))
+}
+
+/// The caller's reading history for books that no longer exist, in total
+///
+/// Unwindowed: exactly what `DELETE /api/v1/reading-stats/orphaned` would
+/// remove, so a client can say so before asking the reader to confirm.
+#[utoipa::path(
+    get,
+    path = "/api/v1/reading-stats/orphaned",
+    responses(
+        (status = 200, description = "Totals of the detached history", body = OrphanedHistoryDto),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Reading Statistics"
+)]
+pub async fn get_orphaned_reading_history(
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+) -> Result<Json<OrphanedHistoryDto>, ApiError> {
+    auth.require_permission(&Permission::ProgressRead)?;
+
+    let totals = ReadingStatsRepository::orphaned_totals(&state.db, auth.user_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to total orphaned history: {}", e)))?;
+
+    Ok(Json(totals.into()))
 }
 
 /// Delete the caller's reading history for books that no longer exist

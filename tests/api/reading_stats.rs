@@ -4,7 +4,9 @@
 mod common;
 
 use chrono::{DateTime, Duration, TimeZone, Utc};
-use codex::api::routes::v1::dto::{PurgedOrphanedHistoryDto, ReadingStatsResponse};
+use codex::api::routes::v1::dto::{
+    OrphanedHistoryDto, PurgedOrphanedHistoryDto, ReadingStatsResponse,
+};
 use codex::db::ScanningStrategy;
 use codex::db::repositories::{
     BookRepository, LibraryRepository, SeriesRepository, UserRepository,
@@ -776,4 +778,45 @@ async fn purging_orphaned_history_is_scoped_to_the_caller() {
     assert_eq!(status, StatusCode::OK);
     let again = again.expect("expected a JSON body");
     assert_eq!((again.sessions_removed, again.completions_removed), (0, 0));
+}
+
+/// The confirmation before a purge has to state what will actually go, which
+/// is every orphaned row regardless of the window the dashboard is showing.
+#[tokio::test]
+async fn orphaned_totals_ignore_the_window_and_the_other_reader() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let removed = book_in_series(&db, "Dune", "epub").await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_reader, token) = admin_and_token(&db, &state, "reader").await;
+    let (_other, other_token) = admin_and_token(&db, &state, "other").await;
+
+    // Two months apart, so no single dashboard window shows both.
+    record_session(state.clone(), &token, removed.id, "phone", 20, at(3)).await;
+    record_session(
+        state.clone(),
+        &token,
+        removed.id,
+        "phone",
+        40,
+        at(3) - Duration::days(60),
+    )
+    .await;
+    record_session(state.clone(), &other_token, removed.id, "tablet", 5, at(4)).await;
+    hard_delete_book(&db, removed.id).await;
+
+    let app = create_test_router(state.clone()).await;
+    let request = get_request_with_auth("/api/v1/reading-stats/orphaned", &token);
+    let (status, body): (_, Option<OrphanedHistoryDto>) = make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+    let body = body.expect("expected a JSON body");
+    assert_eq!(body.sessions, 2);
+    assert_eq!(body.duration.total_ms, 60 * MINUTE_MS);
+    assert_eq!(body.completions, 0);
+
+    purge_orphans(state.clone(), &token).await;
+    let app = create_test_router(state).await;
+    let request = get_request_with_auth("/api/v1/reading-stats/orphaned", &token);
+    let (_, body): (_, Option<OrphanedHistoryDto>) = make_json_request(app, request).await;
+    let body = body.expect("expected a JSON body");
+    assert_eq!((body.sessions, body.duration.total_ms), (0, 0));
 }

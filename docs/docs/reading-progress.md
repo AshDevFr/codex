@@ -114,6 +114,41 @@ whichever book is holding the count up updates the series straight away. Since
 the series number is the *lowest* count across its books, it only moves if that
 book was the one setting it.
 
+## When a book is deleted from the server
+
+A scan that finds a file missing only hides the book (a soft delete), and
+everything about it, progress and history included, comes back if the file
+does. A **permanent** deletion is different: purging deleted books, or deleting
+a whole library, removes the book's row for good.
+
+What happens to your reading then:
+
+- **Your reading time, pages and sittings are kept.** They still count towards
+  every total on the **Reading Statistics** page, the calendar and the
+  per-device breakdown. The time happened; removing the file does not undo it.
+- **Which book it was is lost.** The series and format panels show that time on
+  one row labelled **Removed from library**, since there is no longer a series
+  or format to put it under.
+- **Books read and books finished drop the deleted book.** Both count distinct
+  books, and two deleted books can no longer be told apart, so they are left
+  out rather than guessed at. Time, pages and sittings are unaffected.
+- **Current progress is removed.** Where you were in a book that no longer
+  exists has nothing to resume, so your position in it goes with the book.
+  Your finished read-throughs are kept, detached from the book, like your
+  sittings.
+
+### Deleting the removed-from-library history
+
+If you would rather that reading stopped counting, use **Delete** on the
+**Removed from library** row of the series panel. The confirmation states how
+many sittings, how much reading time and how many finished read-throughs will
+go, across **all** dates rather than only the ones on screen, because that is
+what is deleted. It is permanent, affects only your own history, and never
+touches reading attributed to a book that still exists.
+
+The same is available through the API: `GET /api/v1/reading-stats/orphaned`
+returns the totals, and `DELETE /api/v1/reading-stats/orphaned` removes them.
+
 ## What is not recorded
 
 - **Abandoned reads leave no trace.** Marking a book unread at page 50 without

@@ -124,6 +124,7 @@ describe("TopSeries", () => {
     {
       seriesId: "11111111-1111-1111-1111-111111111111",
       seriesName: "Berserk",
+      removedFromLibrary: false,
       duration: duration(2 * HOUR),
       pagesRead: 120,
       sessions: 4,
@@ -133,6 +134,7 @@ describe("TopSeries", () => {
     {
       seriesId: "22222222-2222-2222-2222-222222222222",
       seriesName: "Vinland Saga",
+      removedFromLibrary: false,
       duration: duration(30 * MINUTE),
       pagesRead: 40,
       sessions: 1,
@@ -154,6 +156,37 @@ describe("TopSeries", () => {
     renderWithProviders(<TopSeries series={series} />);
 
     expect(screen.getByText("40 pages across 1 book")).toBeInTheDocument();
+  });
+
+  /// Reading of deleted books still counts, but it is not a series: it must
+  /// not link anywhere or claim a book count it cannot know.
+  it("shows reading of deleted books as a labelled row, not a series", () => {
+    renderWithProviders(
+      <TopSeries
+        series={[
+          ...series,
+          {
+            seriesId: null,
+            seriesName: null,
+            removedFromLibrary: true,
+            duration: duration(45 * MINUTE),
+            pagesRead: 30,
+            sessions: 3,
+            books: 0,
+            booksFinished: 0,
+          },
+        ]}
+      />,
+    );
+
+    const label = screen.getByText("Removed from library");
+    expect(label.closest("a")).toBeNull();
+    expect(screen.getByText("45m")).toBeInTheDocument();
+    expect(
+      screen.getByText("3 sittings of books no longer on the server"),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
+    expect(screen.getAllByRole("link")).toHaveLength(2);
   });
 
   it("says so plainly when nothing was read", () => {
@@ -224,6 +257,7 @@ describe("empty rows", () => {
           {
             seriesId: "11111111-1111-1111-1111-111111111111",
             seriesName: "Berserk",
+            removedFromLibrary: false,
             duration: duration(2 * HOUR),
             pagesRead: 120,
             sessions: 4,
@@ -232,6 +266,7 @@ describe("empty rows", () => {
           {
             seriesId: "22222222-2222-2222-2222-222222222222",
             seriesName: "Imported Series",
+            removedFromLibrary: false,
             duration: duration(0),
             pagesRead: 0,
             sessions: 6,
@@ -252,6 +287,7 @@ describe("empty rows", () => {
           {
             seriesId: "22222222-2222-2222-2222-222222222222",
             seriesName: "Imported Series",
+            removedFromLibrary: false,
             duration: duration(0),
             pagesRead: 0,
             sessions: 6,
@@ -300,6 +336,7 @@ describe("empty rows", () => {
         formats={[
           {
             format: "cbz",
+            removedFromLibrary: false,
             duration: duration(90 * MINUTE),
             pagesRead: 60,
             sessions: 3,
@@ -307,6 +344,7 @@ describe("empty rows", () => {
           },
           {
             format: "pdf",
+            removedFromLibrary: false,
             duration: duration(0),
             pagesRead: 0,
             sessions: 0,
@@ -321,12 +359,33 @@ describe("empty rows", () => {
     expect(screen.getByText("1h 30m")).toBeInTheDocument();
   });
 
+  it("names the deleted books' format row instead of printing nothing", () => {
+    renderWithProviders(
+      <FormatBreakdown
+        formats={[
+          {
+            format: null,
+            removedFromLibrary: true,
+            duration: duration(20 * MINUTE),
+            pagesRead: 10,
+            sessions: 1,
+            booksFinished: 0,
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("Removed from library")).toBeInTheDocument();
+    expect(screen.getByText("20m")).toBeInTheDocument();
+  });
+
   it("renders no format panel at all when every format is empty", () => {
     renderWithProviders(
       <FormatBreakdown
         formats={[
           {
             format: "pdf",
+            removedFromLibrary: false,
             duration: duration(0),
             pagesRead: 0,
             sessions: 0,
@@ -378,6 +437,7 @@ describe("the active metric", () => {
           {
             seriesId: "11111111-1111-1111-1111-111111111111",
             seriesName: "Berserk",
+            removedFromLibrary: false,
             duration: duration(2 * HOUR),
             pagesRead: 420,
             sessions: 4,

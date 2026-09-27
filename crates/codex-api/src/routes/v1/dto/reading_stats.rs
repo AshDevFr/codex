@@ -6,8 +6,8 @@
 
 use chrono::{DateTime, Utc};
 use codex_db::repositories::{
-    DurationBreakdown, PurgedOrphanedHistory, ReadingByDevice, ReadingByFormat, ReadingBySeries,
-    ReadingCoverage, ReadingPeriod, ReadingSummary, StatsGranularity, StatsSort,
+    DurationBreakdown, OrphanedHistory, PurgedOrphanedHistory, ReadingByDevice, ReadingByFormat,
+    ReadingBySeries, ReadingCoverage, ReadingPeriod, ReadingSummary, StatsGranularity, StatsSort,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
@@ -338,6 +338,30 @@ impl From<PurgedOrphanedHistory> for PurgedOrphanedHistoryDto {
         Self {
             sessions_removed: value.sessions,
             completions_removed: value.completions,
+        }
+    }
+}
+
+/// The caller's reading history whose book has since been deleted, across
+/// every date. What a purge would remove.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct OrphanedHistoryDto {
+    pub duration: DurationBreakdownDto,
+    pub pages_read: i64,
+    /// Session rows, including bookkeeping rows such as a mark-unread.
+    pub sessions: i64,
+    /// Finished read-throughs.
+    pub completions: u64,
+}
+
+impl From<OrphanedHistory> for OrphanedHistoryDto {
+    fn from(value: OrphanedHistory) -> Self {
+        Self {
+            duration: value.duration.into(),
+            pages_read: value.pages_read,
+            sessions: value.sessions,
+            completions: value.completions,
         }
     }
 }

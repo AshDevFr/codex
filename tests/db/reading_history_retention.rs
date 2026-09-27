@@ -282,6 +282,14 @@ async fn exercise_statistics_keep_deleted_reading(db: &DatabaseConnection) {
     );
     assert_eq!(orphaned.len(), 1, "the deleted book's format is unknowable");
     assert_eq!(orphaned[0].duration.measured_ms, 900_000);
+
+    let totals = ReadingStatsRepository::orphaned_totals(db, user)
+        .await
+        .unwrap();
+    assert_eq!(totals.duration.measured_ms, 900_000);
+    assert_eq!(totals.pages_read, 24);
+    assert_eq!(totals.sessions, 1);
+    assert_eq!(totals.completions, 1);
 }
 
 /// Purging removes only the caller's orphans: their attributed history stays,

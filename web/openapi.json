@@ -10435,6 +10435,40 @@
       }
     },
     "/api/v1/reading-stats/orphaned": {
+      "get": {
+        "tags": [
+          "Reading Statistics"
+        ],
+        "summary": "The caller's reading history for books that no longer exist, in total",
+        "description": "Unwindowed: exactly what `DELETE /api/v1/reading-stats/orphaned` would\nremove, so a client can say so before asking the reader to confirm.",
+        "operationId": "get_orphaned_reading_history",
+        "responses": {
+          "200": {
+            "description": "Totals of the detached history",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrphanedHistoryDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
       "delete": {
         "tags": [
           "Reading Statistics"
@@ -35623,6 +35657,36 @@
             "description": "Size of the file in bytes",
             "example": 25600,
             "minimum": 0
+          }
+        }
+      },
+      "OrphanedHistoryDto": {
+        "type": "object",
+        "description": "The caller's reading history whose book has since been deleted, across\nevery date. What a purge would remove.",
+        "required": [
+          "duration",
+          "pagesRead",
+          "sessions",
+          "completions"
+        ],
+        "properties": {
+          "completions": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Finished read-throughs.",
+            "minimum": 0
+          },
+          "duration": {
+            "$ref": "#/components/schemas/DurationBreakdownDto"
+          },
+          "pagesRead": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "sessions": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Session rows, including bookkeeping rows such as a mark-unread."
           }
         }
       },
