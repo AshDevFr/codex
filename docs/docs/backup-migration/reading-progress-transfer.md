@@ -41,6 +41,9 @@ every reader to re-mark their progress by hand.
 2. **Reorganise.** Split the library, move files, rescan under new roots,
    move to a new instance, whatever the move is. Delete the old
    library/root only after the export from step 1 is safely saved somewhere.
+   On the same instance you can import before or after deleting it: a series
+   whose files have all moved away is never chosen as a match, and history
+   still sitting on the old, soft-deleted books is moved onto the new ones.
 3. **Import.** Upload the file from Settings → Reading Progress (or call
    `POST /api/v1/reading-progress/import`). Run it once as a **dry run** first:
    it returns the identical report shape without writing anything, so you
@@ -64,9 +67,21 @@ stopping at the first step that finds anything:
 2. The series' path, relative to its library root.
 3. The series' normalized name.
 
+A series with no books left on disk (for example the old library's copy after
+its files moved away) is never a candidate at any step.
+
 Books are then resolved within that series, in order: their path relative to
 the series folder, their file name, and finally their filename stem (which
-survives a `.cbr` repacked to `.cbz`).
+survives a `.cbr` repacked to `.cbz`). A repack always changes the file's
+hash, so the stem step never checks hashes. Under `hash_mode: verify`, a path
+or name match whose hash differs is reported as `hash_mismatch`; that includes
+a file a tagging tool has rewritten since the export, so use `off` if you
+re-tagged your collection between export and import.
+
+When two entries in the file land on the same book (a file that moved inside
+its series appears once under its old path and once under its new one), the
+second is decided against the first under the conflict policy, exactly as if
+the first were already in the database.
 
 **Nothing is ever guessed.** If a step finds more than one candidate, that
 series or book is reported as `ambiguous` and nothing is written for it. A
@@ -86,8 +101,8 @@ that the content exists.
 | `dry_run` | `false` | Report the outcome without writing anything |
 | `hash_mode` | `verify` | `off` ignores hashes; `verify` rejects a path/name match whose `file_hash` disagrees; `match` additionally uses `file_hash`/`partial_hash` to find a book when path and name both fail (rescues a bulk rename) |
 | `source_preference` | `[]` | External-id sources to try, in order, before falling back to path and name |
-| `conflict_policy` | `newest` | How to resolve a book/rating that already has a value on this side: `newest` (later `updated_at` wins), `furthest` (further into the book wins; a finished read always beats a partial one), `skip_existing`, or `overwrite` |
-| `reattach_sessions` | `true` | On a session or completion id collision against an orphaned row (`book_id IS NULL`), adopt it instead of skipping it. A no-op, reported as such, when the file carries no sessions |
+| `conflict_policy` | `newest` | How to resolve a book/rating that already has a value on this side: `newest` (later `updated_at` wins), `furthest` (further into the book wins; a finished read always beats a partial one), `skip_existing`, or `overwrite`. A rating has no position, so `furthest` behaves like `newest` for ratings, and a file without a rating timestamp never replaces an existing rating except under `overwrite` |
+| `reattach_sessions` | `true` | When a session or completion in the file already exists as your own row but is not on a live book (its book was deleted, or the scanner marked it deleted after the file moved), move it onto the matched book instead of skipping it. A no-op, reported as such, when the file carries no sessions |
 | `accept_stem_matches` | `false` | Apply a book match found only by filename stem |
 
 `GET /api/v1/reading-progress/export` takes one query parameter,
@@ -103,6 +118,11 @@ per-series and per-book breakdown of what matched, what did not, and what was
 (or would be) written. Each series is applied in its own transaction, so a bad
 series does not cost every other series in the file its progress; the
 per-series `committed` field says which ones actually landed.
+
+Ratings must be between 1 and 100, the same range the rating endpoint
+enforces; a file with any other value is rejected with a 400 naming the
+series. Imports up to 64 MB are accepted, which is room for tens of thousands
+of books with their sessions.
 
 ## Limitations
 

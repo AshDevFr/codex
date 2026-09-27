@@ -13301,9 +13301,10 @@ export interface components {
             file: components["schemas"]["ReadingProgressExportDocument"];
             hash_mode?: components["schemas"]["HashMode"];
             /**
-             * @description When a session or completion's id collides with an existing row whose
-             *     `book_id` is `NULL` (the book was hard-deleted after export), adopt it
-             *     by setting `book_id` instead of skipping it as a duplicate.
+             * @description When a session or completion in the file already exists as the
+             *     importer's own row but is not on a live book (its book was hard-deleted,
+             *     leaving `book_id` null, or the scanner marked it deleted after the file
+             *     moved), move it onto the matched book instead of skipping it.
              */
             reattach_sessions?: boolean;
             /**
@@ -29830,7 +29831,7 @@ export interface operations {
                     "application/json": components["schemas"]["ImportReadingProgressResponse"];
                 };
             };
-            /** @description Unknown export format, or a version newer than this server supports */
+            /** @description Unknown export format, a version newer than this server supports, or a value the normal write paths reject */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -29846,6 +29847,13 @@ export interface operations {
             };
             /** @description Forbidden */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The file is larger than the import limit */
+            413: {
                 headers: {
                     [name: string]: unknown;
                 };

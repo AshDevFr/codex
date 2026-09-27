@@ -13,16 +13,20 @@
 
 use anyhow::Result;
 use chrono::{DateTime, Utc};
+use sea_orm::sea_query::Expr;
 use sea_orm::{
-    ActiveModelTrait, DatabaseConnection, DatabaseTransaction, EntityTrait, Set, TransactionTrait,
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, DatabaseTransaction, EntityTrait,
+    QueryFilter, Set, TransactionTrait,
 };
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use uuid::Uuid;
 
-use codex_db::entities::{read_completions, read_progress, reading_sessions, user_series_ratings};
+use codex_db::entities::{
+    books, read_completions, read_progress, reading_sessions, user_series_ratings,
+};
 use codex_db::repositories::{
-    BookRepository, LibraryRepository, ReadProgressRepository, SeriesRepository,
-    UserSeriesRatingRepository,
+    BookRepository, LibraryRepository, SeriesRepository, UserSeriesRatingRepository,
 };
 
 use crate::content_filter::ContentFilter;
@@ -51,6 +55,9 @@ pub struct ImportOptions {
 pub enum ImportError {
     UnknownFormat(String),
     UnsupportedVersion(i32),
+    /// A value the normal write paths would never accept. Named precisely so
+    /// the user can find it in the file.
+    InvalidValue(String),
     Database(anyhow::Error),
 }
 
@@ -65,6 +72,7 @@ impl fmt::Display for ImportError {
                 f,
                 "export version {version} is newer than this server supports (max {READING_PROGRESS_VERSION})"
             ),
+            ImportError::InvalidValue(message) => write!(f, "{message}"),
             ImportError::Database(err) => write!(f, "{err}"),
         }
     }
@@ -79,7 +87,31 @@ fn validate_document(document: &ReadingProgressExportDocument) -> Result<(), Imp
     if document.version > READING_PROGRESS_VERSION {
         return Err(ImportError::UnsupportedVersion(document.version));
     }
+    // Ratings feed a per-series average every user sees, so a file must not
+    // be a way around the range the rating endpoint enforces: an out-of-range
+    // value would skew that average for everyone, and a large one overflows
+    // the sum behind it.
+    for series in &document.series {
+        if let Some(rating) = series.rating
+            && !(1..=100).contains(&rating)
+        {
+            return Err(ImportError::InvalidValue(format!(
+                "series '{}' has rating {rating}; ratings must be between 1 and 100",
+                series.name
+            )));
+        }
+    }
     Ok(())
+}
+
+/// A session's reading time can never exceed the span it covers. The normal
+/// write path clamps to that span for the same reason: a larger figure is a
+/// bug or a fabrication, and one huge value is enough to overflow the
+/// statistics sums for the reader.
+fn clamped_duration(doc: &ExportSessionDto) -> Option<i64> {
+    let span = (doc.client_ended_at - doc.client_started_at).num_milliseconds();
+    doc.active_duration_ms
+        .map(|reported| reported.clamp(0, span.max(0)))
 }
 
 // ---------------------------------------------------------------------------
@@ -100,7 +132,9 @@ struct ProgressValues {
 
 #[derive(Debug, Clone)]
 enum ProgressDecision {
-    Insert(ProgressValues),
+    /// The id is minted when planning, so a later entry for the same book can
+    /// be planned as an update of this row before it exists.
+    Insert(Uuid, ProgressValues),
     Update(Uuid, ProgressValues),
     Skip,
 }
@@ -108,7 +142,7 @@ enum ProgressDecision {
 impl ProgressDecision {
     fn outcome(&self) -> FieldOutcome {
         match self {
-            ProgressDecision::Insert(_) => FieldOutcome::Inserted,
+            ProgressDecision::Insert(_, _) => FieldOutcome::Inserted,
             ProgressDecision::Update(_, _) => FieldOutcome::Updated,
             ProgressDecision::Skip => FieldOutcome::Skipped,
         }
@@ -144,7 +178,7 @@ fn decide_progress(
     };
 
     let Some(existing) = existing else {
-        return ProgressDecision::Insert(values);
+        return ProgressDecision::Insert(Uuid::new_v4(), values);
     };
 
     match policy {
@@ -181,6 +215,7 @@ fn decide_progress(
 enum RatingDecision {
     NoOp,
     Insert {
+        id: Uuid,
         rating: i32,
         notes: Option<String>,
         updated_at: DateTime<Utc>,
@@ -205,11 +240,9 @@ impl RatingDecision {
     }
 }
 
-/// The export document does not carry a timestamp for a series rating (only
-/// `rating` and `notes`), so `newest` and `furthest` have nothing to compare
-/// against and both fall back to `overwrite`. There is no meaningful "further
-/// into a rating" either way, so this loses nothing `furthest` could have
-/// expressed.
+/// Decide a series rating under the conflict policy. `newest` compares the
+/// file's `rating_updated_at` with the existing row's `updated_at`; see the
+/// comments inside for `furthest` and for a file without the timestamp.
 fn decide_rating(
     existing: Option<&user_series_ratings::Model>,
     series_doc: &ExportSeriesDto,
@@ -225,6 +258,7 @@ fn decide_rating(
 
     match existing {
         None => RatingDecision::Insert {
+            id: Uuid::new_v4(),
             rating,
             notes,
             updated_at,
@@ -261,53 +295,163 @@ fn decide_rating(
 enum RowDecision {
     /// No row with this id exists yet.
     Insert,
-    /// A row exists, belongs to this user, and its `book_id` is `NULL`: the
-    /// book it was recorded against was hard-deleted after export. Adopt it.
+    /// The row exists and is the importing user's own, but it is not on a
+    /// live book: its book was hard-deleted (`book_id IS NULL`), or it still
+    /// points at a book the scanner has marked deleted because the file moved.
+    /// Move it onto the matched book.
     Reattach,
-    /// A row already exists with a book attached (re-importing the same
-    /// file), or belongs to someone else (a UUID collision that should never
-    /// happen in practice, handled defensively by leaving it alone).
+    /// Already on a live book (re-importing the same file), listed twice in
+    /// the file, or belongs to someone else (a UUID collision that should
+    /// never happen, handled by leaving it alone).
     Skip,
 }
 
-async fn decide_completion_row(
-    db: &DatabaseConnection,
+/// An existing history row, as much as a decision needs.
+#[derive(Debug, Clone, Copy)]
+struct ExistingRow {
     user_id: Uuid,
-    id: Uuid,
-    reattach_sessions: bool,
-) -> Result<RowDecision> {
-    let existing = read_completions::Entity::find_by_id(id).one(db).await?;
-    Ok(match existing {
-        None => RowDecision::Insert,
-        Some(row) if row.user_id == user_id && row.book_id.is_none() => {
-            if reattach_sessions {
-                RowDecision::Reattach
-            } else {
-                RowDecision::Skip
-            }
-        }
-        Some(_) => RowDecision::Skip,
-    })
+    book_id: Option<Uuid>,
 }
 
-async fn decide_session_row(
+/// What this import has already planned to write, so each entry is decided
+/// against the state the earlier ones will leave rather than against the
+/// database as it was before the import started.
+///
+/// Without it, two entries that land on the same book (the scanner keeps a
+/// moved file's old row soft-deleted, and the export carries both) are each
+/// planned against an empty table: both plan an insert, the second hits the
+/// unique index, and the whole series rolls back. The dry run, deciding the
+/// same way, would have promised both.
+#[derive(Debug, Clone, Default)]
+struct PlannedState {
+    /// The progress row each target book will hold, by book id.
+    progress: HashMap<Uuid, read_progress::Model>,
+    /// The rating each target series will hold, by series id.
+    ratings: HashMap<Uuid, user_series_ratings::Model>,
+    /// Completion and session ids already claimed by an earlier entry.
+    rows: HashSet<Uuid>,
+}
+
+/// Bind-parameter-safe batch size for `IN (...)` lookups.
+const LOOKUP_BATCH: usize = 1_000;
+
+async fn existing_completions(
+    db: &DatabaseConnection,
+    ids: &[Uuid],
+) -> Result<HashMap<Uuid, ExistingRow>> {
+    let mut found = HashMap::new();
+    for chunk in ids.chunks(LOOKUP_BATCH) {
+        for row in read_completions::Entity::find()
+            .filter(read_completions::Column::Id.is_in(chunk.to_vec()))
+            .all(db)
+            .await?
+        {
+            found.insert(
+                row.id,
+                ExistingRow {
+                    user_id: row.user_id,
+                    book_id: row.book_id,
+                },
+            );
+        }
+    }
+    Ok(found)
+}
+
+async fn existing_sessions(
+    db: &DatabaseConnection,
+    ids: &[Uuid],
+) -> Result<HashMap<Uuid, ExistingRow>> {
+    let mut found = HashMap::new();
+    for chunk in ids.chunks(LOOKUP_BATCH) {
+        for row in reading_sessions::Entity::find()
+            .filter(reading_sessions::Column::Id.is_in(chunk.to_vec()))
+            .all(db)
+            .await?
+        {
+            found.insert(
+                row.id,
+                ExistingRow {
+                    user_id: row.user_id,
+                    book_id: row.book_id,
+                },
+            );
+        }
+    }
+    Ok(found)
+}
+
+/// Which of these books the scanner has marked deleted.
+async fn soft_deleted_books(db: &DatabaseConnection, ids: &[Uuid]) -> Result<HashSet<Uuid>> {
+    let mut found = HashSet::new();
+    for chunk in ids.chunks(LOOKUP_BATCH) {
+        for book in books::Entity::find()
+            .filter(books::Column::Id.is_in(chunk.to_vec()))
+            .filter(books::Column::Deleted.eq(true))
+            .all(db)
+            .await?
+        {
+            found.insert(book.id);
+        }
+    }
+    Ok(found)
+}
+
+async fn progress_for_books(
     db: &DatabaseConnection,
     user_id: Uuid,
+    book_ids: &[Uuid],
+) -> Result<HashMap<Uuid, read_progress::Model>> {
+    let mut found = HashMap::new();
+    for chunk in book_ids.chunks(LOOKUP_BATCH) {
+        for row in read_progress::Entity::find()
+            .filter(read_progress::Column::UserId.eq(user_id))
+            .filter(read_progress::Column::BookId.is_in(chunk.to_vec()))
+            .all(db)
+            .await?
+        {
+            found.insert(row.book_id, row);
+        }
+    }
+    Ok(found)
+}
+
+/// Everything already in the database that a series' decisions depend on,
+/// fetched in a handful of batched queries rather than one per row.
+struct SeriesLookups {
+    progress: HashMap<Uuid, read_progress::Model>,
+    completions: HashMap<Uuid, ExistingRow>,
+    sessions: HashMap<Uuid, ExistingRow>,
+    soft_deleted: HashSet<Uuid>,
+}
+
+fn decide_row(
     id: Uuid,
-    reattach_sessions: bool,
-) -> Result<RowDecision> {
-    let existing = reading_sessions::Entity::find_by_id(id).one(db).await?;
-    Ok(match existing {
+    existing: Option<&ExistingRow>,
+    target_book: Uuid,
+    user_id: Uuid,
+    soft_deleted: &HashSet<Uuid>,
+    reattach: bool,
+    planned: &mut PlannedState,
+) -> RowDecision {
+    if !planned.rows.insert(id) {
+        return RowDecision::Skip;
+    }
+    match existing {
         None => RowDecision::Insert,
-        Some(row) if row.user_id == user_id && row.book_id.is_none() => {
-            if reattach_sessions {
+        Some(row) if row.user_id == user_id => {
+            let off_a_live_book = match row.book_id {
+                None => true,
+                Some(book) => book != target_book && soft_deleted.contains(&book),
+            };
+            if off_a_live_book && reattach {
                 RowDecision::Reattach
             } else {
                 RowDecision::Skip
             }
         }
         Some(_) => RowDecision::Skip,
-    })
+    }
 }
 
 /// Everything decided for one exported book, before any write happens.
@@ -321,13 +465,14 @@ struct BookPlan<'a> {
     sessions: Vec<(&'a ExportSessionDto, RowDecision)>,
 }
 
-async fn build_book_plan<'a>(
-    db: &DatabaseConnection,
+fn build_book_plan<'a>(
     user_id: Uuid,
     book_doc: &'a ExportBookDto,
     candidates: &[BookCandidate],
+    lookups: &SeriesLookups,
+    planned: &mut PlannedState,
     options: &ImportOptions,
-) -> Result<BookPlan<'a>> {
+) -> BookPlan<'a> {
     let book_match = matching::resolve_book(candidates, book_doc, options.hash_mode);
 
     let (disposition, matched_book_id, applied) = match book_match {
@@ -342,8 +487,8 @@ async fn build_book_plan<'a>(
         BookMatch::HashMismatch => (BookDisposition::HashMismatch, None, false),
     };
 
-    if !applied {
-        return Ok(BookPlan {
+    let Some(book_id) = matched_book_id.filter(|_| applied) else {
+        return BookPlan {
             book_doc,
             disposition,
             matched_book_id,
@@ -351,42 +496,64 @@ async fn build_book_plan<'a>(
             progress: None,
             completions: vec![],
             sessions: vec![],
-        });
-    }
-
-    let book_id = matched_book_id.expect("applied implies a matched book id");
-
-    let progress = match &book_doc.progress {
-        None => None,
-        Some(imported) => {
-            let existing =
-                ReadProgressRepository::get_by_user_and_book(db, user_id, book_id).await?;
-            Some(decide_progress(
-                existing.as_ref(),
-                imported,
-                options.conflict_policy,
-            ))
-        }
+        };
     };
 
-    let mut completions = Vec::with_capacity(book_doc.completions.len());
-    for completion in &book_doc.completions {
-        let decision =
-            decide_completion_row(db, user_id, completion.id, options.reattach_sessions).await?;
-        completions.push((completion, decision));
-    }
-
-    let mut sessions = Vec::new();
-    if let Some(session_docs) = &book_doc.sessions {
-        sessions.reserve(session_docs.len());
-        for session in session_docs {
-            let decision =
-                decide_session_row(db, user_id, session.id, options.reattach_sessions).await?;
-            sessions.push((session, decision));
+    let progress = book_doc.progress.as_ref().map(|imported| {
+        let existing = planned
+            .progress
+            .get(&book_id)
+            .or_else(|| lookups.progress.get(&book_id))
+            .cloned();
+        let decision = decide_progress(existing.as_ref(), imported, options.conflict_policy);
+        let planned_row = match &decision {
+            ProgressDecision::Insert(id, values) | ProgressDecision::Update(id, values) => {
+                Some(progress_model(*id, user_id, book_id, values))
+            }
+            ProgressDecision::Skip => existing,
+        };
+        if let Some(row) = planned_row {
+            planned.progress.insert(book_id, row);
         }
-    }
+        decision
+    });
 
-    Ok(BookPlan {
+    let completions = book_doc
+        .completions
+        .iter()
+        .map(|completion| {
+            let decision = decide_row(
+                completion.id,
+                lookups.completions.get(&completion.id),
+                book_id,
+                user_id,
+                &lookups.soft_deleted,
+                options.reattach_sessions,
+                planned,
+            );
+            (completion, decision)
+        })
+        .collect();
+
+    let sessions = book_doc
+        .sessions
+        .iter()
+        .flatten()
+        .map(|session| {
+            let decision = decide_row(
+                session.id,
+                lookups.sessions.get(&session.id),
+                book_id,
+                user_id,
+                &lookups.soft_deleted,
+                options.reattach_sessions,
+                planned,
+            );
+            (session, decision)
+        })
+        .collect();
+
+    BookPlan {
         book_doc,
         disposition,
         matched_book_id,
@@ -394,7 +561,27 @@ async fn build_book_plan<'a>(
         progress,
         completions,
         sessions,
-    })
+    }
+}
+
+fn progress_model(
+    id: Uuid,
+    user_id: Uuid,
+    book_id: Uuid,
+    values: &ProgressValues,
+) -> read_progress::Model {
+    read_progress::Model {
+        id,
+        user_id,
+        book_id,
+        current_page: values.current_page,
+        progress_percentage: values.progress_percentage,
+        completed: values.completed,
+        started_at: values.started_at,
+        updated_at: values.updated_at,
+        completed_at: values.completed_at,
+        r2_progression: values.r2_progression.clone(),
+    }
 }
 
 fn book_report_from_plan(plan: &BookPlan<'_>) -> ImportBookReport {
@@ -478,9 +665,9 @@ async fn apply_progress(
 ) -> Result<()> {
     match decision {
         ProgressDecision::Skip => Ok(()),
-        ProgressDecision::Insert(values) => {
+        ProgressDecision::Insert(id, values) => {
             read_progress::ActiveModel {
-                id: Set(Uuid::new_v4()),
+                id: Set(*id),
                 user_id: Set(user_id),
                 book_id: Set(book_id),
                 current_page: Set(values.current_page),
@@ -537,14 +724,12 @@ async fn apply_completion(
             Ok(())
         }
         RowDecision::Reattach => {
-            if let Some(row) = read_completions::Entity::find_by_id(doc.id)
-                .one(txn)
-                .await?
-            {
-                let mut active: read_completions::ActiveModel = row.into();
-                active.book_id = Set(Some(book_id));
-                active.update(txn).await?;
-            }
+            read_completions::Entity::update_many()
+                .col_expr(read_completions::Column::BookId, Expr::value(book_id))
+                .filter(read_completions::Column::Id.eq(doc.id))
+                .filter(read_completions::Column::UserId.eq(user_id))
+                .exec(txn)
+                .await?;
             Ok(())
         }
     }
@@ -566,16 +751,16 @@ async fn apply_session(
                 book_id: Set(Some(book_id)),
                 device_id: Set(doc.device_id.clone()),
                 device_name: Set(doc.device_name.clone()),
-                pass: Set(doc.pass),
+                pass: Set(doc.pass.max(1)),
                 kind: Set(doc.kind.clone()),
                 to_page: Set(doc.to_page),
                 to_percentage: Set(doc.to_percentage),
                 // The export never carries a historical locator; only the
                 // live `read_progress` row keeps one.
                 r2_progression: Set(None),
-                active_duration_ms: Set(doc.active_duration_ms),
+                active_duration_ms: Set(clamped_duration(doc)),
                 duration_source: Set(doc.duration_source.clone()),
-                pages_read: Set(doc.pages_read),
+                pages_read: Set(doc.pages_read.map(|pages| pages.max(0))),
                 client_started_at: Set(doc.client_started_at),
                 client_ended_at: Set(doc.client_ended_at),
                 server_recorded_at: Set(doc.server_recorded_at),
@@ -585,14 +770,12 @@ async fn apply_session(
             Ok(())
         }
         RowDecision::Reattach => {
-            if let Some(row) = reading_sessions::Entity::find_by_id(doc.id)
-                .one(txn)
-                .await?
-            {
-                let mut active: reading_sessions::ActiveModel = row.into();
-                active.book_id = Set(Some(book_id));
-                active.update(txn).await?;
-            }
+            reading_sessions::Entity::update_many()
+                .col_expr(reading_sessions::Column::BookId, Expr::value(book_id))
+                .filter(reading_sessions::Column::Id.eq(doc.id))
+                .filter(reading_sessions::Column::UserId.eq(user_id))
+                .exec(txn)
+                .await?;
             Ok(())
         }
     }
@@ -607,12 +790,13 @@ async fn apply_rating(
     match decision {
         RatingDecision::NoOp | RatingDecision::Skip => Ok(()),
         RatingDecision::Insert {
+            id,
             rating,
             notes,
             updated_at,
         } => {
             user_series_ratings::ActiveModel {
-                id: Set(Uuid::new_v4()),
+                id: Set(*id),
                 user_id: Set(user_id),
                 series_id: Set(series_id),
                 rating: Set(*rating),
@@ -683,6 +867,7 @@ async fn plan_series<'a>(
     user_id: Uuid,
     series_id: Uuid,
     series_doc: &'a ExportSeriesDto,
+    planned: &mut PlannedState,
     options: &ImportOptions,
 ) -> Result<(Vec<BookPlan<'a>>, RatingDecision)> {
     let series_row = SeriesRepository::get_by_id(db, series_id)
@@ -700,18 +885,79 @@ async fn plan_series<'a>(
         .map(|b| BookCandidate::from_model(b, &library_row.path, &series_row.path))
         .collect();
 
-    let mut plans = Vec::with_capacity(series_doc.books.len());
-    for book_doc in &series_doc.books {
-        plans.push(build_book_plan(db, user_id, book_doc, &candidates, options).await?);
-    }
+    let book_ids: Vec<Uuid> = candidates.iter().map(|c| c.id).collect();
+    let completion_ids: Vec<Uuid> = series_doc
+        .books
+        .iter()
+        .flat_map(|b| b.completions.iter().map(|c| c.id))
+        .collect();
+    let session_ids: Vec<Uuid> = series_doc
+        .books
+        .iter()
+        .flat_map(|b| b.sessions.iter().flatten().map(|s| s.id))
+        .collect();
+    let completions = existing_completions(db, &completion_ids).await?;
+    let sessions = existing_sessions(db, &session_ids).await?;
+    let referenced: Vec<Uuid> = completions
+        .values()
+        .chain(sessions.values())
+        .filter_map(|row| row.book_id)
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect();
+    let lookups = SeriesLookups {
+        progress: progress_for_books(db, user_id, &book_ids).await?,
+        soft_deleted: soft_deleted_books(db, &referenced).await?,
+        completions,
+        sessions,
+    };
 
-    let existing_rating =
-        UserSeriesRatingRepository::get_by_user_and_series(db, user_id, series_id).await?;
+    let plans = series_doc
+        .books
+        .iter()
+        .map(|book_doc| build_book_plan(user_id, book_doc, &candidates, &lookups, planned, options))
+        .collect();
+
+    let existing_rating = match planned.ratings.get(&series_id) {
+        Some(row) => Some(row.clone()),
+        None => UserSeriesRatingRepository::get_by_user_and_series(db, user_id, series_id).await?,
+    };
     let rating_decision = decide_rating(
         existing_rating.as_ref(),
         series_doc,
         options.conflict_policy,
     );
+    let planned_rating = match &rating_decision {
+        RatingDecision::Insert {
+            id,
+            rating,
+            notes,
+            updated_at,
+        } => Some(user_series_ratings::Model {
+            id: *id,
+            user_id,
+            series_id,
+            rating: *rating,
+            notes: notes.clone(),
+            created_at: *updated_at,
+            updated_at: *updated_at,
+        }),
+        RatingDecision::Update {
+            existing,
+            rating,
+            notes,
+            updated_at,
+        } => Some(user_series_ratings::Model {
+            rating: *rating,
+            notes: notes.clone(),
+            updated_at: *updated_at,
+            ..existing.clone()
+        }),
+        RatingDecision::NoOp | RatingDecision::Skip => existing_rating,
+    };
+    if let Some(row) = planned_rating {
+        planned.ratings.insert(series_id, row);
+    }
 
     Ok((plans, rating_decision))
 }
@@ -734,6 +980,31 @@ fn unresolved_book_reports(
             sessions: WriteCounts::default(),
         })
         .collect()
+}
+
+/// The report for a series that could not be planned at all.
+fn failed_series_report(
+    summary: &mut ImportSummary,
+    series_doc: &ExportSeriesDto,
+    disposition: SeriesDisposition,
+    matched_series_id: Option<Uuid>,
+    err: anyhow::Error,
+) -> ImportSeriesReport {
+    let books = unresolved_book_reports(series_doc, BookDisposition::Unmatched);
+    for report in &books {
+        tally_book_report(summary, report, false);
+    }
+    ImportSeriesReport {
+        library_relative_path: series_doc.library_relative_path.clone(),
+        name: series_doc.name.clone(),
+        disposition,
+        matched_series_id,
+        attempted: matched_series_id.is_some(),
+        committed: false,
+        error: Some(err.to_string()),
+        rating: None,
+        books,
+    }
 }
 
 /// Apply (or dry-run) a matched export document for one user.
@@ -759,28 +1030,45 @@ pub async fn import_reading_progress(
 
     let mut summary = ImportSummary::default();
     let mut series_reports = Vec::with_capacity(document.series.len());
+    let mut planned = PlannedState::default();
 
     for series_doc in &document.series {
         summary.series_total += 1;
 
-        let series_match =
-            matching::resolve_series(db, &content_filter, series_doc, &options.source_preference)
-                .await
-                .map_err(ImportError::Database)?;
+        // A failure in one series is reported on that series and the import
+        // carries on: earlier series may already have committed, and the
+        // report is the only place the reader learns which did.
+        let series_match = match matching::resolve_series(
+            db,
+            &content_filter,
+            series_doc,
+            &options.source_preference,
+        )
+        .await
+        {
+            Ok(found) => found,
+            Err(err) => {
+                summary.series_unmatched += 1;
+                series_reports.push(failed_series_report(
+                    &mut summary,
+                    series_doc,
+                    SeriesDisposition::Unmatched,
+                    None,
+                    err,
+                ));
+                continue;
+            }
+        };
 
-        match series_match {
+        let series_id = match series_match {
+            SeriesMatch::Matched(series_id) => series_id,
             SeriesMatch::Ambiguous | SeriesMatch::Unmatched => {
-                let disposition = if series_match == SeriesMatch::Ambiguous {
+                let (disposition, book_disposition) = if series_match == SeriesMatch::Ambiguous {
                     summary.series_ambiguous += 1;
-                    SeriesDisposition::Ambiguous
+                    (SeriesDisposition::Ambiguous, BookDisposition::Ambiguous)
                 } else {
                     summary.series_unmatched += 1;
-                    SeriesDisposition::Unmatched
-                };
-                let book_disposition = if disposition == SeriesDisposition::Ambiguous {
-                    BookDisposition::Ambiguous
-                } else {
-                    BookDisposition::Unmatched
+                    (SeriesDisposition::Unmatched, BookDisposition::Unmatched)
                 };
                 let books = unresolved_book_reports(series_doc, book_disposition);
                 for report in &books {
@@ -797,75 +1085,77 @@ pub async fn import_reading_progress(
                     rating: None,
                     books,
                 });
+                continue;
             }
-            SeriesMatch::Matched(series_id) => {
-                summary.series_matched += 1;
+        };
+        summary.series_matched += 1;
 
-                let (plans, rating_decision) =
-                    plan_series(db, user_id, series_id, series_doc, options)
-                        .await
-                        .map_err(ImportError::Database)?;
+        // Restored if this series does not land, so later series are not
+        // planned against writes that never happened.
+        let before_series = planned.clone();
 
-                if options.dry_run {
-                    let books: Vec<ImportBookReport> =
-                        plans.iter().map(book_report_from_plan).collect();
-                    for report in &books {
-                        tally_book_report(&mut summary, report, true);
-                    }
-                    tally_rating_write(&mut summary, &rating_decision);
-                    series_reports.push(ImportSeriesReport {
-                        library_relative_path: series_doc.library_relative_path.clone(),
-                        name: series_doc.name.clone(),
-                        disposition: SeriesDisposition::Matched,
-                        matched_series_id: Some(series_id),
-                        attempted: true,
-                        committed: false,
-                        error: None,
-                        rating: rating_decision.outcome(),
-                        books,
-                    });
-                } else {
-                    match apply_series(db, user_id, series_id, &plans, &rating_decision).await {
-                        Ok(()) => {
-                            summary.series_committed += 1;
-                            let books: Vec<ImportBookReport> =
-                                plans.iter().map(book_report_from_plan).collect();
-                            for report in &books {
-                                tally_book_report(&mut summary, report, true);
-                            }
-                            tally_rating_write(&mut summary, &rating_decision);
-                            series_reports.push(ImportSeriesReport {
-                                library_relative_path: series_doc.library_relative_path.clone(),
-                                name: series_doc.name.clone(),
-                                disposition: SeriesDisposition::Matched,
-                                matched_series_id: Some(series_id),
-                                attempted: true,
-                                committed: true,
-                                error: None,
-                                rating: rating_decision.outcome(),
-                                books,
-                            });
-                        }
-                        Err(err) => {
-                            let books: Vec<ImportBookReport> =
-                                plans.iter().map(book_report_from_plan).collect();
-                            for report in &books {
-                                tally_book_report(&mut summary, report, false);
-                            }
-                            series_reports.push(ImportSeriesReport {
-                                library_relative_path: series_doc.library_relative_path.clone(),
-                                name: series_doc.name.clone(),
-                                disposition: SeriesDisposition::Matched,
-                                matched_series_id: Some(series_id),
-                                attempted: true,
-                                committed: false,
-                                error: Some(err.to_string()),
-                                rating: None,
-                                books,
-                            });
-                        }
-                    }
+        let (plans, rating_decision) =
+            match plan_series(db, user_id, series_id, series_doc, &mut planned, options).await {
+                Ok(planned_series) => planned_series,
+                Err(err) => {
+                    planned = before_series;
+                    series_reports.push(failed_series_report(
+                        &mut summary,
+                        series_doc,
+                        SeriesDisposition::Matched,
+                        Some(series_id),
+                        err,
+                    ));
+                    continue;
                 }
+            };
+
+        let outcome = if options.dry_run {
+            Ok(false)
+        } else {
+            apply_series(db, user_id, series_id, &plans, &rating_decision)
+                .await
+                .map(|()| true)
+        };
+
+        let books: Vec<ImportBookReport> = plans.iter().map(book_report_from_plan).collect();
+        match outcome {
+            Ok(committed) => {
+                if committed {
+                    summary.series_committed += 1;
+                }
+                for report in &books {
+                    tally_book_report(&mut summary, report, true);
+                }
+                tally_rating_write(&mut summary, &rating_decision);
+                series_reports.push(ImportSeriesReport {
+                    library_relative_path: series_doc.library_relative_path.clone(),
+                    name: series_doc.name.clone(),
+                    disposition: SeriesDisposition::Matched,
+                    matched_series_id: Some(series_id),
+                    attempted: true,
+                    committed,
+                    error: None,
+                    rating: rating_decision.outcome(),
+                    books,
+                });
+            }
+            Err(err) => {
+                planned = before_series;
+                for report in &books {
+                    tally_book_report(&mut summary, report, false);
+                }
+                series_reports.push(ImportSeriesReport {
+                    library_relative_path: series_doc.library_relative_path.clone(),
+                    name: series_doc.name.clone(),
+                    disposition: SeriesDisposition::Matched,
+                    matched_series_id: Some(series_id),
+                    attempted: true,
+                    committed: false,
+                    error: Some(err.to_string()),
+                    rating: None,
+                    books,
+                });
             }
         }
     }
@@ -929,7 +1219,7 @@ mod tests {
     fn progress_inserts_when_nothing_exists() {
         let imported = imported_progress(10, false, t(0));
         let decision = decide_progress(None, &imported, ConflictPolicy::Newest);
-        assert!(matches!(decision, ProgressDecision::Insert(_)));
+        assert!(matches!(decision, ProgressDecision::Insert(_, _)));
     }
 
     #[test]
@@ -1133,163 +1423,112 @@ mod tests {
     // Row decisions: insert / reattach / skip for completions and sessions.
     // ------------------------------------------------------------------
 
-    use codex_db::ScanningStrategy;
-    use codex_db::repositories::{
-        LibraryRepository, ReadCompletionRepository, SeriesRepository, UserRepository,
-    };
-    use codex_db::test_helpers::create_test_db;
-
-    async fn make_user(db: &DatabaseConnection) -> Uuid {
-        use codex_db::entities::users;
-        let now = Utc::now();
-        let model = users::Model {
-            id: Uuid::new_v4(),
-            username: format!("u-{}", Uuid::new_v4()),
-            email: format!("{}@test.com", Uuid::new_v4()),
-            password_hash: "hash".to_string(),
-            role: "reader".to_string(),
-            is_active: true,
-            email_verified: true,
-            permissions: serde_json::json!([]),
-            created_at: now,
-            updated_at: now,
-            last_login_at: None,
-        };
-        UserRepository::create(db, &model).await.unwrap().id
+    fn row(user_id: Uuid, book_id: Option<Uuid>) -> ExistingRow {
+        ExistingRow { user_id, book_id }
     }
 
-    #[tokio::test]
-    async fn completion_row_inserts_when_absent() {
-        let (db, _tmp) = create_test_db().await;
-        let conn = db.sea_orm_connection();
-        let user = make_user(conn).await;
-        let decision = decide_completion_row(conn, user, Uuid::new_v4(), true)
-            .await
-            .unwrap();
+    #[test]
+    fn row_inserts_when_absent() {
+        let mut planned = PlannedState::default();
+        let decision = decide_row(
+            Uuid::new_v4(),
+            None,
+            Uuid::new_v4(),
+            Uuid::new_v4(),
+            &HashSet::new(),
+            true,
+            &mut planned,
+        );
         assert_eq!(decision, RowDecision::Insert);
     }
 
-    #[tokio::test]
-    async fn completion_row_reattaches_an_orphan_when_flag_is_on() {
-        let (db, _tmp) = create_test_db().await;
-        let conn = db.sea_orm_connection();
-        let user = make_user(conn).await;
-        let library = LibraryRepository::create(conn, "Lib", "/lib", ScanningStrategy::Default)
-            .await
-            .unwrap();
-        let series = SeriesRepository::create(conn, library.id, "S", None)
-            .await
-            .unwrap();
-        let book = codex_db::entities::books::Model {
-            id: Uuid::new_v4(),
-            series_id: series.id,
-            library_id: library.id,
-            path: "/lib/b.cbz".to_string(),
-            file_name: "b.cbz".to_string(),
-            file_size: 1,
-            file_hash: String::new(),
-            partial_hash: String::new(),
-            format: "cbz".to_string(),
-            page_count: 1,
-            deleted: false,
-            analyzed: false,
-            analysis_error: None,
-            analysis_errors: None,
-            modified_at: Utc::now(),
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
-            thumbnail_path: None,
-            thumbnail_generated_at: None,
-            koreader_hash: None,
-            epub_positions: None,
-            epub_spine_items: None,
-        };
-        let book = BookRepository::create(conn, &book, None).await.unwrap();
-        let completion =
-            ReadCompletionRepository::record(conn, user, book.id, Utc::now(), Utc::now())
-                .await
-                .unwrap();
-
-        // Hard-delete the book: the FK's ON DELETE SET NULL orphans the row.
-        codex_db::entities::books::Entity::delete_by_id(book.id)
-            .exec(conn)
-            .await
-            .unwrap();
-
-        let decision = decide_completion_row(conn, user, completion.id, true)
-            .await
-            .unwrap();
-        assert_eq!(decision, RowDecision::Reattach);
-
-        let decision_off = decide_completion_row(conn, user, completion.id, false)
-            .await
-            .unwrap();
-        assert_eq!(decision_off, RowDecision::Skip);
+    #[test]
+    fn row_reattaches_an_orphan_only_when_the_flag_is_on() {
+        let user = Uuid::new_v4();
+        let target = Uuid::new_v4();
+        let orphan = row(user, None);
+        for (flag, expected) in [(true, RowDecision::Reattach), (false, RowDecision::Skip)] {
+            let mut planned = PlannedState::default();
+            let decision = decide_row(
+                Uuid::new_v4(),
+                Some(&orphan),
+                target,
+                user,
+                &HashSet::new(),
+                flag,
+                &mut planned,
+            );
+            assert_eq!(decision, expected);
+        }
     }
 
-    #[tokio::test]
-    async fn session_row_skips_when_already_attached() {
-        use codex_db::entities::reading_sessions::SessionKind;
-        use codex_db::repositories::{NewSession, ReadProgressRepository};
-
-        let (db, _tmp) = create_test_db().await;
-        let conn = db.sea_orm_connection();
-        let user = make_user(conn).await;
-        let library = LibraryRepository::create(conn, "Lib", "/lib", ScanningStrategy::Default)
-            .await
-            .unwrap();
-        let series = SeriesRepository::create(conn, library.id, "S", None)
-            .await
-            .unwrap();
-        let book = codex_db::entities::books::Model {
-            id: Uuid::new_v4(),
-            series_id: series.id,
-            library_id: library.id,
-            path: "/lib/b.cbz".to_string(),
-            file_name: "b.cbz".to_string(),
-            file_size: 1,
-            file_hash: String::new(),
-            partial_hash: String::new(),
-            format: "cbz".to_string(),
-            page_count: 1,
-            deleted: false,
-            analyzed: false,
-            analysis_error: None,
-            analysis_errors: None,
-            modified_at: Utc::now(),
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
-            thumbnail_path: None,
-            thumbnail_generated_at: None,
-            koreader_hash: None,
-            epub_positions: None,
-            epub_spine_items: None,
-        };
-        let book = BookRepository::create(conn, &book, None).await.unwrap();
-
-        let session_id = Uuid::new_v4();
-        let now = Utc::now();
-        let session = NewSession::from_client(
-            session_id,
+    /// A moved file leaves its old book soft-deleted with the history still
+    /// on it; importing onto the new book moves that history across.
+    #[test]
+    fn row_on_a_soft_deleted_book_moves_to_the_matched_book() {
+        let user = Uuid::new_v4();
+        let old_book = Uuid::new_v4();
+        let mut planned = PlannedState::default();
+        let decision = decide_row(
+            Uuid::new_v4(),
+            Some(&row(user, Some(old_book))),
+            Uuid::new_v4(),
             user,
-            book.id,
-            "device",
-            None,
-            SessionKind::Progress,
-            Some(1000),
-            Some(1),
-            now,
-            now,
-        )
-        .with_page(1);
-        ReadProgressRepository::record_session(conn, session)
-            .await
-            .unwrap();
+            &HashSet::from([old_book]),
+            true,
+            &mut planned,
+        );
+        assert_eq!(decision, RowDecision::Reattach);
+    }
 
-        // Still attached: importing the same id again must skip, not reattach.
-        let decision = decide_session_row(conn, user, session_id, true)
-            .await
-            .unwrap();
+    #[test]
+    fn row_on_a_live_book_is_left_alone() {
+        let user = Uuid::new_v4();
+        let live = Uuid::new_v4();
+        let mut planned = PlannedState::default();
+        let decision = decide_row(
+            Uuid::new_v4(),
+            Some(&row(user, Some(live))),
+            Uuid::new_v4(),
+            user,
+            &HashSet::new(),
+            true,
+            &mut planned,
+        );
         assert_eq!(decision, RowDecision::Skip);
+    }
+
+    #[test]
+    fn another_users_row_is_never_touched() {
+        let mut planned = PlannedState::default();
+        let decision = decide_row(
+            Uuid::new_v4(),
+            Some(&row(Uuid::new_v4(), None)),
+            Uuid::new_v4(),
+            Uuid::new_v4(),
+            &HashSet::new(),
+            true,
+            &mut planned,
+        );
+        assert_eq!(decision, RowDecision::Skip);
+    }
+
+    #[test]
+    fn an_id_listed_twice_is_written_once() {
+        let id = Uuid::new_v4();
+        let mut planned = PlannedState::default();
+        let args = |planned: &mut PlannedState| {
+            decide_row(
+                id,
+                None,
+                Uuid::new_v4(),
+                Uuid::new_v4(),
+                &HashSet::new(),
+                true,
+                planned,
+            )
+        };
+        assert_eq!(args(&mut planned), RowDecision::Insert);
+        assert_eq!(args(&mut planned), RowDecision::Skip);
     }
 }

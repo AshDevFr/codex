@@ -10314,13 +10314,16 @@
             }
           },
           "400": {
-            "description": "Unknown export format, or a version newer than this server supports"
+            "description": "Unknown export format, a version newer than this server supports, or a value the normal write paths reject"
           },
           "401": {
             "description": "Unauthorized"
           },
           "403": {
             "description": "Forbidden"
+          },
+          "413": {
+            "description": "The file is larger than the import limit"
           }
         },
         "security": [
@@ -32562,7 +32565,7 @@
           },
           "reattach_sessions": {
             "type": "boolean",
-            "description": "When a session or completion's id collides with an existing row whose\n`book_id` is `NULL` (the book was hard-deleted after export), adopt it\nby setting `book_id` instead of skipping it as a duplicate."
+            "description": "When a session or completion in the file already exists as the\nimporter's own row but is not on a live book (its book was hard-deleted,\nleaving `book_id` null, or the scanner marked it deleted after the file\nmoved), move it onto the matched book instead of skipping it."
           },
           "source_preference": {
             "type": "array",

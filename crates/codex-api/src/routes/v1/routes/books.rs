@@ -7,9 +7,15 @@ use super::super::handlers;
 use crate::extractors::AppState;
 use axum::{
     Router,
+    extract::DefaultBodyLimit,
     routing::{delete, get, patch, post, put},
 };
 use std::sync::Arc;
+
+/// Largest reading-progress import accepted. A measured 5,000-book history
+/// with one session per book is about 4 MB, so this leaves room for heavy
+/// re-readers and several devices without accepting unbounded bodies.
+const MAX_READING_PROGRESS_IMPORT_BYTES: usize = 64 * 1024 * 1024;
 
 /// Create book routes
 ///
@@ -199,9 +205,13 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/reading-progress/export",
             get(handlers::export_reading_progress),
         )
+        // A whole reading history in one body: axum's 2 MB default stops at
+        // roughly 2,500 books with their sessions, well short of a large
+        // library, so this route alone gets a higher ceiling.
         .route(
             "/reading-progress/import",
-            post(handlers::import_reading_progress),
+            post(handlers::import_reading_progress)
+                .layer(DefaultBodyLimit::max(MAX_READING_PROGRESS_IMPORT_BYTES)),
         )
         // Mark as read/unread routes
         .route("/books/{book_id}/read", post(handlers::mark_book_as_read))

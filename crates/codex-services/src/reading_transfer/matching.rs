@@ -73,6 +73,34 @@ fn visible_ids(content_filter: &ContentFilter, ids: Vec<Uuid>) -> Vec<Uuid> {
         .collect()
 }
 
+/// Visible candidates that still have at least one book on disk.
+///
+/// Splitting a library on the same instance leaves the old library's series
+/// in place until someone deletes it, with every book soft-deleted by the
+/// rescan that noticed the files had gone. That leftover series matches the
+/// export exactly by path, and matching it would stop the search there with
+/// no book to write onto, never reaching the new series. A series with nothing
+/// on disk is not somewhere reading state can land, so it is not a candidate.
+async fn live_candidates(
+    db: &DatabaseConnection,
+    content_filter: &ContentFilter,
+    ids: Vec<Uuid>,
+) -> Result<Vec<Uuid>> {
+    let visible = visible_ids(content_filter, ids);
+    if visible.is_empty() {
+        return Ok(visible);
+    }
+    let live: HashSet<Uuid> = books::Entity::find()
+        .filter(books::Column::SeriesId.is_in(visible.clone()))
+        .filter(books::Column::Deleted.eq(false))
+        .all(db)
+        .await?
+        .into_iter()
+        .map(|b| b.series_id)
+        .collect();
+    Ok(visible.into_iter().filter(|id| live.contains(id)).collect())
+}
+
 async fn series_ids_by_external_id(
     db: &DatabaseConnection,
     source: &str,
@@ -89,9 +117,13 @@ async fn series_ids_by_external_id(
 /// Match by `series.path` across every library, not just the one the export
 /// came from: a library split re-roots series under a different library id,
 /// so scoping this to one library would defeat the entire feature.
+///
+/// Stored series paths use the server's own separator, while exports always
+/// use `/`, so a Windows-stored path is compared in both spellings.
 async fn series_ids_by_path(db: &DatabaseConnection, path: &str) -> Result<Vec<Uuid>> {
+    let spellings = vec![path.to_string(), path.replace('/', "\\")];
     let rows = series::Entity::find()
-        .filter(series::Column::Path.eq(path))
+        .filter(series::Column::Path.is_in(spellings))
         .all(db)
         .await?;
     Ok(rows.into_iter().map(|r| r.id).collect())
@@ -129,7 +161,10 @@ pub async fn resolve_series(
         };
 
         let candidates = series_ids_by_external_id(db, source, &external.id).await?;
-        match visible_ids(content_filter, candidates).as_slice() {
+        match live_candidates(db, content_filter, candidates)
+            .await?
+            .as_slice()
+        {
             [] => continue,
             [only] => return Ok(SeriesMatch::Matched(*only)),
             _ => return Ok(SeriesMatch::Ambiguous),
@@ -137,7 +172,10 @@ pub async fn resolve_series(
     }
 
     let by_path = series_ids_by_path(db, &exported.library_relative_path).await?;
-    match visible_ids(content_filter, by_path).as_slice() {
+    match live_candidates(db, content_filter, by_path)
+        .await?
+        .as_slice()
+    {
         [] => {}
         [only] => return Ok(SeriesMatch::Matched(*only)),
         _ => return Ok(SeriesMatch::Ambiguous),
@@ -145,7 +183,10 @@ pub async fn resolve_series(
 
     let normalized = SeriesRepository::normalize_name(&exported.name);
     let by_name = series_ids_by_normalized_name(db, &normalized).await?;
-    match visible_ids(content_filter, by_name).as_slice() {
+    match live_candidates(db, content_filter, by_name)
+        .await?
+        .as_slice()
+    {
         [] => Ok(SeriesMatch::Unmatched),
         [only] => Ok(SeriesMatch::Matched(*only)),
         _ => Ok(SeriesMatch::Ambiguous),
@@ -164,7 +205,11 @@ fn decide_step(
         0 => None,
         1 => {
             let candidate = matches[0];
-            let hashes_disagree = hash_mode != HashMode::Off
+            // Never on the stem step: it exists for a `.cbr` repacked to
+            // `.cbz`, and a repack always changes the hash, so checking there
+            // would turn every real repack into a mismatch.
+            let hashes_disagree = !is_stem_step
+                && hash_mode != HashMode::Off
                 && !exported.file_hash.is_empty()
                 && !candidate.file_hash.is_empty()
                 && exported.file_hash != candidate.file_hash;
@@ -470,6 +515,91 @@ mod tests {
         }
     }
 
+    /// A series with one book on disk: a series with nothing on disk is not a
+    /// place reading state can land, so the matcher ignores it.
+    async fn live_series(
+        conn: &DatabaseConnection,
+        library_id: Uuid,
+        name: &str,
+    ) -> codex_db::entities::series::Model {
+        let series = SeriesRepository::create(conn, library_id, name, None)
+            .await
+            .unwrap();
+        add_book(conn, &series, false).await;
+        series
+    }
+
+    async fn add_book(
+        conn: &DatabaseConnection,
+        series: &codex_db::entities::series::Model,
+        deleted: bool,
+    ) {
+        use codex_db::repositories::BookRepository;
+        use sea_orm::{ActiveModelTrait, Set};
+        let now = chrono::Utc::now();
+        let book = books::Model {
+            id: Uuid::new_v4(),
+            series_id: series.id,
+            library_id: series.library_id,
+            path: format!("/lib/{}.cbz", Uuid::new_v4()),
+            file_name: "b.cbz".to_string(),
+            file_size: 1,
+            file_hash: String::new(),
+            partial_hash: String::new(),
+            format: "cbz".to_string(),
+            page_count: 1,
+            deleted: false,
+            analyzed: false,
+            analysis_error: None,
+            analysis_errors: None,
+            modified_at: now,
+            created_at: now,
+            updated_at: now,
+            thumbnail_path: None,
+            thumbnail_generated_at: None,
+            koreader_hash: None,
+            epub_positions: None,
+            epub_spine_items: None,
+        };
+        let book = BookRepository::create(conn, &book, None).await.unwrap();
+        if deleted {
+            let mut gone: books::ActiveModel = book.into();
+            gone.deleted = Set(true);
+            gone.update(conn).await.unwrap();
+        }
+    }
+
+    /// The same-instance split: the old library's series is still there with
+    /// every book soft-deleted, and matches the export exactly by path. It
+    /// must not stop the search, or the new series is never reached.
+    #[tokio::test]
+    async fn a_series_with_nothing_on_disk_is_not_a_candidate() {
+        let (db, _tmp) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let user = make_user(conn).await;
+        let old_library =
+            LibraryRepository::create(conn, "Old", "/manga", ScanningStrategy::Default)
+                .await
+                .unwrap();
+        let new_library =
+            LibraryRepository::create(conn, "New", "/shonen", ScanningStrategy::Default)
+                .await
+                .unwrap();
+        let leftover = SeriesRepository::create(conn, old_library.id, "Naruto", None)
+            .await
+            .unwrap();
+        SeriesRepository::update_path(conn, leftover.id, "shonen/Naruto".to_string())
+            .await
+            .unwrap();
+        add_book(conn, &leftover, true).await;
+        let moved = live_series(conn, new_library.id, "Naruto").await;
+
+        let filter = ContentFilter::for_user(conn, user).await.unwrap();
+        let exported = doc_series("Naruto", "shonen/Naruto", None);
+        let result = resolve_series(conn, &filter, &exported, &[]).await.unwrap();
+        assert_eq!(result, SeriesMatch::Matched(moved.id));
+    }
+
     #[tokio::test]
     async fn resolves_by_path_when_no_external_id_matches() {
         let (db, _tmp) = create_test_db().await;
@@ -478,9 +608,7 @@ mod tests {
         let library = LibraryRepository::create(conn, "Lib", "/lib", ScanningStrategy::Default)
             .await
             .unwrap();
-        let series = SeriesRepository::create(conn, library.id, "Naruto", None)
-            .await
-            .unwrap();
+        let series = live_series(conn, library.id, "Naruto").await;
         SeriesRepository::update_path(conn, series.id, "shonen/Naruto".to_string())
             .await
             .unwrap();
@@ -499,9 +627,7 @@ mod tests {
         let library = LibraryRepository::create(conn, "Lib", "/lib", ScanningStrategy::Default)
             .await
             .unwrap();
-        let series = SeriesRepository::create(conn, library.id, "One Piece", None)
-            .await
-            .unwrap();
+        let series = live_series(conn, library.id, "One Piece").await;
 
         let filter = ContentFilter::for_user(conn, user).await.unwrap();
         // A path that does not exist anywhere; only the name matches.
@@ -518,12 +644,8 @@ mod tests {
         let library = LibraryRepository::create(conn, "Lib", "/lib", ScanningStrategy::Default)
             .await
             .unwrap();
-        let series_a = SeriesRepository::create(conn, library.id, "Series A", None)
-            .await
-            .unwrap();
-        let series_b = SeriesRepository::create(conn, library.id, "Series B", None)
-            .await
-            .unwrap();
+        let series_a = live_series(conn, library.id, "Series A").await;
+        let series_b = live_series(conn, library.id, "Series B").await;
         SeriesExternalIdRepository::create(
             conn,
             series_a.id,
@@ -585,12 +707,8 @@ mod tests {
         let library2 = LibraryRepository::create(conn, "Lib2", "/lib2", ScanningStrategy::Default)
             .await
             .unwrap();
-        SeriesRepository::create(conn, library.id, "Duplicate", None)
-            .await
-            .unwrap();
-        SeriesRepository::create(conn, library2.id, "Duplicate", None)
-            .await
-            .unwrap();
+        live_series(conn, library.id, "Duplicate").await;
+        live_series(conn, library2.id, "Duplicate").await;
 
         let filter = ContentFilter::for_user(conn, user).await.unwrap();
         let doc = doc_series("Duplicate", "nowhere/matching", None);
@@ -606,9 +724,7 @@ mod tests {
         let library = LibraryRepository::create(conn, "Lib", "/lib", ScanningStrategy::Default)
             .await
             .unwrap();
-        let series = SeriesRepository::create(conn, library.id, "Hidden", None)
-            .await
-            .unwrap();
+        let series = live_series(conn, library.id, "Hidden").await;
 
         let tag = SharingTagRepository::create(conn, "restricted", None)
             .await
