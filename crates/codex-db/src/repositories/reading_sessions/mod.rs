@@ -455,7 +455,7 @@ impl ReadingSessionRepository {
         let model = reading_sessions::ActiveModel {
             id: Set(session.id),
             user_id: Set(session.user_id),
-            book_id: Set(session.book_id),
+            book_id: Set(Some(session.book_id)),
             device_id: Set(session.device_id),
             device_name: Set(session.device_name),
             pass: Set(pass),

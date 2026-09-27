@@ -1771,7 +1771,7 @@ mod tests {
                 rows.push(reading_sessions::ActiveModel {
                     id: Set(Uuid::new_v4()),
                     user_id: Set(user.id),
-                    book_id: Set(book.id),
+                    book_id: Set(Some(book.id)),
                     device_id: Set(format!("bench-device-{}", i % 3)),
                     device_name: Set(None),
                     pass: Set(pass),

@@ -2,8 +2,9 @@
 //!
 //! An append-only log of finished read-throughs: one row per completed pass of
 //! one book by one user. Rows are inserted when a book is completed and only
-//! ever removed by an explicit history reset (or by a cascade when the user or
-//! book is deleted). Nothing updates them.
+//! ever removed by an explicit history reset or by a cascade when the user is
+//! deleted. Deleting the book keeps the row and clears `book_id`. Nothing else
+//! updates them.
 //!
 //! This is deliberately separate from `read_progress`, which tracks the
 //! *current* pass and is deleted when a book is marked unread. Keeping the
@@ -21,7 +22,11 @@ pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: Uuid,
     pub user_id: Uuid,
-    pub book_id: Uuid,
+    /// The finished book. `None` once that book has been hard-deleted: the fact
+    /// that it was finished survives the file, only the attribution is lost.
+    /// Every write path supplies a book; `None` is only ever reached by the
+    /// foreign key's `ON DELETE SET NULL`.
+    pub book_id: Option<Uuid>,
     /// When this pass started, copied from the `read_progress` row that was
     /// current when the book completed.
     pub started_at: DateTime<Utc>,
@@ -36,7 +41,7 @@ pub enum Relation {
         from = "Column::BookId",
         to = "super::books::Column::Id",
         on_update = "NoAction",
-        on_delete = "Cascade"
+        on_delete = "SetNull"
     )]
     Books,
     #[sea_orm(
