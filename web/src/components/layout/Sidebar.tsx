@@ -16,6 +16,7 @@ import { useMediaQuery } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
 import {
   IconAlertTriangle,
+  IconArrowsRightLeft,
   IconBookmark,
   IconBooks,
   IconBrush,
@@ -818,6 +819,18 @@ export function Sidebar({
                       label="Data Exports"
                       leftSection={<IconFileExport size={16} stroke={1.5} />}
                       active={currentPath.startsWith("/settings/exports")}
+                      onClick={onNavigate}
+                    />
+                    <NavLink
+                      component={Link}
+                      to="/settings/reading-progress"
+                      label="Reading Progress"
+                      leftSection={
+                        <IconArrowsRightLeft size={16} stroke={1.5} />
+                      }
+                      active={currentPath.startsWith(
+                        "/settings/reading-progress",
+                      )}
                       onClick={onNavigate}
                     />
 

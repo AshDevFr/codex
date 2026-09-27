@@ -10,6 +10,7 @@ export { PdfCacheSettings } from "./PdfCacheSettings";
 export { PluginStorageSettings } from "./PluginStorageSettings";
 export { PluginsSettings } from "./PluginsSettings";
 export { ProfileSettings } from "./ProfileSettings";
+export { ReadingProgressTransferSettings } from "./ReadingProgressTransferSettings";
 export { ReleaseTrackingSettings } from "./ReleaseTrackingSettings";
 export { SeriesExportsSettings } from "./SeriesExportsSettings";
 export { ServerSettings } from "./ServerSettings";
