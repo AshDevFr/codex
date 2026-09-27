@@ -53,7 +53,7 @@ impl ReadCompletionRepository {
         let row = read_completions::ActiveModel {
             id: Set(Uuid::new_v4()),
             user_id: Set(user_id),
-            book_id: Set(book_id),
+            book_id: Set(Some(book_id)),
             started_at: Set(started_at),
             completed_at: Set(completed_at),
         };
@@ -240,8 +240,11 @@ impl ReadCompletionRepository {
             .all(db)
             .await?;
         for row in rows {
+            let Some(book_id) = row.book_id else {
+                continue;
+            };
             by_book
-                .entry(row.book_id)
+                .entry(book_id)
                 .or_default()
                 .push((row.started_at, row.completed_at));
         }
@@ -611,8 +614,8 @@ mod tests {
             .unwrap();
         assert_eq!(entries.len(), 2, "the unrelated series must not leak in");
         // Newest first.
-        assert_eq!(entries[0].book_id, second.id);
-        assert_eq!(entries[1].book_id, first.id);
+        assert_eq!(entries[0].book_id, Some(second.id));
+        assert_eq!(entries[1].book_id, Some(first.id));
     }
 
     #[tokio::test]

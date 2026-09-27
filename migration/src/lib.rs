@@ -215,6 +215,7 @@ mod m20260825_000110_add_task_progress;
 mod m20260826_000111_normalize_library_reading_direction;
 mod m20260826_000112_create_user_series_reader_settings;
 mod m20260828_000113_relax_renumber_series_task_dedup;
+mod m20260927_000114_reading_history_survives_book_delete;
 
 pub struct Migrator;
 
@@ -414,6 +415,9 @@ impl MigratorTrait for Migrator {
             // already running: that pass may have read the series before the
             // book existed, so the request would be lost.
             Box::new(m20260828_000113_relax_renumber_series_task_dedup::Migration),
+            // Reading history keeps its rows when the book is hard-deleted;
+            // only the attribution is lost.
+            Box::new(m20260927_000114_reading_history_survives_book_delete::Migration),
         ]
     }
 }

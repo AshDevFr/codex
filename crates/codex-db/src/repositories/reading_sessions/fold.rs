@@ -274,7 +274,7 @@ mod tests {
             Session {
                 id: Uuid::new_v4(),
                 user_id: Uuid::nil(),
-                book_id: Uuid::nil(),
+                book_id: Some(Uuid::nil()),
                 device_id: self.device.to_string(),
                 device_name: None,
                 pass: self.pass,

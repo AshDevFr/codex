@@ -849,7 +849,7 @@ mod tests {
         reading_sessions::ActiveModel {
             id: Set(Uuid::new_v4()),
             user_id: Set(user_id),
-            book_id: Set(book_id),
+            book_id: Set(Some(book_id)),
             device_id: Set(spec.device.to_string()),
             device_name: Set(spec.device_name.map(str::to_string)),
             pass: Set(spec.pass),
@@ -2177,7 +2177,7 @@ mod tests_support {
         reading_sessions::ActiveModel {
             id: Set(Uuid::new_v4()),
             user_id: Set(user_id),
-            book_id: Set(book_id),
+            book_id: Set(Some(book_id)),
             device_id: Set(device.to_string()),
             device_name: Set(Some(device.to_string())),
             pass: Set(1),

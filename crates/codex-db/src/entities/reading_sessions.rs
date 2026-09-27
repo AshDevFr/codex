@@ -28,7 +28,12 @@ pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: Uuid,
     pub user_id: Uuid,
-    pub book_id: Uuid,
+    /// The book this reading happened in. `None` once that book has been
+    /// hard-deleted: the session outlives the file so the time still counts
+    /// towards the reader's statistics, but nothing can say which book it was.
+    /// Every write path supplies a book; `None` is only ever reached by the
+    /// foreign key's `ON DELETE SET NULL`.
+    pub book_id: Option<Uuid>,
     /// Stable per install. Producers with no device concept of their own
     /// (Komga, OPDS) derive one from the API key or user agent.
     pub device_id: String,
@@ -146,7 +151,7 @@ pub enum Relation {
         from = "Column::BookId",
         to = "super::books::Column::Id",
         on_update = "NoAction",
-        on_delete = "Cascade"
+        on_delete = "SetNull"
     )]
     Books,
     #[sea_orm(

@@ -9,6 +9,7 @@ mod entity_event_bridge;
 mod migrations;
 mod oidc_pending_state;
 mod postgres;
+mod reading_history_retention;
 mod reading_sessions;
 mod reading_stats;
 mod refresh_token_repository;
