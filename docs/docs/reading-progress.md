@@ -167,3 +167,11 @@ Books you had already finished before this feature existed are counted: the
 first upgrade records one completion for every book currently marked read, dated
 from its completion time where that was stored and from its last-updated time
 otherwise. You do not need to re-read anything to get a starting count.
+
+## Moving progress across a library reorganisation
+
+Splitting a library, moving files, or moving to a different Codex instance
+mints new series and book ids, and none of the state above follows
+automatically. See
+[Carrying Reading Progress Across a Library Split](./backup-migration/reading-progress-transfer.md)
+for the export/import workflow that moves it.
