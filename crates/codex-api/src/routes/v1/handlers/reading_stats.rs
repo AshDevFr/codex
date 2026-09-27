@@ -1,9 +1,9 @@
 //! Reading statistics, aggregated from the session log.
 
 use super::super::dto::{
-    DurationBreakdownDto, ReadingByDeviceDto, ReadingByFormatDto, ReadingBySeriesDto,
-    ReadingCoverageDto, ReadingPeriodDto, ReadingStatsGranularity, ReadingStatsQuery,
-    ReadingStatsResponse, ReadingStatsSort, ReadingSummaryDto,
+    DurationBreakdownDto, PurgedOrphanedHistoryDto, ReadingByDeviceDto, ReadingByFormatDto,
+    ReadingBySeriesDto, ReadingCoverageDto, ReadingPeriodDto, ReadingStatsGranularity,
+    ReadingStatsQuery, ReadingStatsResponse, ReadingStatsSort, ReadingSummaryDto,
 };
 use crate::{AppState, error::ApiError, extractors::AuthContext, permissions::Permission};
 use axum::{
@@ -34,7 +34,7 @@ const MAX_TZ_OFFSET_MINUTES: i32 = 14 * 60;
 
 #[derive(OpenApi)]
 #[openapi(
-    paths(get_reading_stats),
+    paths(get_reading_stats, purge_orphaned_reading_history),
     components(schemas(
         ReadingStatsResponse,
         ReadingSummaryDto,
@@ -44,6 +44,7 @@ const MAX_TZ_OFFSET_MINUTES: i32 = 14 * 60;
         ReadingByFormatDto,
         DurationBreakdownDto,
         ReadingStatsGranularity,
+        PurgedOrphanedHistoryDto,
     )),
     tags(
         (name = "Reading Statistics", description = "Aggregated reading time and pages")
@@ -185,4 +186,42 @@ pub async fn get_reading_coverage(
         .map_err(|e| ApiError::Internal(format!("Failed to read coverage: {}", e)))?;
 
     Ok(Json(coverage.into()))
+}
+
+/// Delete the caller's reading history for books that no longer exist
+///
+/// When a book is deleted from the server its reading sessions and finished
+/// read-throughs are kept, so the time still counts towards every statistic;
+/// the series and format breakdowns show it as one "removed from library" row.
+/// This discards those rows for the caller, and only for the caller.
+///
+/// Irreversible, and it forecloses the other way out: importing a reading
+/// progress export taken before the delete puts those sessions back on their
+/// books. Only history already detached from any book is touched; attributed
+/// reading is never affected.
+#[utoipa::path(
+    delete,
+    path = "/api/v1/reading-stats/orphaned",
+    responses(
+        (status = 200, description = "What was deleted", body = PurgedOrphanedHistoryDto),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Reading Statistics"
+)]
+pub async fn purge_orphaned_reading_history(
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+) -> Result<Json<PurgedOrphanedHistoryDto>, ApiError> {
+    auth.require_permission(&Permission::ProgressWrite)?;
+
+    let purged = ReadingStatsRepository::purge_orphaned(&state.db, auth.user_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to purge orphaned history: {}", e)))?;
+
+    Ok(Json(purged.into()))
 }

@@ -272,9 +272,9 @@ async fn exercise_reading_stats(db: &DatabaseConnection) {
         .await
         .expect("series breakdown must decode on this engine");
     assert_eq!(series.len(), 2);
-    assert_eq!(series[0].series_name, "Berserk");
+    assert_eq!(series[0].series_name.as_deref(), Some("Berserk"));
     assert_eq!(series[0].duration.total_ms(), 50 * MINUTE_MS);
-    assert_eq!(series[1].series_name, "Dune");
+    assert_eq!(series[1].series_name.as_deref(), Some("Dune"));
     assert_eq!(
         series[1].books_finished, 1,
         "the duplicated finish collapses in the series breakdown too"
@@ -284,7 +284,7 @@ async fn exercise_reading_stats(db: &DatabaseConnection) {
         .await
         .expect("format breakdown must decode on this engine");
     assert_eq!(formats.len(), 2);
-    assert_eq!(formats[0].format, "cbz");
+    assert_eq!(formats[0].format.as_deref(), Some("cbz"));
 
     // Each ranking key is a different `ORDER BY` over aggregate expressions,
     // and PostgreSQL is the strict one about what may appear there. Ranking by

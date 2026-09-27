@@ -3360,6 +3360,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reading-stats/orphaned": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete the caller's reading history for books that no longer exist
+         * @description When a book is deleted from the server its reading sessions and finished
+         *     read-throughs are kept, so the time still counts towards every statistic;
+         *     the series and format breakdowns show it as one "removed from library" row.
+         *     This discards those rows for the caller, and only for the caller.
+         *
+         *     Irreversible, and it forecloses the other way out: importing a reading
+         *     progress export taken before the delete puts those sessions back on their
+         *     books. Only history already detached from any book is touched; attributed
+         *     reading is never affected.
+         */
+        delete: operations["purge_orphaned_reading_history"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/readlists": {
         parameters: {
             query?: never;
@@ -16691,6 +16719,19 @@ export interface components {
              */
             deleted: number;
         };
+        /** @description What purging the removed-from-library history deleted. */
+        PurgedOrphanedHistoryDto: {
+            /**
+             * Format: int64
+             * @description Finished read-throughs deleted.
+             */
+            completionsRemoved: number;
+            /**
+             * Format: int64
+             * @description Reading sessions deleted. Their time no longer counts anywhere.
+             */
+            sessionsRemoved: number;
+        };
         /** @description Queue health metrics */
         QueueHealthMetricsDto: {
             /**
@@ -16895,10 +16936,18 @@ export interface components {
             /** Format: int64 */
             booksFinished: number;
             duration: components["schemas"]["DurationBreakdownDto"];
-            /** @example cbz */
-            format: string;
+            /**
+             * @description Null on the removed-from-library row.
+             * @example cbz
+             */
+            format?: string | null;
             /** Format: int64 */
             pagesRead: number;
+            /**
+             * @description True on the single row that gathers reading whose book has since been
+             *     deleted from the server, and whose format is therefore unknown.
+             */
+            removedFromLibrary: boolean;
             /** Format: int64 */
             sessions: number;
         };
@@ -16918,10 +16967,24 @@ export interface components {
             duration: components["schemas"]["DurationBreakdownDto"];
             /** Format: int64 */
             pagesRead: number;
-            /** Format: uuid */
-            seriesId: string;
-            /** @example Berserk */
-            seriesName: string;
+            /**
+             * @description True on the single row that gathers reading whose book has since been
+             *     deleted from the server. That time still counts towards every total,
+             *     but which series it belonged to is no longer known. Its `books` and
+             *     `booksFinished` are always 0: both count distinct books, and deleted
+             *     books cannot be told apart.
+             */
+            removedFromLibrary: boolean;
+            /**
+             * Format: uuid
+             * @description Null on the removed-from-library row.
+             */
+            seriesId?: string | null;
+            /**
+             * @description Null on the removed-from-library row.
+             * @example Berserk
+             */
+            seriesName?: string | null;
             /** Format: int64 */
             sessions: number;
         };
@@ -29425,6 +29488,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReadingCoverageDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    purge_orphaned_reading_history: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description What was deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PurgedOrphanedHistoryDto"];
                 };
             };
             /** @description Unauthorized */

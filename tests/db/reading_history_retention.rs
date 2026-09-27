@@ -22,7 +22,8 @@ use codex::db::entities::reading_sessions::SessionKind;
 use codex::db::entities::{books, read_completions, reading_sessions, users};
 use codex::db::repositories::{
     BookRepository, LibraryRepository, NewSession, ReadCompletionRepository,
-    ReadProgressRepository, SeriesRepository, UserRepository,
+    ReadProgressRepository, ReadingStatsRepository, SeriesRepository, StatsGranularity, StatsSort,
+    StatsWindow, UserRepository,
 };
 use common::*;
 use migration::{Migrator, MigratorTrait};
@@ -174,10 +175,158 @@ async fn exercise_user_delete_still_removes_history(db: &DatabaseConnection) {
     );
 }
 
+/// Everything the statistics page shows that is a plain sum over sessions.
+///
+/// `books` and `books_finished` are deliberately absent: both count distinct
+/// books, and a book that no longer exists cannot be told apart from another
+/// deleted one, so those two figures lose the deleted book's contribution by
+/// design. Time, pages and sittings are additive per row and must not move.
+#[derive(Debug, PartialEq)]
+struct AdditiveTotals {
+    summary: (i64, i64, i64, i64),
+    periods: Vec<(String, i64, i64, i64)>,
+    devices: Vec<(String, i64, i64, i64)>,
+    first_read_at: Option<chrono::DateTime<Utc>>,
+    last_read_at: Option<chrono::DateTime<Utc>>,
+}
+
+fn whole_history() -> StatsWindow {
+    StatsWindow {
+        from: Utc::now() - Duration::days(30),
+        to: Utc::now() + Duration::days(1),
+    }
+}
+
+async fn additive_totals(db: &DatabaseConnection, user: Uuid) -> AdditiveTotals {
+    let window = whole_history();
+    let summary = ReadingStatsRepository::summary(db, user, window)
+        .await
+        .unwrap();
+    let periods = ReadingStatsRepository::by_period(db, user, window, StatsGranularity::Day, 0)
+        .await
+        .unwrap();
+    let devices = ReadingStatsRepository::by_device(db, user, window, StatsSort::Time)
+        .await
+        .unwrap();
+    let coverage = ReadingStatsRepository::coverage(db, user).await.unwrap();
+
+    AdditiveTotals {
+        summary: (
+            summary.duration.measured_ms,
+            summary.duration.inferred_ms,
+            summary.pages_read,
+            summary.sessions,
+        ),
+        periods: periods
+            .into_iter()
+            .map(|p| (p.bucket, p.duration.total_ms(), p.pages_read, p.sessions))
+            .collect(),
+        devices: devices
+            .into_iter()
+            .map(|d| (d.device_id, d.duration.total_ms(), d.pages_read, d.sessions))
+            .collect(),
+        first_read_at: coverage.first_read_at,
+        last_read_at: coverage.last_read_at,
+    }
+}
+
+/// A hard delete changes no additive total, and the two breakdowns that name a
+/// book's series or format carry its time in one "removed from library" row
+/// instead of dropping it.
+async fn exercise_statistics_keep_deleted_reading(db: &DatabaseConnection) {
+    let user = persist_user(db).await;
+    let kept = persist_book(db).await;
+    let removed = persist_book(db).await;
+    record_history(db, user, kept).await;
+    record_history(db, user, removed).await;
+
+    let before = additive_totals(db, user).await;
+    books::Entity::delete_by_id(removed).exec(db).await.unwrap();
+    let after = additive_totals(db, user).await;
+
+    assert_eq!(
+        after, before,
+        "deleting a book must not change any time, page or sitting total"
+    );
+
+    let window = whole_history();
+    let series = ReadingStatsRepository::by_series(db, user, window, StatsSort::Time, 50)
+        .await
+        .unwrap();
+    assert_eq!(series.len(), 2, "one real series plus the removed bucket");
+    let bucket: Vec<_> = series.iter().filter(|s| s.series_id.is_none()).collect();
+    assert_eq!(bucket.len(), 1, "orphans collapse into exactly one bucket");
+    assert_eq!(bucket[0].duration.measured_ms, 900_000);
+    assert_eq!(bucket[0].pages_read, 24);
+    assert_eq!(bucket[0].sessions, 1);
+    assert!(bucket[0].series_name.is_none());
+    let series_time: i64 = series.iter().map(|s| s.duration.total_ms()).sum();
+    assert_eq!(
+        series_time,
+        before.summary.0 + before.summary.1,
+        "the series breakdown, bucket included, must add up to the summary"
+    );
+
+    let formats = ReadingStatsRepository::by_format(db, user, window, StatsSort::Time)
+        .await
+        .unwrap();
+    let cbz: Vec<_> = formats
+        .iter()
+        .filter(|f| f.format.as_deref() == Some("cbz"))
+        .collect();
+    let orphaned: Vec<_> = formats.iter().filter(|f| f.format.is_none()).collect();
+    assert_eq!(cbz.len(), 1);
+    assert_eq!(
+        cbz[0].duration.measured_ms, 900_000,
+        "only the kept book remains cbz"
+    );
+    assert_eq!(orphaned.len(), 1, "the deleted book's format is unknowable");
+    assert_eq!(orphaned[0].duration.measured_ms, 900_000);
+}
+
+/// Purging removes only the caller's orphans: their attributed history stays,
+/// and another reader's orphans of the same book are untouched.
+async fn exercise_purge_is_scoped_to_orphans_of_one_user(db: &DatabaseConnection) {
+    let purger = persist_user(db).await;
+    let bystander = persist_user(db).await;
+    let kept = persist_book(db).await;
+    let removed = persist_book(db).await;
+    record_history(db, purger, kept).await;
+    record_history(db, purger, removed).await;
+    record_history(db, bystander, removed).await;
+    books::Entity::delete_by_id(removed).exec(db).await.unwrap();
+
+    let purged = ReadingStatsRepository::purge_orphaned(db, purger)
+        .await
+        .unwrap();
+    assert_eq!((purged.sessions, purged.completions), (1, 1));
+
+    let sessions = sessions_for_user(db, purger).await;
+    assert_eq!(sessions.len(), 1);
+    assert_eq!(sessions[0].book_id, Some(kept), "attributed history stays");
+    assert_eq!(completions_for_user(db, purger).await.len(), 1);
+
+    assert_eq!(sessions_for_user(db, bystander).await.len(), 1);
+    assert_eq!(completions_for_user(db, bystander).await.len(), 1);
+}
+
 #[tokio::test]
 async fn history_survives_book_delete_sqlite() {
     let (db, _temp_dir) = setup_test_db().await;
     exercise_history_survives_book_delete(&db).await;
+}
+
+#[tokio::test]
+async fn statistics_keep_deleted_reading_sqlite() {
+    let (db, _temp_dir) = setup_test_db().await;
+    exercise_statistics_keep_deleted_reading(&db).await;
+    exercise_purge_is_scoped_to_orphans_of_one_user(&db).await;
+}
+
+#[tokio::test]
+async fn purge_is_scoped_to_orphans_of_one_user_sqlite() {
+    let (db, _temp_dir) = setup_test_db().await;
+    exercise_purge_is_scoped_to_orphans_of_one_user(&db).await;
 }
 
 #[tokio::test]
@@ -203,6 +352,7 @@ async fn reading_history_retention_postgres() {
 
     exercise_history_survives_book_delete(&db).await;
     exercise_user_delete_still_removes_history(&db).await;
+    exercise_statistics_keep_deleted_reading(&db).await;
 }
 
 // ============================================================================
