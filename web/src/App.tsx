@@ -44,6 +44,7 @@ import {
   PluginStorageSettings,
   PluginsSettings,
   ProfileSettings,
+  ReadingProgressTransferSettings,
   ReleaseTrackingSettings,
   SeriesExportsSettings,
   ServerSettings,
@@ -524,6 +525,17 @@ function App() {
             <ProtectedRoute>
               <AppLayout>
                 <SeriesExportsSettings />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/settings/reading-progress"
+          element={
+            <ProtectedRoute>
+              <AppLayout>
+                <ReadingProgressTransferSettings />
               </AppLayout>
             </ProtectedRoute>
           }
