@@ -34,6 +34,7 @@ import {
   StatTile,
   TopSeries,
 } from "@/components/reading/ReadingStatsPanels";
+import { RemovedHistoryNotice } from "@/components/reading/RemovedHistoryNotice";
 import {
   buildCalendar,
   groupIntoYears,
@@ -355,6 +356,8 @@ export function ReadingStats() {
             <PeriodBars periods={periodBars} metric={metric} />
           </Stack>
         </Paper>
+
+        <RemovedHistoryNotice />
 
         <Group align="flex-start" gap="lg" wrap="wrap">
           <Paper p="md" radius="md" withBorder style={{ flex: "1 1 320px" }}>

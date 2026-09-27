@@ -139,11 +139,12 @@ What happens to your reading then:
 
 ### Deleting the removed-from-library history
 
-If you would rather that reading stopped counting, use **Delete** on the
-**Removed from library** row of the series panel. The confirmation states how
-many sittings, how much reading time and how many finished read-throughs will
-go, across **all** dates rather than only the ones on screen, because that is
-what is deleted. It is permanent, affects only your own history, and never
+Whenever you have any, the **Reading Statistics** page shows a **Reading of
+removed books** notice above the series panel, whatever dates you are viewing.
+If you would rather that reading stopped counting, use **Delete** on that
+notice. The confirmation states how many sittings, how much reading time and
+how many finished read-throughs will go, across **all** dates rather than only
+the ones on screen, because that is what is deleted. It is permanent, affects only your own history, and never
 touches reading attributed to a book that still exists.
 
 The same is available through the API: `GET /api/v1/reading-stats/orphaned`

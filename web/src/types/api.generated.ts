@@ -3382,10 +3382,8 @@ export interface paths {
          *     the series and format breakdowns show it as one "removed from library" row.
          *     This discards those rows for the caller, and only for the caller.
          *
-         *     Irreversible, and it forecloses the other way out: importing a reading
-         *     progress export taken before the delete puts those sessions back on their
-         *     books. Only history already detached from any book is touched; attributed
-         *     reading is never affected.
+         *     Irreversible. Only history already detached from any book is touched;
+         *     attributed reading is never affected.
          */
         delete: operations["purge_orphaned_reading_history"];
         options?: never;
@@ -14925,7 +14923,7 @@ export interface components {
             pagesRead: number;
             /**
              * Format: int64
-             * @description Session rows, including bookkeeping rows such as a mark-unread.
+             * @description Sittings, counted as the dashboard counts them.
              */
             sessions: number;
         };

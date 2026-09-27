@@ -487,10 +487,22 @@ async fn sqlite_rebuild_keeps_rows_and_indexes() {
     apply_retention_migration(conn).await;
 
     for (i, table) in HISTORY_TABLES.into_iter().enumerate() {
+        let book_index = format!("idx_{table}_book_id");
+        let (added, kept): (Vec<String>, Vec<String>) = index_definitions(conn, table)
+            .await
+            .into_iter()
+            .partition(|sql| {
+                sql.contains(&format!("\"{book_index}\""))
+                    || sql.contains(&format!(" {book_index} "))
+            });
         assert_eq!(
-            index_definitions(conn, table).await,
-            indexes_before[i],
-            "{table}: the rebuild must recreate every index exactly"
+            kept, indexes_before[i],
+            "{table}: the rebuild must recreate every original index exactly"
+        );
+        assert_eq!(
+            added.len(),
+            1,
+            "{table}: the rebuild adds one index on book_id for the foreign key action"
         );
 
         let expected_columns: Vec<String> = columns_before[i]
