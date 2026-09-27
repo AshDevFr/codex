@@ -185,7 +185,6 @@ describe("TopSeries", () => {
     expect(
       screen.getByText("3 sittings of books no longer on the server"),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
     expect(screen.getAllByRole("link")).toHaveLength(2);
   });
 

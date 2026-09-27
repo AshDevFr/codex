@@ -349,7 +349,7 @@ impl From<PurgedOrphanedHistory> for PurgedOrphanedHistoryDto {
 pub struct OrphanedHistoryDto {
     pub duration: DurationBreakdownDto,
     pub pages_read: i64,
-    /// Session rows, including bookkeeping rows such as a mark-unread.
+    /// Sittings, counted as the dashboard counts them.
     pub sessions: i64,
     /// Finished read-throughs.
     pub completions: u64,

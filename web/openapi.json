@@ -10474,7 +10474,7 @@
           "Reading Statistics"
         ],
         "summary": "Delete the caller's reading history for books that no longer exist",
-        "description": "When a book is deleted from the server its reading sessions and finished\nread-throughs are kept, so the time still counts towards every statistic;\nthe series and format breakdowns show it as one \"removed from library\" row.\nThis discards those rows for the caller, and only for the caller.\n\nIrreversible, and it forecloses the other way out: importing a reading\nprogress export taken before the delete puts those sessions back on their\nbooks. Only history already detached from any book is touched; attributed\nreading is never affected.",
+        "description": "When a book is deleted from the server its reading sessions and finished\nread-throughs are kept, so the time still counts towards every statistic;\nthe series and format breakdowns show it as one \"removed from library\" row.\nThis discards those rows for the caller, and only for the caller.\n\nIrreversible. Only history already detached from any book is touched;\nattributed reading is never affected.",
         "operationId": "purge_orphaned_reading_history",
         "responses": {
           "200": {
@@ -35686,7 +35686,7 @@
           "sessions": {
             "type": "integer",
             "format": "int64",
-            "description": "Session rows, including bookkeeping rows such as a mark-unread."
+            "description": "Sittings, counted as the dashboard counts them."
           }
         }
       },

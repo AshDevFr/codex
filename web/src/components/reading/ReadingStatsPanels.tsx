@@ -11,7 +11,7 @@
  */
 
 import { Anchor, Box, Group, Paper, Stack, Text, Tooltip } from "@mantine/core";
-import { type ReactNode, useLayoutEffect, useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import type {
   ReadingByDeviceDto,
@@ -20,7 +20,6 @@ import type {
 } from "@/api/readingStats";
 import type { ReadingMetric } from "@/store/readingStatsPreferencesStore";
 import classes from "./ReadingStatsCharts.module.css";
-import { RemovedHistoryPurge } from "./RemovedHistoryPurge";
 import {
   type CalendarDay,
   formatDayLabel,
@@ -412,7 +411,6 @@ function RankedRow({
   href,
   sublabel,
   muted = false,
-  action,
   measuredMs,
   inferredMs,
   value,
@@ -424,7 +422,6 @@ function RankedRow({
   sublabel?: string;
   /** Set for a row that is not a real item, so it cannot pass for one. */
   muted?: boolean;
-  action?: ReactNode;
   measuredMs: number;
   inferredMs: number;
   value: number;
@@ -463,16 +460,13 @@ function RankedRow({
             {label}
           </Text>
         )}
-        <Group gap="xs" wrap="nowrap" style={{ flex: "none" }}>
-          {action}
-          <Text
-            size="sm"
-            c="dimmed"
-            style={{ fontVariantNumeric: "tabular-nums" }}
-          >
-            {formatMetric(value, metric)}
-          </Text>
-        </Group>
+        <Text
+          size="sm"
+          c="dimmed"
+          style={{ fontVariantNumeric: "tabular-nums", flex: "none" }}
+        >
+          {formatMetric(value, metric)}
+        </Text>
       </Group>
       <div className={classes.track}>
         <div
@@ -517,12 +511,13 @@ export function TopSeries({
         s.removedFromLibrary ? (
           // Reading of books since deleted from the server. It still counts,
           // but there is no series to link to or name, and its book counts
-          // are always zero because deleted books cannot be told apart.
+          // are always zero because deleted books cannot be told apart. The
+          // way to discard it is the page-level notice, which is not bound to
+          // this panel's window or ranking.
           <RankedRow
             key="removed-from-library"
             label={REMOVED_LABEL}
             muted
-            action={<RemovedHistoryPurge />}
             sublabel={`${s.sessions} ${s.sessions === 1 ? "sitting" : "sittings"} of books no longer on the server`}
             measuredMs={s.duration.measuredMs}
             inferredMs={s.duration.inferredMs}

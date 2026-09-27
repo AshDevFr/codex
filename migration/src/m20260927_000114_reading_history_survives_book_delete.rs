@@ -33,6 +33,14 @@
 //! ordering; a rebuild that silently lost an index would slow the statistics
 //! queries without failing anything.
 //!
+//! # A `book_id` index
+//!
+//! Neither table had an index leading with `book_id`, so every deleted book
+//! made the foreign key action scan both tables in full. Deleting a library
+//! deletes every book in it, one scan each. That was already true under
+//! `CASCADE`; `SET NULL` additionally rewrites the rows it finds, and the
+//! rebuild is the cheapest moment to add the index.
+//!
 //! # Rollback is lossy
 //!
 //! `down` restores `NOT NULL` and `CASCADE`, which orphaned rows cannot
@@ -75,18 +83,37 @@ impl Direction {
     }
 }
 
+const HISTORY_TABLES: [&str; 2] = ["reading_sessions", "read_completions"];
+
+fn book_index_name(table: &str) -> String {
+    format!("idx_{table}_book_id")
+}
+
+/// `down` restores `NOT NULL`, which orphaned rows cannot satisfy.
+async fn delete_orphans<C: ConnectionTrait>(db: &C) -> Result<(), DbErr> {
+    for table in HISTORY_TABLES {
+        db.execute_unprepared(&format!("DELETE FROM {table} WHERE book_id IS NULL"))
+            .await?;
+    }
+    Ok(())
+}
+
 async fn migrate(manager: &SchemaManager<'_>, direction: Direction) -> Result<(), DbErr> {
     let db = manager.get_connection();
 
-    if direction == Direction::Down {
-        for table in ["reading_sessions", "read_completions"] {
-            db.execute_unprepared(&format!("DELETE FROM {table} WHERE book_id IS NULL"))
-                .await?;
-        }
-    }
-
     match db.get_database_backend() {
+        // Already inside the migrator's transaction.
         DbBackend::Postgres => {
+            if direction == Direction::Down {
+                delete_orphans(db).await?;
+                for table in HISTORY_TABLES {
+                    db.execute_unprepared(&format!(
+                        "DROP INDEX IF EXISTS {}",
+                        book_index_name(table)
+                    ))
+                    .await?;
+                }
+            }
             alter_postgres(
                 db,
                 "reading_sessions",
@@ -101,9 +128,24 @@ async fn migrate(manager: &SchemaManager<'_>, direction: Direction) -> Result<()
                 direction,
             )
             .await?;
+            if direction == Direction::Up {
+                for table in HISTORY_TABLES {
+                    db.execute_unprepared(&format!(
+                        "CREATE INDEX {} ON {table} (book_id)",
+                        book_index_name(table)
+                    ))
+                    .await?;
+                }
+            }
         }
+        // The migrator does not wrap SQLite migrations in a transaction, so
+        // this one opens its own: a rollback that deleted the orphans and then
+        // failed the rebuild would otherwise lose them for nothing.
         DbBackend::Sqlite => {
             let txn = db.begin().await?;
+            if direction == Direction::Down {
+                delete_orphans(&txn).await?;
+            }
             rebuild_sqlite(&txn, &ReadingSessionsTable, direction).await?;
             rebuild_sqlite(&txn, &ReadCompletionsTable, direction).await?;
             txn.commit().await?;
@@ -164,6 +206,17 @@ async fn rebuild_sqlite(
     let staging = format!("{name}_rebuild");
     let columns = table.columns().join(", ");
 
+    // A row that already references a missing user or book would fail the
+    // copy below with SQLite's bare "FOREIGN KEY constraint failed", and since
+    // migrations run at startup the server would not start. Say which table.
+    let existing = foreign_key_violations(txn, name).await?;
+    if existing > 0 {
+        return Err(DbErr::Migration(format!(
+            "{name} has {existing} rows referencing a missing user or book; \
+             `PRAGMA foreign_key_check({name})` lists them. Delete them and restart."
+        )));
+    }
+
     let before = count_rows(txn, name).await?;
 
     txn.execute(backend.build(&table.create(&staging, direction)))
@@ -189,23 +242,32 @@ async fn rebuild_sqlite(
     for index in table.indexes() {
         txn.execute(backend.build(&index)).await?;
     }
-
-    // A row the copy let through that references a missing user or book would
-    // otherwise surface only on some later write.
-    let violations = txn
-        .query_all(Statement::from_string(
-            backend,
-            format!("PRAGMA foreign_key_check({name})"),
+    if direction == Direction::Up {
+        txn.execute_unprepared(&format!(
+            "CREATE INDEX {} ON {name} (book_id)",
+            book_index_name(name)
         ))
         .await?;
-    if !violations.is_empty() {
+    }
+
+    let violations = foreign_key_violations(txn, name).await?;
+    if violations > 0 {
         return Err(DbErr::Migration(format!(
-            "rebuilding {name} left {} foreign key violations",
-            violations.len()
+            "rebuilding {name} left {violations} foreign key violations"
         )));
     }
 
     Ok(())
+}
+
+async fn foreign_key_violations(txn: &DatabaseTransaction, table: &str) -> Result<usize, DbErr> {
+    Ok(txn
+        .query_all(Statement::from_string(
+            DbBackend::Sqlite,
+            format!("PRAGMA foreign_key_check({table})"),
+        ))
+        .await?
+        .len())
 }
 
 async fn count_rows<C: ConnectionTrait>(db: &C, table: &str) -> Result<i64, DbErr> {

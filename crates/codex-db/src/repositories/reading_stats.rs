@@ -692,15 +692,16 @@ impl ReadingStatsRepository {
         }
 
         let backend = db.get_database_backend();
-        // Counts every orphaned row, reading or not: a purge removes `reset`
-        // rows too, and the count has to match what it reports afterwards.
+        // Sittings are counted the way the dashboard counts them, so the
+        // confirmation agrees with the row the reader clicked. A purge also
+        // removes orphaned `reset` rows, but those count towards nothing.
         let sql = format!(
             "SELECT {MEASURED_SUM} AS measured_ms, \
                     {INFERRED_SUM} AS inferred_ms, \
                     {PAGES_SUM} AS pages_read, \
                     COUNT(*) AS sessions \
              FROM reading_sessions rs \
-             WHERE rs.user_id = $1 AND rs.book_id IS NULL"
+             WHERE rs.user_id = $1 AND rs.book_id IS NULL AND {READING_KINDS}"
         );
         let row = OrphanRow::find_by_statement(Statement::from_sql_and_values(
             backend,
@@ -737,9 +738,7 @@ impl ReadingStatsRepository {
     /// and nothing else.
     ///
     /// Those rows keep counting towards every total until the reader decides
-    /// otherwise; this is that decision. It is never run on a schedule: the
-    /// same rows can be reattached to their books by importing an export taken
-    /// before the delete, and a purge makes that impossible.
+    /// otherwise; this is that decision, so it is never run on a schedule.
     ///
     /// Sessions and completions go together in one transaction so the two
     /// logs cannot disagree about whether the history exists.
