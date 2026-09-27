@@ -32,14 +32,17 @@ use std::path::Path;
 /// and this value does not change, which is the whole point of exporting it
 /// instead of the absolute path.
 ///
-/// Falls back to the book's file name if the book path is not actually inside
-/// the library/series folders implied by its own rows (a data inconsistency
-/// that should not happen, but must not panic the export).
+/// Falls back to the book's file name when the book path is not inside the
+/// library folder its row names. That happens for a soft-deleted book after
+/// its library's root was changed, and exporting the absolute path instead
+/// would publish a server filesystem path that can never match anyway; the
+/// file-name step still can.
 pub fn series_relative_book_path(library_path: &str, series_path: &str, book_path: &str) -> String {
     let Ok(library_relative) = Path::new(book_path).strip_prefix(library_path) else {
-        // Should never happen on consistent data; keep the original path
-        // rather than mangling it through a failed strip.
-        return book_path.to_string();
+        return Path::new(book_path)
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| book_path.to_string());
     };
 
     let series_relative = if series_path.is_empty() {
@@ -94,11 +97,12 @@ mod tests {
     }
 
     #[test]
-    fn falls_back_gracefully_when_prefixes_do_not_match() {
-        // Should never happen, but must not panic on inconsistent data.
+    fn falls_back_to_the_file_name_when_prefixes_do_not_match() {
+        // A soft-deleted book under a library whose root has since changed.
+        // Never an absolute server path in the file.
         assert_eq!(
             series_relative_book_path("/other/root", "shonen/Naruto", "/library/root/v01.cbz"),
-            "/library/root/v01.cbz"
+            "v01.cbz"
         );
     }
 

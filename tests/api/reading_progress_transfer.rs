@@ -14,7 +14,7 @@ mod common;
 use chrono::{Duration, Utc};
 use codex::api::routes::v1::dto::{
     BookDisposition, ConflictPolicy, ExportBookDto, ExportCompletionDto, ExportProgressDto,
-    ExportSeriesDto, ExportSessionDto, HashMode, ImportReadingProgressRequest,
+    ExportSeriesDto, ExportSessionDto, FieldOutcome, HashMode, ImportReadingProgressRequest,
     ImportReadingProgressResponse, READING_PROGRESS_FORMAT, READING_PROGRESS_VERSION,
     ReadingProgressExportDocument, SeriesDisposition,
 };
@@ -581,6 +581,8 @@ async fn dry_run_reports_matches_but_writes_nothing() {
 async fn a_book_the_importing_user_cannot_see_resolves_as_unmatched_and_nothing_is_written() {
     let (db, _tmp) = setup_test_db().await;
     exercise_visibility_denies_unmatched(&db).await;
+    exercise_two_entries_one_book(&db).await;
+    exercise_same_instance_split(&db).await;
 }
 
 async fn exercise_visibility_denies_unmatched(db: &DatabaseConnection) {
@@ -609,7 +611,7 @@ async fn exercise_visibility_denies_unmatched(db: &DatabaseConnection) {
     .await
     .unwrap();
 
-    let tag = SharingTagRepository::create(db, "restricted", None)
+    let tag = SharingTagRepository::create(db, &format!("restricted-{}", Uuid::new_v4()), None)
         .await
         .unwrap();
     SharingTagRepository::add_tag_to_series(db, series.id, tag.id)
@@ -828,10 +830,305 @@ async fn hard_deleting_a_book_then_reimporting_reattaches_its_orphaned_history()
     );
 }
 
-/// The three properties that matter most, against PostgreSQL, sequenced in
-/// one test on purpose: `setup_test_db_postgres` truncates a database shared
-/// by the whole run, so two PostgreSQL tests running at once would delete
-/// each other's fixtures.
+// ============================================================================
+// Regressions: values the normal write paths reject, colliding entries, the
+// same-instance split, and a history larger than axum's default body limit.
+// ============================================================================
+
+fn series_doc(path: &str, name: &str, books: Vec<ExportBookDto>) -> ExportSeriesDto {
+    ExportSeriesDto {
+        external_ids: vec![],
+        library_relative_path: path.to_string(),
+        name: name.to_string(),
+        rating: None,
+        notes: None,
+        rating_updated_at: None,
+        books,
+    }
+}
+
+/// Ratings feed an average every user sees, so a file must not get around
+/// the range the rating endpoint enforces.
+#[tokio::test]
+async fn a_rating_outside_1_to_100_is_rejected_with_400() {
+    let (db, _tmp) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_user_id, token) = admin_and_token(&db, &state, "rater").await;
+
+    for rating in [0, 101, 2_000_000_000] {
+        let mut series = series_doc("S", "S", vec![]);
+        series.rating = Some(rating);
+        let app = create_test_router(state.clone()).await;
+        let request = post_json_request_with_auth(
+            "/api/v1/reading-progress/import",
+            &import_request(document(vec![series], false), true),
+            &token,
+        );
+        let (status, _body) = make_request(app, request).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "rating {rating}");
+    }
+}
+
+/// A moved file leaves its old row soft-deleted, the export carries both, and
+/// both resolve to the one current book. The second entry is decided against
+/// the first under the conflict policy instead of colliding with it, so the
+/// series commits and the dry run predicted exactly that.
+#[tokio::test]
+async fn two_entries_landing_on_one_book_are_resolved_by_the_policy() {
+    let (db, _tmp) = setup_test_db().await;
+    exercise_two_entries_one_book(&db).await;
+}
+
+async fn exercise_two_entries_one_book(db: &DatabaseConnection) {
+    let state = create_test_auth_state(db.clone()).await;
+    let (user_id, token) = admin_and_token(db, &state, "mover").await;
+
+    let library = LibraryRepository::create(db, "Lib", "/twice", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(db, library.id, "Twice Told", None)
+        .await
+        .unwrap();
+    let book = BookRepository::create(
+        db,
+        &book_model(
+            series.id,
+            library.id,
+            "/twice/Twice Told/Vol 01/v01.cbz",
+            "v01.cbz",
+            "",
+        ),
+        None,
+    )
+    .await
+    .unwrap();
+
+    let mut older = minimal_book_doc("v01.cbz", "v01.cbz", "", 5);
+    older.progress.as_mut().unwrap().updated_at = Utc::now() - Duration::days(2);
+    let newer = minimal_book_doc("Vol 01/v01.cbz", "v01.cbz", "", 9);
+    let doc = document(
+        vec![series_doc("Twice Told", "Twice Told", vec![newer, older])],
+        false,
+    );
+
+    let mut request = import_request(doc, true);
+    request.conflict_policy = ConflictPolicy::Newest;
+    let app = create_test_router(state.clone()).await;
+    let (status, preview): (StatusCode, Option<ImportReadingProgressResponse>) = make_json_request(
+        app,
+        post_json_request_with_auth("/api/v1/reading-progress/import", &request, &token),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let preview = preview.expect("dry-run body");
+    let outcomes: Vec<_> = preview.series[0].books.iter().map(|b| b.progress).collect();
+    assert_eq!(
+        outcomes,
+        vec![Some(FieldOutcome::Inserted), Some(FieldOutcome::Skipped)],
+        "the older entry loses to the one planned before it"
+    );
+
+    request.dry_run = false;
+    let app = create_test_router(state.clone()).await;
+    let (status, applied): (StatusCode, Option<ImportReadingProgressResponse>) = make_json_request(
+        app,
+        post_json_request_with_auth("/api/v1/reading-progress/import", &request, &token),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let applied = applied.expect("import body");
+    assert!(applied.series[0].committed, "{:?}", applied.series[0].error);
+
+    let progress = ReadProgressRepository::get_by_user_and_book(db, user_id, book.id)
+        .await
+        .unwrap()
+        .expect("progress landed");
+    assert_eq!(progress.current_page, 9, "the newer position wins");
+}
+
+/// Splitting on the same instance: the files move, a rescan soft-deletes the
+/// old books, and the reader imports before deleting the old library. The
+/// leftover series must not capture the match, and history still sitting on
+/// the soft-deleted books moves to the new ones rather than being skipped.
+#[tokio::test]
+async fn importing_before_the_old_library_is_deleted_moves_history_to_the_new_books() {
+    let (db, _tmp) = setup_test_db().await;
+    exercise_same_instance_split(&db).await;
+}
+
+async fn exercise_same_instance_split(db: &DatabaseConnection) {
+    use sea_orm::{ActiveModelTrait, Set};
+
+    let state = create_test_auth_state(db.clone()).await;
+    let (user_id, token) = admin_and_token(db, &state, "same-instance").await;
+
+    let old_library = LibraryRepository::create(db, "Manga", "/manga", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let old_series = SeriesRepository::create(db, old_library.id, "Split Series", None)
+        .await
+        .unwrap();
+    SeriesRepository::update_path(db, old_series.id, "shonen/Split Series".to_string())
+        .await
+        .unwrap();
+    let old_book = BookRepository::create(
+        db,
+        &book_model(
+            old_series.id,
+            old_library.id,
+            "/manga/shonen/Split Series/v01.cbz",
+            "v01.cbz",
+            "hash-split",
+        ),
+        None,
+    )
+    .await
+    .unwrap();
+
+    let completion =
+        ReadCompletionRepository::record(db, user_id, old_book.id, Utc::now(), Utc::now())
+            .await
+            .unwrap();
+    let session_id = Uuid::new_v4();
+    ReadProgressRepository::record_session(
+        db,
+        NewSession::from_client(
+            session_id,
+            user_id,
+            old_book.id,
+            "device-1",
+            None,
+            SessionKind::Progress,
+            Some(60_000),
+            Some(4),
+            Utc::now() - Duration::minutes(5),
+            Utc::now(),
+        )
+        .with_page(4),
+    )
+    .await
+    .unwrap();
+
+    // The files move to a new library; the old library's rescan marks the
+    // book deleted but nobody has deleted the old library yet.
+    let app = create_test_router(state.clone()).await;
+    let (_, exported): (StatusCode, Option<ReadingProgressExportDocument>) = make_json_request(
+        app,
+        get_request_with_auth("/api/v1/reading-progress/export", &token),
+    )
+    .await;
+    let exported = exported.expect("export body");
+
+    let mut gone: books::ActiveModel = old_book.clone().into();
+    gone.deleted = Set(true);
+    gone.update(db).await.unwrap();
+
+    let new_library = LibraryRepository::create(db, "Shonen", "/shonen", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let new_series = SeriesRepository::create(db, new_library.id, "Split Series", None)
+        .await
+        .unwrap();
+    let new_book = BookRepository::create(
+        db,
+        &book_model(
+            new_series.id,
+            new_library.id,
+            "/shonen/Split Series/v01.cbz",
+            "v01.cbz",
+            "hash-split",
+        ),
+        None,
+    )
+    .await
+    .unwrap();
+
+    let app = create_test_router(state.clone()).await;
+    let (status, response): (StatusCode, Option<ImportReadingProgressResponse>) =
+        make_json_request(
+            app,
+            post_json_request_with_auth(
+                "/api/v1/reading-progress/import",
+                &import_request(exported, false),
+                &token,
+            ),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let response = response.expect("import body");
+    assert_eq!(
+        response.series[0].matched_series_id,
+        Some(new_series.id),
+        "the leftover series with nothing on disk must not capture the match"
+    );
+    assert!(response.series[0].committed);
+
+    let completion = read_completions::Entity::find_by_id(completion.id)
+        .one(db)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(completion.book_id, Some(new_book.id));
+    let session = reading_sessions::Entity::find_by_id(session_id)
+        .one(db)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(session.book_id, Some(new_book.id));
+}
+
+/// A large history has to fit: axum's 2 MB default would stop around 2,500
+/// books with their sessions. A dry run keeps this fast; the limit is the
+/// point.
+#[tokio::test]
+async fn an_import_larger_than_two_megabytes_is_accepted() {
+    let (db, _tmp) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_user_id, token) = admin_and_token(&db, &state, "heavy").await;
+
+    let now = Utc::now();
+    let sessions: Vec<ExportSessionDto> = (0..12_000)
+        .map(|i| ExportSessionDto {
+            id: Uuid::new_v4(),
+            device_id: "device-with-a-reasonably-long-identifier".to_string(),
+            device_name: Some("A reader with a descriptive name".to_string()),
+            pass: 1,
+            kind: "progress".to_string(),
+            to_page: Some(i),
+            to_percentage: None,
+            active_duration_ms: Some(60_000),
+            duration_source: "measured".to_string(),
+            pages_read: Some(1),
+            client_started_at: now - Duration::minutes(1),
+            client_ended_at: now,
+            server_recorded_at: now,
+        })
+        .collect();
+    let mut book = minimal_book_doc("v01.cbz", "v01.cbz", "", 1);
+    book.sessions = Some(sessions);
+    let request = import_request(
+        document(vec![series_doc("Heavy", "Heavy", vec![book])], true),
+        true,
+    );
+    let body = serde_json::to_vec(&request).unwrap();
+    assert!(
+        body.len() > 2 * 1024 * 1024,
+        "fixture must exceed the default"
+    );
+
+    let app = create_test_router(state).await;
+    let (status, _body) = make_request(
+        app,
+        post_json_request_with_auth("/api/v1/reading-progress/import", &request, &token),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+}
+
+/// The scenarios that matter most, against PostgreSQL, sequenced in one test
+/// on purpose: `setup_test_db_postgres` truncates a database shared by the
+/// whole run, so two PostgreSQL tests running at once would delete each
+/// other's fixtures.
 #[tokio::test]
 #[ignore] // Requires PostgreSQL test database
 async fn reading_progress_transfer_postgres() {

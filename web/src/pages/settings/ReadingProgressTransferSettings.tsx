@@ -19,7 +19,7 @@ import {
   IconDownload,
   IconUpload,
 } from "@tabler/icons-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type {
   BookDisposition,
   ConflictPolicy,
@@ -34,11 +34,17 @@ import {
 } from "@/hooks/useReadingProgressTransfer";
 
 type ApiErrorLike = Error & {
-  response?: { data?: { message?: string; error?: string } };
+  response?: {
+    status?: number;
+    data?: { message?: string; error?: string };
+  };
 };
 
 function errorMessage(error: unknown, fallback: string): string {
   const err = error as ApiErrorLike;
+  if (err?.response?.status === 413) {
+    return "This file is larger than the server accepts for an import (64 MB).";
+  }
   return (
     err?.response?.data?.message ||
     err?.response?.data?.error ||
@@ -134,8 +140,12 @@ function ReportTable({ report }: { report: ImportReadingProgressResponse }) {
           </Table.Tr>
         </Table.Thead>
         <Table.Tbody>
-          {report.series.map((series) => (
-            <Table.Tr key={`${series.library_relative_path}-${series.name}`}>
+          {report.series.map((series, index) => (
+            // A split exports same-named series from several libraries, so
+            // path and name alone are not unique.
+            <Table.Tr
+              key={`${index}-${series.library_relative_path}-${series.name}`}
+            >
               <Table.Td>
                 <Text size="sm" fw={500}>
                   {series.name}
@@ -212,15 +222,23 @@ export function ReadingProgressTransferSettings() {
   const [report, setReport] = useState<ImportReadingProgressResponse | null>(
     null,
   );
-  const [previewedFor, setPreviewedFor] = useState<File | null>(null);
+  // Every change to the file or an option starts a new generation. A preview
+  // unlocks Apply only for the generation it was run against, so a dry run
+  // still in flight when an option changes cannot unlock Apply for options
+  // it never previewed.
+  const generation = useRef(0);
+  const [previewedGeneration, setPreviewedGeneration] = useState<number | null>(
+    null,
+  );
   const [importError, setImportError] = useState<string | null>(null);
 
   const exportMutation = useExportReadingProgress();
   const importMutation = useImportReadingProgress();
 
   const clearPreview = () => {
+    generation.current += 1;
     setReport(null);
-    setPreviewedFor(null);
+    setPreviewedGeneration(null);
     setImportError(null);
   };
 
@@ -240,6 +258,7 @@ export function ReadingProgressTransferSettings() {
 
   const runImport = (dryRun: boolean) => {
     if (!parsedDocument) return;
+    const requestedFor = generation.current;
     setImportError(null);
     importMutation.mutate(
       {
@@ -253,22 +272,27 @@ export function ReadingProgressTransferSettings() {
       },
       {
         onSuccess: (response) => {
+          if (requestedFor !== generation.current) return;
           setReport(response);
-          if (dryRun) setPreviewedFor(file);
-          else setPreviewedFor(null);
+          setPreviewedGeneration(dryRun ? requestedFor : null);
         },
         onError: (error) => {
+          if (requestedFor !== generation.current) return;
           setImportError(errorMessage(error, "Import failed."));
           setReport(null);
+          // A failed apply may have committed some series, so the old
+          // preview no longer describes what applying would do.
+          setPreviewedGeneration(null);
         },
       },
     );
   };
 
+  const previewed =
+    previewedGeneration !== null && previewedGeneration === generation.current;
   const canApply =
-    Boolean(parsedDocument) &&
-    previewedFor === file &&
-    !importMutation.isPending;
+    Boolean(parsedDocument) && previewed && !importMutation.isPending;
+  const busy = importMutation.isPending;
 
   return (
     <Stack gap="lg">
@@ -319,7 +343,11 @@ export function ReadingProgressTransferSettings() {
           <Title order={4}>Import</Title>
 
           <Group align="flex-end">
-            <FileButton onChange={handleFile} accept="application/json">
+            <FileButton
+              onChange={handleFile}
+              accept="application/json"
+              disabled={busy}
+            >
               {(props) => (
                 <Button
                   {...props}
@@ -351,6 +379,7 @@ export function ReadingProgressTransferSettings() {
                 { value: "overwrite", label: "Overwrite" },
               ]}
               value={conflictPolicy}
+              disabled={busy}
               onChange={(value) => {
                 if (value) setConflictPolicy(value as ConflictPolicy);
                 clearPreview();
@@ -365,6 +394,7 @@ export function ReadingProgressTransferSettings() {
                 { value: "match", label: "Match (rescue a bulk rename)" },
               ]}
               value={hashMode}
+              disabled={busy}
               onChange={(value) => {
                 if (value) setHashMode(value as HashMode);
                 clearPreview();
@@ -374,8 +404,9 @@ export function ReadingProgressTransferSettings() {
 
           <Checkbox
             label="Reattach orphaned sessions and completions"
-            description="When a session or completion's id already exists with no book attached (its book was hard-deleted after export), adopt it instead of skipping it."
+            description="When a session or completion already exists as yours but is not on a book that is still on disk (its book was deleted, or its file moved), move it onto the matched book instead of skipping it."
             checked={reattachSessions}
+            disabled={busy}
             onChange={(event) => {
               setReattachSessions(event.currentTarget.checked);
               clearPreview();
@@ -385,6 +416,7 @@ export function ReadingProgressTransferSettings() {
             label="Accept filename-stem matches"
             description="Apply a book match found only by filename stem (e.g. a .cbr renamed to .cbz). Two files can share a stem, so this is off by default."
             checked={acceptStemMatches}
+            disabled={busy}
             onChange={(event) => {
               setAcceptStemMatches(event.currentTarget.checked);
               clearPreview();
@@ -405,14 +437,14 @@ export function ReadingProgressTransferSettings() {
             <Button
               variant="default"
               disabled={!parsedDocument}
-              loading={importMutation.isPending && previewedFor !== file}
+              loading={busy && !previewed}
               onClick={() => runImport(true)}
             >
               Preview (dry run)
             </Button>
             <Button
               disabled={!canApply}
-              loading={importMutation.isPending && previewedFor === file}
+              loading={busy && previewed}
               onClick={() => runImport(false)}
             >
               Apply import

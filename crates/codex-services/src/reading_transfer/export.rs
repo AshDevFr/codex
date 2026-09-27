@@ -282,7 +282,9 @@ pub async fn export_reading_progress(
 
         series_docs.push(ExportSeriesDto {
             external_ids,
-            library_relative_path: series.path.clone(),
+            // Always `/`, whatever the server stores, so the file matches on
+            // an instance running on another platform.
+            library_relative_path: series.path.replace('\\', "/"),
             name: series.name.clone(),
             rating: rating_row.map(|r| r.rating),
             notes: rating_row.and_then(|r| r.notes.clone()),

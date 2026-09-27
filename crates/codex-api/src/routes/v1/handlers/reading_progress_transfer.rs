@@ -105,7 +105,8 @@ pub async fn export_reading_progress(
     request_body = ImportReadingProgressRequest,
     responses(
         (status = 200, description = "Import processed (or, for a dry run, previewed)", body = ImportReadingProgressResponse),
-        (status = 400, description = "Unknown export format, or a version newer than this server supports"),
+        (status = 400, description = "Unknown export format, a version newer than this server supports, or a value the normal write paths reject"),
+        (status = 413, description = "The file is larger than the import limit"),
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden"),
     ),
@@ -135,9 +136,9 @@ pub async fn import_reading_progress(
         codex_services::import_reading_progress(&state.db, auth.user_id, &request.file, &options)
             .await
             .map_err(|err| match err {
-                ImportError::UnknownFormat(_) | ImportError::UnsupportedVersion(_) => {
-                    ApiError::BadRequest(err.to_string())
-                }
+                ImportError::UnknownFormat(_)
+                | ImportError::UnsupportedVersion(_)
+                | ImportError::InvalidValue(_) => ApiError::BadRequest(err.to_string()),
                 ImportError::Database(source) => {
                     ApiError::Internal(format!("Failed to import reading progress: {source}"))
                 }

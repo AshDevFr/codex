@@ -229,4 +229,67 @@ describe("ReadingProgressTransferSettings", () => {
       );
     });
   });
+
+  /// Options cannot change under a dry run in flight, or its result would
+  /// unlock Apply for options it never previewed.
+  it("locks the options while a dry run is in flight", async () => {
+    let finish: (value: ImportReadingProgressResponse) => void = () => {};
+    importProgress.mockReturnValue(
+      new Promise<ImportReadingProgressResponse>((resolve) => {
+        finish = resolve;
+      }),
+    );
+    const user = userEvent.setup();
+    renderWithProviders(<ReadingProgressTransferSettings />);
+
+    await uploadDocument(user);
+    await user.click(
+      screen.getByRole("button", { name: /preview \(dry run\)/i }),
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("checkbox", { name: /accept filename-stem matches/i }),
+      ).toBeDisabled(),
+    );
+
+    finish(dryRunResponse());
+    await waitFor(() =>
+      expect(
+        screen.getByRole("checkbox", { name: /accept filename-stem matches/i }),
+      ).toBeEnabled(),
+    );
+    expect(screen.getByRole("button", { name: /apply import/i })).toBeEnabled();
+  });
+
+  /// A failed apply may have committed some series, so the old preview no
+  /// longer describes what a second apply would do.
+  it("relocks Apply after an apply fails", async () => {
+    importProgress.mockResolvedValue(dryRunResponse());
+    const user = userEvent.setup();
+    renderWithProviders(<ReadingProgressTransferSettings />);
+
+    await uploadDocument(user);
+    await user.click(
+      screen.getByRole("button", { name: /preview \(dry run\)/i }),
+    );
+    const applyButton = await screen.findByRole("button", {
+      name: /apply import/i,
+    });
+    await waitFor(() => expect(applyButton).toBeEnabled());
+
+    importProgress.mockRejectedValue(
+      Object.assign(new Error("Request failed"), {
+        response: { status: 413 },
+      }),
+    );
+    await user.click(applyButton);
+
+    expect(
+      await screen.findByText(/larger than the server accepts/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /apply import/i }),
+    ).toBeDisabled();
+  });
 });

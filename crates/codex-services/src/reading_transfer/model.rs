@@ -202,9 +202,10 @@ pub struct ImportReadingProgressRequest {
     pub source_preference: Vec<String>,
     #[serde(default)]
     pub conflict_policy: ConflictPolicy,
-    /// When a session or completion's id collides with an existing row whose
-    /// `book_id` is `NULL` (the book was hard-deleted after export), adopt it
-    /// by setting `book_id` instead of skipping it as a duplicate.
+    /// When a session or completion in the file already exists as the
+    /// importer's own row but is not on a live book (its book was hard-deleted,
+    /// leaving `book_id` null, or the scanner marked it deleted after the file
+    /// moved), move it onto the matched book instead of skipping it.
     #[serde(default = "default_reattach_sessions")]
     pub reattach_sessions: bool,
     /// A stem match (`v01.cbr` renamed to `v01.cbz`) is reported either way,

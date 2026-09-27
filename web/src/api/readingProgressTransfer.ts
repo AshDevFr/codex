@@ -19,6 +19,8 @@ export type ConflictPolicy = components["schemas"]["ConflictPolicy"];
 export type SeriesDisposition = components["schemas"]["SeriesDisposition"];
 export type BookDisposition = components["schemas"]["BookDisposition"];
 
+const IMPORT_TIMEOUT_MS = 10 * 60_000;
+
 export const readingProgressTransferApi = {
   /** Export the current user's reading progress as a downloadable document. */
   exportProgress: async (
@@ -41,6 +43,9 @@ export const readingProgressTransferApi = {
     const response = await api.post<ImportReadingProgressResponse>(
       "/reading-progress/import",
       request,
+      // A large history applies one series at a time; the client-wide 30 s
+      // timeout would abandon it part-way and lose the report of what landed.
+      { timeout: IMPORT_TIMEOUT_MS },
     );
     return response.data;
   },
