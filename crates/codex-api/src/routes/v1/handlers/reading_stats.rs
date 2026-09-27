@@ -232,8 +232,10 @@ pub async fn get_orphaned_reading_history(
 /// the series and format breakdowns show it as one "removed from library" row.
 /// This discards those rows for the caller, and only for the caller.
 ///
-/// Irreversible. Only history already detached from any book is touched;
-/// attributed reading is never affected.
+/// Irreversible, and it forecloses the other way out: importing a reading
+/// progress export taken before the delete puts those sessions back on their
+/// books once the files are scanned again. Only history already detached from
+/// any book is touched; attributed reading is never affected.
 #[utoipa::path(
     delete,
     path = "/api/v1/reading-stats/orphaned",
