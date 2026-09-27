@@ -465,6 +465,7 @@ mod tests {
             name: name.to_string(),
             rating: None,
             notes: None,
+            rating_updated_at: None,
             books: vec![],
         }
     }

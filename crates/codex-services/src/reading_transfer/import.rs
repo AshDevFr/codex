@@ -183,11 +183,13 @@ enum RatingDecision {
     Insert {
         rating: i32,
         notes: Option<String>,
+        updated_at: DateTime<Utc>,
     },
     Update {
         existing: user_series_ratings::Model,
         rating: i32,
         notes: Option<String>,
+        updated_at: DateTime<Utc>,
     },
     Skip,
 }
@@ -217,19 +219,39 @@ fn decide_rating(
         return RatingDecision::NoOp;
     };
     let notes = series_doc.notes.clone();
+    // The rating keeps the time it was actually set, so a second import of the
+    // same file compares equal and is skipped rather than rewritten.
+    let updated_at = series_doc.rating_updated_at.unwrap_or_else(Utc::now);
 
     match existing {
-        None => RatingDecision::Insert { rating, notes },
-        Some(existing) => match policy {
-            ConflictPolicy::SkipExisting => RatingDecision::Skip,
-            ConflictPolicy::Overwrite | ConflictPolicy::Newest | ConflictPolicy::Furthest => {
+        None => RatingDecision::Insert {
+            rating,
+            notes,
+            updated_at,
+        },
+        Some(existing) => {
+            let replace = match policy {
+                ConflictPolicy::SkipExisting => false,
+                ConflictPolicy::Overwrite => true,
+                // A rating has no position to be "further" along, so furthest
+                // reads as newest. A file without the timestamp cannot show it
+                // is newer, and an old export must not silently undo a rating
+                // changed since, so it loses.
+                ConflictPolicy::Newest | ConflictPolicy::Furthest => series_doc
+                    .rating_updated_at
+                    .is_some_and(|imported| imported > existing.updated_at),
+            };
+            if replace {
                 RatingDecision::Update {
                     existing: existing.clone(),
                     rating,
                     notes,
+                    updated_at,
                 }
+            } else {
+                RatingDecision::Skip
             }
-        },
+        }
     }
 }
 
@@ -584,16 +606,19 @@ async fn apply_rating(
 ) -> Result<()> {
     match decision {
         RatingDecision::NoOp | RatingDecision::Skip => Ok(()),
-        RatingDecision::Insert { rating, notes } => {
-            let now = Utc::now();
+        RatingDecision::Insert {
+            rating,
+            notes,
+            updated_at,
+        } => {
             user_series_ratings::ActiveModel {
                 id: Set(Uuid::new_v4()),
                 user_id: Set(user_id),
                 series_id: Set(series_id),
                 rating: Set(*rating),
                 notes: Set(notes.clone()),
-                created_at: Set(now),
-                updated_at: Set(now),
+                created_at: Set(Utc::now()),
+                updated_at: Set(*updated_at),
             }
             .insert(txn)
             .await?;
@@ -603,11 +628,12 @@ async fn apply_rating(
             existing,
             rating,
             notes,
+            updated_at,
         } => {
             let mut active: user_series_ratings::ActiveModel = existing.clone().into();
             active.rating = Set(*rating);
             active.notes = Set(notes.clone());
-            active.updated_at = Set(Utc::now());
+            active.updated_at = Set(*updated_at);
             active.update(txn).await?;
             Ok(())
         }
@@ -977,12 +1003,17 @@ mod tests {
     }
 
     fn series_with_rating(rating: Option<i32>) -> ExportSeriesDto {
+        rated_at(rating, None)
+    }
+
+    fn rated_at(rating: Option<i32>, when: Option<DateTime<Utc>>) -> ExportSeriesDto {
         ExportSeriesDto {
             external_ids: vec![],
             library_relative_path: "s".to_string(),
             name: "S".to_string(),
             rating,
             notes: None,
+            rating_updated_at: when,
             books: vec![],
         }
     }
@@ -1016,18 +1047,43 @@ mod tests {
     }
 
     #[test]
-    fn rating_overwrite_and_newest_and_furthest_all_replace() {
+    fn rating_overwrite_always_replaces() {
         let existing = rating_row(40);
         let doc = series_with_rating(Some(90));
-        for policy in [
-            ConflictPolicy::Overwrite,
-            ConflictPolicy::Newest,
-            ConflictPolicy::Furthest,
-        ] {
+        assert!(matches!(
+            decide_rating(Some(&existing), &doc, ConflictPolicy::Overwrite),
+            RatingDecision::Update { .. }
+        ));
+    }
+
+    /// The default policy must not let an old export undo a rating the reader
+    /// changed after taking it.
+    #[test]
+    fn rating_newest_replaces_only_a_strictly_older_rating() {
+        let existing = rating_row(40); // updated at t(0)
+        for policy in [ConflictPolicy::Newest, ConflictPolicy::Furthest] {
             assert!(matches!(
-                decide_rating(Some(&existing), &doc, policy),
+                decide_rating(Some(&existing), &rated_at(Some(90), Some(t(10))), policy),
                 RatingDecision::Update { .. }
             ));
+            assert!(matches!(
+                decide_rating(Some(&existing), &rated_at(Some(90), Some(t(-10))), policy),
+                RatingDecision::Skip
+            ));
+            assert!(
+                matches!(
+                    decide_rating(Some(&existing), &rated_at(Some(90), Some(t(0))), policy),
+                    RatingDecision::Skip
+                ),
+                "an equal timestamp is the same rating re-imported"
+            );
+            assert!(
+                matches!(
+                    decide_rating(Some(&existing), &series_with_rating(Some(90)), policy),
+                    RatingDecision::Skip
+                ),
+                "without a timestamp the file cannot show it is newer"
+            );
         }
     }
 

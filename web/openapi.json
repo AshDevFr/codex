@@ -10570,7 +10570,7 @@
           "Reading Statistics"
         ],
         "summary": "Delete the caller's reading history for books that no longer exist",
-        "description": "When a book is deleted from the server its reading sessions and finished\nread-throughs are kept, so the time still counts towards every statistic;\nthe series and format breakdowns show it as one \"removed from library\" row.\nThis discards those rows for the caller, and only for the caller.\n\nIrreversible. Only history already detached from any book is touched;\nattributed reading is never affected.",
+        "description": "When a book is deleted from the server its reading sessions and finished\nread-throughs are kept, so the time still counts towards every statistic;\nthe series and format breakdowns show it as one \"removed from library\" row.\nThis discards those rows for the caller, and only for the caller.\n\nIrreversible, and it forecloses the other way out: importing a reading\nprogress export taken before the delete puts those sessions back on their\nbooks once the files are scanned again. Only history already detached from\nany book is touched; attributed reading is never affected.",
         "operationId": "purge_orphaned_reading_history",
         "responses": {
           "200": {
@@ -30921,6 +30921,14 @@
               "null"
             ],
             "format": "int32"
+          },
+          "rating_updated_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When the rating was last changed. The `newest` conflict policy needs it\nto tell a stale rating from a fresh one; a file without it never\noverwrites an existing rating except under `overwrite`."
           }
         }
       },

@@ -131,6 +131,11 @@ pub struct ExportSeriesDto {
     pub rating: Option<i32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub notes: Option<String>,
+    /// When the rating was last changed. The `newest` conflict policy needs it
+    /// to tell a stale rating from a fresh one; a file without it never
+    /// overwrites an existing rating except under `overwrite`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rating_updated_at: Option<DateTime<Utc>>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub books: Vec<ExportBookDto>,
 }

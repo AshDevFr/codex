@@ -144,8 +144,14 @@ removed books** notice above the series panel, whatever dates you are viewing.
 If you would rather that reading stopped counting, use **Delete** on that
 notice. The confirmation states how many sittings, how much reading time and
 how many finished read-throughs will go, across **all** dates rather than only
-the ones on screen, because that is what is deleted. It is permanent, affects only your own history, and never
-touches reading attributed to a book that still exists.
+the ones on screen, because that is what is deleted. It is permanent, affects
+only your own history, and never touches reading attributed to a book that
+still exists.
+
+Before deleting, check whether you have a reading progress export taken while
+those books still existed. Importing it after the files are scanned again puts
+this reading back on its books instead of discarding it; see
+[Carrying Reading Progress Across a Library Split](./backup-migration/reading-progress-transfer.md).
 
 The same is available through the API: `GET /api/v1/reading-stats/orphaned`
 returns the totals, and `DELETE /api/v1/reading-stats/orphaned` removes them.

@@ -3446,8 +3446,10 @@ export interface paths {
          *     the series and format breakdowns show it as one "removed from library" row.
          *     This discards those rows for the caller, and only for the caller.
          *
-         *     Irreversible. Only history already detached from any book is touched;
-         *     attributed reading is never affected.
+         *     Irreversible, and it forecloses the other way out: importing a reading
+         *     progress export taken before the delete puts those sessions back on their
+         *     books once the files are scanned again. Only history already detached from
+         *     any book is touched; attributed reading is never affected.
          */
         delete: operations["purge_orphaned_reading_history"];
         options?: never;
@@ -12399,6 +12401,13 @@ export interface components {
             notes?: string | null;
             /** Format: int32 */
             rating?: number | null;
+            /**
+             * Format: date-time
+             * @description When the rating was last changed. The `newest` conflict policy needs it
+             *     to tell a stale rating from a fresh one; a file without it never
+             *     overwrites an existing rating except under `overwrite`.
+             */
+            rating_updated_at?: string | null;
         };
         /**
          * @description One row from the reading-session log. `r2_progression` is deliberately

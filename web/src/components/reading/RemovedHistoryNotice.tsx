@@ -155,6 +155,13 @@ export function RemovedHistoryNotice() {
               only the ones shown. It cannot be undone.
             </Alert>
           )}
+          {settled && !nothingLeft && (
+            <Text size="sm" c="dimmed">
+              If you have a reading progress export taken before these books
+              were removed, importing it puts this reading back on its books
+              instead.
+            </Text>
+          )}
           {nothingLeft && (
             <Text size="sm" c="dimmed">
               There is no removed history left to delete.

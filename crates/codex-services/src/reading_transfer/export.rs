@@ -20,8 +20,8 @@ use uuid::Uuid;
 
 use codex_db::entities::{books, read_completions, read_progress, reading_sessions};
 use codex_db::repositories::{
-    BookRepository, LibraryRepository, ReadProgressRepository, SeriesExternalIdRepository,
-    SeriesRepository, UserSeriesRatingRepository,
+    LibraryRepository, ReadProgressRepository, SeriesExternalIdRepository, SeriesRepository,
+    UserSeriesRatingRepository,
 };
 
 use super::model::{
@@ -47,6 +47,33 @@ async fn completions_for_user(
         .all(db)
         .await?;
     Ok(rows)
+}
+
+/// The books a user's history points at, **including soft-deleted ones**.
+///
+/// `BookRepository::get_by_ids` hides books the scanner has marked deleted,
+/// which is right for browsing and wrong here. Splitting a library usually
+/// moves the files first, the next scan of the old library marks every moved
+/// book deleted without purging it, and that is exactly when the reader takes
+/// the export. Hiding them would export nothing for the books the file exists
+/// to carry across.
+///
+/// Batched so a long history stays under the engines' bind-parameter limits.
+async fn books_including_soft_deleted(
+    db: &DatabaseConnection,
+    ids: &[Uuid],
+) -> Result<Vec<books::Model>> {
+    const BATCH: usize = 1_000;
+    let mut found = Vec::with_capacity(ids.len());
+    for chunk in ids.chunks(BATCH) {
+        found.extend(
+            books::Entity::find()
+                .filter(books::Column::Id.is_in(chunk.to_vec()))
+                .all(db)
+                .await?,
+        );
+    }
+    Ok(found)
 }
 
 /// Every session for `user_id` whose book has not been hard-deleted.
@@ -97,7 +124,7 @@ pub async fn export_reading_progress(
         }
     }
     let book_ids: Vec<Uuid> = book_id_set.into_iter().collect();
-    let books = BookRepository::get_by_ids(db, &book_ids).await?;
+    let books = books_including_soft_deleted(db, &book_ids).await?;
 
     let mut series_id_set: HashSet<Uuid> = books.iter().map(|b| b.series_id).collect();
     for r in &ratings {
@@ -259,6 +286,7 @@ pub async fn export_reading_progress(
             name: series.name.clone(),
             rating: rating_row.map(|r| r.rating),
             notes: rating_row.and_then(|r| r.notes.clone()),
+            rating_updated_at: rating_row.map(|r| r.updated_at),
             books: book_docs,
         });
     }
@@ -279,7 +307,8 @@ mod tests {
     use codex_db::ScanningStrategy;
     use codex_db::entities::reading_sessions::SessionKind;
     use codex_db::repositories::{
-        LibraryRepository, NewSession, ReadCompletionRepository, SeriesRepository, UserRepository,
+        BookRepository, LibraryRepository, NewSession, ReadCompletionRepository, SeriesRepository,
+        UserRepository,
     };
     use codex_db::test_helpers::create_test_db;
 
@@ -361,6 +390,73 @@ mod tests {
         assert_eq!(book_doc.path, "Vol 01/v01.cbz");
         assert_eq!(book_doc.file_hash, "");
         assert!(book_doc.progress.is_some());
+    }
+
+    /// Splitting a library usually moves the files first, and the next scan of
+    /// the old library marks every moved book deleted without purging it. That
+    /// is exactly when a reader takes the export, so soft-deleted books must be
+    /// in it: leaving them out would export nothing for the very books the
+    /// file exists to carry across.
+    #[tokio::test]
+    async fn exports_books_the_scanner_has_soft_deleted() {
+        use sea_orm::{ActiveModelTrait, Set};
+
+        let (db, _tmp) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let user = make_user(conn).await;
+
+        let library = LibraryRepository::create(conn, "Lib", "/manga", ScanningStrategy::Default)
+            .await
+            .unwrap();
+        let series = SeriesRepository::create(conn, library.id, "Naruto", None)
+            .await
+            .unwrap();
+        SeriesRepository::update_path(conn, series.id, "shonen/Naruto".to_string())
+            .await
+            .unwrap();
+        let book = books::Model {
+            id: Uuid::new_v4(),
+            series_id: series.id,
+            library_id: library.id,
+            path: "/manga/shonen/Naruto/v01.cbz".to_string(),
+            file_name: "v01.cbz".to_string(),
+            file_size: 10,
+            file_hash: "h".to_string(),
+            partial_hash: "p".to_string(),
+            format: "cbz".to_string(),
+            page_count: 20,
+            deleted: false,
+            analyzed: true,
+            analysis_error: None,
+            analysis_errors: None,
+            modified_at: Utc::now(),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            thumbnail_path: None,
+            thumbnail_generated_at: None,
+            koreader_hash: None,
+            epub_positions: None,
+            epub_spine_items: None,
+        };
+        let book = BookRepository::create(conn, &book, None).await.unwrap();
+        ReadProgressRepository::upsert(conn, user, book.id, 12, false)
+            .await
+            .unwrap();
+
+        let mut missing: books::ActiveModel = book.clone().into();
+        missing.deleted = Set(true);
+        missing.update(conn).await.unwrap();
+
+        let doc = export_reading_progress(conn, user, true).await.unwrap();
+
+        assert_eq!(
+            doc.series.len(),
+            1,
+            "the soft-deleted book's series is exported"
+        );
+        let book_doc = &doc.series[0].books[0];
+        assert_eq!(book_doc.path, "v01.cbz");
+        assert_eq!(book_doc.progress.as_ref().unwrap().current_page, 12);
     }
 
     #[tokio::test]

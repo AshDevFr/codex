@@ -738,7 +738,9 @@ impl ReadingStatsRepository {
     /// and nothing else.
     ///
     /// Those rows keep counting towards every total until the reader decides
-    /// otherwise; this is that decision, so it is never run on a schedule.
+    /// otherwise; this is that decision, so it is never run on a schedule. A
+    /// reading-progress import can reattach these rows to their books, and a
+    /// purge makes that impossible.
     ///
     /// Sessions and completions go together in one transaction so the two
     /// logs cannot disagree about whether the history exists.

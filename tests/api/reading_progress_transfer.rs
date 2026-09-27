@@ -471,9 +471,14 @@ async fn exercise_idempotent_import(db: &DatabaseConnection) {
         name: "Series".to_string(),
         rating: Some(77),
         notes: None,
+        rating_updated_at: None,
         books: vec![book_doc],
     };
     let doc = document(vec![series_doc], true);
+
+    // Relative to what is already there: the PostgreSQL run shares one
+    // database across several scenarios.
+    let before = table_counts(db).await;
 
     let app = create_test_router(state.clone()).await;
     let request = post_json_request_with_auth(
@@ -486,7 +491,11 @@ async fn exercise_idempotent_import(db: &DatabaseConnection) {
     assert_eq!(status, StatusCode::OK);
 
     let counts_after_first = table_counts(db).await;
-    assert_eq!(counts_after_first, (1, 1, 1, 1));
+    assert_eq!(
+        counts_after_first,
+        (before.0 + 1, before.1 + 1, before.2 + 1, before.3 + 1),
+        "the first import writes one row to each table"
+    );
 
     let app = create_test_router(state.clone()).await;
     let request = post_json_request_with_auth(
@@ -537,6 +546,7 @@ async fn dry_run_reports_matches_but_writes_nothing() {
         name: "Series".to_string(),
         rating: Some(50),
         notes: None,
+        rating_updated_at: None,
         books: vec![minimal_book_doc("v01.cbz", "v01.cbz", "h1", 9)],
     };
     let doc = document(vec![series_doc], false);
@@ -574,6 +584,8 @@ async fn a_book_the_importing_user_cannot_see_resolves_as_unmatched_and_nothing_
 }
 
 async fn exercise_visibility_denies_unmatched(db: &DatabaseConnection) {
+    // Relative, because the PostgreSQL run shares one database across scenarios.
+    let before = table_counts(db).await;
     let state = create_test_auth_state(db.clone()).await;
     let (user_id, token) = admin_and_token(db, &state, "restricted-reader").await;
 
@@ -613,6 +625,7 @@ async fn exercise_visibility_denies_unmatched(db: &DatabaseConnection) {
         name: "Hidden".to_string(),
         rating: Some(100),
         notes: None,
+        rating_updated_at: None,
         books: vec![minimal_book_doc("v01.cbz", "v01.cbz", "h1", 1)],
     };
     let doc = document(vec![series_doc], false);
@@ -640,8 +653,7 @@ async fn exercise_visibility_denies_unmatched(db: &DatabaseConnection) {
 
     let counts = table_counts(db).await;
     assert_eq!(
-        counts,
-        (0, 0, 0, 0),
+        counts, before,
         "nothing may be written against an invisible book"
     );
 }
