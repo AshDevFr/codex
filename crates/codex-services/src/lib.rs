@@ -31,6 +31,7 @@ pub mod plugin_file_storage;
 pub mod plugin_metrics;
 pub mod rate_limiter;
 pub mod read_progress;
+pub mod reading_transfer;
 pub mod refresh_token;
 pub mod release;
 pub mod scheduler_handle;
@@ -58,6 +59,8 @@ pub use pdf_handle_cache::{HandleCacheEntrySnapshot, HandleCacheSnapshot, PdfHan
 pub use pdf_handle_cache_subscriber::PdfHandleCacheSubscriber;
 pub use rate_limiter::RateLimiterService;
 pub use read_progress::ReadProgressService;
+pub use reading_transfer::export::export_reading_progress;
+pub use reading_transfer::import::{ImportError, ImportOptions, import_reading_progress};
 #[allow(unused_imports)]
 pub use refresh_token::{IssuedRefreshToken, RefreshTokenError, RefreshTokenService};
 pub use settings::SettingsService;

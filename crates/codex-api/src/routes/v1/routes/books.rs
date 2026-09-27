@@ -193,6 +193,16 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             get(handlers::get_orphaned_reading_history)
                 .delete(handlers::purge_orphaned_reading_history),
         )
+        // Carrying reading state across a library reorganisation or a move
+        // to a different Codex instance.
+        .route(
+            "/reading-progress/export",
+            get(handlers::export_reading_progress),
+        )
+        .route(
+            "/reading-progress/import",
+            post(handlers::import_reading_progress),
+        )
         // Mark as read/unread routes
         .route("/books/{book_id}/read", post(handlers::mark_book_as_read))
         .route(

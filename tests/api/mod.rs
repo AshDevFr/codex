@@ -50,6 +50,7 @@ mod rate_limit;
 mod read_history;
 mod read_progress;
 mod reading_direction;
+mod reading_progress_transfer;
 mod reading_sessions;
 mod reading_stats;
 mod readlists;
