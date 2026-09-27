@@ -21,9 +21,11 @@ PostgreSQL's native `uuid`/`jsonb`, so a byte-level copy would corrupt data. The
 `export`/`import`/`copy` commands translate these correctly.
 :::
 
-:::note Not the same as "Data Exports"
+:::note Not the same as "Data Exports" or reading-progress transfer
 This is database-level backup/transfer. The user-facing [Data Exports](../exports)
-feature (exporting a series to JSON/CSV) is unrelated.
+feature (exporting a series to JSON/CSV) is unrelated, and so is
+[carrying one user's reading progress across a library split](./reading-progress-transfer.md),
+which moves far less data through the web API rather than the shell.
 :::
 
 ## `export`

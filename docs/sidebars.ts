@@ -108,6 +108,7 @@ const sidebars: SidebarsConfig = {
       items: [
         "backup-migration/export-import-copy",
         "backup-migration/migrate-postgres",
+        "backup-migration/reading-progress-transfer",
       ],
     },
     {
