@@ -4,7 +4,7 @@
 mod common;
 
 use chrono::{DateTime, Duration, TimeZone, Utc};
-use codex::api::routes::v1::dto::ReadingStatsResponse;
+use codex::api::routes::v1::dto::{PurgedOrphanedHistoryDto, ReadingStatsResponse};
 use codex::db::ScanningStrategy;
 use codex::db::repositories::{
     BookRepository, LibraryRepository, SeriesRepository, UserRepository,
@@ -191,8 +191,8 @@ async fn one_response_carries_every_breakdown() {
     assert_eq!(stats.formats.len(), 2);
 
     assert_eq!(stats.devices[0].device_id, "phone", "ranked by time read");
-    assert_eq!(stats.series[0].series_name, "Berserk");
-    assert_eq!(stats.formats[0].format, "cbz");
+    assert_eq!(stats.series[0].series_name.as_deref(), Some("Berserk"));
+    assert_eq!(stats.formats[0].format.as_deref(), Some("cbz"));
 }
 
 /// A reader with no history gets an empty dashboard rather than an error.
@@ -364,6 +364,7 @@ async fn the_sort_key_decides_which_series_survive_the_limit() {
             body.expect("expected a JSON body").series[0]
                 .series_name
                 .clone()
+                .unwrap_or_default()
         }
     };
 
@@ -637,4 +638,142 @@ async fn the_response_reports_the_window_it_used() {
         (stats.to - stats.from).num_days() >= 89,
         "the default window covers roughly the last ninety days"
     );
+}
+
+// ============================================================================
+// Reading whose book was deleted
+// ============================================================================
+
+async fn hard_delete_book(db: &sea_orm::DatabaseConnection, book_id: Uuid) {
+    use sea_orm::EntityTrait;
+    codex::db::entities::books::Entity::delete_by_id(book_id)
+        .exec(db)
+        .await
+        .unwrap();
+}
+
+async fn orphaned_completions(db: &sea_orm::DatabaseConnection, user_id: Uuid) -> u64 {
+    use codex::db::entities::read_completions;
+    use sea_orm::{ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter};
+    read_completions::Entity::find()
+        .filter(read_completions::Column::UserId.eq(user_id))
+        .filter(read_completions::Column::BookId.is_null())
+        .count(db)
+        .await
+        .unwrap()
+}
+
+async fn purge_orphans(
+    state: std::sync::Arc<codex::api::extractors::AuthState>,
+    token: &str,
+) -> (StatusCode, Option<PurgedOrphanedHistoryDto>) {
+    let app = create_test_router(state).await;
+    let request = delete_request_with_auth("/api/v1/reading-stats/orphaned", token);
+    make_json_request(app, request).await
+}
+
+/// Reading a deleted book keeps counting, and the series and format panels
+/// show it as one flagged row rather than dropping it or naming a null series.
+#[tokio::test]
+async fn deleted_books_reading_shows_as_one_flagged_row() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let kept = book_in_series(&db, "Berserk", "cbz").await;
+    let removed = book_in_series(&db, "Dune", "epub").await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_user_id, token) = admin_and_token(&db, &state, "reader").await;
+
+    record_session(state.clone(), &token, kept.id, "phone", 60, at(3)).await;
+    record_session(state.clone(), &token, removed.id, "phone", 20, at(4)).await;
+    hard_delete_book(&db, removed.id).await;
+
+    let window = format!("?from={}&to={}", q(at(1)), q(at(30)));
+    let (status, response) = fetch_stats(state, &token, &window).await;
+    let stats = response.expect("expected a JSON body");
+    assert_eq!(status, StatusCode::OK);
+
+    assert_eq!(
+        stats.summary.duration.total_ms,
+        80 * MINUTE_MS,
+        "the deleted book's time still counts"
+    );
+
+    assert_eq!(stats.series.len(), 2);
+    assert!(!stats.series[0].removed_from_library);
+    assert_eq!(stats.series[0].series_name.as_deref(), Some("Berserk"));
+    let bucket = &stats.series[1];
+    assert!(bucket.removed_from_library);
+    assert!(bucket.series_id.is_none());
+    assert!(bucket.series_name.is_none());
+    assert_eq!(bucket.duration.total_ms, 20 * MINUTE_MS);
+
+    let formats: Vec<_> = stats
+        .formats
+        .iter()
+        .map(|f| (f.format.clone(), f.removed_from_library))
+        .collect();
+    assert_eq!(
+        formats,
+        vec![(Some("cbz".to_string()), false), (None, true)],
+        "the epub is gone, so its time is in the removed row, ranked like any other"
+    );
+}
+
+/// Purging removes exactly the caller's orphaned history: their attributed
+/// reading stays, and another reader's orphans of the same book are untouched.
+#[tokio::test]
+async fn purging_orphaned_history_is_scoped_to_the_caller() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let kept = book_in_series(&db, "Berserk", "cbz").await;
+    let removed = book_in_series(&db, "Dune", "epub").await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (purger, purger_token) = admin_and_token(&db, &state, "purger").await;
+    let (_bystander, bystander_token) = admin_and_token(&db, &state, "bystander").await;
+
+    record_session(state.clone(), &purger_token, kept.id, "phone", 60, at(3)).await;
+    record_reading(
+        state.clone(),
+        &purger_token,
+        removed.id,
+        "phone",
+        20,
+        10,
+        "completed",
+        at(4),
+    )
+    .await;
+    record_session(
+        state.clone(),
+        &bystander_token,
+        removed.id,
+        "tablet",
+        15,
+        at(5),
+    )
+    .await;
+    hard_delete_book(&db, removed.id).await;
+
+    let completions = orphaned_completions(&db, purger).await;
+    let (status, purged) = purge_orphans(state.clone(), &purger_token).await;
+    assert_eq!(status, StatusCode::OK);
+    let purged = purged.expect("expected a JSON body");
+    assert_eq!(purged.sessions_removed, 1);
+    assert_eq!(purged.completions_removed, completions);
+    assert_eq!(orphaned_completions(&db, purger).await, 0);
+
+    let window = format!("?from={}&to={}", q(at(1)), q(at(30)));
+    let (_, mine) = fetch_stats(state.clone(), &purger_token, &window).await;
+    let mine = mine.expect("expected a JSON body");
+    assert_eq!(mine.summary.duration.total_ms, 60 * MINUTE_MS);
+    assert!(mine.series.iter().all(|s| !s.removed_from_library));
+
+    let (_, theirs) = fetch_stats(state.clone(), &bystander_token, &window).await;
+    let theirs = theirs.expect("expected a JSON body");
+    assert_eq!(theirs.summary.duration.total_ms, 15 * MINUTE_MS);
+    assert!(theirs.series[0].removed_from_library);
+
+    // Nothing left to purge is not an error.
+    let (status, again) = purge_orphans(state, &purger_token).await;
+    assert_eq!(status, StatusCode::OK);
+    let again = again.expect("expected a JSON body");
+    assert_eq!((again.sessions_removed, again.completions_removed), (0, 0));
 }

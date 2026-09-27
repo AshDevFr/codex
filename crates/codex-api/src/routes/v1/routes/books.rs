@@ -186,6 +186,12 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/reading-stats/coverage",
             get(handlers::get_reading_coverage),
         )
+        // Reading whose book has been deleted is kept until the reader says
+        // otherwise.
+        .route(
+            "/reading-stats/orphaned",
+            delete(handlers::purge_orphaned_reading_history),
+        )
         // Mark as read/unread routes
         .route("/books/{book_id}/read", post(handlers::mark_book_as_read))
         .route(

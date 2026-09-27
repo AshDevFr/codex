@@ -17,9 +17,13 @@
 
 #![allow(dead_code)]
 
+use crate::entities::{read_completions, reading_sessions};
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use sea_orm::{ConnectionTrait, DatabaseBackend, FromQueryResult, Statement, Value};
+use sea_orm::{
+    ColumnTrait, ConnectionTrait, DatabaseBackend, EntityTrait, FromQueryResult, QueryFilter,
+    Statement, TransactionTrait, Value,
+};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -182,10 +186,14 @@ pub struct ReadingByDevice {
 }
 
 /// Totals for one series.
+///
+/// `series_id` and `series_name` are both `None` on the one row that gathers
+/// reading whose book has since been hard-deleted. That time is real and
+/// counts towards every total, but nothing says which series it came from.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ReadingBySeries {
-    pub series_id: Uuid,
-    pub series_name: String,
+    pub series_id: Option<Uuid>,
+    pub series_name: Option<String>,
     pub duration: DurationBreakdown,
     pub pages_read: i64,
     pub sessions: i64,
@@ -194,9 +202,12 @@ pub struct ReadingBySeries {
 }
 
 /// Totals for one file format.
+///
+/// `format` is `None` on the one row that gathers reading whose book has since
+/// been hard-deleted, for the same reason as [`ReadingBySeries`].
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ReadingByFormat {
-    pub format: String,
+    pub format: Option<String>,
     pub duration: DurationBreakdown,
     pub pages_read: i64,
     pub sessions: i64,
@@ -209,6 +220,13 @@ pub struct ReadingCoverage {
     /// When this reader first read anything, or `None` if they never have.
     pub first_read_at: Option<DateTime<Utc>>,
     pub last_read_at: Option<DateTime<Utc>>,
+}
+
+/// What [`ReadingStatsRepository::purge_orphaned`] removed.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PurgedOrphanedHistory {
+    pub sessions: u64,
+    pub completions: u64,
 }
 
 /// The window a query covers.
@@ -281,7 +299,18 @@ const READING_KINDS: &str = "rs.kind IN ('progress', 'completed')";
 ///
 /// Left-joined and coalesced rather than inner-joined: a series whose metadata
 /// row is missing has to keep appearing in the reader's own history.
-const SERIES_TITLE_SORT: &str = "COALESCE(sm.title_sort, sm.title, s.name)";
+///
+/// Sessions outlive a hard-deleted book with a null `book_id`, so the series
+/// and format breakdowns `LEFT JOIN` too, and those orphans group into a single
+/// row whose name is null. The engines disagree about where a null sorts (first
+/// on SQLite, last on PostgreSQL), so the orphan row is placed after every
+/// named one explicitly rather than by whichever backend is running.
+const SERIES_TIEBREAK: &str =
+    "CASE WHEN s.id IS NULL THEN 1 ELSE 0 END ASC, COALESCE(sm.title_sort, sm.title, s.name)";
+
+/// The format breakdown's tiebreak, with the orphan row last. `books.format` is
+/// never null, so a null format means the book is gone.
+const FORMAT_TIEBREAK: &str = "CASE WHEN b.format IS NULL THEN 1 ELSE 0 END ASC, b.format";
 
 #[derive(Debug, FromQueryResult)]
 struct SummaryRow {
@@ -319,8 +348,8 @@ struct DeviceRow {
 
 #[derive(Debug, FromQueryResult)]
 struct SeriesRow {
-    series_id: Uuid,
-    series_name: String,
+    series_id: Option<Uuid>,
+    series_name: Option<String>,
     measured_ms: i64,
     inferred_ms: i64,
     pages_read: i64,
@@ -331,7 +360,7 @@ struct SeriesRow {
 
 #[derive(Debug, FromQueryResult)]
 struct FormatRow {
-    format: String,
+    format: Option<String>,
     measured_ms: i64,
     inferred_ms: i64,
     pages_read: i64,
@@ -501,7 +530,7 @@ impl ReadingStatsRepository {
         limit: u64,
     ) -> Result<Vec<ReadingBySeries>> {
         let backend = db.get_database_backend();
-        let order_by = sort.order_by(SERIES_TITLE_SORT);
+        let order_by = sort.order_by(SERIES_TIEBREAK);
         let sql = format!(
             "SELECT s.id AS series_id, \
                     COALESCE(sm.title, s.name) AS series_name, \
@@ -512,8 +541,8 @@ impl ReadingStatsRepository {
                     {COMPLETIONS_SUM} AS books_finished, \
                     COUNT(DISTINCT rs.book_id) AS books \
              FROM reading_sessions rs \
-             JOIN books b ON b.id = rs.book_id \
-             JOIN series s ON s.id = b.series_id \
+             LEFT JOIN books b ON b.id = rs.book_id \
+             LEFT JOIN series s ON s.id = b.series_id \
              LEFT JOIN series_metadata sm ON sm.series_id = s.id \
              WHERE rs.user_id = $1 AND {READING_KINDS} \
                AND rs.client_started_at >= $2 AND rs.client_started_at < $3 \
@@ -556,7 +585,7 @@ impl ReadingStatsRepository {
         sort: StatsSort,
     ) -> Result<Vec<ReadingByFormat>> {
         let backend = db.get_database_backend();
-        let order_by = sort.order_by("format");
+        let order_by = sort.order_by(FORMAT_TIEBREAK);
         let sql = format!(
             "SELECT b.format AS format, \
                     {MEASURED_SUM} AS measured_ms, \
@@ -565,7 +594,7 @@ impl ReadingStatsRepository {
                     COUNT(*) AS sessions, \
                     {COMPLETIONS_SUM} AS books_finished \
              FROM reading_sessions rs \
-             JOIN books b ON b.id = rs.book_id \
+             LEFT JOIN books b ON b.id = rs.book_id \
              WHERE rs.user_id = $1 AND {READING_KINDS} \
                AND rs.client_started_at >= $2 AND rs.client_started_at < $3 \
              GROUP BY b.format \
@@ -633,6 +662,41 @@ impl ReadingStatsRepository {
                 last_read_at: r.last_read_at,
             }),
         )
+    }
+
+    /// Delete the caller's reading history whose book has been hard-deleted,
+    /// and nothing else.
+    ///
+    /// Those rows keep counting towards every total until the reader decides
+    /// otherwise; this is that decision. It is never run on a schedule: the
+    /// same rows can be reattached to their books by importing an export taken
+    /// before the delete, and a purge makes that impossible.
+    ///
+    /// Sessions and completions go together in one transaction so the two
+    /// logs cannot disagree about whether the history exists.
+    pub async fn purge_orphaned<C: ConnectionTrait + TransactionTrait>(
+        db: &C,
+        user_id: Uuid,
+    ) -> Result<PurgedOrphanedHistory> {
+        let txn = db.begin().await?;
+        let sessions = reading_sessions::Entity::delete_many()
+            .filter(reading_sessions::Column::UserId.eq(user_id))
+            .filter(reading_sessions::Column::BookId.is_null())
+            .exec(&txn)
+            .await?
+            .rows_affected;
+        let completions = read_completions::Entity::delete_many()
+            .filter(read_completions::Column::UserId.eq(user_id))
+            .filter(read_completions::Column::BookId.is_null())
+            .exec(&txn)
+            .await?
+            .rows_affected;
+        txn.commit().await?;
+
+        Ok(PurgedOrphanedHistory {
+            sessions,
+            completions,
+        })
     }
 
     /// How many session rows a user has, for judging whether retention or
@@ -1553,10 +1617,10 @@ mod tests {
                 .unwrap();
 
         assert_eq!(series.len(), 2);
-        assert_eq!(series[0].series_name, "Berserk");
+        assert_eq!(series[0].series_name.as_deref(), Some("Berserk"));
         assert_eq!(series[0].duration.measured_ms, 90 * MINUTE_MS);
         assert_eq!(series[0].books, 1);
-        assert_eq!(series[1].series_name, "Vinland Saga");
+        assert_eq!(series[1].series_name.as_deref(), Some("Vinland Saga"));
     }
 
     /// Coverage answers "which years can this reader ask for", so it must not
@@ -1826,6 +1890,7 @@ mod tests {
                 .unwrap()[0]
                 .series_name
                 .clone()
+                .unwrap_or_default()
         };
 
         assert_eq!(top(StatsSort::Time).await, "Long Sitting");
@@ -1856,7 +1921,7 @@ mod tests {
                 .await
                 .unwrap();
 
-        assert_eq!(series[0].series_name, "Prison School");
+        assert_eq!(series[0].series_name.as_deref(), Some("Prison School"));
     }
 
     /// Metadata is created alongside every series today, but a missing row must
@@ -1886,7 +1951,7 @@ mod tests {
                 .unwrap();
 
         assert_eq!(series.len(), 1);
-        assert_eq!(series[0].series_name, "Berserk");
+        assert_eq!(series[0].series_name.as_deref(), Some("Berserk"));
     }
 
     #[tokio::test]
@@ -1910,8 +1975,8 @@ mod tests {
                 .unwrap();
 
         assert_eq!(series.len(), 2);
-        assert_eq!(series[0].series_name, "A");
-        assert_eq!(series[1].series_name, "B");
+        assert_eq!(series[0].series_name.as_deref(), Some("A"));
+        assert_eq!(series[1].series_name.as_deref(), Some("B"));
     }
 
     #[tokio::test]
@@ -1942,9 +2007,9 @@ mod tests {
                 .unwrap();
 
         assert_eq!(formats.len(), 2);
-        assert_eq!(formats[0].format, "cbz");
+        assert_eq!(formats[0].format.as_deref(), Some("cbz"));
         assert_eq!(formats[0].duration.measured_ms, 90 * MINUTE_MS);
-        assert_eq!(formats[1].format, "epub");
+        assert_eq!(formats[1].format.as_deref(), Some("epub"));
     }
 
     /// Pages are summed independently of time, so a client that reports one and

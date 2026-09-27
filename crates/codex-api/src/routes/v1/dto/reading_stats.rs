@@ -6,8 +6,8 @@
 
 use chrono::{DateTime, Utc};
 use codex_db::repositories::{
-    DurationBreakdown, ReadingByDevice, ReadingByFormat, ReadingBySeries, ReadingCoverage,
-    ReadingPeriod, ReadingSummary, StatsGranularity, StatsSort,
+    DurationBreakdown, PurgedOrphanedHistory, ReadingByDevice, ReadingByFormat, ReadingBySeries,
+    ReadingCoverage, ReadingPeriod, ReadingSummary, StatsGranularity, StatsSort,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
@@ -219,9 +219,17 @@ impl From<ReadingByDevice> for ReadingByDeviceDto {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ReadingBySeriesDto {
-    pub series_id: Uuid,
+    /// Null on the removed-from-library row.
+    pub series_id: Option<Uuid>,
+    /// Null on the removed-from-library row.
     #[schema(example = "Berserk")]
-    pub series_name: String,
+    pub series_name: Option<String>,
+    /// True on the single row that gathers reading whose book has since been
+    /// deleted from the server. That time still counts towards every total,
+    /// but which series it belonged to is no longer known. Its `books` and
+    /// `booksFinished` are always 0: both count distinct books, and deleted
+    /// books cannot be told apart.
+    pub removed_from_library: bool,
     pub duration: DurationBreakdownDto,
     pub pages_read: i64,
     pub sessions: i64,
@@ -235,6 +243,7 @@ pub struct ReadingBySeriesDto {
 impl From<ReadingBySeries> for ReadingBySeriesDto {
     fn from(value: ReadingBySeries) -> Self {
         Self {
+            removed_from_library: value.series_id.is_none(),
             series_id: value.series_id,
             series_name: value.series_name,
             duration: value.duration.into(),
@@ -250,8 +259,12 @@ impl From<ReadingBySeries> for ReadingBySeriesDto {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ReadingByFormatDto {
+    /// Null on the removed-from-library row.
     #[schema(example = "cbz")]
-    pub format: String,
+    pub format: Option<String>,
+    /// True on the single row that gathers reading whose book has since been
+    /// deleted from the server, and whose format is therefore unknown.
+    pub removed_from_library: bool,
     pub duration: DurationBreakdownDto,
     pub pages_read: i64,
     pub sessions: i64,
@@ -261,6 +274,7 @@ pub struct ReadingByFormatDto {
 impl From<ReadingByFormat> for ReadingByFormatDto {
     fn from(value: ReadingByFormat) -> Self {
         Self {
+            removed_from_library: value.format.is_none(),
             format: value.format,
             duration: value.duration.into(),
             pages_read: value.pages_read,
@@ -307,4 +321,23 @@ pub struct ReadingStatsResponse {
     pub devices: Vec<ReadingByDeviceDto>,
     pub series: Vec<ReadingBySeriesDto>,
     pub formats: Vec<ReadingByFormatDto>,
+}
+
+/// What purging the removed-from-library history deleted.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PurgedOrphanedHistoryDto {
+    /// Reading sessions deleted. Their time no longer counts anywhere.
+    pub sessions_removed: u64,
+    /// Finished read-throughs deleted.
+    pub completions_removed: u64,
+}
+
+impl From<PurgedOrphanedHistory> for PurgedOrphanedHistoryDto {
+    fn from(value: PurgedOrphanedHistory) -> Self {
+        Self {
+            sessions_removed: value.sessions,
+            completions_removed: value.completions,
+        }
+    }
 }
