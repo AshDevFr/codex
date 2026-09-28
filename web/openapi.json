@@ -30709,6 +30709,10 @@
               "$ref": "#/components/schemas/ExportSessionDto"
             },
             "description": "Omitted entirely (not an empty array) when the export was taken with\n`includeSessions=false`."
+          },
+          "wantToRead": {
+            "$ref": "#/components/schemas/ExportWantToReadDto",
+            "description": "Present when this book, rather than its whole series, is queued."
           }
         }
       },
@@ -30948,6 +30952,10 @@
             ],
             "format": "date-time",
             "description": "When the rating was last changed. The `newest` conflict policy needs it\nto tell a stale rating from a fresh one; a file without it never\noverwrites an existing rating except under `overwrite`."
+          },
+          "wantToRead": {
+            "$ref": "#/components/schemas/ExportWantToReadDto",
+            "description": "Present when the whole series is queued. A queued series is often one\nthe reader never started, so it can appear with no books at all."
           }
         }
       },
@@ -31031,6 +31039,24 @@
               "null"
             ],
             "format": "double"
+          }
+        }
+      },
+      "ExportWantToReadDto": {
+        "type": "object",
+        "description": "A want-to-read queue entry, attached to the series or book it flags.\n\n`position` is carried so imported entries keep their original relative\norder: the queue is ordered globally across series and books, and that\norder is otherwise lost when the file groups entries by series.\n`added_at` is carried because the queue's newest and oldest sorts read it,\nand stamping the import time would reorder both views by when the import\nhappened to run.",
+        "required": [
+          "position",
+          "addedAt"
+        ],
+        "properties": {
+          "addedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "position": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },
@@ -32594,6 +32620,10 @@
             "type": "boolean",
             "description": "When a session or completion in the file already exists as the\nimporter's own row but is not on a live book (its book was hard-deleted,\nleaving `book_id` null, or the scanner marked it deleted after the file\nmoved), move it onto the matched book instead of skipping it."
           },
+          "restoreWantToRead": {
+            "type": "boolean",
+            "description": "Put queued series and books back into want-to-read. On by default:\ncarrying the queue across a split is the reason it is exported.\nRestored entries land after anything already queued, in their original\nrelative order, and an entry already queued is left where it is."
+          },
           "sourcePreference": {
             "type": [
               "array",
@@ -32714,7 +32744,11 @@
           "completionsReattached",
           "sessionsInserted",
           "sessionsReattached",
-          "rowsStranded"
+          "rowsStranded",
+          "seriesMatchedDistinct",
+          "booksMatchedDistinct",
+          "booksInUnmatchedSeries",
+          "wantToReadRestored"
         ],
         "properties": {
           "booksAmbiguous": {
@@ -32727,9 +32761,30 @@
             "format": "int32",
             "minimum": 0
           },
+          "booksInSelectedLibraries": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Live books in the scoped libraries. `None` when not scoped.",
+            "minimum": 0
+          },
+          "booksInUnmatchedSeries": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Books counted in `books_unmatched` only because their whole series did\nnot match.\n\n`books_unmatched` mixes two outcomes. In a scoped import these are\nbooks belonging to other libraries, which is expected. The remainder,\n`books_unmatched - books_in_unmatched_series`, are books missed inside\na series that *did* match, which is worth a reader's attention and\nmust not be hidden under the reassuring label.",
+            "minimum": 0
+          },
           "booksMatched": {
             "type": "integer",
             "format": "int32",
+            "minimum": 0
+          },
+          "booksMatchedDistinct": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Distinct destination books matched, for the same reason.",
             "minimum": 0
           },
           "booksStemMatched": {
@@ -32783,9 +32838,24 @@
             "format": "int32",
             "minimum": 0
           },
+          "seriesInSelectedLibraries": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Live series in the libraries the import was scoped to. `None` when the\nimport was not scoped: the denominator would then be every series the\nreader can see, which measures nothing.\n\nWith this set, a file series that did not match is almost always one\nthat belongs to another library, which is expected when a split\nimports into one of several new libraries, not a matching failure.",
+            "minimum": 0
+          },
           "seriesMatched": {
             "type": "integer",
             "format": "int32",
+            "minimum": 0
+          },
+          "seriesMatchedDistinct": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Distinct destination series that at least one file series resolved to.\n\n`series_matched` counts file series, and two of those can resolve to\none destination series by name, so it can exceed what the destination\nholds. Coverage of the destination has to count this instead.",
             "minimum": 0
           },
           "seriesTotal": {
@@ -32806,6 +32876,12 @@
           "sessionsReattached": {
             "type": "integer",
             "format": "int32",
+            "minimum": 0
+          },
+          "wantToReadRestored": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Queue entries put back into want-to-read.",
             "minimum": 0
           }
         }

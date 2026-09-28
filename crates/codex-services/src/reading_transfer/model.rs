@@ -121,6 +121,24 @@ pub struct ExportBookDto {
     /// `includeSessions=false`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sessions: Option<Vec<ExportSessionDto>>,
+    /// Present when this book, rather than its whole series, is queued.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub want_to_read: Option<ExportWantToReadDto>,
+}
+
+/// A want-to-read queue entry, attached to the series or book it flags.
+///
+/// `position` is carried so imported entries keep their original relative
+/// order: the queue is ordered globally across series and books, and that
+/// order is otherwise lost when the file groups entries by series.
+/// `added_at` is carried because the queue's newest and oldest sorts read it,
+/// and stamping the import time would reorder both views by when the import
+/// happened to run.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportWantToReadDto {
+    pub position: i32,
+    pub added_at: DateTime<Utc>,
 }
 
 /// One series and everything the exporting user recorded against its books.
@@ -145,6 +163,10 @@ pub struct ExportSeriesDto {
     pub rating_updated_at: Option<DateTime<Utc>>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub books: Vec<ExportBookDto>,
+    /// Present when the whole series is queued. A queued series is often one
+    /// the reader never started, so it can appear with no books at all.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub want_to_read: Option<ExportWantToReadDto>,
 }
 
 /// The whole export: one user's reading state, self-describing enough to be
@@ -196,6 +218,10 @@ fn default_reattach_sessions() -> bool {
     true
 }
 
+fn default_restore_want_to_read() -> bool {
+    true
+}
+
 /// `POST /api/v1/reading-progress/import` request body.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -236,6 +262,12 @@ pub struct ImportReadingProgressRequest {
     /// `ambiguous`.
     #[serde(default)]
     pub library_ids: Option<Vec<Uuid>>,
+    /// Put queued series and books back into want-to-read. On by default:
+    /// carrying the queue across a split is the reason it is exported.
+    /// Restored entries land after anything already queued, in their original
+    /// relative order, and an entry already queued is left where it is.
+    #[serde(default = "default_restore_want_to_read")]
+    pub restore_want_to_read: bool,
     pub file: ReadingProgressExportDocument,
 }
 
@@ -365,6 +397,35 @@ pub struct ImportSummary {
     /// Rows left behind on a live book in another library. Non-zero means the
     /// import moved less than it appears to have.
     pub rows_stranded: u32,
+    /// Distinct destination series that at least one file series resolved to.
+    ///
+    /// `series_matched` counts file series, and two of those can resolve to
+    /// one destination series by name, so it can exceed what the destination
+    /// holds. Coverage of the destination has to count this instead.
+    pub series_matched_distinct: u32,
+    /// Distinct destination books matched, for the same reason.
+    pub books_matched_distinct: u32,
+    /// Live series in the libraries the import was scoped to. `None` when the
+    /// import was not scoped: the denominator would then be every series the
+    /// reader can see, which measures nothing.
+    ///
+    /// With this set, a file series that did not match is almost always one
+    /// that belongs to another library, which is expected when a split
+    /// imports into one of several new libraries, not a matching failure.
+    pub series_in_selected_libraries: Option<u32>,
+    /// Live books in the scoped libraries. `None` when not scoped.
+    pub books_in_selected_libraries: Option<u32>,
+    /// Books counted in `books_unmatched` only because their whole series did
+    /// not match.
+    ///
+    /// `books_unmatched` mixes two outcomes. In a scoped import these are
+    /// books belonging to other libraries, which is expected. The remainder,
+    /// `books_unmatched - books_in_unmatched_series`, are books missed inside
+    /// a series that *did* match, which is worth a reader's attention and
+    /// must not be hidden under the reassuring label.
+    pub books_in_unmatched_series: u32,
+    /// Queue entries put back into want-to-read.
+    pub want_to_read_restored: u32,
 }
 
 /// The response for both a real import and a dry run: the shape is identical

@@ -14,8 +14,8 @@ mod common;
 use chrono::{Duration, Utc};
 use codex::api::routes::v1::dto::{
     BookDisposition, ConflictPolicy, ExportBookDto, ExportCompletionDto, ExportExternalIdDto,
-    ExportProgressDto, ExportSeriesDto, ExportSessionDto, FieldOutcome, HashMode,
-    ImportReadingProgressRequest, ImportReadingProgressResponse, READING_PROGRESS_FORMAT,
+    ExportProgressDto, ExportSeriesDto, ExportSessionDto, ExportWantToReadDto, FieldOutcome,
+    HashMode, ImportReadingProgressRequest, ImportReadingProgressResponse, READING_PROGRESS_FORMAT,
     READING_PROGRESS_VERSION, ReadingProgressExportDocument, SeriesDisposition,
 };
 use codex::db::ScanningStrategy;
@@ -127,6 +127,7 @@ fn minimal_book_doc(path: &str, file_name: &str, hash: &str, current_page: i32) 
         }),
         completions: vec![],
         sessions: None,
+        want_to_read: None,
     }
 }
 
@@ -155,6 +156,7 @@ fn import_request(
         reattach_sessions: true,
         accept_stem_matches: false,
         library_ids: None,
+        restore_want_to_read: true,
         file,
     }
 }
@@ -474,6 +476,7 @@ async fn exercise_idempotent_import(db: &DatabaseConnection) {
         notes: None,
         rating_updated_at: None,
         books: vec![book_doc],
+        want_to_read: None,
     };
     let doc = document(vec![series_doc], true);
 
@@ -549,6 +552,7 @@ async fn dry_run_reports_matches_but_writes_nothing() {
         notes: None,
         rating_updated_at: None,
         books: vec![minimal_book_doc("v01.cbz", "v01.cbz", "h1", 9)],
+        want_to_read: None,
     };
     let doc = document(vec![series_doc], false);
 
@@ -630,6 +634,7 @@ async fn exercise_visibility_denies_unmatched(db: &DatabaseConnection) {
         notes: None,
         rating_updated_at: None,
         books: vec![minimal_book_doc("v01.cbz", "v01.cbz", "h1", 1)],
+        want_to_read: None,
     };
     let doc = document(vec![series_doc], false);
 
@@ -845,6 +850,7 @@ fn series_doc(path: &str, name: &str, books: Vec<ExportBookDto>) -> ExportSeries
         notes: None,
         rating_updated_at: None,
         books,
+        want_to_read: None,
     }
 }
 
@@ -1199,6 +1205,7 @@ fn series_doc_with_ids(ids: Vec<(&str, &str)>) -> ExportSeriesDto {
         notes: None,
         rating_updated_at: Some(Utc::now()),
         books: vec![],
+        want_to_read: None,
     }
 }
 
@@ -1420,6 +1427,7 @@ async fn scoping_the_import_to_a_library_resolves_a_duplicate_that_is_otherwise_
         notes: None,
         rating_updated_at: Some(Utc::now()),
         books: vec![],
+        want_to_read: None,
     };
 
     // Unscoped: both copies compete.
@@ -1611,7 +1619,9 @@ async fn rows_on_a_live_book_elsewhere_are_reported_as_stranded() {
                 client_ended_at: now,
                 server_recorded_at: now,
             }]),
+            want_to_read: None,
         }],
+        want_to_read: None,
     };
 
     let app = create_test_router(state.clone()).await;
@@ -1631,5 +1641,434 @@ async fn rows_on_a_live_book_elsewhere_are_reported_as_stranded() {
         report.notices.iter().any(|n| n.contains("left behind")),
         "a half-migration must be stated, got: {:?}",
         report.notices
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Reporting coverage of the destination.
+//
+// A split exports a whole old library and imports it into one of several new
+// ones, so most file series are *meant* to miss. Counting them as unmatched
+// made a complete import read like a failure. A scoped import instead reports
+// how much of the destination it covered.
+// ---------------------------------------------------------------------------
+
+/// A live series with one live book, in the given library.
+async fn live_series(db: &DatabaseConnection, library_id: Uuid, root: &str, name: &str) -> Uuid {
+    let series = SeriesRepository::create(db, library_id, name, None)
+        .await
+        .unwrap();
+    BookRepository::create(
+        db,
+        &book_model(
+            series.id,
+            library_id,
+            &format!("/{root}/{name}/v01.cbz"),
+            "v01.cbz",
+            "",
+        ),
+        None,
+    )
+    .await
+    .unwrap();
+    series.id
+}
+
+fn named_series_doc(name: &str, relative_path: &str) -> ExportSeriesDto {
+    ExportSeriesDto {
+        external_ids: vec![],
+        library_relative_path: relative_path.to_string(),
+        name: name.to_string(),
+        rating: None,
+        notes: None,
+        rating_updated_at: None,
+        books: vec![],
+        want_to_read: None,
+    }
+}
+
+async fn preview(
+    state: &std::sync::Arc<codex::api::extractors::AuthState>,
+    token: &str,
+    series: Vec<ExportSeriesDto>,
+    library_ids: Option<Vec<Uuid>>,
+) -> ImportReadingProgressResponse {
+    let app = create_test_router(state.clone()).await;
+    let mut body = import_request(document(series, false), true);
+    body.library_ids = library_ids;
+    let request = post_json_request_with_auth("/api/v1/reading-progress/import", &body, token);
+    let (status, response): (StatusCode, Option<ImportReadingProgressResponse>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+    response.expect("import response")
+}
+
+/// The shape of the user's first real import: the file covers far more than
+/// the destination, and every destination series matched.
+#[tokio::test]
+async fn a_scoped_import_reports_coverage_of_the_destination() {
+    let (db, _tmp) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_user, token) = admin_and_token(&db, &state, "coverage").await;
+
+    let shonen = LibraryRepository::create(&db, "Shonen", "/shonen", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let other = LibraryRepository::create(&db, "Other", "/other", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    live_series(&db, shonen.id, "shonen", "Naruto").await;
+    live_series(&db, shonen.id, "shonen", "Bleach").await;
+    live_series(&db, other.id, "other", "Monster").await;
+
+    let report = preview(
+        &state,
+        &token,
+        vec![
+            named_series_doc("Naruto", "Naruto"),
+            named_series_doc("Bleach", "Bleach"),
+            named_series_doc("Monster", "Monster"),
+            named_series_doc("Nowhere At All", "Nowhere At All"),
+        ],
+        Some(vec![shonen.id]),
+    )
+    .await;
+
+    assert_eq!(report.summary.series_in_selected_libraries, Some(2));
+    assert_eq!(report.summary.series_matched_distinct, 2);
+    assert_eq!(report.summary.books_in_selected_libraries, Some(2));
+}
+
+/// Two file series can resolve to one destination series by name. Counting
+/// file matches would then report more matches than the destination holds,
+/// so coverage counts distinct destination series.
+#[tokio::test]
+async fn two_file_series_landing_on_one_destination_series_count_once() {
+    let (db, _tmp) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_user, token) = admin_and_token(&db, &state, "distinct").await;
+
+    let lib = LibraryRepository::create(&db, "Lib", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    live_series(&db, lib.id, "lib", "Naruto").await;
+
+    let report = preview(
+        &state,
+        &token,
+        vec![
+            named_series_doc("Naruto", "shonen/Naruto"),
+            named_series_doc("Naruto", "old/Naruto"),
+        ],
+        Some(vec![lib.id]),
+    )
+    .await;
+
+    assert_eq!(report.summary.series_matched, 2);
+    assert_eq!(report.summary.series_matched_distinct, 1);
+    assert_eq!(report.summary.series_in_selected_libraries, Some(1));
+}
+
+/// Unscoped, there is no meaningful destination to measure against: the
+/// denominator would be every series the reader can see.
+#[tokio::test]
+async fn an_unscoped_import_has_no_destination_totals() {
+    let (db, _tmp) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_user, token) = admin_and_token(&db, &state, "unscoped").await;
+
+    let lib = LibraryRepository::create(&db, "Lib", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    live_series(&db, lib.id, "lib", "Naruto").await;
+
+    let report = preview(
+        &state,
+        &token,
+        vec![named_series_doc("Naruto", "Naruto")],
+        None,
+    )
+    .await;
+
+    assert_eq!(report.summary.series_in_selected_libraries, None);
+    assert_eq!(report.summary.books_in_selected_libraries, None);
+    assert_eq!(report.summary.series_matched_distinct, 1);
+}
+
+// ---------------------------------------------------------------------------
+// Want-to-read.
+//
+// The queue is per-user and keyed by series or book, so it rides the match the
+// import already performs. The case that matters most is the one that is easy
+// to lose: a series queued but never started has no reading state at all, so
+// an export seeded only from reading state would never carry it.
+// ---------------------------------------------------------------------------
+
+use codex::db::entities::want_to_read;
+use codex::db::repositories::WantToReadRepository;
+use codex::models::sort::WantToReadSort;
+
+async fn queue_for(db: &DatabaseConnection, user: Uuid) -> Vec<want_to_read::Model> {
+    WantToReadRepository::list(db, user, WantToReadSort::Custom)
+        .await
+        .unwrap()
+}
+
+async fn export_doc(
+    state: &std::sync::Arc<codex::api::extractors::AuthState>,
+    token: &str,
+) -> ReadingProgressExportDocument {
+    let app = create_test_router(state.clone()).await;
+    let request = get_request_with_auth("/api/v1/reading-progress/export", token);
+    let (status, doc): (StatusCode, Option<ReadingProgressExportDocument>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+    doc.expect("export document")
+}
+
+async fn import_doc(
+    state: &std::sync::Arc<codex::api::extractors::AuthState>,
+    token: &str,
+    doc: ReadingProgressExportDocument,
+    dry_run: bool,
+    restore: bool,
+) -> ImportReadingProgressResponse {
+    let app = create_test_router(state.clone()).await;
+    let mut body = import_request(doc, dry_run);
+    body.restore_want_to_read = restore;
+    let request = post_json_request_with_auth("/api/v1/reading-progress/import", &body, token);
+    let (status, response): (StatusCode, Option<ImportReadingProgressResponse>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+    response.expect("import response")
+}
+
+/// The ordinary want-to-read case: queued, never opened. With no progress,
+/// completion, session or rating, nothing else would put it in the file.
+#[tokio::test]
+async fn a_queued_series_with_no_reading_state_is_exported() {
+    let (db, _tmp) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (user, token) = admin_and_token(&db, &state, "wtr-series").await;
+    let lib = LibraryRepository::create(&db, "Lib", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = live_series(&db, lib.id, "lib", "Unstarted").await;
+    WantToReadRepository::add_series(&db, user, series)
+        .await
+        .unwrap();
+
+    let doc = export_doc(&state, &token).await;
+
+    let exported = doc
+        .series
+        .iter()
+        .find(|s| s.name == "Unstarted")
+        .expect("a queued series with no reading state must still be exported");
+    assert!(exported.want_to_read.is_some());
+}
+
+/// A book can be queued on its own. It has to travel with its series so the
+/// import can match it, even though nothing else was recorded against either.
+#[tokio::test]
+async fn a_queued_book_is_exported_with_its_series() {
+    let (db, _tmp) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (user, token) = admin_and_token(&db, &state, "wtr-book").await;
+    let lib = LibraryRepository::create(&db, "Lib", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = live_series(&db, lib.id, "lib", "Anthology").await;
+    let book = books::Entity::find()
+        .filter(books::Column::SeriesId.eq(series))
+        .one(&db)
+        .await
+        .unwrap()
+        .expect("the series has a book");
+    WantToReadRepository::add_book(&db, user, book.id)
+        .await
+        .unwrap();
+
+    let doc = export_doc(&state, &token).await;
+
+    let exported = doc
+        .series
+        .iter()
+        .find(|s| s.name == "Anthology")
+        .expect("the queued book's series must be exported");
+    assert!(
+        exported.want_to_read.is_none(),
+        "the book was queued, not the series"
+    );
+    assert_eq!(exported.books.len(), 1);
+    assert!(exported.books[0].want_to_read.is_some());
+}
+
+/// Imported entries go after the reader's existing queue, in their original
+/// relative order, and nothing already queued moves.
+#[tokio::test]
+async fn restored_entries_follow_the_existing_queue_in_original_order() {
+    let (db, _tmp) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (user, token) = admin_and_token(&db, &state, "wtr-order").await;
+    let lib = LibraryRepository::create(&db, "Lib", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let already_queued = live_series(&db, lib.id, "lib", "Already Queued").await;
+    let second = live_series(&db, lib.id, "lib", "Second").await;
+    let first = live_series(&db, lib.id, "lib", "First").await;
+    WantToReadRepository::add_series(&db, user, already_queued)
+        .await
+        .unwrap();
+
+    // Listed out of order in the file; the original positions say First comes
+    // before Second.
+    let queued_on = Utc::now() - Duration::days(30);
+    let mut second_doc = named_series_doc("Second", "Second");
+    second_doc.want_to_read = Some(ExportWantToReadDto {
+        position: 9,
+        added_at: queued_on,
+    });
+    let mut first_doc = named_series_doc("First", "First");
+    first_doc.want_to_read = Some(ExportWantToReadDto {
+        position: 4,
+        added_at: queued_on,
+    });
+
+    let report = import_doc(
+        &state,
+        &token,
+        document(vec![second_doc, first_doc], false),
+        false,
+        true,
+    )
+    .await;
+    assert_eq!(report.summary.want_to_read_restored, 2);
+
+    let queue = queue_for(&db, user).await;
+    let order: Vec<Uuid> = queue.iter().filter_map(|e| e.series_id).collect();
+    assert_eq!(order, vec![already_queued, first, second]);
+
+    // The original date survives, so the newest/oldest sorts stay truthful.
+    let restored = queue.iter().find(|e| e.series_id == Some(first)).unwrap();
+    assert_eq!(restored.added_at.timestamp(), queued_on.timestamp());
+}
+
+/// Row ids are not reused for the queue, so idempotency comes from the entry
+/// itself: a series already queued is left exactly where it is.
+#[tokio::test]
+async fn reimporting_does_not_duplicate_the_queue() {
+    let (db, _tmp) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (user, token) = admin_and_token(&db, &state, "wtr-twice").await;
+    let lib = LibraryRepository::create(&db, "Lib", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    live_series(&db, lib.id, "lib", "Once").await;
+
+    let mut doc_series = named_series_doc("Once", "Once");
+    doc_series.want_to_read = Some(ExportWantToReadDto {
+        position: 0,
+        added_at: Utc::now(),
+    });
+    let doc = document(vec![doc_series], false);
+
+    import_doc(&state, &token, doc.clone(), false, true).await;
+    let second = import_doc(&state, &token, doc, false, true).await;
+
+    assert_eq!(queue_for(&db, user).await.len(), 1);
+    assert_eq!(second.summary.want_to_read_restored, 0);
+}
+
+#[tokio::test]
+async fn restoring_want_to_read_can_be_switched_off() {
+    let (db, _tmp) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (user, token) = admin_and_token(&db, &state, "wtr-off").await;
+    let lib = LibraryRepository::create(&db, "Lib", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    live_series(&db, lib.id, "lib", "Skipped").await;
+
+    let mut doc_series = named_series_doc("Skipped", "Skipped");
+    doc_series.want_to_read = Some(ExportWantToReadDto {
+        position: 0,
+        added_at: Utc::now(),
+    });
+
+    let report = import_doc(
+        &state,
+        &token,
+        document(vec![doc_series], false),
+        false,
+        false,
+    )
+    .await;
+
+    assert!(queue_for(&db, user).await.is_empty());
+    assert_eq!(report.summary.want_to_read_restored, 0);
+}
+
+/// A dry run reports what it would restore and writes nothing, like every
+/// other count in the report.
+#[tokio::test]
+async fn a_dry_run_reports_want_to_read_but_writes_nothing() {
+    let (db, _tmp) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (user, token) = admin_and_token(&db, &state, "wtr-dry").await;
+    let lib = LibraryRepository::create(&db, "Lib", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    live_series(&db, lib.id, "lib", "Previewed").await;
+
+    let mut doc_series = named_series_doc("Previewed", "Previewed");
+    doc_series.want_to_read = Some(ExportWantToReadDto {
+        position: 0,
+        added_at: Utc::now(),
+    });
+
+    let report = import_doc(
+        &state,
+        &token,
+        document(vec![doc_series], false),
+        true,
+        true,
+    )
+    .await;
+
+    assert_eq!(report.summary.want_to_read_restored, 1);
+    assert!(queue_for(&db, user).await.is_empty());
+}
+
+/// `booksUnmatched` mixes books whose whole series belongs elsewhere with
+/// books missed inside a series that matched. Only the first is reassuring,
+/// so the report has to keep them apart.
+#[tokio::test]
+async fn books_missed_inside_a_matched_series_are_kept_apart_from_other_libraries() {
+    let (db, _tmp) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_user, token) = admin_and_token(&db, &state, "book-split").await;
+    let lib = LibraryRepository::create(&db, "Lib", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    live_series(&db, lib.id, "lib", "Here").await;
+
+    let book = |path: &str| minimal_book_doc(path, path, "", 1);
+
+    // A matched series: one book matches, one is genuinely missing.
+    let mut here = named_series_doc("Here", "Here");
+    here.books = vec![book("v01.cbz"), book("v99-missing.cbz")];
+    // A series that belongs to another library entirely.
+    let mut elsewhere = named_series_doc("Elsewhere", "Elsewhere");
+    elsewhere.books = vec![book("a.cbz"), book("b.cbz")];
+
+    let report = preview(&state, &token, vec![here, elsewhere], Some(vec![lib.id])).await;
+
+    assert_eq!(report.summary.books_unmatched, 3);
+    assert_eq!(report.summary.books_in_unmatched_series, 2);
+    // What is left is the one that deserves attention.
+    assert_eq!(
+        report.summary.books_unmatched - report.summary.books_in_unmatched_series,
+        1
     );
 }

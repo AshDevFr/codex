@@ -10,7 +10,7 @@
 //! would confirm it exists.
 
 use anyhow::Result;
-use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
+use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QuerySelect};
 use std::collections::HashSet;
 use uuid::Uuid;
 
@@ -108,6 +108,44 @@ async fn live_candidates(
         .map(|b| b.series_id)
         .collect();
     Ok(visible.into_iter().filter(|id| live.contains(id)).collect())
+}
+
+/// How many live series and books the reader can see in these libraries.
+///
+/// The denominator for a scoped import's coverage. It goes through the same
+/// visibility filter as matching: a series hidden from the reader could never
+/// have received their state, so counting it would report an import as less
+/// complete than it was. "Live" means at least one book not marked deleted,
+/// the same test [`live_candidates`] applies.
+pub async fn scope_totals(
+    db: &DatabaseConnection,
+    content_filter: &ContentFilter,
+    library_ids: &[Uuid],
+) -> Result<(u32, u32)> {
+    // Only the series id is needed per book; a full row would drag in the
+    // EPUB position blobs for every book in the library.
+    let series_per_book: Vec<Uuid> = books::Entity::find()
+        .select_only()
+        .column(books::Column::SeriesId)
+        .filter(books::Column::LibraryId.is_in(library_ids.to_vec()))
+        .filter(books::Column::Deleted.eq(false))
+        .into_tuple()
+        .all(db)
+        .await?;
+
+    let distinct: Vec<Uuid> = series_per_book
+        .iter()
+        .copied()
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect();
+    let visible: HashSet<Uuid> = visible_ids(content_filter, distinct).into_iter().collect();
+
+    let books = series_per_book
+        .iter()
+        .filter(|series_id| visible.contains(series_id))
+        .count() as u32;
+    Ok((visible.len() as u32, books))
 }
 
 async fn series_ids_by_external_id(
@@ -345,6 +383,7 @@ mod tests {
             progress: None,
             completions: vec![],
             sessions: None,
+            want_to_read: None,
         }
     }
 
@@ -537,6 +576,7 @@ mod tests {
             notes: None,
             rating_updated_at: None,
             books: vec![],
+            want_to_read: None,
         }
     }
 

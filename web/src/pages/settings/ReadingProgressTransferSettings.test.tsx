@@ -1,10 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   ImportReadingProgressResponse,
+  ImportSummary,
   ReadingProgressExportDocument,
 } from "@/api/readingProgressTransfer";
 import { renderWithProviders, screen, userEvent, waitFor } from "@/test/utils";
-import { ReadingProgressTransferSettings } from "./ReadingProgressTransferSettings";
+import {
+  ReadingProgressTransferSettings,
+  SummaryLine,
+} from "./ReadingProgressTransferSettings";
 
 const exportProgress = vi.fn();
 const importProgress = vi.fn();
@@ -37,7 +41,7 @@ const exportDocument: ReadingProgressExportDocument = {
           path: "v01.cbz",
           fileName: "v01.cbz",
           fileHash: "",
-          partial_hash: "",
+          partialHash: "",
           completions: [],
         },
       ],
@@ -45,36 +49,57 @@ const exportDocument: ReadingProgressExportDocument = {
   ],
 };
 
-function dryRunResponse(): ImportReadingProgressResponse {
+/**
+ * Builds a summary with every field present. Test files are excluded from
+ * `tsc -b`, so a stale key here would not fail the type check: this fixture
+ * sat in snake_case for a release after the wire format became camelCase,
+ * and passed only because nothing asserted a rendered count. The tests below
+ * assert rendered numbers, which is what catches that at run time.
+ */
+function summary(overrides: Partial<ImportSummary> = {}): ImportSummary {
+  return {
+    seriesTotal: 1,
+    seriesMatched: 1,
+    seriesAmbiguous: 0,
+    seriesUnmatched: 0,
+    seriesCommitted: 0,
+    booksTotal: 1,
+    booksMatched: 1,
+    booksStemMatched: 0,
+    booksAmbiguous: 0,
+    booksUnmatched: 0,
+    booksHashMismatch: 0,
+    progressWritten: 1,
+    ratingsWritten: 0,
+    completionsInserted: 0,
+    completionsReattached: 0,
+    sessionsInserted: 0,
+    sessionsReattached: 0,
+    rowsStranded: 0,
+    seriesMatchedDistinct: 1,
+    booksMatchedDistinct: 1,
+    seriesInSelectedLibraries: null,
+    booksInSelectedLibraries: null,
+    booksInUnmatchedSeries: 0,
+    wantToReadRestored: 0,
+    ...overrides,
+  };
+}
+
+function dryRunResponse(
+  overrides: Partial<ImportSummary> = {},
+): ImportReadingProgressResponse {
   return {
     dryRun: true,
-    sessions_in_file: true,
+    sessionsInFile: true,
     notices: [],
-    summary: {
-      series_total: 1,
-      series_matched: 1,
-      series_ambiguous: 0,
-      series_unmatched: 0,
-      series_committed: 0,
-      books_total: 1,
-      books_matched: 1,
-      books_stem_matched: 0,
-      books_ambiguous: 0,
-      books_unmatched: 0,
-      books_hash_mismatch: 0,
-      progress_written: 1,
-      ratings_written: 0,
-      completions_inserted: 0,
-      completions_reattached: 0,
-      sessions_inserted: 0,
-      sessions_reattached: 0,
-    },
+    summary: summary(overrides),
     series: [
       {
         libraryRelativePath: "Naruto",
         name: "Naruto",
         disposition: "matched",
-        matched_series_id: "11111111-1111-1111-1111-111111111111",
+        matchedSeriesId: "11111111-1111-1111-1111-111111111111",
         attempted: true,
         committed: false,
         books: [
@@ -82,11 +107,16 @@ function dryRunResponse(): ImportReadingProgressResponse {
             path: "v01.cbz",
             fileName: "v01.cbz",
             disposition: "matched",
-            matched_book_id: "22222222-2222-2222-2222-222222222222",
+            matchedBookId: "22222222-2222-2222-2222-222222222222",
             applied: true,
             progress: "inserted",
-            completions: { inserted: 0, reattached: 0, skipped: 0 },
-            sessions: { inserted: 0, reattached: 0, skipped: 0 },
+            completions: {
+              inserted: 0,
+              reattached: 0,
+              skipped: 0,
+              stranded: 0,
+            },
+            sessions: { inserted: 0, reattached: 0, skipped: 0, stranded: 0 },
           },
         ],
       },
@@ -314,5 +344,84 @@ describe("ReadingProgressTransferSettings", () => {
     expect(
       screen.getByRole("button", { name: /apply import/i }),
     ).toBeDisabled();
+  });
+
+  describe("report wording", () => {
+    // The shape of the first real import: the file covered far more than the
+    // destination, and every destination series matched.
+    const scoped = dryRunResponse({
+      seriesMatched: 32,
+      seriesMatchedDistinct: 32,
+      seriesUnmatched: 244,
+      seriesInSelectedLibraries: 32,
+      booksMatched: 1838,
+      booksMatchedDistinct: 1838,
+      booksUnmatched: 3183,
+      booksInUnmatchedSeries: 3121,
+      booksInSelectedLibraries: 1900,
+    });
+
+    it("states a scoped import as coverage of the destination", () => {
+      renderWithProviders(<SummaryLine report={scoped} scopeLabel="Shonen" />);
+      const text = document.body.textContent ?? "";
+
+      expect(text).toContain("Series: 32 of the 32 in Shonen matched");
+      expect(text).toContain("Books: 1838 of the 1900 in Shonen matched");
+      expect(text).toContain(
+        "244 series (3121 books) that belong to other libraries",
+      );
+      expect(text).not.toMatch(/unmatched/);
+    });
+
+    it("keeps books missed inside a matched series visible", () => {
+      // 3183 unmatched, 3121 of them in series that live elsewhere: the other
+      // 62 were missed inside series that did match, and must not be folded
+      // into the reassuring note.
+      renderWithProviders(<SummaryLine report={scoped} scopeLabel="Shonen" />);
+
+      expect(document.body.textContent).toContain("62 missed");
+    });
+
+    it("keeps the plain counts when the import was not scoped", () => {
+      const unscoped = dryRunResponse({ seriesUnmatched: 4 });
+      renderWithProviders(<SummaryLine report={unscoped} scopeLabel={null} />);
+      const text = document.body.textContent ?? "";
+
+      expect(text).toContain("4 unmatched");
+      expect(text).not.toMatch(/belong to other libraries/);
+    });
+  });
+
+  describe("restoring want to read", () => {
+    it("is requested by default", async () => {
+      importProgress.mockResolvedValue(dryRunResponse());
+      const user = userEvent.setup();
+      renderWithProviders(<ReadingProgressTransferSettings />);
+
+      await uploadDocument(user);
+      await user.click(
+        screen.getByRole("button", { name: /preview \(dry run\)/i }),
+      );
+
+      await waitFor(() => expect(importProgress).toHaveBeenCalled());
+      expect(importProgress.mock.calls[0][0].restoreWantToRead).toBe(true);
+    });
+
+    it("can be switched off", async () => {
+      importProgress.mockResolvedValue(dryRunResponse());
+      const user = userEvent.setup();
+      renderWithProviders(<ReadingProgressTransferSettings />);
+
+      await uploadDocument(user);
+      await user.click(
+        screen.getByRole("checkbox", { name: /restore want to read/i }),
+      );
+      await user.click(
+        screen.getByRole("button", { name: /preview \(dry run\)/i }),
+      );
+
+      await waitFor(() => expect(importProgress).toHaveBeenCalled());
+      expect(importProgress.mock.calls[0][0].restoreWantToRead).toBe(false);
+    });
   });
 });
