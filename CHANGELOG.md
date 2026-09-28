@@ -7,6 +7,36 @@ release. A patch release may fix an API bug; it may not add an operation, a para
 field, or a new behaviour on an existing route. A client may therefore treat the release a feature
 first appears under in the 🔌 API sections below as a floor it can rely on.
 
+## [2.6.0] - 2026-09-28
+
+### 🔌 API
+
+- *(api)* Count reading of deleted books, and let a reader purge it
+- *(api)* Export and import one user's reading state across a library split
+- *(api)* Export soft-deleted books, and respect rating timestamps on import
+- *(api)* Harden reading-progress import against colliding and crafted input
+- *(api)* CamelCase the reading-progress transfer wire format
+
+### 🚀 Features
+
+- *(web)* Show reading of deleted books, and a confirmed way to delete it
+- *(web)* Add a Reading Progress settings page for export and import
+
+### 🐛 Bug Fixes
+
+- *(db)* Keep reading history when its book is hard-deleted
+- Make removed-book history reachable and its purge honest
+- *(build)* Use the system linker on macOS
+
+### 📚 Documentation
+
+- Document carrying reading progress across a library split
+- Add CLAUDE.md contributor guide for AI-assisted development
+
+### ⚙️ Miscellaneous Tasks
+
+- Add shared Claude Code permission allowlist
+
 ## [2.5.0] - 2026-09-12
 
 ### 🚀 Features
