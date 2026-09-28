@@ -1,0 +1,47 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cargo build:*)",
+      "Bash(cargo check:*)",
+      "Bash(cargo test:*)",
+      "Bash(cargo nextest run:*)",
+      "Bash(cargo nextest list:*)",
+      "Bash(cargo clippy:*)",
+      "Bash(cargo fmt:*)",
+      "Bash(cargo doc:*)",
+      "Bash(cargo tree:*)",
+
+      "Bash(make help:*)",
+      "Bash(make check:*)",
+      "Bash(make fmt:*)",
+      "Bash(make lint:*)",
+      "Bash(make test-fast:*)",
+      "Bash(make test-frontend:*)",
+      "Bash(make test-all:*)",
+      "Bash(make openapi:*)",
+      "Bash(make openapi-types:*)",
+      "Bash(make openapi-all:*)",
+      "Bash(make frontend-lint:*)",
+      "Bash(make frontend-lint-fix:*)",
+      "Bash(make plugins-lint:*)",
+      "Bash(make plugins-check:*)",
+      "Bash(make plugins-check-fix:*)",
+
+      "Bash(npm test:*)",
+      "Bash(npm run test:run:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm run lint:*)",
+      "Bash(npm run type-check:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npm ls:*)",
+      "Bash(npm outdated:*)",
+
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+
+      "WebFetch(domain:docs.rs)",
+      "WebFetch(domain:www.sea-ql.org)"
+    ]
+  }
+}
