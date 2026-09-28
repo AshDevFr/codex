@@ -44,10 +44,16 @@ use super::model::{
 pub struct ImportOptions {
     pub dry_run: bool,
     pub hash_mode: HashMode,
-    pub source_preference: Vec<String>,
+    /// `None` means every source the exported series carries. See
+    /// [`ImportReadingProgressRequest::source_preference`].
+    pub source_preference: Option<Vec<String>>,
     pub conflict_policy: ConflictPolicy,
     pub reattach_sessions: bool,
     pub accept_stem_matches: bool,
+    /// Which libraries a series may match into. `None` searches every library
+    /// the reader can see; `Some` narrows the search, which is how an import
+    /// can run while the old copy of a series is still present.
+    pub library_ids: Option<Vec<Uuid>>,
 }
 
 /// A rejection worth a 400, versus every other failure which is a 500.
@@ -304,6 +310,11 @@ enum RowDecision {
     /// the file, or belongs to someone else (a UUID collision that should
     /// never happen, handled by leaving it alone).
     Skip,
+    /// On a *different* live book, in a library that still has the file. The
+    /// write is the same no-op as [`Self::Skip`], but it means something very
+    /// different: the progress moved and the reading history did not. Counted
+    /// apart so the report can say so.
+    SkipStranded,
 }
 
 /// An existing history row, as much as a decision needs.
@@ -440,12 +451,15 @@ fn decide_row(
     match existing {
         None => RowDecision::Insert,
         Some(row) if row.user_id == user_id => {
+            let on_another_live_book = matches!(row.book_id, Some(book) if book != target_book && !soft_deleted.contains(&book));
             let off_a_live_book = match row.book_id {
                 None => true,
                 Some(book) => book != target_book && soft_deleted.contains(&book),
             };
             if off_a_live_book && reattach {
                 RowDecision::Reattach
+            } else if on_another_live_book {
+                RowDecision::SkipStranded
             } else {
                 RowDecision::Skip
             }
@@ -591,6 +605,10 @@ fn book_report_from_plan(plan: &BookPlan<'_>) -> ImportBookReport {
             RowDecision::Insert => completions.inserted += 1,
             RowDecision::Reattach => completions.reattached += 1,
             RowDecision::Skip => completions.skipped += 1,
+            RowDecision::SkipStranded => {
+                completions.skipped += 1;
+                completions.stranded += 1;
+            }
         }
     }
     let mut sessions = WriteCounts::default();
@@ -599,6 +617,10 @@ fn book_report_from_plan(plan: &BookPlan<'_>) -> ImportBookReport {
             RowDecision::Insert => sessions.inserted += 1,
             RowDecision::Reattach => sessions.reattached += 1,
             RowDecision::Skip => sessions.skipped += 1,
+            RowDecision::SkipStranded => {
+                sessions.skipped += 1;
+                sessions.stranded += 1;
+            }
         }
     }
 
@@ -651,6 +673,7 @@ fn tally_book_report(summary: &mut ImportSummary, report: &ImportBookReport, cou
     summary.completions_reattached += report.completions.reattached;
     summary.sessions_inserted += report.sessions.inserted;
     summary.sessions_reattached += report.sessions.reattached;
+    summary.rows_stranded += report.completions.stranded + report.sessions.stranded;
 }
 
 // ---------------------------------------------------------------------------
@@ -710,7 +733,7 @@ async fn apply_completion(
     decision: &RowDecision,
 ) -> Result<()> {
     match decision {
-        RowDecision::Skip => Ok(()),
+        RowDecision::Skip | RowDecision::SkipStranded => Ok(()),
         RowDecision::Insert => {
             read_completions::ActiveModel {
                 id: Set(doc.id),
@@ -743,7 +766,7 @@ async fn apply_session(
     decision: &RowDecision,
 ) -> Result<()> {
     match decision {
-        RowDecision::Skip => Ok(()),
+        RowDecision::Skip | RowDecision::SkipStranded => Ok(()),
         RowDecision::Insert => {
             reading_sessions::ActiveModel {
                 id: Set(doc.id),
@@ -1042,7 +1065,8 @@ pub async fn import_reading_progress(
             db,
             &content_filter,
             series_doc,
-            &options.source_preference,
+            options.source_preference.as_deref(),
+            options.library_ids.as_deref(),
         )
         .await
         {
@@ -1158,6 +1182,20 @@ pub async fn import_reading_progress(
                 });
             }
         }
+    }
+
+    // A stranded row means the progress moved and the reading history did
+    // not, which the per-book counts show but the summary otherwise reads as
+    // success. Say it plainly: the reader can still fix it by removing or
+    // rescanning the other library and importing again.
+    if summary.rows_stranded > 0 {
+        notices.push(format!(
+            "{} session/completion rows were left behind: their books are still \
+             live in another library. Progress moved but reading history did not. \
+             Delete or rescan that library so its books are no longer on disk, \
+             then import again to bring the history across.",
+            summary.rows_stranded
+        ));
     }
 
     Ok(ImportReadingProgressResponse {
@@ -1481,8 +1519,13 @@ mod tests {
         assert_eq!(decision, RowDecision::Reattach);
     }
 
+    /// Left alone, but not for the harmless reason a plain `Skip` means.
+    /// The row is on a live book in another library: reattaching would strip
+    /// history from a library the reader may still be using, and skipping it
+    /// silently would hide that the progress moved without it. Hence its own
+    /// variant, which the report turns into a notice.
     #[test]
-    fn row_on_a_live_book_is_left_alone() {
+    fn row_on_a_live_book_elsewhere_is_left_alone_but_flagged() {
         let user = Uuid::new_v4();
         let live = Uuid::new_v4();
         let mut planned = PlannedState::default();
@@ -1490,6 +1533,25 @@ mod tests {
             Uuid::new_v4(),
             Some(&row(user, Some(live))),
             Uuid::new_v4(),
+            user,
+            &HashSet::new(),
+            true,
+            &mut planned,
+        );
+        assert_eq!(decision, RowDecision::SkipStranded);
+    }
+
+    /// The genuinely harmless skip: the row is already on the book being
+    /// imported onto, which is what makes re-importing the same file a no-op.
+    #[test]
+    fn row_already_on_the_target_book_is_a_plain_skip() {
+        let user = Uuid::new_v4();
+        let target = Uuid::new_v4();
+        let mut planned = PlannedState::default();
+        let decision = decide_row(
+            Uuid::new_v4(),
+            Some(&row(user, Some(target))),
+            target,
             user,
             &HashSet::new(),
             true,

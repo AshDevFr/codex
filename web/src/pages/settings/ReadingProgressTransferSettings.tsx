@@ -7,6 +7,7 @@ import {
   Divider,
   FileButton,
   Group,
+  MultiSelect,
   Select,
   Stack,
   Table,
@@ -19,7 +20,9 @@ import {
   IconDownload,
   IconUpload,
 } from "@tabler/icons-react";
-import { useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useMemo, useRef, useState } from "react";
+import { librariesApi } from "@/api/libraries";
 import type {
   BookDisposition,
   ConflictPolicy,
@@ -206,7 +209,19 @@ function ReportTable({ report }: { report: ImportReadingProgressResponse }) {
 }
 
 export function ReadingProgressTransferSettings() {
+  const { data: libraries = [] } = useQuery({
+    queryKey: ["libraries"],
+    queryFn: librariesApi.getAll,
+  });
+  const libraryOptions = libraries.map((library) => ({
+    value: library.id,
+    label: library.name,
+  }));
+
   const [includeSessions, setIncludeSessions] = useState(true);
+  const [exportLibraryIds, setExportLibraryIds] = useState<string[]>([]);
+  const [importLibraryIds, setImportLibraryIds] = useState<string[]>([]);
+  const [sourcePreference, setSourcePreference] = useState<string[]>([]);
 
   const [file, setFile] = useState<File | null>(null);
   const [parsedDocument, setParsedDocument] =
@@ -231,6 +246,15 @@ export function ReadingProgressTransferSettings() {
     null,
   );
   const [importError, setImportError] = useState<string | null>(null);
+
+  const availableSources = useMemo(() => {
+    const seen = new Set<string>();
+    for (const series of parsedDocument?.series ?? []) {
+      for (const external of series.externalIds ?? [])
+        seen.add(external.source);
+    }
+    return [...seen];
+  }, [parsedDocument]);
 
   const exportMutation = useExportReadingProgress();
   const importMutation = useImportReadingProgress();
@@ -264,7 +288,9 @@ export function ReadingProgressTransferSettings() {
       {
         dryRun,
         hashMode,
-        sourcePreference: [],
+        sourcePreference:
+          sourcePreference.length > 0 ? sourcePreference : undefined,
+        libraryIds: importLibraryIds.length > 0 ? importLibraryIds : undefined,
         conflictPolicy,
         reattachSessions,
         acceptStemMatches,
@@ -318,6 +344,19 @@ export function ReadingProgressTransferSettings() {
       <Card withBorder>
         <Stack gap="sm">
           <Title order={4}>Export</Title>
+          <MultiSelect
+            label="Libraries"
+            description="Leave empty to export every library. Narrowing to the one you are reorganising keeps the file small and gives the import less to match against."
+            placeholder={
+              exportLibraryIds.length === 0 ? "All libraries" : undefined
+            }
+            data={libraryOptions}
+            value={exportLibraryIds}
+            onChange={setExportLibraryIds}
+            disabled={exportMutation.isPending}
+            clearable
+            searchable
+          />
           <Checkbox
             label="Include the reading-session log"
             description="Sessions are the only source of every reading statistic; leave this on unless you specifically want a smaller file."
@@ -330,7 +369,12 @@ export function ReadingProgressTransferSettings() {
             <Button
               leftSection={<IconDownload size={16} />}
               loading={exportMutation.isPending}
-              onClick={() => exportMutation.mutate(includeSessions)}
+              onClick={() =>
+                exportMutation.mutate({
+                  includeSessions,
+                  libraryIds: exportLibraryIds,
+                })
+              }
             >
               Download export
             </Button>
@@ -367,6 +411,46 @@ export function ReadingProgressTransferSettings() {
           )}
 
           <Divider label="Options" labelPosition="left" />
+
+          <MultiSelect
+            label="Match into these libraries"
+            description="Leave empty to search every library. Naming the target library is what lets an import run before the old library has been rescanned: otherwise both copies of a series match and the import reports it as ambiguous."
+            placeholder={
+              importLibraryIds.length === 0 ? "All libraries" : undefined
+            }
+            data={libraryOptions}
+            value={importLibraryIds}
+            disabled={busy}
+            onChange={(value) => {
+              setImportLibraryIds(value);
+              clearPreview();
+            }}
+            clearable
+            searchable
+          />
+
+          {availableSources.length > 0 && (
+            <MultiSelect
+              label="External-id sources, most trusted first"
+              description="An external id is the only key that survives both a rename and a move, so it is tried before the path and the name. Pick sources in the order you trust them; leave empty to try every source the file carries, in the order it lists them."
+              placeholder={
+                sourcePreference.length === 0
+                  ? "All sources in the file"
+                  : undefined
+              }
+              data={availableSources.map((source) => ({
+                value: source,
+                label: source,
+              }))}
+              value={sourcePreference}
+              disabled={busy}
+              onChange={(value) => {
+                setSourcePreference(value);
+                clearPreview();
+              }}
+              clearable
+            />
+          )}
 
           <Group grow>
             <Select

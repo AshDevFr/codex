@@ -10254,6 +10254,15 @@
             "schema": {
               "type": "boolean"
             }
+          },
+          {
+            "name": "libraryIds",
+            "in": "query",
+            "description": "Comma-separated library ids to export. Omitted exports every library the reader has state for.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -30880,6 +30889,13 @@
           "includeSessions": {
             "type": "boolean",
             "description": "Sessions are opt-out: they are the only source of every reading\nstatistic, so leaving them out is easy to do by accident and hard to\nnotice until the numbers are gone."
+          },
+          "libraryIds": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Comma-separated library ids to export, e.g.\n`?libraryIds=<uuid>,<uuid>`. Omitted exports every library the reader\nhas state for.\n\nComma-separated rather than a repeated key because axum's `Query`\nextractor deserializes with `serde_urlencoded`, which collapses a\nrepeated key instead of collecting it into a `Vec`."
           }
         }
       },
@@ -32563,16 +32579,30 @@
           "hashMode": {
             "$ref": "#/components/schemas/HashMode"
           },
+          "libraryIds": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Which libraries a series may match into. Omitted searches every\nlibrary the reader can see. Narrowing to the target library is what\nlets an import run before the old library has been rescanned: two\ncopies of one series would otherwise both match and report\n`ambiguous`."
+          },
           "reattachSessions": {
             "type": "boolean",
             "description": "When a session or completion in the file already exists as the\nimporter's own row but is not on a live book (its book was hard-deleted,\nleaving `book_id` null, or the scanner marked it deleted after the file\nmoved), move it onto the matched book instead of skipping it."
           },
           "sourcePreference": {
-            "type": "array",
+            "type": [
+              "array",
+              "null"
+            ],
             "items": {
               "type": "string"
             },
-            "description": "External-id sources to try, in order, before falling back to path and\nthen normalized name. An empty list skips straight to path matching."
+            "description": "External-id sources to try, in order, before falling back to path and\nthen normalized name.\n\nOmitted means every source the exported series carries, in the order\nthe document lists them. An external id survives a rename and a move\nwhere neither the path nor the name does, so defaulting this to\nnothing silently downgrades every import to the two weakest steps.\nAn explicit empty list still skips straight to path matching, for a\ncaller that wants exactly that."
           }
         }
       },
@@ -32683,7 +32713,8 @@
           "completionsInserted",
           "completionsReattached",
           "sessionsInserted",
-          "sessionsReattached"
+          "sessionsReattached",
+          "rowsStranded"
         ],
         "properties": {
           "booksAmbiguous": {
@@ -32734,6 +32765,12 @@
           "ratingsWritten": {
             "type": "integer",
             "format": "int32",
+            "minimum": 0
+          },
+          "rowsStranded": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Rows left behind on a live book in another library. Non-zero means the\nimport moved less than it appears to have.",
             "minimum": 0
           },
           "seriesAmbiguous": {
@@ -48125,7 +48162,8 @@
         "required": [
           "inserted",
           "reattached",
-          "skipped"
+          "skipped",
+          "stranded"
         ],
         "properties": {
           "inserted": {
@@ -48142,7 +48180,13 @@
           "skipped": {
             "type": "integer",
             "format": "int32",
-            "description": "Already present with the same book attached; re-importing is a no-op.",
+            "description": "Already present with the same book attached; re-importing is a no-op.\nIncludes `stranded`, so `inserted + reattached + skipped` still totals\nevery row in the file.",
+            "minimum": 0
+          },
+          "stranded": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Skipped because the row sits on a book that is still live in another\nlibrary, which is not the same thing as a harmless re-import: the\nreading history stays behind while the progress moves. Reattaching it\nwould strip a library the reader may still be using, so the import\nreports it instead of guessing.",
             "minimum": 0
           }
         }

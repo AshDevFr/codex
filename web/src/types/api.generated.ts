@@ -12386,6 +12386,16 @@ export interface components {
              *     notice until the numbers are gone.
              */
             includeSessions?: boolean;
+            /**
+             * @description Comma-separated library ids to export, e.g.
+             *     `?libraryIds=<uuid>,<uuid>`. Omitted exports every library the reader
+             *     has state for.
+             *
+             *     Comma-separated rather than a repeated key because axum's `Query`
+             *     extractor deserializes with `serde_urlencoded`, which collapses a
+             *     repeated key instead of collecting it into a `Vec`.
+             */
+            libraryIds?: string | null;
         };
         /** @description One series and everything the exporting user recorded against its books. */
         ExportSeriesDto: {
@@ -13301,6 +13311,14 @@ export interface components {
             file: components["schemas"]["ReadingProgressExportDocument"];
             hashMode?: components["schemas"]["HashMode"];
             /**
+             * @description Which libraries a series may match into. Omitted searches every
+             *     library the reader can see. Narrowing to the target library is what
+             *     lets an import run before the old library has been rescanned: two
+             *     copies of one series would otherwise both match and report
+             *     `ambiguous`.
+             */
+            libraryIds?: string[] | null;
+            /**
              * @description When a session or completion in the file already exists as the
              *     importer's own row but is not on a live book (its book was hard-deleted,
              *     leaving `book_id` null, or the scanner marked it deleted after the file
@@ -13309,9 +13327,16 @@ export interface components {
             reattachSessions?: boolean;
             /**
              * @description External-id sources to try, in order, before falling back to path and
-             *     then normalized name. An empty list skips straight to path matching.
+             *     then normalized name.
+             *
+             *     Omitted means every source the exported series carries, in the order
+             *     the document lists them. An external id survives a rename and a move
+             *     where neither the path nor the name does, so defaulting this to
+             *     nothing silently downgrades every import to the two weakest steps.
+             *     An explicit empty list still skips straight to path matching, for a
+             *     caller that wants exactly that.
              */
-            sourcePreference?: string[];
+            sourcePreference?: string[] | null;
         };
         /**
          * @description The response for both a real import and a dry run: the shape is identical
@@ -13372,6 +13397,12 @@ export interface components {
             progressWritten: number;
             /** Format: int32 */
             ratingsWritten: number;
+            /**
+             * Format: int32
+             * @description Rows left behind on a live book in another library. Non-zero means the
+             *     import moved less than it appears to have.
+             */
+            rowsStranded: number;
             /** Format: int32 */
             seriesAmbiguous: number;
             /** Format: int32 */
@@ -21980,8 +22011,19 @@ export interface components {
             /**
              * Format: int32
              * @description Already present with the same book attached; re-importing is a no-op.
+             *     Includes `stranded`, so `inserted + reattached + skipped` still totals
+             *     every row in the file.
              */
             skipped: number;
+            /**
+             * Format: int32
+             * @description Skipped because the row sits on a book that is still live in another
+             *     library, which is not the same thing as a harmless re-import: the
+             *     reading history stays behind while the progress moves. Reattaching it
+             *     would strip a library the reader may still be using, so the import
+             *     reports it instead of guessing.
+             */
+            stranded: number;
         };
     };
     responses: never;
@@ -29777,6 +29819,8 @@ export interface operations {
             query?: {
                 /** @description Include the reading-session log (default: true). Sessions are the only source of every reading statistic, so this is opt-out rather than opt-in. */
                 includeSessions?: boolean;
+                /** @description Comma-separated library ids to export. Omitted exports every library the reader has state for. */
+                libraryIds?: string;
             };
             header?: never;
             path?: never;

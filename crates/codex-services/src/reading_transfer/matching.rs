@@ -81,18 +81,27 @@ fn visible_ids(content_filter: &ContentFilter, ids: Vec<Uuid>) -> Vec<Uuid> {
 /// export exactly by path, and matching it would stop the search there with
 /// no book to write onto, never reaching the new series. A series with nothing
 /// on disk is not somewhere reading state can land, so it is not a candidate.
+/// Every matching step funnels through here, so scoping to a library is done
+/// once rather than in each lookup. That scope is what lets an import run
+/// while the old copy of a series is still on disk: without it the old and
+/// new series both match the same name and the step reports `Ambiguous`.
 async fn live_candidates(
     db: &DatabaseConnection,
     content_filter: &ContentFilter,
     ids: Vec<Uuid>,
+    library_ids: Option<&[Uuid]>,
 ) -> Result<Vec<Uuid>> {
     let visible = visible_ids(content_filter, ids);
     if visible.is_empty() {
         return Ok(visible);
     }
-    let live: HashSet<Uuid> = books::Entity::find()
+    let mut query = books::Entity::find()
         .filter(books::Column::SeriesId.is_in(visible.clone()))
-        .filter(books::Column::Deleted.eq(false))
+        .filter(books::Column::Deleted.eq(false));
+    if let Some(wanted) = library_ids {
+        query = query.filter(books::Column::LibraryId.is_in(wanted.to_vec()));
+    }
+    let live: HashSet<Uuid> = query
         .all(db)
         .await?
         .into_iter()
@@ -149,19 +158,35 @@ async fn series_ids_by_normalized_name(
 /// moving to the next preferred source when a tried one yields no visible
 /// candidate), then `series.path`, then `series.normalized_name`. Stops at
 /// the first step that produces any visible candidate.
+///
+/// `source_preference` of `None` means every source the exported series
+/// carries, in document order. That is the useful default: an external id is
+/// the only key that survives both a rename and a move, so a caller who names
+/// no sources should still get it rather than falling through to the two
+/// weakest steps. `Some(&[])` skips the id steps outright.
 pub async fn resolve_series(
     db: &DatabaseConnection,
     content_filter: &ContentFilter,
     exported: &ExportSeriesDto,
-    source_preference: &[String],
+    source_preference: Option<&[String]>,
+    library_ids: Option<&[Uuid]>,
 ) -> Result<SeriesMatch> {
-    for source in source_preference {
-        let Some(external) = exported.external_ids.iter().find(|e| &e.source == source) else {
+    let sources: Vec<&str> = match source_preference {
+        Some(preferred) => preferred.iter().map(String::as_str).collect(),
+        None => exported
+            .external_ids
+            .iter()
+            .map(|e| e.source.as_str())
+            .collect(),
+    };
+
+    for source in sources {
+        let Some(external) = exported.external_ids.iter().find(|e| e.source == source) else {
             continue;
         };
 
         let candidates = series_ids_by_external_id(db, source, &external.id).await?;
-        match live_candidates(db, content_filter, candidates)
+        match live_candidates(db, content_filter, candidates, library_ids)
             .await?
             .as_slice()
         {
@@ -172,7 +197,7 @@ pub async fn resolve_series(
     }
 
     let by_path = series_ids_by_path(db, &exported.library_relative_path).await?;
-    match live_candidates(db, content_filter, by_path)
+    match live_candidates(db, content_filter, by_path, library_ids)
         .await?
         .as_slice()
     {
@@ -183,7 +208,7 @@ pub async fn resolve_series(
 
     let normalized = SeriesRepository::normalize_name(&exported.name);
     let by_name = series_ids_by_normalized_name(db, &normalized).await?;
-    match live_candidates(db, content_filter, by_name)
+    match live_candidates(db, content_filter, by_name, library_ids)
         .await?
         .as_slice()
     {
@@ -596,7 +621,9 @@ mod tests {
 
         let filter = ContentFilter::for_user(conn, user).await.unwrap();
         let exported = doc_series("Naruto", "shonen/Naruto", None);
-        let result = resolve_series(conn, &filter, &exported, &[]).await.unwrap();
+        let result = resolve_series(conn, &filter, &exported, None, None)
+            .await
+            .unwrap();
         assert_eq!(result, SeriesMatch::Matched(moved.id));
     }
 
@@ -615,7 +642,9 @@ mod tests {
 
         let filter = ContentFilter::for_user(conn, user).await.unwrap();
         let doc = doc_series("Naruto", "shonen/Naruto", None);
-        let result = resolve_series(conn, &filter, &doc, &[]).await.unwrap();
+        let result = resolve_series(conn, &filter, &doc, None, None)
+            .await
+            .unwrap();
         assert_eq!(result, SeriesMatch::Matched(series.id));
     }
 
@@ -632,7 +661,9 @@ mod tests {
         let filter = ContentFilter::for_user(conn, user).await.unwrap();
         // A path that does not exist anywhere; only the name matches.
         let doc = doc_series("One Piece", "moved/somewhere/else", None);
-        let result = resolve_series(conn, &filter, &doc, &[]).await.unwrap();
+        let result = resolve_series(conn, &filter, &doc, None, None)
+            .await
+            .unwrap();
         assert_eq!(result, SeriesMatch::Matched(series.id));
     }
 
@@ -677,7 +708,8 @@ mod tests {
             conn,
             &filter,
             &doc,
-            &["plugin:mangabaka".to_string(), "plugin:anilist".to_string()],
+            Some(&["plugin:mangabaka".to_string(), "plugin:anilist".to_string()]),
+            None,
         )
         .await
         .unwrap();
@@ -687,7 +719,8 @@ mod tests {
             conn,
             &filter,
             &doc,
-            &["plugin:anilist".to_string(), "plugin:mangabaka".to_string()],
+            Some(&["plugin:anilist".to_string(), "plugin:mangabaka".to_string()]),
+            None,
         )
         .await
         .unwrap();
@@ -712,7 +745,9 @@ mod tests {
 
         let filter = ContentFilter::for_user(conn, user).await.unwrap();
         let doc = doc_series("Duplicate", "nowhere/matching", None);
-        let result = resolve_series(conn, &filter, &doc, &[]).await.unwrap();
+        let result = resolve_series(conn, &filter, &doc, None, None)
+            .await
+            .unwrap();
         assert_eq!(result, SeriesMatch::Ambiguous);
     }
 
@@ -740,7 +775,9 @@ mod tests {
 
         let filter = ContentFilter::for_user(conn, user).await.unwrap();
         let doc = doc_series("Hidden", &series.path, None);
-        let result = resolve_series(conn, &filter, &doc, &[]).await.unwrap();
+        let result = resolve_series(conn, &filter, &doc, None, None)
+            .await
+            .unwrap();
         assert_eq!(result, SeriesMatch::Unmatched);
     }
 }

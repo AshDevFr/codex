@@ -13,10 +13,10 @@ mod common;
 
 use chrono::{Duration, Utc};
 use codex::api::routes::v1::dto::{
-    BookDisposition, ConflictPolicy, ExportBookDto, ExportCompletionDto, ExportProgressDto,
-    ExportSeriesDto, ExportSessionDto, FieldOutcome, HashMode, ImportReadingProgressRequest,
-    ImportReadingProgressResponse, READING_PROGRESS_FORMAT, READING_PROGRESS_VERSION,
-    ReadingProgressExportDocument, SeriesDisposition,
+    BookDisposition, ConflictPolicy, ExportBookDto, ExportCompletionDto, ExportExternalIdDto,
+    ExportProgressDto, ExportSeriesDto, ExportSessionDto, FieldOutcome, HashMode,
+    ImportReadingProgressRequest, ImportReadingProgressResponse, READING_PROGRESS_FORMAT,
+    READING_PROGRESS_VERSION, ReadingProgressExportDocument, SeriesDisposition,
 };
 use codex::db::ScanningStrategy;
 use codex::db::entities::reading_sessions::SessionKind;
@@ -26,8 +26,8 @@ use codex::db::entities::{
 };
 use codex::db::repositories::{
     BookRepository, LibraryRepository, NewSession, ReadCompletionRepository,
-    ReadProgressRepository, SeriesRepository, SharingTagRepository, UserRepository,
-    UserSeriesRatingRepository,
+    ReadProgressRepository, SeriesExternalIdRepository, SeriesRepository, SharingTagRepository,
+    UserRepository, UserSeriesRatingRepository,
 };
 use codex::utils::password;
 use common::*;
@@ -150,10 +150,11 @@ fn import_request(
     ImportReadingProgressRequest {
         dry_run,
         hash_mode: HashMode::Verify,
-        source_preference: vec![],
+        source_preference: None,
         conflict_policy: ConflictPolicy::Overwrite,
         reattach_sessions: true,
         accept_stem_matches: false,
+        library_ids: None,
         file,
     }
 }
@@ -1140,4 +1141,495 @@ async fn reading_progress_transfer_postgres() {
     exercise_library_split_round_trip(&db).await;
     exercise_idempotent_import(&db).await;
     exercise_visibility_denies_unmatched(&db).await;
+}
+
+// ---------------------------------------------------------------------------
+// Series matching by external id.
+//
+// This is the step the format exists for: an id survives a rename and a move,
+// which neither the relative path nor the normalized name does. Everything
+// below builds a target whose path *and* name differ from the export, so the
+// two weaker steps cannot succeed and only the id can explain a match.
+// ---------------------------------------------------------------------------
+
+/// A series in the library, with an external id attached, whose path and name
+/// deliberately differ from whatever the export will carry.
+async fn series_with_external_id(
+    db: &DatabaseConnection,
+    library_id: Uuid,
+    name: &str,
+    source: &str,
+    external_id: &str,
+) -> Uuid {
+    let series = SeriesRepository::create(db, library_id, name, None)
+        .await
+        .unwrap();
+    SeriesExternalIdRepository::create(db, series.id, source, external_id, None, None)
+        .await
+        .unwrap();
+    BookRepository::create(
+        db,
+        &book_model(
+            series.id,
+            library_id,
+            &format!("/lib/{name}/v01.cbz"),
+            "v01.cbz",
+            "",
+        ),
+        None,
+    )
+    .await
+    .unwrap();
+    series.id
+}
+
+/// An exported series carrying ids but a path and name that match nothing.
+fn series_doc_with_ids(ids: Vec<(&str, &str)>) -> ExportSeriesDto {
+    ExportSeriesDto {
+        external_ids: ids
+            .into_iter()
+            .map(|(source, id)| ExportExternalIdDto {
+                source: source.to_string(),
+                id: id.to_string(),
+            })
+            .collect(),
+        library_relative_path: "a/path/that/matches/nothing".to_string(),
+        name: "A Name That Matches Nothing".to_string(),
+        rating: Some(64),
+        notes: None,
+        rating_updated_at: Some(Utc::now()),
+        books: vec![],
+    }
+}
+
+async fn import_with(
+    state: &std::sync::Arc<codex::api::extractors::AuthState>,
+    token: &str,
+    doc: ReadingProgressExportDocument,
+    sources: Option<Vec<String>>,
+) -> ImportReadingProgressResponse {
+    let app = create_test_router(state.clone()).await;
+    let mut body = import_request(doc, true);
+    body.source_preference = sources;
+    let request = post_json_request_with_auth("/api/v1/reading-progress/import", &body, token);
+    let (status, response): (StatusCode, Option<ImportReadingProgressResponse>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+    response.expect("import response")
+}
+
+/// The defect this change fixes: a caller that does not name any source still
+/// gets id matching. An empty default silently downgraded every import to the
+/// two weakest steps, and no caller in the tree ever passed anything else.
+#[tokio::test]
+async fn omitting_the_source_preference_still_matches_on_external_id() {
+    let (db, _tmp) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_user, token) = admin_and_token(&db, &state, "id-default").await;
+    let library = LibraryRepository::create(&db, "Lib", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let target = series_with_external_id(
+        &db,
+        library.id,
+        "Renamed Series",
+        "plugin:mangabaka",
+        "12345",
+    )
+    .await;
+
+    let doc = document(
+        vec![series_doc_with_ids(vec![("plugin:mangabaka", "12345")])],
+        false,
+    );
+    let report = import_with(&state, &token, doc, None).await;
+
+    assert_eq!(report.summary.series_matched, 1);
+    assert_eq!(report.series[0].disposition, SeriesDisposition::Matched);
+    assert_eq!(report.series[0].matched_series_id, Some(target));
+}
+
+/// An explicit empty list still means "skip ids", so a caller can deliberately
+/// fall through to path and name.
+#[tokio::test]
+async fn an_explicit_empty_source_preference_skips_external_ids() {
+    let (db, _tmp) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_user, token) = admin_and_token(&db, &state, "id-optout").await;
+    let library = LibraryRepository::create(&db, "Lib", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    series_with_external_id(
+        &db,
+        library.id,
+        "Renamed Series",
+        "plugin:mangabaka",
+        "12345",
+    )
+    .await;
+
+    let doc = document(
+        vec![series_doc_with_ids(vec![("plugin:mangabaka", "12345")])],
+        false,
+    );
+    let report = import_with(&state, &token, doc, Some(vec![])).await;
+
+    assert_eq!(report.summary.series_unmatched, 1);
+}
+
+/// Priority order is the point of a *list*: when the file carries two ids that
+/// resolve to different series, the order decides which one wins.
+#[tokio::test]
+async fn the_preference_order_decides_between_two_matching_sources() {
+    let (db, _tmp) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_user, token) = admin_and_token(&db, &state, "id-order").await;
+    let library = LibraryRepository::create(&db, "Lib", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let baka =
+        series_with_external_id(&db, library.id, "Via Mangabaka", "plugin:mangabaka", "111").await;
+    let anilist =
+        series_with_external_id(&db, library.id, "Via Anilist", "plugin:anilist", "222").await;
+
+    let ids = vec![("plugin:mangabaka", "111"), ("plugin:anilist", "222")];
+
+    let baka_first = import_with(
+        &state,
+        &token,
+        document(vec![series_doc_with_ids(ids.clone())], false),
+        Some(vec!["plugin:mangabaka".into(), "plugin:anilist".into()]),
+    )
+    .await;
+    assert_eq!(baka_first.series[0].matched_series_id, Some(baka));
+
+    let anilist_first = import_with(
+        &state,
+        &token,
+        document(vec![series_doc_with_ids(ids)], false),
+        Some(vec!["plugin:anilist".into(), "plugin:mangabaka".into()]),
+    )
+    .await;
+    assert_eq!(anilist_first.series[0].matched_series_id, Some(anilist));
+}
+
+/// A preferred source the file does not carry is skipped rather than ending
+/// the search, so naming a source order costs nothing when a file is sparse.
+#[tokio::test]
+async fn a_source_absent_from_the_file_falls_through_to_the_next() {
+    let (db, _tmp) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_user, token) = admin_and_token(&db, &state, "id-sparse").await;
+    let library = LibraryRepository::create(&db, "Lib", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let target =
+        series_with_external_id(&db, library.id, "Only Anilist", "plugin:anilist", "222").await;
+
+    let doc = document(
+        vec![series_doc_with_ids(vec![("plugin:anilist", "222")])],
+        false,
+    );
+    let report = import_with(
+        &state,
+        &token,
+        doc,
+        Some(vec!["plugin:mangabaka".into(), "plugin:anilist".into()]),
+    )
+    .await;
+
+    assert_eq!(report.series[0].matched_series_id, Some(target));
+}
+
+/// Two series sharing one id is a real state (a bad plugin match, or a split
+/// that duplicated a series). Guessing between them would write a reader's
+/// history onto the wrong book, so it reports and writes nothing.
+#[tokio::test]
+async fn two_series_sharing_an_external_id_are_ambiguous() {
+    let (db, _tmp) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_user, token) = admin_and_token(&db, &state, "id-ambiguous").await;
+    let library = LibraryRepository::create(&db, "Lib", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    series_with_external_id(&db, library.id, "First Copy", "plugin:mangabaka", "12345").await;
+    series_with_external_id(&db, library.id, "Second Copy", "plugin:mangabaka", "12345").await;
+
+    let doc = document(
+        vec![series_doc_with_ids(vec![("plugin:mangabaka", "12345")])],
+        false,
+    );
+    let report = import_with(&state, &token, doc, None).await;
+
+    assert_eq!(report.series[0].disposition, SeriesDisposition::Ambiguous);
+    assert_eq!(report.summary.series_ambiguous, 1);
+}
+
+// ---------------------------------------------------------------------------
+// Library scoping.
+// ---------------------------------------------------------------------------
+
+/// Scoping the import to the target library is what lets it run while the old
+/// copy of a series is still on disk. Unscoped, both copies are live, both
+/// match the same normalized name, and the series reports `ambiguous` with
+/// nothing written.
+#[tokio::test]
+async fn scoping_the_import_to_a_library_resolves_a_duplicate_that_is_otherwise_ambiguous() {
+    let (db, _tmp) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_user, token) = admin_and_token(&db, &state, "lib-scope").await;
+
+    let old_lib = LibraryRepository::create(&db, "Old", "/old", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let new_lib = LibraryRepository::create(&db, "New", "/new", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // The same series, live in both libraries: the files were copied rather
+    // than moved, or the old library has not been rescanned yet.
+    for (lib, root) in [(old_lib.id, "old"), (new_lib.id, "new")] {
+        let series = SeriesRepository::create(&db, lib, "Naruto", None)
+            .await
+            .unwrap();
+        BookRepository::create(
+            &db,
+            &book_model(
+                series.id,
+                lib,
+                &format!("/{root}/Naruto/v01.cbz"),
+                "v01.cbz",
+                "",
+            ),
+            None,
+        )
+        .await
+        .unwrap();
+    }
+
+    let series_doc = ExportSeriesDto {
+        external_ids: vec![],
+        library_relative_path: "Naruto".to_string(),
+        name: "Naruto".to_string(),
+        rating: Some(50),
+        notes: None,
+        rating_updated_at: Some(Utc::now()),
+        books: vec![],
+    };
+
+    // Unscoped: both copies compete.
+    let app = create_test_router(state.clone()).await;
+    let body = import_request(document(vec![series_doc.clone()], false), true);
+    let request = post_json_request_with_auth("/api/v1/reading-progress/import", &body, &token);
+    let (_status, unscoped): (StatusCode, Option<ImportReadingProgressResponse>) =
+        make_json_request(app, request).await;
+    assert_eq!(
+        unscoped.expect("report").series[0].disposition,
+        SeriesDisposition::Ambiguous
+    );
+
+    // Scoped to the new library: only one candidate remains.
+    let app = create_test_router(state.clone()).await;
+    let mut body = import_request(document(vec![series_doc], false), true);
+    body.library_ids = Some(vec![new_lib.id]);
+    let request = post_json_request_with_auth("/api/v1/reading-progress/import", &body, &token);
+    let (_status, scoped): (StatusCode, Option<ImportReadingProgressResponse>) =
+        make_json_request(app, request).await;
+    assert_eq!(
+        scoped.expect("report").series[0].disposition,
+        SeriesDisposition::Matched
+    );
+}
+
+/// Exporting a subset carries only that library's series.
+#[tokio::test]
+async fn exporting_with_library_ids_omits_the_other_libraries() {
+    let (db, _tmp) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (user_id, token) = admin_and_token(&db, &state, "lib-export").await;
+
+    let mut wanted_library = None;
+    for name in ["Kept", "Excluded"] {
+        let lib =
+            LibraryRepository::create(&db, name, &format!("/{name}"), ScanningStrategy::Default)
+                .await
+                .unwrap();
+        let series = SeriesRepository::create(&db, lib.id, name, None)
+            .await
+            .unwrap();
+        let book = BookRepository::create(
+            &db,
+            &book_model(
+                series.id,
+                lib.id,
+                &format!("/{name}/{name}/v01.cbz"),
+                "v01.cbz",
+                "",
+            ),
+            None,
+        )
+        .await
+        .unwrap();
+        ReadProgressRepository::upsert(&db, user_id, book.id, 3, false)
+            .await
+            .unwrap();
+        if name == "Kept" {
+            wanted_library = Some(lib.id);
+        }
+    }
+
+    let app = create_test_router(state.clone()).await;
+    let request = get_request_with_auth(
+        &format!(
+            "/api/v1/reading-progress/export?libraryIds={}",
+            wanted_library.unwrap()
+        ),
+        &token,
+    );
+    let (status, document): (StatusCode, Option<ReadingProgressExportDocument>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let document = document.expect("export document");
+    let names: Vec<&str> = document.series.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(names, vec!["Kept"]);
+}
+
+/// A malformed id is a 400, not a silently wider export.
+#[tokio::test]
+async fn a_malformed_library_id_is_rejected_with_400() {
+    let (db, _tmp) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_user, token) = admin_and_token(&db, &state, "lib-bad").await;
+
+    let app = create_test_router(state.clone()).await;
+    let request = get_request_with_auth(
+        "/api/v1/reading-progress/export?libraryIds=not-a-uuid",
+        &token,
+    );
+    let (status, _body): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
+/// Scoping makes a series match that would otherwise be ambiguous, which is
+/// the point of it. But the reader's sessions still sit on the old library's
+/// live books, so they are *not* moved: progress goes across and the reading
+/// history stays behind. That is a half-migration, and the report has to say
+/// so rather than reading as a clean success.
+#[tokio::test]
+async fn rows_on_a_live_book_elsewhere_are_reported_as_stranded() {
+    let (db, _tmp) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (user_id, token) = admin_and_token(&db, &state, "stranded").await;
+
+    let old_lib = LibraryRepository::create(&db, "Old", "/old", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let new_lib = LibraryRepository::create(&db, "New", "/new", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // The same series in both libraries, both live: the files were copied
+    // rather than moved, so the old library still has them on disk.
+    let mut old_book = None;
+    for (lib, root) in [(old_lib.id, "old"), (new_lib.id, "new")] {
+        let series = SeriesRepository::create(&db, lib, "Naruto", None)
+            .await
+            .unwrap();
+        let book = BookRepository::create(
+            &db,
+            &book_model(
+                series.id,
+                lib,
+                &format!("/{root}/Naruto/v01.cbz"),
+                "v01.cbz",
+                "",
+            ),
+            None,
+        )
+        .await
+        .unwrap();
+        if root == "old" {
+            old_book = Some(book.id);
+        }
+    }
+
+    // A session already banked against the old library's still-live book.
+    let session_id = Uuid::new_v4();
+    let now = Utc::now();
+    ReadProgressRepository::record_session(
+        &db,
+        NewSession::from_client(
+            session_id,
+            user_id,
+            old_book.unwrap(),
+            "device-1",
+            None,
+            SessionKind::Progress,
+            Some(60_000),
+            Some(5),
+            now - Duration::minutes(10),
+            now,
+        )
+        .with_page(5),
+    )
+    .await
+    .unwrap();
+
+    let series_doc = ExportSeriesDto {
+        external_ids: vec![],
+        library_relative_path: "Naruto".to_string(),
+        name: "Naruto".to_string(),
+        rating: None,
+        notes: None,
+        rating_updated_at: None,
+        books: vec![ExportBookDto {
+            path: "v01.cbz".to_string(),
+            file_name: "v01.cbz".to_string(),
+            file_hash: String::new(),
+            partial_hash: String::new(),
+            progress: None,
+            completions: vec![],
+            sessions: Some(vec![ExportSessionDto {
+                id: session_id,
+                device_id: "device-1".to_string(),
+                device_name: None,
+                pass: 1,
+                kind: "progress".to_string(),
+                to_page: Some(5),
+                to_percentage: None,
+                active_duration_ms: Some(60_000),
+                duration_source: "measured".to_string(),
+                pages_read: Some(5),
+                client_started_at: now - Duration::minutes(10),
+                client_ended_at: now,
+                server_recorded_at: now,
+            }]),
+        }],
+    };
+
+    let app = create_test_router(state.clone()).await;
+    let mut body = import_request(document(vec![series_doc], true), true);
+    body.library_ids = Some(vec![new_lib.id]);
+    let request = post_json_request_with_auth("/api/v1/reading-progress/import", &body, &token);
+    let (status, response): (StatusCode, Option<ImportReadingProgressResponse>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+    let report = response.expect("import response");
+
+    // The series matched, so this reads as a success without the notice.
+    assert_eq!(report.series[0].disposition, SeriesDisposition::Matched);
+    assert_eq!(report.summary.rows_stranded, 1);
+    assert_eq!(report.series[0].books[0].sessions.stranded, 1);
+    assert!(
+        report.notices.iter().any(|n| n.contains("left behind")),
+        "a half-migration must be stated, got: {:?}",
+        report.notices
+    );
 }

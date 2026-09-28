@@ -40,7 +40,8 @@ use codex_services::reading_transfer::import::{ImportError, ImportOptions};
     get,
     path = "/api/v1/reading-progress/export",
     params(
-        ("includeSessions" = Option<bool>, Query, description = "Include the reading-session log (default: true). Sessions are the only source of every reading statistic, so this is opt-out rather than opt-in.")
+        ("includeSessions" = Option<bool>, Query, description = "Include the reading-session log (default: true). Sessions are the only source of every reading statistic, so this is opt-out rather than opt-in."),
+        ("libraryIds" = Option<String>, Query, description = "Comma-separated library ids to export. Omitted exports every library the reader has state for.")
     ),
     responses(
         (status = 200, description = "The export document", body = codex_services::reading_transfer::model::ReadingProgressExportDocument),
@@ -60,10 +61,18 @@ pub async fn export_reading_progress(
 ) -> Result<Response, ApiError> {
     auth.require_permission(&Permission::ProgressRead)?;
 
-    let document =
-        codex_services::export_reading_progress(&state.db, auth.user_id, query.include_sessions)
-            .await
-            .map_err(|e| ApiError::Internal(format!("Failed to export reading progress: {e}")))?;
+    let library_ids = query
+        .parsed_library_ids()
+        .map_err(|e| ApiError::BadRequest(format!("Invalid libraryIds: {e}")))?;
+
+    let document = codex_services::export_reading_progress(
+        &state.db,
+        auth.user_id,
+        query.include_sessions,
+        library_ids.as_deref(),
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to export reading progress: {e}")))?;
 
     let filename = format!(
         "codex-reading-progress-{}.json",
@@ -130,6 +139,7 @@ pub async fn import_reading_progress(
         conflict_policy: request.conflict_policy,
         reattach_sessions: request.reattach_sessions,
         accept_stem_matches: request.accept_stem_matches,
+        library_ids: request.library_ids,
     };
 
     let response =
