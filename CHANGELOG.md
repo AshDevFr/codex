@@ -7,6 +7,12 @@ release. A patch release may fix an API bug; it may not add an operation, a para
 field, or a new behaviour on an existing route. A client may therefore treat the release a feature
 first appears under in the 🔌 API sections below as a floor it can rely on.
 
+## [2.6.2] - 2026-09-28
+
+### 🔌 API
+
+- *(api)* State scoped imports as coverage, and carry want-to-read across
+
 ## [2.6.1] - 2026-09-28
 
 ### 🔌 API
