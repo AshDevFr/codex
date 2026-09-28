@@ -25,9 +25,17 @@ function errorMessage(error: ApiErrorLike, fallback: string): string {
  */
 export function useExportReadingProgress() {
   return useMutation({
-    mutationFn: async (includeSessions: boolean) => {
-      const exported =
-        await readingProgressTransferApi.exportProgress(includeSessions);
+    mutationFn: async ({
+      includeSessions,
+      libraryIds,
+    }: {
+      includeSessions: boolean;
+      libraryIds: string[];
+    }) => {
+      const exported = await readingProgressTransferApi.exportProgress(
+        includeSessions,
+        libraryIds,
+      );
 
       const timestamp = new Date().toISOString().slice(0, 10);
       const filename = `codex-reading-progress-${timestamp}.json`;

@@ -95,10 +95,15 @@ async fn sessions_for_user(
 /// `include_sessions = false` omits the `sessions` key entirely on every book
 /// rather than emitting empty arrays, so a client can tell "not exported"
 /// apart from "exported, and there were none".
+/// `library_ids` of `None` exports everything the reader has state for.
+/// `Some` narrows to those libraries, which is what a split wants: carrying
+/// an entire reading history when only one library is being reorganised makes
+/// the file larger and the import's matching job harder for no gain.
 pub async fn export_reading_progress(
     db: &DatabaseConnection,
     user_id: Uuid,
     include_sessions: bool,
+    library_ids: Option<&[Uuid]>,
 ) -> Result<ReadingProgressExportDocument> {
     let progress_rows = ReadProgressRepository::get_by_user(db, user_id).await?;
     let completion_rows = completions_for_user(db, user_id).await?;
@@ -133,7 +138,14 @@ pub async fn export_reading_progress(
     let series_ids: Vec<Uuid> = series_id_set.into_iter().collect();
 
     let mut series_rows = SeriesRepository::get_by_ids(db, &series_ids).await?;
+    if let Some(wanted) = library_ids {
+        series_rows.retain(|s| wanted.contains(&s.library_id));
+    }
     series_rows.sort_by(|a, b| a.path.cmp(&b.path).then_with(|| a.id.cmp(&b.id)));
+
+    // Re-derived after the filter so nothing downstream loads or emits a
+    // series the caller excluded.
+    let series_ids: Vec<Uuid> = series_rows.iter().map(|s| s.id).collect();
 
     let library_ids: Vec<Uuid> = series_rows
         .iter()
@@ -381,7 +393,9 @@ mod tests {
             .await
             .unwrap();
 
-        let doc = export_reading_progress(conn, user, true).await.unwrap();
+        let doc = export_reading_progress(conn, user, true, None)
+            .await
+            .unwrap();
 
         assert_eq!(doc.format, READING_PROGRESS_FORMAT);
         assert_eq!(doc.series.len(), 1);
@@ -449,7 +463,9 @@ mod tests {
         missing.deleted = Set(true);
         missing.update(conn).await.unwrap();
 
-        let doc = export_reading_progress(conn, user, true).await.unwrap();
+        let doc = export_reading_progress(conn, user, true, None)
+            .await
+            .unwrap();
 
         assert_eq!(
             doc.series.len(),
@@ -520,7 +536,9 @@ mod tests {
             .await
             .unwrap();
 
-        let doc_without = export_reading_progress(conn, user, false).await.unwrap();
+        let doc_without = export_reading_progress(conn, user, false, None)
+            .await
+            .unwrap();
         assert!(!doc_without.includes_sessions);
         let book_doc = &doc_without.series[0].books[0];
         assert!(book_doc.sessions.is_none());
@@ -528,7 +546,9 @@ mod tests {
         assert_eq!(book_doc.completions.len(), 1);
         assert!(book_doc.progress.is_some());
 
-        let doc_with = export_reading_progress(conn, user, true).await.unwrap();
+        let doc_with = export_reading_progress(conn, user, true, None)
+            .await
+            .unwrap();
         assert!(doc_with.includes_sessions);
         let book_doc = &doc_with.series[0].books[0];
         assert!(book_doc.sessions.is_some());
@@ -684,7 +704,9 @@ mod tests {
                 .unwrap();
         }
 
-        let doc = export_reading_progress(conn, user, true).await.unwrap();
+        let doc = export_reading_progress(conn, user, true, None)
+            .await
+            .unwrap();
         assert_eq!(doc.series.len(), SERIES_COUNT);
 
         let json = serde_json::to_vec(&doc).unwrap();
@@ -746,7 +768,9 @@ mod tests {
             .await
             .unwrap();
 
-        let doc = export_reading_progress(conn, user_a, true).await.unwrap();
+        let doc = export_reading_progress(conn, user_a, true, None)
+            .await
+            .unwrap();
         assert_eq!(doc.series.len(), 1);
         assert_eq!(doc.series[0].books.len(), 1);
         assert_eq!(

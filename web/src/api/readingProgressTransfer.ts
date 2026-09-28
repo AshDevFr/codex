@@ -22,13 +22,25 @@ export type BookDisposition = components["schemas"]["BookDisposition"];
 const IMPORT_TIMEOUT_MS = 10 * 60_000;
 
 export const readingProgressTransferApi = {
-  /** Export the current user's reading progress as a downloadable document. */
+  /**
+   * Export the current user's reading progress as a downloadable document.
+   * An empty `libraryIds` exports every library the reader has state for.
+   */
   exportProgress: async (
     includeSessions = true,
+    libraryIds: string[] = [],
   ): Promise<ReadingProgressExportDocument> => {
     const response = await api.get<ReadingProgressExportDocument>(
       "/reading-progress/export",
-      { params: { includeSessions } },
+      {
+        params: {
+          includeSessions,
+          // Comma-separated: the endpoint reads one value, not a repeated key.
+          ...(libraryIds.length > 0
+            ? { libraryIds: libraryIds.join(",") }
+            : {}),
+        },
+      },
     );
     return response.data;
   },

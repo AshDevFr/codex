@@ -206,9 +206,16 @@ pub struct ImportReadingProgressRequest {
     #[serde(default)]
     pub hash_mode: HashMode,
     /// External-id sources to try, in order, before falling back to path and
-    /// then normalized name. An empty list skips straight to path matching.
+    /// then normalized name.
+    ///
+    /// Omitted means every source the exported series carries, in the order
+    /// the document lists them. An external id survives a rename and a move
+    /// where neither the path nor the name does, so defaulting this to
+    /// nothing silently downgrades every import to the two weakest steps.
+    /// An explicit empty list still skips straight to path matching, for a
+    /// caller that wants exactly that.
     #[serde(default)]
-    pub source_preference: Vec<String>,
+    pub source_preference: Option<Vec<String>>,
     #[serde(default)]
     pub conflict_policy: ConflictPolicy,
     /// When a session or completion in the file already exists as the
@@ -222,6 +229,13 @@ pub struct ImportReadingProgressRequest {
     /// applying it silently risks writing progress onto the wrong one.
     #[serde(default)]
     pub accept_stem_matches: bool,
+    /// Which libraries a series may match into. Omitted searches every
+    /// library the reader can see. Narrowing to the target library is what
+    /// lets an import run before the old library has been rescanned: two
+    /// copies of one series would otherwise both match and report
+    /// `ambiguous`.
+    #[serde(default)]
+    pub library_ids: Option<Vec<Uuid>>,
     pub file: ReadingProgressExportDocument,
 }
 
@@ -275,7 +289,15 @@ pub struct WriteCounts {
     /// new one.
     pub reattached: u32,
     /// Already present with the same book attached; re-importing is a no-op.
+    /// Includes `stranded`, so `inserted + reattached + skipped` still totals
+    /// every row in the file.
     pub skipped: u32,
+    /// Skipped because the row sits on a book that is still live in another
+    /// library, which is not the same thing as a harmless re-import: the
+    /// reading history stays behind while the progress moves. Reattaching it
+    /// would strip a library the reader may still be using, so the import
+    /// reports it instead of guessing.
+    pub stranded: u32,
 }
 
 /// The outcome for one book in the import file.
@@ -340,6 +362,9 @@ pub struct ImportSummary {
     pub completions_reattached: u32,
     pub sessions_inserted: u32,
     pub sessions_reattached: u32,
+    /// Rows left behind on a live book in another library. Non-zero means the
+    /// import moved less than it appears to have.
+    pub rows_stranded: u32,
 }
 
 /// The response for both a real import and a dry run: the shape is identical

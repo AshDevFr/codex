@@ -10,6 +10,7 @@ pub use codex_services::reading_transfer::model::*;
 
 use serde::Deserialize;
 use utoipa::ToSchema;
+use uuid::Uuid;
 
 fn default_true() -> bool {
     true
@@ -24,12 +25,39 @@ pub struct ExportReadingProgressQuery {
     /// notice until the numbers are gone.
     #[serde(default = "default_true")]
     pub include_sessions: bool,
+
+    /// Comma-separated library ids to export, e.g.
+    /// `?libraryIds=<uuid>,<uuid>`. Omitted exports every library the reader
+    /// has state for.
+    ///
+    /// Comma-separated rather than a repeated key because axum's `Query`
+    /// extractor deserializes with `serde_urlencoded`, which collapses a
+    /// repeated key instead of collecting it into a `Vec`.
+    pub library_ids: Option<String>,
+}
+
+impl ExportReadingProgressQuery {
+    /// Parse `library_ids`, rejecting anything that is not a uuid rather than
+    /// silently exporting more than the caller asked for.
+    pub fn parsed_library_ids(&self) -> Result<Option<Vec<Uuid>>, uuid::Error> {
+        let Some(raw) = self.library_ids.as_deref() else {
+            return Ok(None);
+        };
+        let ids = raw
+            .split(',')
+            .map(str::trim)
+            .filter(|part| !part.is_empty())
+            .map(Uuid::parse_str)
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Some(ids))
+    }
 }
 
 impl Default for ExportReadingProgressQuery {
     fn default() -> Self {
         Self {
             include_sessions: true,
+            library_ids: None,
         }
     }
 }

@@ -131,7 +131,9 @@ describe("ReadingProgressTransferSettings", () => {
     await user.click(screen.getByRole("button", { name: /download export/i }));
 
     await waitFor(() => {
-      expect(exportProgress).toHaveBeenCalledWith(true);
+      // No library selected means every library, which the client sends as
+      // an empty list rather than a libraryIds parameter.
+      expect(exportProgress).toHaveBeenCalledWith(true, []);
     });
   });
 
@@ -157,6 +159,27 @@ describe("ReadingProgressTransferSettings", () => {
     expect(importProgress).toHaveBeenCalledWith(
       expect.objectContaining({ dryRun: true }),
     );
+  });
+
+  it("omits sourcePreference rather than sending an empty list", async () => {
+    // An empty list means "skip external ids" to the server, and an id is the
+    // only matching key that survives a rename. Sending [] here silently
+    // downgraded every import to path and name matching.
+    importProgress.mockResolvedValue(dryRunResponse());
+    const user = userEvent.setup();
+    renderWithProviders(<ReadingProgressTransferSettings />);
+
+    await uploadDocument(user);
+    await user.click(
+      screen.getByRole("button", { name: /preview \(dry run\)/i }),
+    );
+
+    await waitFor(() => {
+      expect(importProgress).toHaveBeenCalled();
+    });
+    const request = importProgress.mock.calls[0][0];
+    expect(request.sourcePreference).toBeUndefined();
+    expect(request.libraryIds).toBeUndefined();
   });
 
   it("re-locks Apply when an option changes after the preview", async () => {

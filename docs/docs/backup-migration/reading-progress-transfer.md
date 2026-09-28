@@ -100,16 +100,44 @@ that the content exists.
 |---|---|---|
 | `dryRun` | `false` | Report the outcome without writing anything |
 | `hashMode` | `verify` | `off` ignores hashes; `verify` rejects a path/name match whose `fileHash` disagrees; `match` additionally uses `fileHash`/`partialHash` to find a book when path and name both fail (rescues a bulk rename) |
-| `sourcePreference` | `[]` | External-id sources to try, in order, before falling back to path and name |
+| `sourcePreference` | every source in the file | External-id sources to try, in order, before falling back to path and name. Omit it to try each source the exported series carries, in document order. An explicit `[]` skips external ids entirely and goes straight to path matching |
 | `conflictPolicy` | `newest` | How to resolve a book/rating that already has a value on this side: `newest` (later `updatedAt` wins), `furthest` (further into the book wins; a finished read always beats a partial one), `skip_existing`, or `overwrite`. A rating has no position, so `furthest` behaves like `newest` for ratings, and a file without a rating timestamp never replaces an existing rating except under `overwrite` |
 | `reattachSessions` | `true` | When a session or completion in the file already exists as your own row but is not on a live book (its book was deleted, or the scanner marked it deleted after the file moved), move it onto the matched book instead of skipping it. A no-op, reported as such, when the file carries no sessions |
 | `acceptStemMatches` | `false` | Apply a book match found only by filename stem |
+| `libraryIds` | all libraries | Which libraries a series may match into. Naming the target library is what lets an import run before the old library has been rescanned: otherwise both copies of a series are live, both match, and the series is reported `ambiguous` |
 
-`GET /api/v1/reading-progress/export` takes one query parameter,
+`GET /api/v1/reading-progress/export` takes two query parameters.
+
 `includeSessions` (default `true`). Turn it off only if you specifically want
 a smaller file: sessions are the only source of every reading statistic, so
 leaving them out is easy to do by accident and easy not to notice until the
 numbers are gone.
+
+`libraryIds`, a comma-separated list (for example
+`?libraryIds=<uuid>,<uuid>`). Omitted, the export carries every library you
+have reading state for. Narrowing it to the library you are reorganising
+keeps the file small and gives the import less to match against. A value that
+is not a uuid is a `400` rather than a quietly wider export.
+
+## When history is left behind
+
+Reattachment moves a session or completion onto the matched book when its own
+book is gone (`bookId` is null after a hard delete) or the scanner has marked
+it deleted because the file moved. Both are the normal shapes of a library
+split, so the usual sequence needs no special care: export, delete the old
+library, import into the new one.
+
+It does **not** move a row whose book is still live somewhere. Reattaching
+then would strip reading history out of a library you may still be using, so
+the import leaves it alone and counts it as `stranded`, both per book and as
+`rowsStranded` in the summary, with a notice on the report.
+
+This is worth watching for when you scope an import with `libraryIds` while
+the old copy of a series is still on disk. The scope makes the series match
+where it would otherwise be reported `ambiguous`, so the progress moves and
+the history does not. The fix is the notice's advice: delete or rescan the
+other library so its books are no longer live, then import again. The reused
+row ids make that second import safe to run.
 
 ## The response
 
