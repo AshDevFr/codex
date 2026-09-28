@@ -7,6 +7,12 @@ release. A patch release may fix an API bug; it may not add an operation, a para
 field, or a new behaviour on an existing route. A client may therefore treat the release a feature
 first appears under in the 🔌 API sections below as a floor it can rely on.
 
+## [2.6.1] - 2026-09-28
+
+### 🔌 API
+
+- *(api)* Let an import actually use external ids, and scope it to a library
+
 ## [2.6.0] - 2026-09-28
 
 ### 🔌 API
