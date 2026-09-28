@@ -12310,6 +12310,8 @@ export interface components {
              *     `includeSessions=false`.
              */
             sessions?: components["schemas"]["ExportSessionDto"][] | null;
+            /** @description Present when this book, rather than its whole series, is queued. */
+            wantToRead?: components["schemas"]["ExportWantToReadDto"];
         };
         /**
          * @description One finished read-through. Keeps its original id so re-importing the same
@@ -12418,6 +12420,11 @@ export interface components {
              *     overwrites an existing rating except under `overwrite`.
              */
             ratingUpdatedAt?: string | null;
+            /**
+             * @description Present when the whole series is queued. A queued series is often one
+             *     the reader never started, so it can appear with no books at all.
+             */
+            wantToRead?: components["schemas"]["ExportWantToReadDto"];
         };
         /**
          * @description One row from the reading-session log. `r2_progression` is deliberately
@@ -12455,6 +12462,22 @@ export interface components {
             toPage?: number | null;
             /** Format: double */
             toPercentage?: number | null;
+        };
+        /**
+         * @description A want-to-read queue entry, attached to the series or book it flags.
+         *
+         *     `position` is carried so imported entries keep their original relative
+         *     order: the queue is ordered globally across series and books, and that
+         *     order is otherwise lost when the file groups entries by series.
+         *     `added_at` is carried because the queue's newest and oldest sorts read it,
+         *     and stamping the import time would reorder both views by when the import
+         *     happened to run.
+         */
+        ExportWantToReadDto: {
+            /** Format: date-time */
+            addedAt: string;
+            /** Format: int32 */
+            position: number;
         };
         /**
          * @description External ID context for template evaluation.
@@ -13326,6 +13349,13 @@ export interface components {
              */
             reattachSessions?: boolean;
             /**
+             * @description Put queued series and books back into want-to-read. On by default:
+             *     carrying the queue across a split is the reason it is exported.
+             *     Restored entries land after anything already queued, in their original
+             *     relative order, and an entry already queued is left where it is.
+             */
+            restoreWantToRead?: boolean;
+            /**
              * @description External-id sources to try, in order, before falling back to path and
              *     then normalized name.
              *
@@ -13381,8 +13411,30 @@ export interface components {
             booksAmbiguous: number;
             /** Format: int32 */
             booksHashMismatch: number;
+            /**
+             * Format: int32
+             * @description Live books in the scoped libraries. `None` when not scoped.
+             */
+            booksInSelectedLibraries?: number | null;
+            /**
+             * Format: int32
+             * @description Books counted in `books_unmatched` only because their whole series did
+             *     not match.
+             *
+             *     `books_unmatched` mixes two outcomes. In a scoped import these are
+             *     books belonging to other libraries, which is expected. The remainder,
+             *     `books_unmatched - books_in_unmatched_series`, are books missed inside
+             *     a series that *did* match, which is worth a reader's attention and
+             *     must not be hidden under the reassuring label.
+             */
+            booksInUnmatchedSeries: number;
             /** Format: int32 */
             booksMatched: number;
+            /**
+             * Format: int32
+             * @description Distinct destination books matched, for the same reason.
+             */
+            booksMatchedDistinct: number;
             /** Format: int32 */
             booksStemMatched: number;
             /** Format: int32 */
@@ -13407,8 +13459,28 @@ export interface components {
             seriesAmbiguous: number;
             /** Format: int32 */
             seriesCommitted: number;
+            /**
+             * Format: int32
+             * @description Live series in the libraries the import was scoped to. `None` when the
+             *     import was not scoped: the denominator would then be every series the
+             *     reader can see, which measures nothing.
+             *
+             *     With this set, a file series that did not match is almost always one
+             *     that belongs to another library, which is expected when a split
+             *     imports into one of several new libraries, not a matching failure.
+             */
+            seriesInSelectedLibraries?: number | null;
             /** Format: int32 */
             seriesMatched: number;
+            /**
+             * Format: int32
+             * @description Distinct destination series that at least one file series resolved to.
+             *
+             *     `series_matched` counts file series, and two of those can resolve to
+             *     one destination series by name, so it can exceed what the destination
+             *     holds. Coverage of the destination has to count this instead.
+             */
+            seriesMatchedDistinct: number;
             /** Format: int32 */
             seriesTotal: number;
             /** Format: int32 */
@@ -13417,6 +13489,11 @@ export interface components {
             sessionsInserted: number;
             /** Format: int32 */
             sessionsReattached: number;
+            /**
+             * Format: int32
+             * @description Queue entries put back into want-to-read.
+             */
+            wantToReadRestored: number;
         };
         /**
          * @description Which layer supplied a value the user is inheriting.

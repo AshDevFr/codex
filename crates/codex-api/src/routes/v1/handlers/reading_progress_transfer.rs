@@ -140,6 +140,7 @@ pub async fn import_reading_progress(
         reattach_sessions: request.reattach_sessions,
         accept_stem_matches: request.accept_stem_matches,
         library_ids: request.library_ids,
+        restore_want_to_read: request.restore_want_to_read,
     };
 
     let response =

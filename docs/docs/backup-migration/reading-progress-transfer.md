@@ -6,8 +6,9 @@
 Reorganising a library, whether splitting one root into several, moving files
 to a new path, or moving your whole collection to a different Codex instance,
 mints new series and book ids. Nothing about your reading history follows
-automatically: `read_progress`, `read_completions`, `reading_sessions`, and
-your series ratings are all keyed on the ids the old scan created.
+automatically: `read_progress`, `read_completions`, `reading_sessions`, your
+series ratings, and your want-to-read queue are all keyed on the ids the old
+scan created.
 
 `GET /api/v1/reading-progress/export` and `POST /api/v1/reading-progress/import`
 exist to carry that state across the move. Export writes one JSON file for your
@@ -104,6 +105,7 @@ that the content exists.
 | `conflictPolicy` | `newest` | How to resolve a book/rating that already has a value on this side: `newest` (later `updatedAt` wins), `furthest` (further into the book wins; a finished read always beats a partial one), `skip_existing`, or `overwrite`. A rating has no position, so `furthest` behaves like `newest` for ratings, and a file without a rating timestamp never replaces an existing rating except under `overwrite` |
 | `reattachSessions` | `true` | When a session or completion in the file already exists as your own row but is not on a live book (its book was deleted, or the scanner marked it deleted after the file moved), move it onto the matched book instead of skipping it. A no-op, reported as such, when the file carries no sessions |
 | `acceptStemMatches` | `false` | Apply a book match found only by filename stem |
+| `restoreWantToRead` | `true` | Put queued series and books back into want-to-read. See [Want to read](#want-to-read) |
 | `libraryIds` | all libraries | Which libraries a series may match into. Naming the target library is what lets an import run before the old library has been rescanned: otherwise both copies of a series are live, both match, and the series is reported `ambiguous` |
 
 `GET /api/v1/reading-progress/export` takes two query parameters.
@@ -139,6 +141,22 @@ the history does not. The fix is the notice's advice: delete or rescan the
 other library so its books are no longer live, then import again. The reused
 row ids make that second import safe to run.
 
+## Want to read
+
+Your want-to-read queue travels with the export: a whole series you queued,
+and a single book you queued on its own. A series you queued but never
+started is included too, which matters, because that is the usual reason
+anything is on the list, and it has no reading state to pull it in otherwise.
+
+On import, restored entries go **after** anything already in your queue, in
+the order they held on the old library. Anything already queued keeps its
+place: nothing you arranged by hand is moved. Each entry keeps the date it was
+first queued, so sorting the list by newest or oldest still means what it
+did. Importing the same file twice adds nothing the second time.
+
+Entries are restored only onto a series that matched, or a book whose match
+was applied, so a stem match you did not accept restores nothing.
+
 ## The response
 
 The response is the same shape whether or not `dryRun` is set: counts, plus a
@@ -146,6 +164,27 @@ per-series and per-book breakdown of what matched, what did not, and what was
 (or would be) written. Each series is applied in its own transaction, so a bad
 series does not cost every other series in the file its progress; the
 per-series `committed` field says which ones actually landed.
+
+### Reading the counts after a scoped import
+
+When the import names `libraryIds`, most unmatched series are not a problem:
+splitting a library exports the whole old library and imports it into one of
+several new ones, so series belonging to the others are *meant* to miss. The
+summary therefore also states coverage of the destination:
+
+| Field | Meaning |
+|---|---|
+| `seriesInSelectedLibraries`, `booksInSelectedLibraries` | What the selected libraries hold (only what you can see). Absent when the import was not scoped |
+| `seriesMatchedDistinct`, `booksMatchedDistinct` | How many of those received state. Distinct, because two series in the file can resolve to one here |
+| `booksInUnmatchedSeries` | Books whose whole series did not match. After a scoped import, these belong to other libraries |
+
+`booksUnmatched - booksInUnmatchedSeries` is the number worth looking at:
+books missed inside a series that **did** match. The Settings page shows
+these as "missed" and sets the rest aside, reading, for example, *32 of the
+32 series in Shonen matched*.
+
+Without `libraryIds` there is no destination to measure against, so these
+fields are absent and an unmatched series means what it says.
 
 Ratings must be between 1 and 100, the same range the rating endpoint
 enforces; a file with any other value is rejected with a 400 naming the
@@ -155,7 +194,9 @@ of books with their sessions.
 ## Limitations
 
 - Metadata, collections, read lists, and covers are not carried; this moves
-  reading state only. See [Data Exports](../exports) for a metadata export, and
+  reading state and your want-to-read queue only. Read lists have their own
+  ordering and collections can be rule-driven, so neither follows the series
+  match cleanly. See [Data Exports](../exports) for a metadata export, and
   [`codex export`](./export-import-copy.md) for a full instance backup.
 - A series with no external ids whose name and path both changed will not
   match. Give it an external id (or a manual one) before the move if you can.

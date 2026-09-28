@@ -97,36 +97,92 @@ function bookDispositionColor(disposition: BookDisposition): string {
   }
 }
 
-function SummaryLine({ report }: { report: ImportReadingProgressResponse }) {
+/**
+ * The import's headline counts.
+ *
+ * Scoped, the counts are stated in terms of the destination: a split exports a
+ * whole old library and imports it into one of several new ones, so most file
+ * series are meant to miss, and reporting them as "unmatched" made a complete
+ * import read like a failure. Unscoped there is no destination to measure
+ * against, and an unmatched series really was not found, so the plain counts
+ * stay.
+ */
+export function SummaryLine({
+  report,
+  scopeLabel,
+}: {
+  report: ImportReadingProgressResponse;
+  /** Name of the one selected library, or a phrase for several; null if unscoped. */
+  scopeLabel: string | null;
+}) {
   const { summary } = report;
+  const committed = !report.dryRun && (
+    <>
+      , <b>{summary.seriesCommitted}</b> committed
+    </>
+  );
+  const writes = (
+    <Text size="sm">
+      Progress written: <b>{summary.progressWritten}</b> &middot; Completions:{" "}
+      <b>{summary.completionsInserted}</b> inserted /{" "}
+      <b>{summary.completionsReattached}</b> reattached &middot; Sessions:{" "}
+      <b>{summary.sessionsInserted}</b> inserted /{" "}
+      <b>{summary.sessionsReattached}</b> reattached &middot; Ratings:{" "}
+      <b>{summary.ratingsWritten}</b> &middot; Want to read:{" "}
+      <b>{summary.wantToReadRestored}</b>
+    </Text>
+  );
+
+  const seriesInScope = summary.seriesInSelectedLibraries;
+  const booksInScope = summary.booksInSelectedLibraries;
+  if (scopeLabel === null || seriesInScope == null || booksInScope == null) {
+    return (
+      <Group gap="lg" wrap="wrap">
+        <Text size="sm">
+          Series: <b>{summary.seriesMatched}</b> matched,{" "}
+          <b>{summary.seriesAmbiguous}</b> ambiguous,{" "}
+          <b>{summary.seriesUnmatched}</b> unmatched
+          {committed}
+        </Text>
+        <Text size="sm">
+          Books: <b>{summary.booksMatched}</b> matched,{" "}
+          <b>{summary.booksStemMatched}</b> stem match,{" "}
+          <b>{summary.booksAmbiguous}</b> ambiguous,{" "}
+          <b>{summary.booksUnmatched}</b> unmatched,{" "}
+          <b>{summary.booksHashMismatch}</b> hash mismatch
+        </Text>
+        {writes}
+      </Group>
+    );
+  }
+
+  // Books missed inside a series that did match are a real gap and stay
+  // visible; only books whose whole series lives elsewhere are set aside.
+  const booksMissed = summary.booksUnmatched - summary.booksInUnmatchedSeries;
   return (
-    <Group gap="lg" wrap="wrap">
-      <Text size="sm">
-        Series: <b>{summary.seriesMatched}</b> matched,{" "}
-        <b>{summary.seriesAmbiguous}</b> ambiguous,{" "}
-        <b>{summary.seriesUnmatched}</b> unmatched
-        {!report.dryRun && (
-          <>
-            , <b>{summary.seriesCommitted}</b> committed
-          </>
-        )}
+    <Stack gap={4}>
+      <Group gap="lg" wrap="wrap">
+        <Text size="sm">
+          Series: <b>{summary.seriesMatchedDistinct}</b> of the{" "}
+          <b>{seriesInScope}</b> in {scopeLabel} matched,{" "}
+          <b>{summary.seriesAmbiguous}</b> ambiguous
+          {committed}
+        </Text>
+        <Text size="sm">
+          Books: <b>{summary.booksMatchedDistinct}</b> of the{" "}
+          <b>{booksInScope}</b> in {scopeLabel} matched, <b>{booksMissed}</b>{" "}
+          missed, <b>{summary.booksStemMatched}</b> stem match,{" "}
+          <b>{summary.booksAmbiguous}</b> ambiguous,{" "}
+          <b>{summary.booksHashMismatch}</b> hash mismatch
+        </Text>
+        {writes}
+      </Group>
+      <Text size="xs" c="dimmed">
+        The file also holds {summary.seriesUnmatched} series (
+        {summary.booksInUnmatchedSeries} books) that belong to other libraries.
+        That is expected when importing part of a split.
       </Text>
-      <Text size="sm">
-        Books: <b>{summary.booksMatched}</b> matched,{" "}
-        <b>{summary.booksStemMatched}</b> stem match,{" "}
-        <b>{summary.booksAmbiguous}</b> ambiguous,{" "}
-        <b>{summary.booksUnmatched}</b> unmatched,{" "}
-        <b>{summary.booksHashMismatch}</b> hash mismatch
-      </Text>
-      <Text size="sm">
-        Progress written: <b>{summary.progressWritten}</b> &middot; Completions:{" "}
-        <b>{summary.completionsInserted}</b> inserted /{" "}
-        <b>{summary.completionsReattached}</b> reattached &middot; Sessions:{" "}
-        <b>{summary.sessionsInserted}</b> inserted /{" "}
-        <b>{summary.sessionsReattached}</b> reattached &middot; Ratings:{" "}
-        <b>{summary.ratingsWritten}</b>
-      </Text>
-    </Group>
+    </Stack>
   );
 }
 
@@ -222,6 +278,7 @@ export function ReadingProgressTransferSettings() {
   const [exportLibraryIds, setExportLibraryIds] = useState<string[]>([]);
   const [importLibraryIds, setImportLibraryIds] = useState<string[]>([]);
   const [sourcePreference, setSourcePreference] = useState<string[]>([]);
+  const [restoreWantToRead, setRestoreWantToRead] = useState(true);
 
   const [file, setFile] = useState<File | null>(null);
   const [parsedDocument, setParsedDocument] =
@@ -255,6 +312,14 @@ export function ReadingProgressTransferSettings() {
     }
     return [...seen];
   }, [parsedDocument]);
+
+  const scopeLabel =
+    importLibraryIds.length === 0
+      ? null
+      : importLibraryIds.length === 1
+        ? (libraries.find((library) => library.id === importLibraryIds[0])
+            ?.name ?? "the selected library")
+        : "the selected libraries";
 
   const exportMutation = useExportReadingProgress();
   const importMutation = useImportReadingProgress();
@@ -291,6 +356,7 @@ export function ReadingProgressTransferSettings() {
         sourcePreference:
           sourcePreference.length > 0 ? sourcePreference : undefined,
         libraryIds: importLibraryIds.length > 0 ? importLibraryIds : undefined,
+        restoreWantToRead,
         conflictPolicy,
         reattachSessions,
         acceptStemMatches,
@@ -507,6 +573,17 @@ export function ReadingProgressTransferSettings() {
             }}
           />
 
+          <Checkbox
+            label="Restore want to read"
+            description="Put series and books that were queued on the old library back in your want-to-read list. They go after anything already queued, in their original order; anything already queued keeps its place."
+            checked={restoreWantToRead}
+            disabled={busy}
+            onChange={(event) => {
+              setRestoreWantToRead(event.currentTarget.checked);
+              clearPreview();
+            }}
+          />
+
           {importError && (
             <Alert
               color="red"
@@ -555,7 +632,7 @@ export function ReadingProgressTransferSettings() {
                   {notice}
                 </Text>
               ))}
-              <SummaryLine report={report} />
+              <SummaryLine report={report} scopeLabel={scopeLabel} />
               <ReportTable report={report} />
             </Stack>
           )}

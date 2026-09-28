@@ -23,7 +23,7 @@ use std::fmt;
 use uuid::Uuid;
 
 use codex_db::entities::{
-    books, read_completions, read_progress, reading_sessions, user_series_ratings,
+    books, read_completions, read_progress, reading_sessions, user_series_ratings, want_to_read,
 };
 use codex_db::repositories::{
     BookRepository, LibraryRepository, SeriesRepository, UserSeriesRatingRepository,
@@ -54,6 +54,8 @@ pub struct ImportOptions {
     /// the reader can see; `Some` narrows the search, which is how an import
     /// can run while the old copy of a series is still present.
     pub library_ids: Option<Vec<Uuid>>,
+    /// See [`ImportReadingProgressRequest::restore_want_to_read`].
+    pub restore_want_to_read: bool,
 }
 
 /// A rejection worth a 400, versus every other failure which is a 500.
@@ -341,6 +343,120 @@ struct PlannedState {
     ratings: HashMap<Uuid, user_series_ratings::Model>,
     /// Completion and session ids already claimed by an earlier entry.
     rows: HashSet<Uuid>,
+    /// Series and books already in the reader's queue, or queued by an earlier
+    /// entry in this import. Two file series can resolve to one destination
+    /// series, and the second must not queue it again.
+    queued_series: HashSet<Uuid>,
+    queued_books: HashSet<Uuid>,
+}
+
+/// Which queue a restored want-to-read entry flags.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum QueueTarget {
+    Series(Uuid),
+    Book(Uuid),
+}
+
+/// A want-to-read entry the import will write, with its position already
+/// fixed. See [`rank_queue_entries`] for why positions are decided before any
+/// series is applied.
+#[derive(Debug, Clone)]
+struct QueueInsert {
+    target: QueueTarget,
+    position: i32,
+    added_at: DateTime<Utc>,
+}
+
+/// Where a want-to-read entry sits in the file: its series' index, and its
+/// book's index within that series, or `None` for a series-level entry.
+type QueueKey = (usize, Option<usize>);
+
+/// Rank every want-to-read entry in the file by its original queue position.
+///
+/// The queue is ordered globally across series and books, but the file groups
+/// entries by series and the import applies one series per transaction. So
+/// positions are decided here, once, for the whole file: each entry's rank in
+/// its original order, which the caller offsets past the reader's existing
+/// queue. Each series transaction then writes entries whose positions are
+/// already fixed, and the original relative order survives regardless of the
+/// order series happen to be applied in. Entries that are later skipped leave
+/// gaps, which the custom sort does not mind.
+///
+/// Keyed by (series index, book index), `None` for a series-level entry.
+fn rank_queue_entries(document: &ReadingProgressExportDocument) -> HashMap<QueueKey, i32> {
+    let mut entries: Vec<(QueueKey, i32, DateTime<Utc>)> = Vec::new();
+    for (series_index, series_doc) in document.series.iter().enumerate() {
+        if let Some(entry) = &series_doc.want_to_read {
+            entries.push(((series_index, None), entry.position, entry.added_at));
+        }
+        for (book_index, book_doc) in series_doc.books.iter().enumerate() {
+            if let Some(entry) = &book_doc.want_to_read {
+                entries.push((
+                    (series_index, Some(book_index)),
+                    entry.position,
+                    entry.added_at,
+                ));
+            }
+        }
+    }
+    // Ties in position fall back to when the entry was queued, then to the
+    // file's own order, so the result never depends on hash iteration.
+    entries.sort_by(|a, b| a.1.cmp(&b.1).then(a.2.cmp(&b.2)).then(a.0.cmp(&b.0)));
+    entries
+        .into_iter()
+        .enumerate()
+        .map(|(rank, (key, _, _))| (key, rank as i32))
+        .collect()
+}
+
+/// The queue entries one matched series will write.
+///
+/// An entry is written only onto a series that matched, or a book whose match
+/// was applied, and only when that series or book is not already queued.
+/// Already-queued entries keep their place: moving them would reshuffle a
+/// queue the reader ordered by hand.
+fn plan_queue(
+    series_index: usize,
+    series_id: Uuid,
+    series_doc: &ExportSeriesDto,
+    plans: &[BookPlan<'_>],
+    ranks: &HashMap<QueueKey, i32>,
+    base_position: i32,
+    planned: &mut PlannedState,
+) -> Vec<QueueInsert> {
+    let mut inserts = Vec::new();
+
+    // Every entry in the file is ranked, so a missing rank would be a bug;
+    // skipping it is better than panicking a request over it.
+    if let Some(entry) = &series_doc.want_to_read
+        && let Some(rank) = ranks.get(&(series_index, None))
+        && planned.queued_series.insert(series_id)
+    {
+        inserts.push(QueueInsert {
+            target: QueueTarget::Series(series_id),
+            position: base_position + rank,
+            added_at: entry.added_at,
+        });
+    }
+
+    for (book_index, plan) in plans.iter().enumerate() {
+        let (Some(entry), Some(book_id)) = (&plan.book_doc.want_to_read, plan.matched_book_id)
+        else {
+            continue;
+        };
+        let Some(rank) = ranks.get(&(series_index, Some(book_index))) else {
+            continue;
+        };
+        if plan.applied && planned.queued_books.insert(book_id) {
+            inserts.push(QueueInsert {
+                target: QueueTarget::Book(book_id),
+                position: base_position + rank,
+                added_at: entry.added_at,
+            });
+        }
+    }
+
+    inserts
 }
 
 /// Bind-parameter-safe batch size for `IN (...)` lookups.
@@ -853,6 +969,7 @@ async fn apply_series(
     series_id: Uuid,
     plans: &[BookPlan<'_>],
     rating_decision: &RatingDecision,
+    queue_inserts: &[QueueInsert],
 ) -> Result<()> {
     let txn = db.begin().await?;
 
@@ -876,6 +993,26 @@ async fn apply_series(
     }
 
     apply_rating(&txn, user_id, series_id, rating_decision).await?;
+
+    // Written with an explicit position and date rather than through
+    // `WantToReadRepository::add_series`, which needs a plain connection,
+    // stamps the current time, and rescans the whole queue for a position.
+    for insert in queue_inserts {
+        let (series, book) = match insert.target {
+            QueueTarget::Series(id) => (Some(id), None),
+            QueueTarget::Book(id) => (None, Some(id)),
+        };
+        want_to_read::ActiveModel {
+            id: Set(Uuid::new_v4()),
+            user_id: Set(user_id),
+            series_id: Set(series),
+            book_id: Set(book),
+            added_at: Set(insert.added_at),
+            position: Set(insert.position),
+        }
+        .insert(&txn)
+        .await?;
+    }
 
     txn.commit().await?;
     Ok(())
@@ -1055,7 +1192,25 @@ pub async fn import_reading_progress(
     let mut series_reports = Vec::with_capacity(document.series.len());
     let mut planned = PlannedState::default();
 
-    for series_doc in &document.series {
+    // Decided once for the whole file; see `rank_queue_entries`.
+    let queue_ranks = rank_queue_entries(document);
+    let mut queue_base = 0;
+    if options.restore_want_to_read && !queue_ranks.is_empty() {
+        let existing = want_to_read::Entity::find()
+            .filter(want_to_read::Column::UserId.eq(user_id))
+            .all(db)
+            .await
+            .map_err(|e| ImportError::Database(e.into()))?;
+        queue_base = existing
+            .iter()
+            .map(|e| e.position)
+            .max()
+            .map_or(0, |m| m + 1);
+        planned.queued_series = existing.iter().filter_map(|e| e.series_id).collect();
+        planned.queued_books = existing.iter().filter_map(|e| e.book_id).collect();
+    }
+
+    for (series_index, series_doc) in document.series.iter().enumerate() {
         summary.series_total += 1;
 
         // A failure in one series is reported on that series and the import
@@ -1134,12 +1289,33 @@ pub async fn import_reading_progress(
                 }
             };
 
+        let queue_inserts = if options.restore_want_to_read {
+            plan_queue(
+                series_index,
+                series_id,
+                series_doc,
+                &plans,
+                &queue_ranks,
+                queue_base,
+                &mut planned,
+            )
+        } else {
+            Vec::new()
+        };
+
         let outcome = if options.dry_run {
             Ok(false)
         } else {
-            apply_series(db, user_id, series_id, &plans, &rating_decision)
-                .await
-                .map(|()| true)
+            apply_series(
+                db,
+                user_id,
+                series_id,
+                &plans,
+                &rating_decision,
+                &queue_inserts,
+            )
+            .await
+            .map(|()| true)
         };
 
         let books: Vec<ImportBookReport> = plans.iter().map(book_report_from_plan).collect();
@@ -1152,6 +1328,7 @@ pub async fn import_reading_progress(
                     tally_book_report(&mut summary, report, true);
                 }
                 tally_rating_write(&mut summary, &rating_decision);
+                summary.want_to_read_restored += queue_inserts.len() as u32;
                 series_reports.push(ImportSeriesReport {
                     library_relative_path: series_doc.library_relative_path.clone(),
                     name: series_doc.name.clone(),
@@ -1184,6 +1361,36 @@ pub async fn import_reading_progress(
         }
     }
 
+    // Coverage of the destination, counted in destination terms. File series
+    // can resolve to the same destination series by name, so counting file
+    // matches can report more than the destination holds.
+    summary.series_matched_distinct = series_reports
+        .iter()
+        .filter_map(|report| report.matched_series_id)
+        .collect::<HashSet<_>>()
+        .len() as u32;
+    summary.books_matched_distinct = series_reports
+        .iter()
+        .flat_map(|report| report.books.iter())
+        .filter(|book| book.disposition == BookDisposition::Matched)
+        .filter_map(|book| book.matched_book_id)
+        .collect::<HashSet<_>>()
+        .len() as u32;
+
+    summary.books_in_unmatched_series = series_reports
+        .iter()
+        .filter(|report| report.disposition == SeriesDisposition::Unmatched)
+        .map(|report| report.books.len() as u32)
+        .sum();
+
+    if let Some(library_ids) = options.library_ids.as_deref() {
+        let (series, books) = matching::scope_totals(db, &content_filter, library_ids)
+            .await
+            .map_err(ImportError::Database)?;
+        summary.series_in_selected_libraries = Some(series);
+        summary.books_in_selected_libraries = Some(books);
+    }
+
     // A stranded row means the progress moved and the reading history did
     // not, which the per-book counts show but the summary otherwise reads as
     // success. Say it plainly: the reader can still fix it by removing or
@@ -1210,7 +1417,9 @@ pub async fn import_reading_progress(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::reading_transfer::model::ExportProgressDto;
+    use crate::reading_transfer::model::{
+        ExportProgressDto, ExportWantToReadDto, READING_PROGRESS_FORMAT, READING_PROGRESS_VERSION,
+    };
 
     fn progress_row(
         current_page: i32,
@@ -1343,6 +1552,7 @@ mod tests {
             notes: None,
             rating_updated_at: when,
             books: vec![],
+            want_to_read: None,
         }
     }
 
@@ -1558,6 +1768,62 @@ mod tests {
             &mut planned,
         );
         assert_eq!(decision, RowDecision::Skip);
+    }
+
+    /// The queue is global but the file is grouped by series, so ranking has
+    /// to reconstruct the original order across series and books, and settle
+    /// ties the same way every time.
+    #[test]
+    fn queue_entries_rank_by_original_position_across_series_and_books() {
+        let when = Utc::now();
+        let entry = |position| ExportWantToReadDto {
+            position,
+            added_at: when,
+        };
+        let book = |position: Option<i32>| ExportBookDto {
+            path: "v01.cbz".into(),
+            file_name: "v01.cbz".into(),
+            file_hash: String::new(),
+            partial_hash: String::new(),
+            progress: None,
+            completions: vec![],
+            sessions: None,
+            want_to_read: position.map(entry),
+        };
+        let series = |position: Option<i32>, books| ExportSeriesDto {
+            external_ids: vec![],
+            library_relative_path: "s".into(),
+            name: "s".into(),
+            rating: None,
+            notes: None,
+            rating_updated_at: None,
+            books,
+            want_to_read: position.map(entry),
+        };
+        let document = ReadingProgressExportDocument {
+            format: READING_PROGRESS_FORMAT.into(),
+            version: READING_PROGRESS_VERSION,
+            exported_at: when,
+            includes_sessions: false,
+            series: vec![
+                series(Some(7), vec![book(Some(2)), book(None)]),
+                series(None, vec![book(Some(5))]),
+                series(Some(2), vec![]),
+            ],
+        };
+
+        let ranks = rank_queue_entries(&document);
+
+        // Position 2 twice: the tie goes to file order, so series 0's book
+        // (0, Some(0)) comes before series 2 (2, None).
+        assert_eq!(ranks[&(0, Some(0))], 0);
+        assert_eq!(ranks[&(2, None)], 1);
+        assert_eq!(ranks[&(1, Some(0))], 2);
+        assert_eq!(ranks[&(0, None)], 3);
+        assert!(
+            !ranks.contains_key(&(0, Some(1))),
+            "an unqueued book has no rank"
+        );
     }
 
     #[test]

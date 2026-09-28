@@ -18,7 +18,7 @@ use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOr
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
-use codex_db::entities::{books, read_completions, read_progress, reading_sessions};
+use codex_db::entities::{books, read_completions, read_progress, reading_sessions, want_to_read};
 use codex_db::repositories::{
     LibraryRepository, ReadProgressRepository, SeriesExternalIdRepository, SeriesRepository,
     UserSeriesRatingRepository,
@@ -26,7 +26,7 @@ use codex_db::repositories::{
 
 use super::model::{
     ExportBookDto, ExportCompletionDto, ExportExternalIdDto, ExportProgressDto, ExportSeriesDto,
-    ExportSessionDto, READING_PROGRESS_FORMAT, READING_PROGRESS_VERSION,
+    ExportSessionDto, ExportWantToReadDto, READING_PROGRESS_FORMAT, READING_PROGRESS_VERSION,
     ReadingProgressExportDocument,
 };
 use super::series_relative_book_path;
@@ -95,6 +95,13 @@ async fn sessions_for_user(
 /// `include_sessions = false` omits the `sessions` key entirely on every book
 /// rather than emitting empty arrays, so a client can tell "not exported"
 /// apart from "exported, and there were none".
+fn to_want_to_read(entry: &want_to_read::Model) -> ExportWantToReadDto {
+    ExportWantToReadDto {
+        position: entry.position,
+        added_at: entry.added_at,
+    }
+}
+
 /// `library_ids` of `None` exports everything the reader has state for.
 /// `Some` narrows to those libraries, which is what a split wants: carrying
 /// an entire reading history when only one library is being reorganised makes
@@ -113,6 +120,10 @@ pub async fn export_reading_progress(
         Vec::new()
     };
     let ratings = UserSeriesRatingRepository::get_all_for_user(db, user_id).await?;
+    let queue = want_to_read::Entity::find()
+        .filter(want_to_read::Column::UserId.eq(user_id))
+        .all(db)
+        .await?;
 
     let mut book_id_set: HashSet<Uuid> = HashSet::new();
     for p in &progress_rows {
@@ -128,6 +139,11 @@ pub async fn export_reading_progress(
             book_id_set.insert(id);
         }
     }
+    for entry in &queue {
+        if let Some(id) = entry.book_id {
+            book_id_set.insert(id);
+        }
+    }
     let book_ids: Vec<Uuid> = book_id_set.into_iter().collect();
     let books = books_including_soft_deleted(db, &book_ids).await?;
 
@@ -135,6 +151,19 @@ pub async fn export_reading_progress(
     for r in &ratings {
         series_id_set.insert(r.series_id);
     }
+    for entry in &queue {
+        if let Some(id) = entry.series_id {
+            series_id_set.insert(id);
+        }
+    }
+    let queued_series: HashMap<Uuid, &want_to_read::Model> = queue
+        .iter()
+        .filter_map(|e| e.series_id.map(|id| (id, e)))
+        .collect();
+    let queued_books: HashMap<Uuid, &want_to_read::Model> = queue
+        .iter()
+        .filter_map(|e| e.book_id.map(|id| (id, e)))
+        .collect();
     let series_ids: Vec<Uuid> = series_id_set.into_iter().collect();
 
     let mut series_rows = SeriesRepository::get_by_ids(db, &series_ids).await?;
@@ -270,7 +299,12 @@ pub async fn export_reading_progress(
                 };
 
                 let has_sessions = sessions.as_ref().is_some_and(|s| !s.is_empty());
-                if progress.is_none() && completions.is_empty() && !has_sessions {
+                let want_to_read = queued_books.get(&book.id).map(|e| to_want_to_read(e));
+                if progress.is_none()
+                    && completions.is_empty()
+                    && !has_sessions
+                    && want_to_read.is_none()
+                {
                     // Nothing to say about this book for this user.
                     continue;
                 }
@@ -283,11 +317,13 @@ pub async fn export_reading_progress(
                     progress,
                     completions,
                     sessions,
+                    want_to_read,
                 });
             }
         }
 
-        if rating_row.is_none() && book_docs.is_empty() {
+        let series_want_to_read = queued_series.get(&series.id).map(|e| to_want_to_read(e));
+        if rating_row.is_none() && book_docs.is_empty() && series_want_to_read.is_none() {
             // Nothing recorded against this series for this user.
             continue;
         }
@@ -302,6 +338,7 @@ pub async fn export_reading_progress(
             notes: rating_row.and_then(|r| r.notes.clone()),
             rating_updated_at: rating_row.map(|r| r.updated_at),
             books: book_docs,
+            want_to_read: series_want_to_read,
         });
     }
 
