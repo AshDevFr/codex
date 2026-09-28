@@ -1,10 +1,10 @@
 import type { components } from "@/types/api.generated";
 import { api } from "./client";
 
-// Re-export generated types for convenience. The document, request, and
-// report shapes intentionally use snake_case (see the backend's DTO module
-// doc comment): this is a portable file format, not an ordinary camelCase
-// API response, so the field names here are passed straight through.
+// Re-export generated types for convenience. The document is both a portable
+// file and an ordinary API payload: the export returns it as a response body
+// and the import nests it inside its request, so it uses the same camelCase
+// field names as every other endpoint rather than a second convention.
 export type ReadingProgressExportDocument =
   components["schemas"]["ReadingProgressExportDocument"];
 export type ImportReadingProgressRequest =
@@ -28,7 +28,7 @@ export const readingProgressTransferApi = {
   ): Promise<ReadingProgressExportDocument> => {
     const response = await api.get<ReadingProgressExportDocument>(
       "/reading-progress/export",
-      { params: { include_sessions: includeSessions } },
+      { params: { includeSessions } },
     );
     return response.data;
   },

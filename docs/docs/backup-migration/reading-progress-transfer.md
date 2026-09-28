@@ -48,7 +48,7 @@ every reader to re-mark their progress by hand.
    `POST /api/v1/reading-progress/import`). Run it once as a **dry run** first:
    it returns the identical report shape without writing anything, so you
    can check the match quality before committing.
-4. **Apply.** Re-run with `dry_run: false` (the Settings page gates this
+4. **Apply.** Re-run with `dryRun: false` (the Settings page gates this
    behind a successful preview). Progress, completions, sessions, and ratings
    land on the new books and series.
 
@@ -63,7 +63,7 @@ Each series in the file is resolved against the current library, in order,
 stopping at the first step that finds anything:
 
 1. An external id (a plugin match, ComicInfo, or a manual entry), tried in the
-   order given by `source_preference`.
+   order given by `sourcePreference`.
 2. The series' path, relative to its library root.
 3. The series' normalized name.
 
@@ -73,7 +73,7 @@ its files moved away) is never a candidate at any step.
 Books are then resolved within that series, in order: their path relative to
 the series folder, their file name, and finally their filename stem (which
 survives a `.cbr` repacked to `.cbz`). A repack always changes the file's
-hash, so the stem step never checks hashes. Under `hash_mode: verify`, a path
+hash, so the stem step never checks hashes. Under `hashMode: verify`, a path
 or name match whose hash differs is reported as `hash_mismatch`; that includes
 a file a tagging tool has rewritten since the export, so use `off` if you
 re-tagged your collection between export and import.
@@ -86,7 +86,7 @@ the first were already in the database.
 **Nothing is ever guessed.** If a step finds more than one candidate, that
 series or book is reported as `ambiguous` and nothing is written for it. A
 stem match is reported as `stem_match` and is only applied if you turn on
-`accept_stem_matches`: two files can share a stem, so applying it silently
+`acceptStemMatches`: two files can share a stem, so applying it silently
 risks writing progress onto the wrong one.
 
 A series or book you cannot see (denied by a sharing tag, or outside your
@@ -98,22 +98,22 @@ that the content exists.
 
 | Flag | Default | Effect |
 |---|---|---|
-| `dry_run` | `false` | Report the outcome without writing anything |
-| `hash_mode` | `verify` | `off` ignores hashes; `verify` rejects a path/name match whose `file_hash` disagrees; `match` additionally uses `file_hash`/`partial_hash` to find a book when path and name both fail (rescues a bulk rename) |
-| `source_preference` | `[]` | External-id sources to try, in order, before falling back to path and name |
-| `conflict_policy` | `newest` | How to resolve a book/rating that already has a value on this side: `newest` (later `updated_at` wins), `furthest` (further into the book wins; a finished read always beats a partial one), `skip_existing`, or `overwrite`. A rating has no position, so `furthest` behaves like `newest` for ratings, and a file without a rating timestamp never replaces an existing rating except under `overwrite` |
-| `reattach_sessions` | `true` | When a session or completion in the file already exists as your own row but is not on a live book (its book was deleted, or the scanner marked it deleted after the file moved), move it onto the matched book instead of skipping it. A no-op, reported as such, when the file carries no sessions |
-| `accept_stem_matches` | `false` | Apply a book match found only by filename stem |
+| `dryRun` | `false` | Report the outcome without writing anything |
+| `hashMode` | `verify` | `off` ignores hashes; `verify` rejects a path/name match whose `fileHash` disagrees; `match` additionally uses `fileHash`/`partialHash` to find a book when path and name both fail (rescues a bulk rename) |
+| `sourcePreference` | `[]` | External-id sources to try, in order, before falling back to path and name |
+| `conflictPolicy` | `newest` | How to resolve a book/rating that already has a value on this side: `newest` (later `updatedAt` wins), `furthest` (further into the book wins; a finished read always beats a partial one), `skip_existing`, or `overwrite`. A rating has no position, so `furthest` behaves like `newest` for ratings, and a file without a rating timestamp never replaces an existing rating except under `overwrite` |
+| `reattachSessions` | `true` | When a session or completion in the file already exists as your own row but is not on a live book (its book was deleted, or the scanner marked it deleted after the file moved), move it onto the matched book instead of skipping it. A no-op, reported as such, when the file carries no sessions |
+| `acceptStemMatches` | `false` | Apply a book match found only by filename stem |
 
 `GET /api/v1/reading-progress/export` takes one query parameter,
-`include_sessions` (default `true`). Turn it off only if you specifically want
+`includeSessions` (default `true`). Turn it off only if you specifically want
 a smaller file: sessions are the only source of every reading statistic, so
 leaving them out is easy to do by accident and easy not to notice until the
 numbers are gone.
 
 ## The response
 
-The response is the same shape whether or not `dry_run` is set: counts, plus a
+The response is the same shape whether or not `dryRun` is set: counts, plus a
 per-series and per-book breakdown of what matched, what did not, and what was
 (or would be) written. Each series is applied in its own transaction, so a bad
 series does not cost every other series in the file its progress; the

@@ -99,29 +99,29 @@ function SummaryLine({ report }: { report: ImportReadingProgressResponse }) {
   return (
     <Group gap="lg" wrap="wrap">
       <Text size="sm">
-        Series: <b>{summary.series_matched}</b> matched,{" "}
-        <b>{summary.series_ambiguous}</b> ambiguous,{" "}
-        <b>{summary.series_unmatched}</b> unmatched
-        {!report.dry_run && (
+        Series: <b>{summary.seriesMatched}</b> matched,{" "}
+        <b>{summary.seriesAmbiguous}</b> ambiguous,{" "}
+        <b>{summary.seriesUnmatched}</b> unmatched
+        {!report.dryRun && (
           <>
-            , <b>{summary.series_committed}</b> committed
+            , <b>{summary.seriesCommitted}</b> committed
           </>
         )}
       </Text>
       <Text size="sm">
-        Books: <b>{summary.books_matched}</b> matched,{" "}
-        <b>{summary.books_stem_matched}</b> stem match,{" "}
-        <b>{summary.books_ambiguous}</b> ambiguous,{" "}
-        <b>{summary.books_unmatched}</b> unmatched,{" "}
-        <b>{summary.books_hash_mismatch}</b> hash mismatch
+        Books: <b>{summary.booksMatched}</b> matched,{" "}
+        <b>{summary.booksStemMatched}</b> stem match,{" "}
+        <b>{summary.booksAmbiguous}</b> ambiguous,{" "}
+        <b>{summary.booksUnmatched}</b> unmatched,{" "}
+        <b>{summary.booksHashMismatch}</b> hash mismatch
       </Text>
       <Text size="sm">
-        Progress written: <b>{summary.progress_written}</b> &middot;
-        Completions: <b>{summary.completions_inserted}</b> inserted /{" "}
-        <b>{summary.completions_reattached}</b> reattached &middot; Sessions:{" "}
-        <b>{summary.sessions_inserted}</b> inserted /{" "}
-        <b>{summary.sessions_reattached}</b> reattached &middot; Ratings:{" "}
-        <b>{summary.ratings_written}</b>
+        Progress written: <b>{summary.progressWritten}</b> &middot; Completions:{" "}
+        <b>{summary.completionsInserted}</b> inserted /{" "}
+        <b>{summary.completionsReattached}</b> reattached &middot; Sessions:{" "}
+        <b>{summary.sessionsInserted}</b> inserted /{" "}
+        <b>{summary.sessionsReattached}</b> reattached &middot; Ratings:{" "}
+        <b>{summary.ratingsWritten}</b>
       </Text>
     </Group>
   );
@@ -144,14 +144,14 @@ function ReportTable({ report }: { report: ImportReadingProgressResponse }) {
             // A split exports same-named series from several libraries, so
             // path and name alone are not unique.
             <Table.Tr
-              key={`${index}-${series.library_relative_path}-${series.name}`}
+              key={`${index}-${series.libraryRelativePath}-${series.name}`}
             >
               <Table.Td>
                 <Text size="sm" fw={500}>
                   {series.name}
                 </Text>
                 <Text size="xs" c="dimmed">
-                  {series.library_relative_path}
+                  {series.libraryRelativePath}
                 </Text>
                 {series.error && (
                   <Text size="xs" c="red">
@@ -186,13 +186,13 @@ function ReportTable({ report }: { report: ImportReadingProgressResponse }) {
                 <Group gap={4} wrap="wrap">
                   {series.books.map((book) => (
                     <Badge
-                      key={`${book.path}-${book.file_name}`}
+                      key={`${book.path}-${book.fileName}`}
                       size="sm"
                       variant="dot"
                       color={bookDispositionColor(book.disposition)}
                       title={book.path}
                     >
-                      {book.file_name}
+                      {book.fileName}
                     </Badge>
                   ))}
                 </Group>
@@ -262,12 +262,12 @@ export function ReadingProgressTransferSettings() {
     setImportError(null);
     importMutation.mutate(
       {
-        dry_run: dryRun,
-        hash_mode: hashMode,
-        source_preference: [],
-        conflict_policy: conflictPolicy,
-        reattach_sessions: reattachSessions,
-        accept_stem_matches: acceptStemMatches,
+        dryRun,
+        hashMode,
+        sourcePreference: [],
+        conflictPolicy,
+        reattachSessions,
+        acceptStemMatches,
         file: parsedDocument,
       },
       {
@@ -455,13 +455,13 @@ export function ReadingProgressTransferSettings() {
             <Stack gap="sm" mt="sm">
               <Divider
                 label={
-                  report.dry_run
+                  report.dryRun
                     ? "Preview (nothing written yet)"
                     : "Import result"
                 }
                 labelPosition="left"
               />
-              {!report.sessions_in_file && (
+              {!report.sessionsInFile && (
                 <Text size="xs" c="dimmed">
                   This file does not include sessions.
                 </Text>

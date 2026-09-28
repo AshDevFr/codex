@@ -17,6 +17,7 @@ fn default_true() -> bool {
 
 /// Query parameters for `GET /api/v1/reading-progress/export`.
 #[derive(Debug, Clone, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct ExportReadingProgressQuery {
     /// Sessions are opt-out: they are the only source of every reading
     /// statistic, so leaving them out is easy to do by accident and hard to

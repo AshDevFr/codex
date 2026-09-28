@@ -10247,7 +10247,7 @@
         "operationId": "export_reading_progress",
         "parameters": [
           {
-            "name": "include_sessions",
+            "name": "includeSessions",
             "in": "query",
             "description": "Include the reading-session log (default: true). Sessions are the only source of every reading statistic, so this is opt-out rather than opt-in.",
             "required": false,
@@ -10290,7 +10290,7 @@
           "Reading Progress Transfer"
         ],
         "summary": "Import reading progress from an export document",
-        "description": "Resolves the file's series and books against the current library through\nthe same access-group / sharing-tag visibility that an ordinary read\nrespects: a book the importing user cannot see resolves as `unmatched`,\nnever as a permission error that would confirm it exists, and nothing is\never written against it.\n\nMatching never guesses: any step (external id, path, file name, or, under\n`hash_mode = \"match\"`, hash) that finds more than one candidate reports\n`ambiguous` and writes nothing for that series or book. `dry_run: true`\nreturns the identical response shape without writing anything, which is\nwhat makes it safe to preview before committing.\n\nEach series is applied in its own transaction; the response's per-series\n`committed` field says which ones actually landed. `read_completions` and\n`reading_sessions` reuse their exported ids on insert, so importing the\nsame file twice leaves row counts unchanged rather than duplicating\nhistory.",
+        "description": "Resolves the file's series and books against the current library through\nthe same access-group / sharing-tag visibility that an ordinary read\nrespects: a book the importing user cannot see resolves as `unmatched`,\nnever as a permission error that would confirm it exists, and nothing is\never written against it.\n\nMatching never guesses: any step (external id, path, file name, or, under\n`hashMode = \"match\"`, hash) that finds more than one candidate reports\n`ambiguous` and writes nothing for that series or book. `dryRun: true`\nreturns the identical response shape without writing anything, which is\nwhat makes it safe to preview before committing.\n\nEach series is applied in its own transaction; the response's per-series\n`committed` field says which ones actually landed. `read_completions` and\n`reading_sessions` reuse their exported ids on insert, so importing the\nsame file twice leaves row counts unchanged rather than duplicating\nhistory.",
         "operationId": "import_reading_progress",
         "requestBody": {
           "content": {
@@ -30663,7 +30663,7 @@
         "description": "One book inside a series, keyed for matching by path, name, and hash\nrather than by id: the whole point of the file is that ids on the far side\nare expected to be different.",
         "required": [
           "path",
-          "file_name"
+          "fileName"
         ],
         "properties": {
           "completions": {
@@ -30672,15 +30672,15 @@
               "$ref": "#/components/schemas/ExportCompletionDto"
             }
           },
-          "file_hash": {
+          "fileHash": {
             "type": "string",
             "description": "Empty when the book was never analyzed; never treated as a value to\nmatch on in that case."
           },
-          "file_name": {
+          "fileName": {
             "type": "string",
             "example": "v01.cbz"
           },
-          "partial_hash": {
+          "partialHash": {
             "type": "string"
           },
           "path": {
@@ -30699,7 +30699,7 @@
             "items": {
               "$ref": "#/components/schemas/ExportSessionDto"
             },
-            "description": "Omitted entirely (not an empty array) when the export was taken with\n`include_sessions=false`."
+            "description": "Omitted entirely (not an empty array) when the export was taken with\n`includeSessions=false`."
           }
         }
       },
@@ -30708,11 +30708,11 @@
         "description": "One finished read-through. Keeps its original id so re-importing the same\nfile is a no-op rather than a duplicate.",
         "required": [
           "id",
-          "started_at",
-          "completed_at"
+          "startedAt",
+          "completedAt"
         ],
         "properties": {
-          "completed_at": {
+          "completedAt": {
             "type": "string",
             "format": "date-time"
           },
@@ -30720,7 +30720,7 @@
             "type": "string",
             "format": "uuid"
           },
-          "started_at": {
+          "startedAt": {
             "type": "string",
             "format": "date-time"
           }
@@ -30830,44 +30830,44 @@
         "type": "object",
         "description": "The live resume position for one book. Retains `r2_progression`: it is the\nonly place the EPUB locator survives, since sessions strip it.",
         "required": [
-          "current_page",
+          "currentPage",
           "completed",
-          "started_at",
-          "updated_at"
+          "startedAt",
+          "updatedAt"
         ],
         "properties": {
           "completed": {
             "type": "boolean"
           },
-          "completed_at": {
+          "completedAt": {
             "type": [
               "string",
               "null"
             ],
             "format": "date-time"
           },
-          "current_page": {
+          "currentPage": {
             "type": "integer",
             "format": "int32"
           },
-          "progress_percentage": {
+          "progressPercentage": {
             "type": [
               "number",
               "null"
             ],
             "format": "double"
           },
-          "r2_progression": {
+          "r2Progression": {
             "type": [
               "string",
               "null"
             ]
           },
-          "started_at": {
+          "startedAt": {
             "type": "string",
             "format": "date-time"
           },
-          "updated_at": {
+          "updatedAt": {
             "type": "string",
             "format": "date-time"
           }
@@ -30877,7 +30877,7 @@
         "type": "object",
         "description": "Query parameters for `GET /api/v1/reading-progress/export`.",
         "properties": {
-          "include_sessions": {
+          "includeSessions": {
             "type": "boolean",
             "description": "Sessions are opt-out: they are the only source of every reading\nstatistic, so leaving them out is easy to do by accident and hard to\nnotice until the numbers are gone."
           }
@@ -30887,7 +30887,7 @@
         "type": "object",
         "description": "One series and everything the exporting user recorded against its books.",
         "required": [
-          "library_relative_path",
+          "libraryRelativePath",
           "name"
         ],
         "properties": {
@@ -30897,13 +30897,13 @@
               "$ref": "#/components/schemas/ExportBookDto"
             }
           },
-          "external_ids": {
+          "externalIds": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/ExportExternalIdDto"
             }
           },
-          "library_relative_path": {
+          "libraryRelativePath": {
             "type": "string",
             "description": "The series path as stored, relative to the library root.",
             "example": "shonen/Naruto"
@@ -30925,7 +30925,7 @@
             ],
             "format": "int32"
           },
-          "rating_updated_at": {
+          "ratingUpdatedAt": {
             "type": [
               "string",
               "null"
@@ -30940,40 +30940,40 @@
         "description": "One row from the reading-session log. `r2_progression` is deliberately\nabsent: nothing reads a session's historical locator, and it is the only\nnon-scalar column on the row.",
         "required": [
           "id",
-          "device_id",
+          "deviceId",
           "pass",
           "kind",
-          "duration_source",
-          "client_started_at",
-          "client_ended_at",
-          "server_recorded_at"
+          "durationSource",
+          "clientStartedAt",
+          "clientEndedAt",
+          "serverRecordedAt"
         ],
         "properties": {
-          "active_duration_ms": {
+          "activeDurationMs": {
             "type": [
               "integer",
               "null"
             ],
             "format": "int64"
           },
-          "client_ended_at": {
+          "clientEndedAt": {
             "type": "string",
             "format": "date-time"
           },
-          "client_started_at": {
+          "clientStartedAt": {
             "type": "string",
             "format": "date-time"
           },
-          "device_id": {
+          "deviceId": {
             "type": "string"
           },
-          "device_name": {
+          "deviceName": {
             "type": [
               "string",
               "null"
             ]
           },
-          "duration_source": {
+          "durationSource": {
             "type": "string",
             "description": "`\"measured\"`, `\"inferred\"`, or `\"unknown\"`.",
             "example": "measured"
@@ -30987,7 +30987,7 @@
             "description": "`\"progress\"`, `\"completed\"`, or `\"reset\"`.",
             "example": "progress"
           },
-          "pages_read": {
+          "pagesRead": {
             "type": [
               "integer",
               "null"
@@ -30998,18 +30998,18 @@
             "type": "integer",
             "format": "int32"
           },
-          "server_recorded_at": {
+          "serverRecordedAt": {
             "type": "string",
             "format": "date-time"
           },
-          "to_page": {
+          "toPage": {
             "type": [
               "integer",
               "null"
             ],
             "format": "int32"
           },
-          "to_percentage": {
+          "toPercentage": {
             "type": [
               "number",
               "null"
@@ -32501,7 +32501,7 @@
         "description": "The outcome for one book in the import file.",
         "required": [
           "path",
-          "file_name",
+          "fileName",
           "disposition",
           "applied",
           "completions",
@@ -32510,7 +32510,7 @@
         "properties": {
           "applied": {
             "type": "boolean",
-            "description": "Whether any writes were attempted for this book. False for every\ndisposition except `matched`, and except `stem_match` when\n`accept_stem_matches` is off."
+            "description": "Whether any writes were attempted for this book. False for every\ndisposition except `matched`, and except `stem_match` when\n`acceptStemMatches` is off."
           },
           "completions": {
             "$ref": "#/components/schemas/WriteCounts"
@@ -32518,10 +32518,10 @@
           "disposition": {
             "$ref": "#/components/schemas/BookDisposition"
           },
-          "file_name": {
+          "fileName": {
             "type": "string"
           },
-          "matched_book_id": {
+          "matchedBookId": {
             "type": [
               "string",
               "null"
@@ -32546,28 +32546,28 @@
           "file"
         ],
         "properties": {
-          "accept_stem_matches": {
+          "acceptStemMatches": {
             "type": "boolean",
             "description": "A stem match (`v01.cbr` renamed to `v01.cbz`) is reported either way,\nbut only written when this is set: two files can share a stem, and\napplying it silently risks writing progress onto the wrong one."
           },
-          "conflict_policy": {
+          "conflictPolicy": {
             "$ref": "#/components/schemas/ConflictPolicy"
           },
-          "dry_run": {
+          "dryRun": {
             "type": "boolean",
             "description": "Compute and report the outcome without writing anything."
           },
           "file": {
             "$ref": "#/components/schemas/ReadingProgressExportDocument"
           },
-          "hash_mode": {
+          "hashMode": {
             "$ref": "#/components/schemas/HashMode"
           },
-          "reattach_sessions": {
+          "reattachSessions": {
             "type": "boolean",
             "description": "When a session or completion in the file already exists as the\nimporter's own row but is not on a live book (its book was hard-deleted,\nleaving `book_id` null, or the scanner marked it deleted after the file\nmoved), move it onto the matched book instead of skipping it."
           },
-          "source_preference": {
+          "sourcePreference": {
             "type": "array",
             "items": {
               "type": "string"
@@ -32578,15 +32578,15 @@
       },
       "ImportReadingProgressResponse": {
         "type": "object",
-        "description": "The response for both a real import and a dry run: the shape is identical\neither way, so a client cannot tell from the response alone whether\nanything was written. Only `dry_run` (and the DB) says that.",
+        "description": "The response for both a real import and a dry run: the shape is identical\neither way, so a client cannot tell from the response alone whether\nanything was written. Only `dryRun` (and the DB) says that.",
         "required": [
-          "dry_run",
-          "sessions_in_file",
+          "dryRun",
+          "sessionsInFile",
           "summary",
           "series"
         ],
         "properties": {
-          "dry_run": {
+          "dryRun": {
             "type": "boolean"
           },
           "notices": {
@@ -32594,7 +32594,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Informational notes about the request, e.g. `reattach_sessions` having\nno effect because the file carries no sessions."
+            "description": "Informational notes about the request, e.g. `reattachSessions` having\nno effect because the file carries no sessions."
           },
           "series": {
             "type": "array",
@@ -32602,7 +32602,7 @@
               "$ref": "#/components/schemas/ImportSeriesReport"
             }
           },
-          "sessions_in_file": {
+          "sessionsInFile": {
             "type": "boolean"
           },
           "summary": {
@@ -32614,7 +32614,7 @@
         "type": "object",
         "description": "The outcome for one series in the import file.",
         "required": [
-          "library_relative_path",
+          "libraryRelativePath",
           "name",
           "disposition",
           "attempted",
@@ -32645,10 +32645,10 @@
               "null"
             ]
           },
-          "library_relative_path": {
+          "libraryRelativePath": {
             "type": "string"
           },
-          "matched_series_id": {
+          "matchedSeriesId": {
             "type": [
               "string",
               "null"
@@ -32667,106 +32667,106 @@
         "type": "object",
         "description": "Totals across every series in the file, for a one-line summary.",
         "required": [
-          "series_total",
-          "series_matched",
-          "series_ambiguous",
-          "series_unmatched",
-          "series_committed",
-          "books_total",
-          "books_matched",
-          "books_stem_matched",
-          "books_ambiguous",
-          "books_unmatched",
-          "books_hash_mismatch",
-          "progress_written",
-          "ratings_written",
-          "completions_inserted",
-          "completions_reattached",
-          "sessions_inserted",
-          "sessions_reattached"
+          "seriesTotal",
+          "seriesMatched",
+          "seriesAmbiguous",
+          "seriesUnmatched",
+          "seriesCommitted",
+          "booksTotal",
+          "booksMatched",
+          "booksStemMatched",
+          "booksAmbiguous",
+          "booksUnmatched",
+          "booksHashMismatch",
+          "progressWritten",
+          "ratingsWritten",
+          "completionsInserted",
+          "completionsReattached",
+          "sessionsInserted",
+          "sessionsReattached"
         ],
         "properties": {
-          "books_ambiguous": {
+          "booksAmbiguous": {
             "type": "integer",
             "format": "int32",
             "minimum": 0
           },
-          "books_hash_mismatch": {
+          "booksHashMismatch": {
             "type": "integer",
             "format": "int32",
             "minimum": 0
           },
-          "books_matched": {
+          "booksMatched": {
             "type": "integer",
             "format": "int32",
             "minimum": 0
           },
-          "books_stem_matched": {
+          "booksStemMatched": {
             "type": "integer",
             "format": "int32",
             "minimum": 0
           },
-          "books_total": {
+          "booksTotal": {
             "type": "integer",
             "format": "int32",
             "minimum": 0
           },
-          "books_unmatched": {
+          "booksUnmatched": {
             "type": "integer",
             "format": "int32",
             "minimum": 0
           },
-          "completions_inserted": {
+          "completionsInserted": {
             "type": "integer",
             "format": "int32",
             "minimum": 0
           },
-          "completions_reattached": {
+          "completionsReattached": {
             "type": "integer",
             "format": "int32",
             "minimum": 0
           },
-          "progress_written": {
+          "progressWritten": {
             "type": "integer",
             "format": "int32",
             "minimum": 0
           },
-          "ratings_written": {
+          "ratingsWritten": {
             "type": "integer",
             "format": "int32",
             "minimum": 0
           },
-          "series_ambiguous": {
+          "seriesAmbiguous": {
             "type": "integer",
             "format": "int32",
             "minimum": 0
           },
-          "series_committed": {
+          "seriesCommitted": {
             "type": "integer",
             "format": "int32",
             "minimum": 0
           },
-          "series_matched": {
+          "seriesMatched": {
             "type": "integer",
             "format": "int32",
             "minimum": 0
           },
-          "series_total": {
+          "seriesTotal": {
             "type": "integer",
             "format": "int32",
             "minimum": 0
           },
-          "series_unmatched": {
+          "seriesUnmatched": {
             "type": "integer",
             "format": "int32",
             "minimum": 0
           },
-          "sessions_inserted": {
+          "sessionsInserted": {
             "type": "integer",
             "format": "int32",
             "minimum": 0
           },
-          "sessions_reattached": {
+          "sessionsReattached": {
             "type": "integer",
             "format": "int32",
             "minimum": 0
@@ -40020,11 +40020,11 @@
         "required": [
           "format",
           "version",
-          "exported_at",
-          "includes_sessions"
+          "exportedAt",
+          "includesSessions"
         ],
         "properties": {
-          "exported_at": {
+          "exportedAt": {
             "type": "string",
             "format": "date-time"
           },
@@ -40032,7 +40032,7 @@
             "type": "string",
             "example": "codex-reading-progress"
           },
-          "includes_sessions": {
+          "includesSessions": {
             "type": "boolean"
           },
           "series": {
