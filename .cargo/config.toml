@@ -10,19 +10,16 @@
 # Linker Configuration
 # =============================================================================
 # Using faster linkers significantly reduces link time during development.
-# - macOS: lld (install with: brew install lld)
 # - Linux: mold (install with: apt install mold)
 #
 # If the linker is not installed, Cargo will fall back to the default linker.
+#
+# macOS uses the system linker. lld is not an option here: against the macOS 27
+# SDK it fails to resolve libSystem primitives (bzero, memset, lchown, fchown),
+# so every binary and test link dies with hundreds of undefined symbols. This is
+# not a version lag that an upgrade clears, and Apple's ld is fast enough that
+# the lost link time does not justify a broken build.
 # =============================================================================
-
-# macOS (Apple Silicon)
-[target.aarch64-apple-darwin]
-rustflags = ["-C", "link-arg=-fuse-ld=lld"]
-
-# macOS (Intel)
-[target.x86_64-apple-darwin]
-rustflags = ["-C", "link-arg=-fuse-ld=lld"]
 
 # Linux (x86_64) - used in CI
 [target.x86_64-unknown-linux-gnu]
