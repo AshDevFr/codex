@@ -40,7 +40,7 @@ use codex_services::reading_transfer::import::{ImportError, ImportOptions};
     get,
     path = "/api/v1/reading-progress/export",
     params(
-        ("include_sessions" = Option<bool>, Query, description = "Include the reading-session log (default: true). Sessions are the only source of every reading statistic, so this is opt-out rather than opt-in.")
+        ("includeSessions" = Option<bool>, Query, description = "Include the reading-session log (default: true). Sessions are the only source of every reading statistic, so this is opt-out rather than opt-in.")
     ),
     responses(
         (status = 200, description = "The export document", body = codex_services::reading_transfer::model::ReadingProgressExportDocument),
@@ -89,8 +89,8 @@ pub async fn export_reading_progress(
 /// ever written against it.
 ///
 /// Matching never guesses: any step (external id, path, file name, or, under
-/// `hash_mode = "match"`, hash) that finds more than one candidate reports
-/// `ambiguous` and writes nothing for that series or book. `dry_run: true`
+/// `hashMode = "match"`, hash) that finds more than one candidate reports
+/// `ambiguous` and writes nothing for that series or book. `dryRun: true`
 /// returns the identical response shape without writing anything, which is
 /// what makes it safe to preview before committing.
 ///

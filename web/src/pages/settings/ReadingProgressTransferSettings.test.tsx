@@ -25,18 +25,18 @@ vi.mock("@/api/readingProgressTransfer", async () => {
 const exportDocument: ReadingProgressExportDocument = {
   format: "codex-reading-progress",
   version: 1,
-  exported_at: "2026-09-27T00:00:00Z",
-  includes_sessions: true,
+  exportedAt: "2026-09-27T00:00:00Z",
+  includesSessions: true,
   series: [
     {
-      external_ids: [],
-      library_relative_path: "Naruto",
+      externalIds: [],
+      libraryRelativePath: "Naruto",
       name: "Naruto",
       books: [
         {
           path: "v01.cbz",
-          file_name: "v01.cbz",
-          file_hash: "",
+          fileName: "v01.cbz",
+          fileHash: "",
           partial_hash: "",
           completions: [],
         },
@@ -47,7 +47,7 @@ const exportDocument: ReadingProgressExportDocument = {
 
 function dryRunResponse(): ImportReadingProgressResponse {
   return {
-    dry_run: true,
+    dryRun: true,
     sessions_in_file: true,
     notices: [],
     summary: {
@@ -71,7 +71,7 @@ function dryRunResponse(): ImportReadingProgressResponse {
     },
     series: [
       {
-        library_relative_path: "Naruto",
+        libraryRelativePath: "Naruto",
         name: "Naruto",
         disposition: "matched",
         matched_series_id: "11111111-1111-1111-1111-111111111111",
@@ -80,7 +80,7 @@ function dryRunResponse(): ImportReadingProgressResponse {
         books: [
           {
             path: "v01.cbz",
-            file_name: "v01.cbz",
+            fileName: "v01.cbz",
             disposition: "matched",
             matched_book_id: "22222222-2222-2222-2222-222222222222",
             applied: true,
@@ -155,7 +155,7 @@ describe("ReadingProgressTransferSettings", () => {
       expect(applyButton).toBeEnabled();
     });
     expect(importProgress).toHaveBeenCalledWith(
-      expect.objectContaining({ dry_run: true }),
+      expect.objectContaining({ dryRun: true }),
     );
   });
 
@@ -196,7 +196,7 @@ describe("ReadingProgressTransferSettings", () => {
     expect(screen.getAllByText("matched").length).toBeGreaterThan(0);
   });
 
-  it("calls import with dry_run: false when Apply is pressed", async () => {
+  it("calls import with dryRun: false when Apply is pressed", async () => {
     importProgress.mockResolvedValue(dryRunResponse());
     const user = userEvent.setup();
     renderWithProviders(<ReadingProgressTransferSettings />);
@@ -213,7 +213,7 @@ describe("ReadingProgressTransferSettings", () => {
 
     importProgress.mockResolvedValue({
       ...dryRunResponse(),
-      dry_run: false,
+      dryRun: false,
       series: [
         {
           ...dryRunResponse().series[0],
@@ -225,7 +225,7 @@ describe("ReadingProgressTransferSettings", () => {
 
     await waitFor(() => {
       expect(importProgress).toHaveBeenLastCalledWith(
-        expect.objectContaining({ dry_run: false }),
+        expect.objectContaining({ dryRun: false }),
       );
     });
   });

@@ -3322,8 +3322,8 @@ export interface paths {
          *     ever written against it.
          *
          *     Matching never guesses: any step (external id, path, file name, or, under
-         *     `hash_mode = "match"`, hash) that finds more than one candidate reports
-         *     `ambiguous` and writes nothing for that series or book. `dry_run: true`
+         *     `hashMode = "match"`, hash) that finds more than one candidate reports
+         *     `ambiguous` and writes nothing for that series or book. `dryRun: true`
          *     returns the identical response shape without writing anything, which is
          *     what makes it safe to preview before committing.
          *
@@ -12295,10 +12295,10 @@ export interface components {
              * @description Empty when the book was never analyzed; never treated as a value to
              *     match on in that case.
              */
-            file_hash?: string;
+            fileHash?: string;
             /** @example v01.cbz */
-            file_name: string;
-            partial_hash?: string;
+            fileName: string;
+            partialHash?: string;
             /**
              * @description Relative to the series folder, so a series move does not invalidate it.
              * @example Vol 01/v01.cbz
@@ -12307,7 +12307,7 @@ export interface components {
             progress?: components["schemas"]["ExportProgressDto"];
             /**
              * @description Omitted entirely (not an empty array) when the export was taken with
-             *     `include_sessions=false`.
+             *     `includeSessions=false`.
              */
             sessions?: components["schemas"]["ExportSessionDto"][] | null;
         };
@@ -12317,11 +12317,11 @@ export interface components {
          */
         ExportCompletionDto: {
             /** Format: date-time */
-            completed_at: string;
+            completedAt: string;
             /** Format: uuid */
             id: string;
             /** Format: date-time */
-            started_at: string;
+            startedAt: string;
         };
         /**
          * @description One external identifier attached to a series (a plugin match, a ComicInfo
@@ -12367,16 +12367,16 @@ export interface components {
         ExportProgressDto: {
             completed: boolean;
             /** Format: date-time */
-            completed_at?: string | null;
+            completedAt?: string | null;
             /** Format: int32 */
-            current_page: number;
+            currentPage: number;
             /** Format: double */
-            progress_percentage?: number | null;
-            r2_progression?: string | null;
+            progressPercentage?: number | null;
+            r2Progression?: string | null;
             /** Format: date-time */
-            started_at: string;
+            startedAt: string;
             /** Format: date-time */
-            updated_at: string;
+            updatedAt: string;
         };
         /** @description Query parameters for `GET /api/v1/reading-progress/export`. */
         ExportReadingProgressQuery: {
@@ -12385,17 +12385,17 @@ export interface components {
              *     statistic, so leaving them out is easy to do by accident and hard to
              *     notice until the numbers are gone.
              */
-            include_sessions?: boolean;
+            includeSessions?: boolean;
         };
         /** @description One series and everything the exporting user recorded against its books. */
         ExportSeriesDto: {
             books?: components["schemas"]["ExportBookDto"][];
-            external_ids?: components["schemas"]["ExportExternalIdDto"][];
+            externalIds?: components["schemas"]["ExportExternalIdDto"][];
             /**
              * @description The series path as stored, relative to the library root.
              * @example shonen/Naruto
              */
-            library_relative_path: string;
+            libraryRelativePath: string;
             /** @example Naruto */
             name: string;
             notes?: string | null;
@@ -12407,7 +12407,7 @@ export interface components {
              *     to tell a stale rating from a fresh one; a file without it never
              *     overwrites an existing rating except under `overwrite`.
              */
-            rating_updated_at?: string | null;
+            ratingUpdatedAt?: string | null;
         };
         /**
          * @description One row from the reading-session log. `r2_progression` is deliberately
@@ -12416,18 +12416,18 @@ export interface components {
          */
         ExportSessionDto: {
             /** Format: int64 */
-            active_duration_ms?: number | null;
+            activeDurationMs?: number | null;
             /** Format: date-time */
-            client_ended_at: string;
+            clientEndedAt: string;
             /** Format: date-time */
-            client_started_at: string;
-            device_id: string;
-            device_name?: string | null;
+            clientStartedAt: string;
+            deviceId: string;
+            deviceName?: string | null;
             /**
              * @description `"measured"`, `"inferred"`, or `"unknown"`.
              * @example measured
              */
-            duration_source: string;
+            durationSource: string;
             /** Format: uuid */
             id: string;
             /**
@@ -12436,15 +12436,15 @@ export interface components {
              */
             kind: string;
             /** Format: int32 */
-            pages_read?: number | null;
+            pagesRead?: number | null;
             /** Format: int32 */
             pass: number;
             /** Format: date-time */
-            server_recorded_at: string;
+            serverRecordedAt: string;
             /** Format: int32 */
-            to_page?: number | null;
+            toPage?: number | null;
             /** Format: double */
-            to_percentage?: number | null;
+            toPercentage?: number | null;
         };
         /**
          * @description External ID context for template evaluation.
@@ -13275,14 +13275,14 @@ export interface components {
             /**
              * @description Whether any writes were attempted for this book. False for every
              *     disposition except `matched`, and except `stem_match` when
-             *     `accept_stem_matches` is off.
+             *     `acceptStemMatches` is off.
              */
             applied: boolean;
             completions: components["schemas"]["WriteCounts"];
             disposition: components["schemas"]["BookDisposition"];
-            file_name: string;
+            fileName: string;
             /** Format: uuid */
-            matched_book_id?: string | null;
+            matchedBookId?: string | null;
             path: string;
             progress?: components["schemas"]["FieldOutcome"];
             sessions: components["schemas"]["WriteCounts"];
@@ -13294,39 +13294,39 @@ export interface components {
              *     but only written when this is set: two files can share a stem, and
              *     applying it silently risks writing progress onto the wrong one.
              */
-            accept_stem_matches?: boolean;
-            conflict_policy?: components["schemas"]["ConflictPolicy"];
+            acceptStemMatches?: boolean;
+            conflictPolicy?: components["schemas"]["ConflictPolicy"];
             /** @description Compute and report the outcome without writing anything. */
-            dry_run?: boolean;
+            dryRun?: boolean;
             file: components["schemas"]["ReadingProgressExportDocument"];
-            hash_mode?: components["schemas"]["HashMode"];
+            hashMode?: components["schemas"]["HashMode"];
             /**
              * @description When a session or completion in the file already exists as the
              *     importer's own row but is not on a live book (its book was hard-deleted,
              *     leaving `book_id` null, or the scanner marked it deleted after the file
              *     moved), move it onto the matched book instead of skipping it.
              */
-            reattach_sessions?: boolean;
+            reattachSessions?: boolean;
             /**
              * @description External-id sources to try, in order, before falling back to path and
              *     then normalized name. An empty list skips straight to path matching.
              */
-            source_preference?: string[];
+            sourcePreference?: string[];
         };
         /**
          * @description The response for both a real import and a dry run: the shape is identical
          *     either way, so a client cannot tell from the response alone whether
-         *     anything was written. Only `dry_run` (and the DB) says that.
+         *     anything was written. Only `dryRun` (and the DB) says that.
          */
         ImportReadingProgressResponse: {
-            dry_run: boolean;
+            dryRun: boolean;
             /**
-             * @description Informational notes about the request, e.g. `reattach_sessions` having
+             * @description Informational notes about the request, e.g. `reattachSessions` having
              *     no effect because the file carries no sessions.
              */
             notices?: string[];
             series: components["schemas"]["ImportSeriesReport"][];
-            sessions_in_file: boolean;
+            sessionsInFile: boolean;
             summary: components["schemas"]["ImportSummary"];
         };
         /** @description The outcome for one series in the import file. */
@@ -13344,48 +13344,48 @@ export interface components {
             committed: boolean;
             disposition: components["schemas"]["SeriesDisposition"];
             error?: string | null;
-            library_relative_path: string;
+            libraryRelativePath: string;
             /** Format: uuid */
-            matched_series_id?: string | null;
+            matchedSeriesId?: string | null;
             name: string;
             rating?: components["schemas"]["FieldOutcome"];
         };
         /** @description Totals across every series in the file, for a one-line summary. */
         ImportSummary: {
             /** Format: int32 */
-            books_ambiguous: number;
+            booksAmbiguous: number;
             /** Format: int32 */
-            books_hash_mismatch: number;
+            booksHashMismatch: number;
             /** Format: int32 */
-            books_matched: number;
+            booksMatched: number;
             /** Format: int32 */
-            books_stem_matched: number;
+            booksStemMatched: number;
             /** Format: int32 */
-            books_total: number;
+            booksTotal: number;
             /** Format: int32 */
-            books_unmatched: number;
+            booksUnmatched: number;
             /** Format: int32 */
-            completions_inserted: number;
+            completionsInserted: number;
             /** Format: int32 */
-            completions_reattached: number;
+            completionsReattached: number;
             /** Format: int32 */
-            progress_written: number;
+            progressWritten: number;
             /** Format: int32 */
-            ratings_written: number;
+            ratingsWritten: number;
             /** Format: int32 */
-            series_ambiguous: number;
+            seriesAmbiguous: number;
             /** Format: int32 */
-            series_committed: number;
+            seriesCommitted: number;
             /** Format: int32 */
-            series_matched: number;
+            seriesMatched: number;
             /** Format: int32 */
-            series_total: number;
+            seriesTotal: number;
             /** Format: int32 */
-            series_unmatched: number;
+            seriesUnmatched: number;
             /** Format: int32 */
-            sessions_inserted: number;
+            sessionsInserted: number;
             /** Format: int32 */
-            sessions_reattached: number;
+            sessionsReattached: number;
         };
         /**
          * @description Which layer supplied a value the user is inheriting.
@@ -17440,10 +17440,10 @@ export interface components {
          */
         ReadingProgressExportDocument: {
             /** Format: date-time */
-            exported_at: string;
+            exportedAt: string;
             /** @example codex-reading-progress */
             format: string;
-            includes_sessions: boolean;
+            includesSessions: boolean;
             series?: components["schemas"]["ExportSeriesDto"][];
             /**
              * Format: int32
@@ -29776,7 +29776,7 @@ export interface operations {
         parameters: {
             query?: {
                 /** @description Include the reading-session log (default: true). Sessions are the only source of every reading statistic, so this is opt-out rather than opt-in. */
-                include_sessions?: boolean;
+                includeSessions?: boolean;
             };
             header?: never;
             path?: never;

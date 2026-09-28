@@ -301,7 +301,7 @@ async fn exercise_library_split_round_trip(db: &DatabaseConnection) {
     // --- Export before the split ---
     let app = create_test_router(state.clone()).await;
     let request = get_request_with_auth(
-        "/api/v1/reading-progress/export?include_sessions=true",
+        "/api/v1/reading-progress/export?includeSessions=true",
         &token,
     );
     let (status, exported): (StatusCode, Option<ReadingProgressExportDocument>) =
@@ -767,7 +767,7 @@ async fn hard_deleting_a_book_then_reimporting_reattaches_its_orphaned_history()
     // match back against.
     let app = create_test_router(state.clone()).await;
     let request = get_request_with_auth(
-        "/api/v1/reading-progress/export?include_sessions=true",
+        "/api/v1/reading-progress/export?includeSessions=true",
         &token,
     );
     let (status, exported): (StatusCode, Option<ReadingProgressExportDocument>) =
