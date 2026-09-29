@@ -1,5 +1,12 @@
-# Rust build artifacts
+# Agent worktrees and the private spec repo (full checkouts with their own
+# target/ and node_modules/, easily tens of GB)
+.claude/
+.specs/
+
+# Rust build artifacts (patterns are root-anchored, so match nested copies too)
 target/
+**/target/
+**/node_modules/
 **/*.rs.bk
 
 # Docker local data (mounted volumes, caches)
