@@ -12,18 +12,6 @@ This document provides guidelines for working with Claude on the Codex project. 
 - **Formats**: CBZ, CBR, EPUB, PDF support
 - **Architecture**: Stateless, horizontally scalable
 
-## Task Workflow
-
-The maintainer keeps planning documents in `.specs/`, a separate private repository that this one
-ignores. It is optional: if you do not have it, skip this section, and never reference its
-files, phase numbers, or task IDs from committed code, comments, or commit messages.
-
-- **Spec Repo**: `.specs/`
-- **PRD**: `.specs/docs/PRD.md`
-- **Phase Specs**: `.specs/docs/specs/phase-N_<title>.md`
-- **Task Directory**: `.specs/docs/tasks/phase-N/`
-- **Task File Pattern**: `N.NN-descriptive-name.md`
-
 ## Core Principles
 
 ### 1. All Implementations Must Have Tests
