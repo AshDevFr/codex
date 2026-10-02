@@ -7,6 +7,22 @@ release. A patch release may fix an API bug; it may not add an operation, a para
 field, or a new behaviour on an existing route. A client may therefore treat the release a feature
 first appears under in the 🔌 API sections below as a floor it can rely on.
 
+## [2.6.3] - 2026-10-02
+
+### 🐛 Bug Fixes
+
+- *(build)* Keep agent worktrees out of the Docker build context
+- *(db)* Stop a session that moved nothing from rewriting reading progress
+- *(db)* Report a concurrently replayed reading session as a duplicate
+
+### 📚 Documentation
+
+- Drop the private spec repo layout from CLAUDE.md
+
+### ⚙️ Miscellaneous Tasks
+
+- Report Rust and web test coverage on pull requests
+
 ## [2.6.2] - 2026-09-28
 
 ### 🔌 API
