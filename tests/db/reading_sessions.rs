@@ -17,11 +17,11 @@ use codex::db::ScanningStrategy;
 use codex::db::entities::reading_sessions;
 use codex::db::entities::reading_sessions::SessionKind;
 use codex::db::repositories::{
-    BookRepository, DeviceContext, LibraryRepository, NewSession, ReadProgressRepository,
-    ReadingSessionRepository, SeriesRepository, UserRepository,
+    AppendOutcome, BookRepository, DeviceContext, LibraryRepository, NewSession,
+    ReadProgressRepository, ReadingSessionRepository, SeriesRepository, UserRepository,
 };
 use common::*;
-use sea_orm::DatabaseConnection;
+use sea_orm::{DatabaseConnection, TransactionTrait};
 use uuid::Uuid;
 
 const DEVICE: &str = "browser-1";
@@ -265,6 +265,66 @@ async fn compat_client_unaffected_sqlite() {
     exercise_compat_client_unaffected(&db).await;
 }
 
+/// A client that sends the same queue twice at once: both requests carry the
+/// same session id, and the second arrives while the first is still inside its
+/// transaction.
+///
+/// The replay check reads before it writes, so it cannot see a sibling's
+/// uncommitted row. Holding the first transaction open makes the race happen
+/// every run instead of by timing. On PostgreSQL the second insert waits on the
+/// first's row and then collides with it; on SQLite it loses the write lock.
+/// Either way the replay must come back as a duplicate, not an error.
+async fn exercise_concurrent_replay_is_a_duplicate(db: &DatabaseConnection) {
+    let user = persist_user(db).await;
+    let book = persist_book(db).await;
+    let id = Uuid::new_v4();
+    let now = Utc::now();
+    let session = move || {
+        NewSession::from_client(
+            id,
+            user,
+            book,
+            DEVICE,
+            None,
+            SessionKind::Progress,
+            Some(60_000),
+            Some(1),
+            now - Duration::minutes(2),
+            now - Duration::minutes(1),
+        )
+        .with_page(5)
+    };
+
+    let first = db.begin().await.unwrap();
+    let outcome = ReadingSessionRepository::append(&first, session(), Utc::now())
+        .await
+        .unwrap();
+    assert_eq!(outcome, AppendOutcome::Inserted);
+
+    let replay_db = db.clone();
+    let replay =
+        tokio::spawn(
+            async move { ReadProgressRepository::record_session(&replay_db, session()).await },
+        );
+
+    // Long enough for the replay to have read and reached its insert.
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+    first.commit().await.unwrap();
+
+    let (outcome, _) = replay
+        .await
+        .unwrap()
+        .expect("a concurrent replay must not fail");
+    assert_eq!(outcome, AppendOutcome::Duplicate);
+    assert_eq!(sessions(db, user, book).await.len(), 1);
+}
+
+#[tokio::test]
+async fn concurrent_replay_is_a_duplicate_sqlite() {
+    let (db, _t) = setup_test_db().await;
+    exercise_concurrent_replay_is_a_duplicate(&db).await;
+}
+
 /// All of the above against PostgreSQL, sequenced in one test on purpose:
 /// `setup_test_db_postgres` truncates a database shared by the whole run, so
 /// two PostgreSQL tests running at once delete each other's fixtures.
@@ -281,4 +341,5 @@ async fn reading_sessions_postgres() {
     exercise_other_device_is_untouched(&db).await;
     exercise_stale_position_save_is_not_absorbed(&db).await;
     exercise_compat_client_unaffected(&db).await;
+    exercise_concurrent_replay_is_a_duplicate(&db).await;
 }
