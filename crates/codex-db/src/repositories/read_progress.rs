@@ -8,7 +8,7 @@ use crate::entities::reading_sessions::SessionKind;
 use crate::entities::{read_progress, read_progress::Entity as ReadProgress};
 use crate::repositories::ReadCompletionRepository;
 use crate::repositories::reading_sessions::{
-    AppendOutcome, DeviceContext, NewSession, ReadingSessionRepository, fold,
+    AppendOutcome, DeviceContext, NewSession, ProgressProjection, ReadingSessionRepository, fold,
 };
 use anyhow::{Result, anyhow};
 use chrono::Utc;
@@ -272,6 +272,9 @@ impl ReadProgressRepository {
     /// be one. That happens after a reset with no reading since: marking a book
     /// unread has always removed the row outright rather than zeroing it, and
     /// callers check for its absence.
+    ///
+    /// When nothing in the current pass moved the reader (only time spent was
+    /// reported), the row is left exactly as it is and returned as found.
     async fn refold<C: ConnectionTrait>(
         db: &C,
         user_id: Uuid,
@@ -282,9 +285,13 @@ impl ReadProgressRepository {
         let sessions = ReadingSessionRepository::load_current_pass(db, user_id, book_id).await?;
         let folded = fold(&sessions);
 
-        let Some(projected) = folded.progress else {
-            Self::delete_row_in(db, user_id, book_id).await?;
-            return Ok(None);
+        let projected = match folded.progress {
+            ProgressProjection::Row(projected) => projected,
+            ProgressProjection::Absent => {
+                Self::delete_row_in(db, user_id, book_id).await?;
+                return Ok(None);
+            }
+            ProgressProjection::Unchanged => return Self::get_in(db, user_id, book_id).await,
         };
 
         let existing = Self::get_in(db, user_id, book_id).await?;

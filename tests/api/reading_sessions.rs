@@ -671,3 +671,232 @@ async fn a_batch_spanning_books_returns_progress_for_each() {
     );
     assert_eq!(page_for(second.id), 25);
 }
+
+// ---------------------------------------------------------------------------
+// Sessions that report time spent and nothing else
+// ---------------------------------------------------------------------------
+
+async fn post_sessions(
+    state: &std::sync::Arc<codex::api::extractors::AuthState>,
+    token: &str,
+    sessions: Vec<serde_json::Value>,
+) -> RecordReadingSessionsResponse {
+    let app = create_test_router(state.clone()).await;
+    let request = post_json_request_with_auth(
+        "/api/v1/reading-sessions",
+        &json!({ "sessions": sessions }),
+        token,
+    );
+    let (status, response): (StatusCode, Option<RecordReadingSessionsResponse>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+    response.expect("expected a JSON body")
+}
+
+/// A reader left open: time spent, no position. The shape an unattended iPad
+/// queues and uploads the next morning.
+fn time_only(id: Uuid, book_id: Uuid, from: i64, to: i64) -> serde_json::Value {
+    json!({
+        "id": id,
+        "bookId": book_id,
+        "deviceId": "ipad",
+        "kind": "progress",
+        "activeDurationMs": 953,
+        "pagesRead": 1,
+        "clientStartedAt": at(from),
+        "clientEndedAt": at(to),
+    })
+}
+
+/// The reported failure: an unattended open must not move a book to the top of
+/// Keep Reading. The row is left exactly as it was, and the time still lands
+/// in the log for the statistics.
+#[tokio::test]
+async fn a_time_only_session_leaves_progress_exactly_as_it_was() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let book = create_book(&db, "/test/book.cbz").await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (user_id, token) = create_admin_and_token(&db, &state).await;
+
+    post_sessions(
+        &state,
+        &token,
+        vec![session(Uuid::new_v4(), book.id, "phone", 2, 0, 10)],
+    )
+    .await;
+    let before = ReadProgressRepository::get_by_user_and_book(&db, user_id, book.id)
+        .await
+        .unwrap()
+        .unwrap();
+
+    let id = Uuid::new_v4();
+    let response = post_sessions(&state, &token, vec![time_only(id, book.id, 60, 61)]).await;
+    assert_eq!(response.accepted, vec![id]);
+
+    let after = ReadProgressRepository::get_by_user_and_book(&db, user_id, book.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        after, before,
+        "a session that moved nothing must not touch the row"
+    );
+
+    let sessions =
+        codex::db::repositories::ReadingSessionRepository::load_for_book(&db, user_id, book.id)
+            .await
+            .unwrap();
+    let stored = sessions
+        .iter()
+        .find(|s| s.id == id)
+        .expect("the session is still recorded");
+    assert_eq!(stored.active_duration_ms, Some(953));
+    assert_eq!(stored.pages_read, Some(1));
+}
+
+/// Opening a finished book and leaving it there does not un-finish it.
+#[tokio::test]
+async fn a_time_only_session_does_not_reopen_a_finished_book() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let book = create_book(&db, "/test/book.cbz").await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (user_id, token) = create_admin_and_token(&db, &state).await;
+
+    let mut finished = session(Uuid::new_v4(), book.id, "phone", 100, 0, 10);
+    finished["kind"] = json!("completed");
+    post_sessions(&state, &token, vec![finished]).await;
+    let before = ReadProgressRepository::get_by_user_and_book(&db, user_id, book.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(before.completed);
+
+    post_sessions(
+        &state,
+        &token,
+        vec![time_only(Uuid::new_v4(), book.id, 60, 61)],
+    )
+    .await;
+
+    let after = ReadProgressRepository::get_by_user_and_book(&db, user_id, book.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(after, before);
+}
+
+/// Opening an unread book without reading it does not put it in Keep Reading.
+#[tokio::test]
+async fn a_time_only_session_on_an_unread_book_creates_no_progress() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let book = create_book(&db, "/test/book.cbz").await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (user_id, token) = create_admin_and_token(&db, &state).await;
+
+    let id = Uuid::new_v4();
+    let response = post_sessions(&state, &token, vec![time_only(id, book.id, 0, 1)]).await;
+    assert_eq!(response.accepted, vec![id]);
+
+    let progress = ReadProgressRepository::get_by_user_and_book(&db, user_id, book.id)
+        .await
+        .unwrap();
+    assert!(
+        progress.is_none(),
+        "no row, so the book stays off the in-progress shelf"
+    );
+}
+
+/// A row can exist with no positioned session behind it: importing a
+/// reading-progress export writes `read_progress` directly. A time-only session
+/// must not delete or rewrite it.
+#[tokio::test]
+async fn a_time_only_session_keeps_a_row_the_log_does_not_explain() {
+    use codex::db::entities::read_progress;
+    use sea_orm::{ActiveModelTrait, Set};
+
+    let (db, _temp_dir) = setup_test_db().await;
+    let book = create_book(&db, "/test/book.cbz").await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (user_id, token) = create_admin_and_token(&db, &state).await;
+
+    let imported = read_progress::ActiveModel {
+        id: Set(Uuid::new_v4()),
+        user_id: Set(user_id),
+        book_id: Set(book.id),
+        current_page: Set(42),
+        progress_percentage: Set(None),
+        completed: Set(false),
+        started_at: Set(at(0)),
+        updated_at: Set(at(10)),
+        completed_at: Set(None),
+        r2_progression: Set(None),
+    }
+    .insert(&db)
+    .await
+    .unwrap();
+
+    post_sessions(
+        &state,
+        &token,
+        vec![time_only(Uuid::new_v4(), book.id, 60, 61)],
+    )
+    .await;
+
+    let after = ReadProgressRepository::get_by_user_and_book(&db, user_id, book.id)
+        .await
+        .unwrap();
+    assert_eq!(after, Some(imported));
+}
+
+/// The boundary of the rule. A measured session with no position of its own
+/// absorbs the position writes made during its sitting, and so does move the
+/// reader: those writes said where they were.
+#[tokio::test]
+async fn a_measured_session_that_absorbs_position_writes_moves_the_row() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let book = create_book(&db, "/test/book.cbz").await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (user_id, token) = create_admin_and_token(&db, &state).await;
+
+    let started = Utc::now() - Duration::minutes(20);
+    let app = create_test_router(state.clone()).await;
+    let mut request = put_json_request_with_auth(
+        &format!("/api/v1/books/{}/progress", book.id),
+        &json!({ "currentPage": 9 }),
+        &token,
+    );
+    request
+        .headers_mut()
+        .insert("x-codex-device-id", "browser-abc".parse().unwrap());
+    let (status, _body) = make_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    post_sessions(
+        &state,
+        &token,
+        vec![json!({
+            "id": Uuid::new_v4(),
+            "bookId": book.id,
+            "deviceId": "browser-abc",
+            "kind": "progress",
+            "activeDurationMs": 600_000,
+            "clientStartedAt": started,
+            "clientEndedAt": Utc::now(),
+        })],
+    )
+    .await;
+
+    let sessions =
+        codex::db::repositories::ReadingSessionRepository::load_for_book(&db, user_id, book.id)
+            .await
+            .unwrap();
+    assert_eq!(sessions.len(), 1, "the position write was absorbed");
+    assert_eq!(sessions[0].to_page, Some(9));
+
+    let progress = ReadProgressRepository::get_by_user_and_book(&db, user_id, book.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(progress.current_page, 9);
+    assert_eq!(progress.updated_at, sessions[0].server_recorded_at);
+}
