@@ -6,7 +6,7 @@ name: CI
 permissions:
   contents: read
   packages: write
-  # The API Contract job posts its report as a pull-request comment.
+  # The API Contract and Coverage Report jobs post pull-request comments.
   pull-requests: write
 
 on:
@@ -66,6 +66,97 @@ jobs:
           name: nextest-archive
       - name: Run tests (partition ${{ matrix.partition }}/5)
         run: cargo nextest run --archive-file nextest-archive.tar.zst --partition hash:${{ matrix.partition }}/5
+
+  # Measure backend test coverage. Reports only: it never fails the run, and the
+  # partitioned test jobs above stay the source of truth for pass/fail.
+  # Instrumented binaries are slower, so this runs on its own runner in
+  # parallel rather than inside the test partitions.
+  coverage:
+    name: Coverage (Rust)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      SCCACHE_GHA_VERSION: coverage
+      RUSTC_WRAPPER: sccache
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install mold linker
+        run: sudo apt-get update && sudo apt-get install -y mold
+      # Not in rust-toolchain.toml, so local builds do not all download it.
+      - name: Install llvm-tools
+        run: rustup component add llvm-tools-preview
+      - name: Install cargo-llvm-cov and cargo-nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov,nextest
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+      # A failing test is reported by the test partitions; here it would only
+      # turn the coverage check red as well. The numbers are still written.
+      - name: Run tests with coverage
+        continue-on-error: true
+        run: cargo llvm-cov nextest --workspace --features rar --no-report --no-fail-fast
+      # Test code is excluded so the figure is about the code under test.
+      - name: Write reports
+        if: always()
+        run: |
+          IGNORE='(^|/)tests/'
+          cargo llvm-cov report --ignore-filename-regex "$IGNORE" --lcov --output-path rust-lcov.info
+          cargo llvm-cov report --ignore-filename-regex "$IGNORE" --json --summary-only --output-path rust-coverage.json
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-rust
+          path: |
+            rust-coverage.json
+            rust-lcov.info
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # Collate both coverage reports into the job summary and one pull-request
+  # comment, edited in place like the API contract report.
+  coverage-report:
+    name: Coverage Report
+    needs: [coverage, frontend]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download coverage
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          pattern: coverage-*
+          path: coverage
+      - name: Render the report
+        run: |
+          bash .github/scripts/coverage-summary.sh \
+            coverage/coverage-rust/rust-coverage.json \
+            coverage/coverage-web/coverage-summary.json > coverage.md
+          cat coverage.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Comment the coverage report
+        if: github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          MARKER='<!-- coverage-report -->'
+          BODY="${MARKER}"$'\n'"$(cat coverage.md)"
+
+          ID=$(gh api "repos/${REPO}/issues/${PR}/comments" --paginate \
+                 --jq "[.[] | select(.body | startswith(\"${MARKER}\")) | .id] | first // empty")
+
+          if [ -n "$ID" ]; then
+            gh api -X PATCH "repos/${REPO}/issues/comments/${ID}" -f body="$BODY" >/dev/null
+            echo "Updated comment ${ID}"
+          else
+            gh api -X POST "repos/${REPO}/issues/${PR}/comments" -f body="$BODY" >/dev/null
+            echo "Created comment"
+          fi
 
   # Run linting checks
   lint:
@@ -238,7 +329,17 @@ jobs:
         with:
           timeout_minutes: 10
           max_attempts: 3
-          command: cd web && npm run test:run
+          command: cd web && npm run test:coverage
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-web
+          path: |
+            web/coverage/coverage-summary.json
+            web/coverage/lcov.info
+          if-no-files-found: ignore
+          retention-days: 14
       - name: Build frontend
         working-directory: web
         run: npm run build

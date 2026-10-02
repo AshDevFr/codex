@@ -33,10 +33,17 @@ export default defineConfig({
     maxWorkers: "50%",
     coverage: {
       provider: "v8",
-      reporter: ["text", "json", "html"],
+      // `json-summary` and `lcov` feed the CI coverage report; `html` is for
+      // browsing locally (`npm run test:coverage`, then open coverage/index.html).
+      reporter: ["text-summary", "json-summary", "lcov", "html"],
+      // Without `include`, Vitest only counts files some test happened to
+      // import, so a module nothing tests is invisible and the total flatters.
+      include: ["src/**/*.{ts,tsx}"],
       exclude: [
         "node_modules/",
         "src/test/",
+        "src/mocks/",
+        "**/*.test.{ts,tsx}",
         "**/*.d.ts",
         "**/*.config.*",
         "**/mockData",
