@@ -16,6 +16,35 @@ use sea_orm::*;
 use std::collections::HashMap;
 use uuid::Uuid;
 
+/// How many times [`ReadProgressRepository::record_session`] retries a
+/// transaction that lost the SQLite write lock. With the backoff doubling from
+/// 50ms, the last attempt starts about 1.5s after the first.
+const SQLITE_BUSY_RETRIES: u32 = 5;
+
+/// Whether an error is SQLite refusing a write because another connection holds
+/// the lock (`SQLITE_BUSY`, including `SQLITE_BUSY_SNAPSHOT` under WAL, or
+/// `SQLITE_LOCKED`). Matched on the primary result code, since the extended
+/// codes vary with the journal mode.
+fn is_sqlite_busy(err: &anyhow::Error) -> bool {
+    err.chain().any(|cause| {
+        let Some(DbErr::Exec(runtime) | DbErr::Query(runtime) | DbErr::Conn(runtime)) =
+            cause.downcast_ref::<DbErr>()
+        else {
+            return false;
+        };
+        let RuntimeErr::SqlxError(sea_orm::sqlx::Error::Database(db_err)) = runtime else {
+            return false;
+        };
+        db_err
+            .try_downcast_ref::<sea_orm::error::SqlxSqliteError>()
+            .is_some()
+            && db_err
+                .code()
+                .and_then(|code| code.parse::<i32>().ok())
+                .is_some_and(|code| matches!(code & 0xff, 5 | 6))
+    })
+}
+
 pub struct ReadProgressRepository;
 
 impl ReadProgressRepository {
@@ -242,7 +271,36 @@ impl ReadProgressRepository {
     /// The entry point for the sessions API. Everything runs in one transaction
     /// so the log and its projections cannot disagree, and a replayed id is
     /// reported rather than applied twice.
+    ///
+    /// On SQLite a transaction that loses the write lock to a concurrent one is
+    /// retried from the start. A client sending the same queue twice at once
+    /// hits exactly this: both requests read before either writes, and the one
+    /// that loses cannot proceed on what it read. Running it again re-reads,
+    /// finds the sibling's committed row, and reports the replay as a
+    /// duplicate. PostgreSQL waits on the row instead, so it never gets here.
     pub async fn record_session(
+        db: &DatabaseConnection,
+        session: NewSession,
+    ) -> Result<(AppendOutcome, Option<read_progress::Model>)> {
+        let mut retries = 0;
+        loop {
+            match Self::record_session_once(db, session.clone()).await {
+                Err(err) if retries < SQLITE_BUSY_RETRIES && is_sqlite_busy(&err) => {
+                    retries += 1;
+                    let backoff = std::time::Duration::from_millis(50 << (retries - 1));
+                    tracing::warn!(
+                        session_id = %session.id,
+                        retry = retries,
+                        "reading session lost the SQLite write lock, retrying: {err}"
+                    );
+                    tokio::time::sleep(backoff).await;
+                }
+                result => return result,
+            }
+        }
+    }
+
+    async fn record_session_once(
         db: &DatabaseConnection,
         session: NewSession,
     ) -> Result<(AppendOutcome, Option<read_progress::Model>)> {
@@ -709,6 +767,51 @@ mod tests {
     use crate::test_helpers::setup_test_db;
     use codex_models::ScanningStrategy;
     use codex_utils::password;
+
+    /// Only lock contention is retried. Anything else, a unique violation
+    /// above all, must surface on the first attempt rather than be re-run.
+    #[test]
+    fn only_sqlite_lock_contention_counts_as_busy() {
+        assert!(!is_sqlite_busy(&anyhow!("database is locked")));
+        assert!(!is_sqlite_busy(&anyhow::Error::from(
+            DbErr::RecordNotFound("gone".to_string())
+        )));
+        assert!(!is_sqlite_busy(&anyhow::Error::from(
+            DbErr::RecordNotInserted
+        )));
+    }
+
+    /// The positive case, from a real lock: one connection holds the write
+    /// lock, and another tries to write without waiting for it.
+    #[tokio::test]
+    async fn a_held_sqlite_write_lock_counts_as_busy() {
+        let dir = tempfile::tempdir().unwrap();
+        let url = format!("sqlite://{}?mode=rwc", dir.path().join("busy.db").display());
+        let holder = sea_orm::Database::connect(&url).await.unwrap();
+        holder
+            .execute_unprepared("CREATE TABLE t (x INTEGER)")
+            .await
+            .unwrap();
+        let held = holder.begin().await.unwrap();
+        held.execute_unprepared("INSERT INTO t VALUES (1)")
+            .await
+            .unwrap();
+
+        let mut options = sea_orm::ConnectOptions::new(&url);
+        options.max_connections(1);
+        let other = sea_orm::Database::connect(options).await.unwrap();
+        other
+            .execute_unprepared("PRAGMA busy_timeout = 0")
+            .await
+            .unwrap();
+        let err = other
+            .execute_unprepared("INSERT INTO t VALUES (2)")
+            .await
+            .expect_err("the write lock is held");
+
+        assert!(is_sqlite_busy(&anyhow::Error::from(err)));
+        held.rollback().await.unwrap();
+    }
 
     async fn create_test_user(db: &DatabaseConnection) -> users::Model {
         let password_hash = password::hash_password("password").unwrap();

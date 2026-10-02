@@ -15,6 +15,7 @@ use crate::entities::{
 };
 use anyhow::Result;
 use chrono::{DateTime, Duration, Utc};
+use sea_orm::sea_query::OnConflict;
 use sea_orm::*;
 use uuid::Uuid;
 
@@ -470,7 +471,32 @@ impl ReadingSessionRepository {
             client_ended_at: Set(session.client_ended_at),
             server_recorded_at: Set(now),
         };
-        let inserted = model.insert(db).await?;
+        // The check above reads before it writes, so it cannot see a concurrent
+        // request's uncommitted row with the same id: a client that sends its
+        // queue twice at once gets past it on both requests. The insert has to
+        // tolerate the collision itself. PostgreSQL waits for the sibling's
+        // transaction and then skips the row; SQLite cannot get that far (the
+        // second writer loses the lock instead), which `record_session` retries.
+        //
+        // `exec` rather than `exec_with_returning`: only `exec` reports an
+        // insert that did nothing as a conflict. Every column is set here, so
+        // the stored row is known without reading it back.
+        let inserted = model.clone().try_into_model()?;
+        match ReadingSessions::insert(model)
+            .on_conflict(
+                OnConflict::column(reading_sessions::Column::Id)
+                    .do_nothing()
+                    .to_owned(),
+            )
+            .do_nothing()
+            .exec(db)
+            .await?
+        {
+            TryInsertResult::Inserted(_) => {}
+            TryInsertResult::Conflicted | TryInsertResult::Empty => {
+                return Ok(AppendOutcome::Duplicate);
+            }
+        }
 
         // A measured session describes a whole sitting, including everything
         // the position-only writes made during it already said. Fold them in
