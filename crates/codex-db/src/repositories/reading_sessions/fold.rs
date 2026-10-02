@@ -55,15 +55,41 @@ pub struct FoldedCompletion {
     pub completed_at: DateTime<Utc>,
 }
 
-/// The result of folding one `(user, book)` slice.
+/// What the fold says about the `read_progress` row.
 #[derive(Clone, Debug, PartialEq, Default)]
-pub struct Fold {
-    /// `None` means the `read_progress` row must **not exist**.
+pub enum ProgressProjection {
+    /// The row should hold exactly this.
+    Row(FoldedProgress),
+    /// The row must **not exist**.
     ///
     /// Marking a book unread deletes that row today, and callers assert on its
     /// absence rather than on a zeroed row, so a pass consisting only of a
     /// reset has to project to nothing at all.
-    pub progress: Option<FoldedProgress>,
+    #[default]
+    Absent,
+    /// Nothing in the pass moved the reader, so whatever the row holds stands.
+    ///
+    /// Distinct from [`Self::Absent`] because the row is not always the fold
+    /// of its log: importing a reading-progress export writes `read_progress`
+    /// directly, and a session that only reports time spent must not delete a
+    /// row like that.
+    Unchanged,
+}
+
+impl ProgressProjection {
+    /// The projected row, when the fold produced one.
+    pub fn row(&self) -> Option<&FoldedProgress> {
+        match self {
+            Self::Row(progress) => Some(progress),
+            Self::Absent | Self::Unchanged => None,
+        }
+    }
+}
+
+/// The result of folding one `(user, book)` slice.
+#[derive(Clone, Debug, PartialEq, Default)]
+pub struct Fold {
+    pub progress: ProgressProjection,
     /// Set when the current pass has finished. Earlier passes are not
     /// re-reported: their completions were banked while they were current.
     pub completion: Option<FoldedCompletion>,
@@ -92,16 +118,27 @@ pub fn fold(sessions: &[Session]) -> Fold {
     let mut current: Vec<&Session> = sessions.iter().filter(|s| s.pass == current_pass).collect();
     current.sort_by_key(|s| sort_key(s));
 
-    // A pass whose only events are resets is a book marked unread and not read
-    // since. That must project to no row, not to a zeroed one.
-    let mut reading = current
-        .iter()
-        .filter(|s| s.session_kind() != SessionKind::Reset)
-        .peekable();
-    if reading.peek().is_none() {
-        return Fold::default();
+    // Only sessions that moved the reader shape the row. One that reports time
+    // spent and nothing else (a reader left open, an unattended auto-advance)
+    // still counts towards reading statistics, which read the log directly,
+    // but it says nothing about where the reader is.
+    let reading: Vec<&&Session> = current.iter().filter(|s| moves_the_reader(s)).collect();
+    if reading.is_empty() {
+        // A pass that holds a reset is a book marked unread and not read since,
+        // which must project to no row, not to a zeroed one. Without a reset,
+        // nothing here has any say over the row.
+        let reset = current
+            .iter()
+            .any(|s| s.session_kind() == SessionKind::Reset);
+        return Fold {
+            progress: if reset {
+                ProgressProjection::Absent
+            } else {
+                ProgressProjection::Unchanged
+            },
+            completion: None,
+        };
     }
-    let reading: Vec<&&Session> = reading.collect();
 
     // The pass began when its first reading happened. This delimits the pass
     // for the completion guard, and it has to survive a back-tap (which is just
@@ -111,12 +148,15 @@ pub fn fold(sessions: &[Session]) -> Fold {
         .iter()
         .map(|s| s.client_started_at)
         .min()
-        .expect("non-empty by the peek above");
-    let updated_at = current
+        .expect("non-empty, checked above");
+    // Arrival time rather than client time: this orders the shelves by when the
+    // server last learned something new. Resets do not count, since a pass that
+    // has reading in it began after its reset.
+    let updated_at = reading
         .iter()
         .map(|s| s.server_recorded_at)
         .max()
-        .expect("non-empty because reading is non-empty");
+        .expect("non-empty, checked above");
 
     let mut current_page = 0;
     let mut progress_percentage = None;
@@ -154,7 +194,7 @@ pub fn fold(sessions: &[Session]) -> Fold {
                 completed = false;
                 completed_at = None;
             }
-            SessionKind::Reset => unreachable!("resets are filtered out above"),
+            SessionKind::Reset => unreachable!("resets do not move the reader"),
         }
     }
 
@@ -164,7 +204,7 @@ pub fn fold(sessions: &[Session]) -> Fold {
     });
 
     Fold {
-        progress: Some(FoldedProgress {
+        progress: ProgressProjection::Row(FoldedProgress {
             pass: current_pass,
             current_page,
             progress_percentage,
@@ -175,6 +215,21 @@ pub fn fold(sessions: &[Session]) -> Fold {
             r2_progression,
         }),
         completion,
+    }
+}
+
+/// Whether a session changes what the progress row should say: it carries a
+/// position, or it is a completion. Resets are handled as pass boundaries, and
+/// everything else reports time only.
+fn moves_the_reader(session: &Session) -> bool {
+    match session.session_kind() {
+        SessionKind::Reset => false,
+        SessionKind::Completed => true,
+        SessionKind::Progress => {
+            session.to_page.is_some()
+                || session.to_percentage.is_some()
+                || session.r2_progression.is_some()
+        }
     }
 }
 
@@ -238,6 +293,12 @@ mod tests {
             Self::new(SessionKind::Reset, ended)
         }
 
+        /// A session that reports time spent and nothing else: no page, no
+        /// percentage, no progression. A reader left open unattended.
+        fn time_only(ended: DateTime<Utc>) -> Self {
+            Self::new(SessionKind::Progress, ended)
+        }
+
         fn pass(mut self, pass: i32) -> Self {
             self.pass = pass;
             self
@@ -298,7 +359,11 @@ mod tests {
     }
 
     fn progress_of(sessions: Vec<S>) -> FoldedProgress {
-        fold_of(sessions).progress.expect("expected a progress row")
+        fold_of(sessions)
+            .progress
+            .row()
+            .cloned()
+            .expect("expected a progress row")
     }
 
     // ------------------------------------------------------------------
@@ -353,8 +418,8 @@ mod tests {
         let mut reversed: Vec<Session> = sessions().into_iter().map(S::build).collect();
         reversed.reverse();
 
-        assert_eq!(forward.progress.unwrap().current_page, 40);
-        assert_eq!(fold(&reversed).progress.unwrap().current_page, 40);
+        assert_eq!(forward.progress.row().unwrap().current_page, 40);
+        assert_eq!(fold(&reversed).progress.row().unwrap().current_page, 40);
     }
 
     /// Simultaneous client times fall back to arrival order rather than being
@@ -446,7 +511,7 @@ mod tests {
             S::reset(at(20)).pass(2),
         ]);
 
-        assert_eq!(folded.progress, None);
+        assert_eq!(folded.progress, ProgressProjection::Absent);
         assert_eq!(folded.completion, None);
     }
 
@@ -458,7 +523,7 @@ mod tests {
             S::reset(at(20)).pass(3),
         ]);
 
-        assert_eq!(folded.progress, None);
+        assert_eq!(folded.progress, ProgressProjection::Absent);
     }
 
     /// Reading after a reset starts fresh: the new pass's position, and a
@@ -471,7 +536,11 @@ mod tests {
             S::progress(5, at(30)).pass(2),
         ]);
 
-        let progress = folded.progress.expect("expected a progress row");
+        let progress = folded
+            .progress
+            .row()
+            .cloned()
+            .expect("expected a progress row");
         assert_eq!(progress.pass, 2);
         assert_eq!(progress.current_page, 5);
         assert!(!progress.completed);
@@ -511,7 +580,7 @@ mod tests {
             S::progress(3, at(20)).pass(2),
         ]);
 
-        let progress = folded.progress.unwrap();
+        let progress = folded.progress.row().cloned().unwrap();
         assert_eq!(progress.current_page, 3);
         assert_eq!(folded.completion, None);
     }
@@ -546,13 +615,122 @@ mod tests {
     }
 
     #[test]
-    fn updated_at_is_the_latest_arrival() {
+    fn updated_at_is_the_latest_arrival_that_moved_something() {
         let progress = progress_of(vec![
             S::progress(10, at(10)).recorded(at(15)),
             S::progress(20, at(20)).recorded(at(90)),
+            S::time_only(at(30)).recorded(at(120)),
         ]);
 
-        assert_eq!(progress.updated_at, at(90));
+        assert_eq!(
+            progress.updated_at,
+            at(90),
+            "a session that moved nothing must not bump the row up the shelves"
+        );
+    }
+
+    // ------------------------------------------------------------------
+    // Sessions that report time only
+    // ------------------------------------------------------------------
+
+    /// A reader left open on a book reports time spent with no position. That
+    /// is reading time, not reading progress.
+    #[test]
+    fn a_time_only_session_leaves_the_position_alone() {
+        let progress = progress_of(vec![
+            S::progress(2, at(10))
+                .percentage(0.1)
+                .r2(r#"{"locator":"a"}"#),
+            S::time_only(at(20)),
+        ]);
+
+        assert_eq!(progress.current_page, 2);
+        assert_eq!(progress.progress_percentage, Some(0.1));
+        assert_eq!(
+            progress.r2_progression.as_deref(),
+            Some(r#"{"locator":"a"}"#)
+        );
+    }
+
+    /// Opening a finished book and leaving it is not reading it again.
+    #[test]
+    fn a_time_only_session_does_not_reopen_a_finished_book() {
+        let folded = fold_of(vec![S::completed(50, at(10)), S::time_only(at(20))]);
+
+        let progress = folded
+            .progress
+            .row()
+            .cloned()
+            .expect("expected a progress row");
+        assert!(progress.completed);
+        assert_eq!(progress.completed_at, Some(at(10)));
+        assert_eq!(
+            folded.completion,
+            Some(FoldedCompletion {
+                started_at: at(10),
+                completed_at: at(10),
+            })
+        );
+    }
+
+    /// Nothing moved, so nothing is projected, and the row (if any) stands.
+    /// Not `Absent`: that would delete a row this pass has no say over.
+    #[test]
+    fn a_pass_of_only_time_only_sessions_leaves_the_row_alone() {
+        let folded = fold_of(vec![S::time_only(at(10)), S::time_only(at(20))]);
+
+        assert_eq!(folded.progress, ProgressProjection::Unchanged);
+        assert_eq!(folded.completion, None);
+    }
+
+    /// After a reset the row must not exist, and opening the book without
+    /// reading does not bring it back.
+    #[test]
+    fn a_time_only_session_after_a_reset_still_projects_no_row() {
+        let folded = fold_of(vec![
+            S::completed(50, at(10)).pass(1),
+            S::reset(at(20)).pass(2),
+            S::time_only(at(30)).pass(2),
+        ]);
+
+        assert_eq!(folded.progress, ProgressProjection::Absent);
+    }
+
+    #[test]
+    fn a_positioned_session_after_a_time_only_one_wins() {
+        let progress = progress_of(vec![
+            S::progress(2, at(10)),
+            S::time_only(at(20)),
+            S::progress(7, at(30)).recorded(at(40)),
+        ]);
+
+        assert_eq!(progress.current_page, 7);
+        assert_eq!(progress.updated_at, at(40));
+    }
+
+    /// A stray open before the real start must not backdate the pass.
+    #[test]
+    fn started_at_ignores_time_only_sessions() {
+        let progress = progress_of(vec![
+            S::time_only(at(5)).started(at(5)),
+            S::progress(10, at(30)).started(at(25)),
+        ]);
+
+        assert_eq!(progress.started_at, at(25));
+    }
+
+    /// A completion is a change of state even without a position.
+    #[test]
+    fn a_completion_without_a_position_still_moves_the_row() {
+        let folded = fold_of(vec![S::new(SessionKind::Completed, at(10))]);
+
+        let progress = folded
+            .progress
+            .row()
+            .cloned()
+            .expect("expected a progress row");
+        assert!(progress.completed);
+        assert_eq!(progress.completed_at, Some(at(10)));
     }
 
     // ------------------------------------------------------------------
@@ -638,7 +816,7 @@ mod tests {
             S::progress(20, at(30)).device("ipad"),
         ]);
 
-        let progress = folded.progress.unwrap();
+        let progress = folded.progress.row().cloned().unwrap();
         assert!(!progress.completed);
         assert_eq!(progress.current_page, 20);
         assert_eq!(folded.completion, None);
@@ -656,7 +834,11 @@ mod tests {
         session.kind = "some-future-kind".to_string();
 
         let folded = fold(&[session]);
-        let progress = folded.progress.expect("expected a progress row");
+        let progress = folded
+            .progress
+            .row()
+            .cloned()
+            .expect("expected a progress row");
         assert_eq!(progress.current_page, 10);
         assert!(!progress.completed);
     }

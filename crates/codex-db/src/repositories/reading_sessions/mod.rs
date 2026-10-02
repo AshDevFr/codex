@@ -7,7 +7,7 @@
 
 pub mod fold;
 
-pub use fold::{Fold, FoldedCompletion, FoldedProgress, fold};
+pub use fold::{Fold, FoldedCompletion, FoldedProgress, ProgressProjection, fold};
 
 use crate::entities::{
     reading_sessions,
