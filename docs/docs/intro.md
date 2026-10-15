@@ -69,6 +69,19 @@ Standard e-reader protocol support:
 - Browse and download books directly from your device
 - Search functionality
 
+### Native iOS App
+
+<a href="https://apps.apple.com/us/app/codex-reader-manga-comics/id6801989441">
+  <img src="/img/codex-reader-icon.png" alt="Codex Reader app icon" width="96" />
+</a>
+
+[Codex Reader](https://apps.apple.com/us/app/codex-reader-manga-comics/id6801989441) is the
+native iOS client for your Codex server, available on the App Store:
+
+- Reads CBZ, CBR, PDF, and EPUB
+- Reading progress and reader settings sync with the server and the web reader
+- See [Codex Reader (iOS)](./ios-app.md) for requirements and setup
+
 ### Comprehensive API
 
 Full-featured REST API for integration:

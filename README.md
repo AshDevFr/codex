@@ -83,6 +83,14 @@ For more details, see the [UnRAR license](https://www.rarlab.com/license.htm).
 - [Troubleshooting](https://codex.4sh.dev/docs/troubleshooting)
 - [Changelog](CHANGELOG.md)
 
+## iOS App
+
+<a href="https://apps.apple.com/us/app/codex-reader-manga-comics/id6801989441"><img src="docs/static/img/codex-reader-icon.png" alt="Codex Reader app icon" width="96" align="left" hspace="10"></a>
+
+**[Codex Reader](https://apps.apple.com/us/app/codex-reader-manga-comics/id6801989441)** is the native iOS app for Codex, available on the App Store. Reading progress and reader settings sync with your server, so a book started on your phone resumes in the web reader. Requires Codex 2.4.0 or newer. See the [docs](https://codex.4sh.dev/docs/ios-app) for setup.
+
+<br clear="left">
+
 ## Companion Projects
 
 - **[Tsundoku](https://github.com/AshDevFr/tsundoku)** ([docs](https://tsundoku.4sh.dev)) — a standalone manga discovery service that finds series you *don't* own yet. Where Codex's release tracking watches series already in your library, Tsundoku polls discovery sources and keeps a browsable catalog of titles not yet in Codex, reading your library over the Codex API to skip the ones you already have. See the [Codex docs](https://codex.4sh.dev/docs/tsundoku) for how the two fit together.

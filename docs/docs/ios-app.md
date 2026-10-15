@@ -3,10 +3,14 @@
 Codex Reader is the native iOS app for Codex. This page covers what the app needs, what it can
 open, and where to ask for help.
 
-:::info[Beta]
-Codex Reader is currently in a private beta through TestFlight and is not yet available on the
-App Store.
-:::
+## Download
+
+<a href="https://apps.apple.com/us/app/codex-reader-manga-comics/id6801989441">
+  <img src="/img/codex-reader-icon.png" alt="Codex Reader app icon" width="128" />
+</a>
+
+Codex Reader is available on the
+[App Store](https://apps.apple.com/us/app/codex-reader-manga-comics/id6801989441).
 
 ## You need a Codex server
 
