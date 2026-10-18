@@ -7,6 +7,27 @@ release. A patch release may fix an API bug; it may not add an operation, a para
 field, or a new behaviour on an existing route. A client may therefore treat the release a feature
 first appears under in the 🔌 API sections below as a floor it can rely on.
 
+## [2.7.0] - 2026-10-18
+
+### 🚀 Features
+
+- Show admins Codex release and app news inside Codex
+- *(web)* Show admins what's new since their version from the sidebar
+
+### 📚 Documentation
+
+- Link Codex Reader on the App Store
+
+### 🧪 Testing
+
+- *(web)* Serve several Codex releases from the news mock
+- *(cli)* Pin the reused-connection wait test to a one-connection pool
+
+### ⚙️ Miscellaneous Tasks
+
+- Measure coverage in the test partitions instead of a second full run
+- Run the crate unit tests before building a release
+
 ## [2.6.3] - 2026-10-02
 
 ### 🐛 Bug Fixes
