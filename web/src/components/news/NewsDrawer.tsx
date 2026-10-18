@@ -15,6 +15,7 @@ import { useEffect, useRef, useState } from "react";
 import type { NewsEntryDto, NewsResponse } from "@/api/news";
 import { MarkdownContent } from "@/components/common/MarkdownContent";
 import { useMarkNewsSeen } from "@/hooks/useNews";
+import { formatNewsDate } from "./format";
 
 const ALL_UPDATES_URL = "https://updates.4sh.dev/codex/";
 
@@ -115,11 +116,7 @@ function NewsEntry({ entry, isNew }: { entry: NewsEntryDto; isNew: boolean }) {
     label: entry.project,
     color: "gray",
   };
-  const published = new Date(entry.publishedAt).toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
+  const published = formatNewsDate(entry.publishedAt);
 
   return (
     <Stack gap={4}>

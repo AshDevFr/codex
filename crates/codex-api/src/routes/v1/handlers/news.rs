@@ -8,6 +8,7 @@ use chrono::Utc;
 use super::super::dto::{NewsEntryDto, NewsResponse, NewsUpdateAvailableDto};
 use crate::error::ApiError;
 use crate::extractors::{AppState, AuthContext};
+use codex_db::entities::news_entries;
 use codex_services::news;
 
 /// Get news for the calling admin
@@ -50,32 +51,48 @@ pub async fn get_news(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load news: {e}")))?;
 
+    let update_available = view.newer_releases.first().map(|(latest, _)| {
+        let latest_version = latest.version.clone().unwrap_or_default();
+        let url = latest.url.clone();
+        NewsUpdateAvailableDto {
+            current_version: state.app_version.to_string(),
+            latest_version,
+            url,
+            releases: view
+                .newer_releases
+                .iter()
+                .cloned()
+                .map(|(entry, unread)| entry_dto(entry, unread))
+                .collect(),
+        }
+    });
+
     Ok(Json(NewsResponse {
         enabled: true,
         last_fetched_at: view.last_fetched_at,
         unread_count: view.unread_count as u32,
-        update_available: view.update_available.map(|latest| NewsUpdateAvailableDto {
-            current_version: state.app_version.to_string(),
-            latest_version: latest.version.unwrap_or_default(),
-            url: latest.url,
-        }),
+        update_available,
         entries: view
             .entries
             .into_iter()
-            .map(|(entry, unread)| NewsEntryDto {
-                id: entry.id,
-                project: entry.project,
-                kind: entry.kind,
-                title: entry.title,
-                version: entry.version,
-                summary: entry.summary,
-                body: entry.body,
-                url: entry.url,
-                published_at: entry.published_at,
-                unread,
-            })
+            .map(|(entry, unread)| entry_dto(entry, unread))
             .collect(),
     }))
+}
+
+fn entry_dto(entry: news_entries::Model, unread: bool) -> NewsEntryDto {
+    NewsEntryDto {
+        id: entry.id,
+        project: entry.project,
+        kind: entry.kind,
+        title: entry.title,
+        version: entry.version,
+        summary: entry.summary,
+        body: entry.body,
+        url: entry.url,
+        published_at: entry.published_at,
+        unread,
+    }
 }
 
 /// Mark news as seen

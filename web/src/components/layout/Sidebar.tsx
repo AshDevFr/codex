@@ -57,6 +57,7 @@ import { userPluginsApi } from "@/api/userPlugins";
 import { LibraryModal } from "@/components/forms/LibraryModal";
 import { ReleasesNavBadge } from "@/components/layout/ReleasesNavBadge";
 import { LibraryActionsMenu } from "@/components/library/LibraryActionsMenu";
+import { VersionLabel } from "@/components/news/VersionLabel";
 import { TaskNotificationBadge } from "@/components/TaskNotificationBadge";
 import { MOBILE_MEDIA_QUERY } from "@/components/ui";
 import { useAppInfo } from "@/hooks/useAppInfo";
@@ -903,11 +904,7 @@ export function Sidebar({
                 onClick={handleLogout}
                 color="red"
               />
-              {appInfo?.version && (
-                <Text size="xs" c="dimmed" ta="center" fw={400}>
-                  v{appInfo.version}
-                </Text>
-              )}
+              {appInfo?.version && <VersionLabel version={appInfo.version} />}
             </footer>
           </AppShell.Section>
         </AppShell.Navbar>

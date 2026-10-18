@@ -36059,7 +36059,8 @@
         "description": "A newer Codex release than the one this server runs.",
         "required": [
           "currentVersion",
-          "latestVersion"
+          "latestVersion",
+          "releases"
         ],
         "properties": {
           "currentVersion": {
@@ -36069,6 +36070,13 @@
           "latestVersion": {
             "type": "string",
             "example": "2.7.0"
+          },
+          "releases": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NewsEntryDto"
+            },
+            "description": "Every Codex release newer than the running one, highest version\nfirst: what upgrading would bring."
           },
           "url": {
             "type": [

@@ -316,24 +316,37 @@ pub fn is_unread(
     true
 }
 
-/// The newest Codex release that is newer than the running build, if any.
+/// Every release newer than the running build, highest version first: what
+/// an admin would get by upgrading.
 ///
 /// Compared by version, not by date, so a backported patch published after a
-/// newer minor does not read as the latest. Unparseable versions on either
-/// side yield `None` rather than a guess.
-pub fn update_available<'a>(
+/// newer minor does not sort above it. Entries with unparseable versions are
+/// skipped, and an unparseable running version yields nothing rather than a
+/// guess.
+pub fn newer_releases<'a>(
     releases: &'a [news_entries::Model],
     running_version: &str,
-) -> Option<&'a news_entries::Model> {
-    let running = parse_version(running_version)?;
-    releases
+) -> Vec<&'a news_entries::Model> {
+    let Some(running) = parse_version(running_version) else {
+        return Vec::new();
+    };
+    let mut newer: Vec<(semver::Version, &news_entries::Model)> = releases
         .iter()
         .filter_map(|entry| {
             let version = entry.version.as_deref().and_then(parse_version)?;
             (version > running).then_some((version, entry))
         })
-        .max_by(|(a, _), (b, _)| a.cmp(b))
-        .map(|(_, entry)| entry)
+        .collect();
+    newer.sort_by(|(a, _), (b, _)| b.cmp(a));
+    newer.into_iter().map(|(_, entry)| entry).collect()
+}
+
+/// The newest Codex release that is newer than the running build, if any.
+pub fn update_available<'a>(
+    releases: &'a [news_entries::Model],
+    running_version: &str,
+) -> Option<&'a news_entries::Model> {
+    newer_releases(releases, running_version).into_iter().next()
 }
 
 /// How many entries the admin view lists.
@@ -345,8 +358,9 @@ pub struct NewsView {
     /// Newest first, each with whether it is unread for this admin.
     pub entries: Vec<(news_entries::Model, bool)>,
     pub unread_count: usize,
-    /// The newest Codex release above the running version, if any.
-    pub update_available: Option<news_entries::Model>,
+    /// Codex releases above the running version, highest first. The first
+    /// one, if any, is the update available.
+    pub newer_releases: Vec<(news_entries::Model, bool)>,
     /// Most recent successful fetch of any feed.
     pub last_fetched_at: Option<DateTime<Utc>>,
 }
@@ -375,7 +389,10 @@ pub async fn load_news_view(
     let unread_count = entries.iter().filter(|(_, unread)| *unread).count();
 
     let releases = NewsEntryRepository::list_releases(db, CODEX_PROJECT).await?;
-    let update_available = update_available(&releases, running_version).cloned();
+    let newer_releases = newer_releases(&releases, running_version)
+        .into_iter()
+        .map(|entry| (entry.clone(), is_unread(entry, baseline, running_version)))
+        .collect();
 
     let mut last_fetched_at = None;
     for project in NEWS_PROJECTS {
@@ -388,7 +405,7 @@ pub async fn load_news_view(
     Ok(NewsView {
         entries,
         unread_count,
-        update_available,
+        newer_releases,
         last_fetched_at,
     })
 }
@@ -567,6 +584,42 @@ mod tests {
         assert!(is_unread(&odd, Some(at(1)), "2.6.3"));
         let normal = model("codex", "release", Some("2.6.3"), 16);
         assert!(is_unread(&normal, Some(at(1)), "dev"));
+    }
+
+    // ---- newer_releases ----
+
+    fn versions(releases: &[&news_entries::Model]) -> Vec<String> {
+        releases
+            .iter()
+            .map(|e| e.version.clone().unwrap_or_default())
+            .collect()
+    }
+
+    #[test]
+    fn newer_releases_are_every_release_above_the_running_one_highest_first() {
+        let releases = vec![
+            model("codex", "release", Some("2.6.4"), 20), // backport, newest by date
+            model("codex", "release", Some("2.7.0"), 18),
+            model("codex", "release", Some("2.6.3"), 2),
+            model("codex", "release", Some("2.6.2"), 1),
+            model("codex", "release", Some("2.10.0"), 25),
+        ];
+        assert_eq!(
+            versions(&newer_releases(&releases, "2.6.3")),
+            vec!["2.10.0", "2.7.0", "2.6.4"],
+            "sorted by version, not by date or string order"
+        );
+    }
+
+    #[test]
+    fn newer_releases_skip_unparseable_versions_and_need_a_parseable_running_version() {
+        let releases = vec![
+            model("codex", "release", Some("nightly"), 2),
+            model("codex", "release", Some("2.7.0"), 2),
+        ];
+        assert_eq!(versions(&newer_releases(&releases, "2.6.3")), vec!["2.7.0"]);
+        assert!(newer_releases(&releases, "dev").is_empty());
+        assert!(newer_releases(&releases, "2.7.0").is_empty());
     }
 
     // ---- update_available ----
