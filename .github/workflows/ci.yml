@@ -20,7 +20,13 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Build test binaries and create nextest archive
+  # Build test binaries and create nextest archive.
+  #
+  # The binaries are built with coverage instrumentation, so the same test run
+  # that decides pass/fail also measures coverage. A separate coverage job would
+  # compile the workspace a second time (the instrumented flags miss the
+  # sccache entries of a plain build) and run the whole suite again on one
+  # runner, which is what made coverage the slowest job by far.
   build-tests:
     name: Build Tests
     runs-on: ubuntu-latest
@@ -33,12 +39,23 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install mold linker
         run: sudo apt-get update && sudo apt-get install -y mold
-      - name: Install cargo-nextest
-        uses: taiki-e/install-action@nextest
+      # Not in rust-toolchain.toml, so local builds do not all download it.
+      - name: Install llvm-tools
+        run: rustup component add llvm-tools-preview
+      - name: Install cargo-nextest and cargo-llvm-cov
+        uses: taiki-e/install-action@v2
+        with:
+          tool: nextest,cargo-llvm-cov
       - name: Setup sccache
         uses: mozilla-actions/sccache-action@v0.0.9
+      # show-env instruments only workspace crates (dependencies are built as
+      # usual) and keeps sccache as the inner compiler wrapper. `--workspace`
+      # matters: without it only the root package's tests are archived and the
+      # unit tests of every crate under crates/ never run.
       - name: Build and archive tests
-        run: cargo nextest archive --features rar --archive-file nextest-archive.tar.zst
+        run: |
+          source <(cargo llvm-cov show-env --sh)
+          cargo nextest archive --workspace --features rar --archive-file nextest-archive.tar.zst
       - name: Upload test archive
         uses: actions/upload-artifact@v4
         with:
@@ -46,7 +63,9 @@ jobs:
           path: nextest-archive.tar.zst
           retention-days: 1
 
-  # Run tests in parallel partitions
+  # Run tests in parallel partitions. Each partition merges the raw profiles
+  # its test processes wrote (one per process, thousands in total) into a
+  # single small .profdata for the coverage report.
   test:
     name: Test (${{ matrix.partition }}/5)
     needs: build-tests
@@ -58,6 +77,8 @@ jobs:
         partition: [1, 2, 3, 4, 5]
     steps:
       - uses: actions/checkout@v4
+      - name: Install llvm-tools
+        run: rustup component add llvm-tools-preview
       - name: Install cargo-nextest
         uses: taiki-e/install-action@nextest
       - name: Download test archive
@@ -65,72 +86,100 @@ jobs:
         with:
           name: nextest-archive
       - name: Run tests (partition ${{ matrix.partition }}/5)
+        env:
+          LLVM_PROFILE_FILE: ${{ github.workspace }}/profraw/codex-%p-%12m.profraw
         run: cargo nextest run --archive-file nextest-archive.tar.zst --partition hash:${{ matrix.partition }}/5
-
-  # Measure backend test coverage. Reports only: it never fails the run, and the
-  # partitioned test jobs above stay the source of truth for pass/fail.
-  # Instrumented binaries are slower, so this runs on its own runner in
-  # parallel rather than inside the test partitions.
-  coverage:
-    name: Coverage (Rust)
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    env:
-      SCCACHE_GHA_ENABLED: "true"
-      SCCACHE_GHA_VERSION: coverage
-      RUSTC_WRAPPER: sccache
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install mold linker
-        run: sudo apt-get update && sudo apt-get install -y mold
-      # Not in rust-toolchain.toml, so local builds do not all download it.
-      - name: Install llvm-tools
-        run: rustup component add llvm-tools-preview
-      - name: Install cargo-llvm-cov and cargo-nextest
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-llvm-cov,nextest
-      - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.9
-      # A failing test is reported by the test partitions; here it would only
-      # turn the coverage check red as well. The numbers are still written.
-      - name: Run tests with coverage
-        continue-on-error: true
-        run: cargo llvm-cov nextest --workspace --features rar --no-report --no-fail-fast
-      # Test code is excluded so the figure is about the code under test.
-      - name: Write reports
-        if: always()
+      # Coverage is still collected when tests fail; the failure is already
+      # reported by the step above.
+      - name: Merge coverage profiles
+        if: ${{ !cancelled() }}
         run: |
-          IGNORE='(^|/)tests/'
-          cargo llvm-cov report --ignore-filename-regex "$IGNORE" --lcov --output-path rust-lcov.info
-          cargo llvm-cov report --ignore-filename-regex "$IGNORE" --json --summary-only --output-path rust-coverage.json
-      - name: Upload coverage
-        if: always()
+          shopt -s nullglob
+          files=(profraw/*.profraw)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No coverage profiles were written"
+            exit 0
+          fi
+          llvm_profdata=$(find "$(rustc --print sysroot)" -name llvm-profdata -type f | head -n 1)
+          "$llvm_profdata" merge -sparse "${files[@]}" -o partition-${{ matrix.partition }}.profdata
+      - name: Upload coverage profile
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-rust
-          path: |
-            rust-coverage.json
-            rust-lcov.info
+          name: profdata-${{ matrix.partition }}
+          path: partition-${{ matrix.partition }}.profdata
           if-no-files-found: ignore
-          retention-days: 14
+          retention-days: 1
 
   # Collate both coverage reports into the job summary and one pull-request
-  # comment, edited in place like the API contract report.
+  # comment, edited in place like the API contract report. Reports only: it
+  # never fails the run, and the test partitions stay the source of truth for
+  # pass/fail.
   coverage-report:
     name: Coverage Report
-    needs: [coverage, frontend]
+    needs: [test, frontend]
     if: always()
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      - name: Install llvm-tools
+        run: rustup component add llvm-tools-preview
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
       - name: Download coverage
         uses: actions/download-artifact@v4
         continue-on-error: true
         with:
           pattern: coverage-*
           path: coverage
+      - name: Download test archive
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: nextest-archive
+      - name: Download coverage profiles
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          pattern: profdata-*
+          path: profdata
+          merge-multiple: true
+      # llvm-cov needs the instrumented binaries the profiles came from, so they
+      # are unpacked from the test archive into target/, where cargo-llvm-cov
+      # looks for them. cargo-llvm-cov only picks up *.profraw files there;
+      # llvm-profdata merge reads indexed profiles too, so the per-partition
+      # .profdata files go in under that extension.
+      # Test code is excluded so the figure is about the code under test.
+      - name: Write Rust coverage reports
+        continue-on-error: true
+        run: |
+          shopt -s nullglob
+          profiles=(profdata/*.profdata)
+          if [ ! -f nextest-archive.tar.zst ] || [ ${#profiles[@]} -eq 0 ]; then
+            echo "No test archive or coverage profiles to report on"
+            exit 0
+          fi
+          tar --zstd -xf nextest-archive.tar.zst
+          for f in "${profiles[@]}"; do
+            cp "$f" "target/$(basename "$f" .profdata).profraw"
+          done
+          source <(cargo llvm-cov show-env --sh)
+          IGNORE='(^|/)tests/'
+          mkdir -p coverage/coverage-rust
+          cargo llvm-cov report --workspace --ignore-filename-regex "$IGNORE" --lcov --output-path coverage/coverage-rust/rust-lcov.info
+          cargo llvm-cov report --workspace --ignore-filename-regex "$IGNORE" --json --summary-only --output-path coverage/coverage-rust/rust-coverage.json
+      - name: Upload Rust coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-rust
+          path: |
+            coverage/coverage-rust/rust-coverage.json
+            coverage/coverage-rust/rust-lcov.info
+          if-no-files-found: ignore
+          retention-days: 14
       - name: Render the report
         run: |
           bash .github/scripts/coverage-summary.sh \
