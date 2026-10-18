@@ -36,6 +36,31 @@ const entries: NewsResponse["entries"] = [
     publishedAt: "2026-10-02T23:24:00Z",
     unread: false,
   },
+  {
+    id: "codex-v2.6.2",
+    project: "codex",
+    kind: "release",
+    title: "Codex 2.6.2",
+    version: "2.6.2",
+    summary: "State scoped imports as coverage, and carry want-to-read across",
+    body: "### API\n\n- *(api)* State scoped imports as coverage, and carry want-to-read across",
+    url: "https://github.com/AshDevFr/codex/releases/tag/v2.6.2",
+    publishedAt: "2026-09-28T17:57:55Z",
+    unread: false,
+  },
+  {
+    id: "codex-v2.6.0",
+    project: "codex",
+    kind: "release",
+    title: "Codex 2.6.0",
+    version: "2.6.0",
+    summary:
+      "Count reading of deleted books, and let a reader purge it; Export and import one user's reading state across a library split",
+    body: "### API\n\n- *(api)* Count reading of deleted books, and let a reader purge it\n- *(api)* Export and import one user's reading state across a library split\n\n### Features\n\n- *(web)* Add a Reading Progress settings page for export and import\n\n### Bug Fixes\n\n- *(db)* Keep reading history when its book is hard-deleted",
+    url: "https://github.com/AshDevFr/codex/releases/tag/v2.6.0",
+    publishedAt: "2026-09-28T02:55:45Z",
+    unread: false,
+  },
 ];
 
 export const newsHandlers = [
