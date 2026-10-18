@@ -22,6 +22,7 @@ pub mod image_decode;
 pub mod inflight_thumbnails;
 pub mod library_jobs;
 pub mod metadata;
+pub mod news;
 pub mod oidc;
 pub mod pdf_cache;
 pub mod pdf_handle_cache;

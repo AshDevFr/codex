@@ -7,6 +7,7 @@ mod book_duplicates;
 mod collections;
 mod entity_event_bridge;
 mod migrations;
+mod news;
 mod oidc_pending_state;
 mod postgres;
 mod reading_history_retention;

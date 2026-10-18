@@ -22,7 +22,7 @@ use crate::handlers::{
     BulkTrackForReleasesHandler, CleanupBookFilesHandler, CleanupOidcPendingStatesHandler,
     CleanupOrphanedFilesHandler, CleanupPdfCacheHandler, CleanupPluginDataHandler,
     CleanupRefreshTokensHandler, CleanupSeriesExportsHandler, CleanupSeriesFilesHandler,
-    ExportSeriesHandler, FindDuplicatesHandler, GenerateSeriesThumbnailHandler,
+    ExportSeriesHandler, FetchNewsHandler, FindDuplicatesHandler, GenerateSeriesThumbnailHandler,
     GenerateSeriesThumbnailsHandler, GenerateThumbnailHandler, GenerateThumbnailsHandler,
     PluginAutoMatchHandler, PollReleaseSourceHandler, PurgeDeletedHandler,
     RefreshLibraryMetadataHandler, RenumberSeriesBatchHandler, RenumberSeriesHandler,
@@ -210,6 +210,13 @@ impl TaskWorker {
             "cleanup_oidc_pending_states".to_string(),
             Arc::new(CleanupOidcPendingStatesHandler::new()),
         );
+        // News fetch. Registered disabled so a worker that was never told
+        // about the config cannot contact the feed host; `with_news_enabled`
+        // swaps in the enabled handler.
+        handlers.insert(
+            "fetch_news".to_string(),
+            Arc::new(FetchNewsHandler::new(false)),
+        );
         // Release-tracking maintenance: backfill aliases from metadata.
         handlers.insert(
             "backfill_tracking_from_metadata".to_string(),
@@ -331,6 +338,16 @@ impl TaskWorker {
         }
         self.handlers
             .insert("scan_library".to_string(), Arc::new(handler));
+    }
+
+    /// Let the `fetch_news` handler contact the feed host. Mirrors the
+    /// `news.enabled` config.
+    pub fn with_news_enabled(mut self, enabled: bool) -> Self {
+        self.handlers.insert(
+            "fetch_news".to_string(),
+            Arc::new(FetchNewsHandler::new(enabled)),
+        );
+        self
     }
 
     /// Set the thumbnail service for thumbnail generation

@@ -180,7 +180,8 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     let scheduler: Arc<tokio::sync::Mutex<codex_scheduler::Scheduler>> =
         Arc::new(tokio::sync::Mutex::new(
             codex_scheduler::Scheduler::new(background_conn.clone(), &config.scheduler.timezone)
-                .await?,
+                .await?
+                .with_news_enabled(config.news.enabled),
         ));
     scheduler.lock().await.start().await?;
     info!("Job scheduler started successfully");
@@ -531,6 +532,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
             // which already has the live SSE subscribers, so no cross-process
             // progress bridge is needed (and would double-deliver).
             None,
+            config.news.enabled,
         );
         worker_handles = handles;
         worker_shutdown_channels = channels;
@@ -612,6 +614,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         export_storage: Some(export_storage.clone()),
         plugin_file_storage: Some(plugin_file_storage),
         scheduler_timezone: config.scheduler.timezone.clone(),
+        news_enabled: config.news.enabled,
         fuzzy_index,
         app_name: env!("CARGO_PKG_NAME"),
         app_version: env!("CARGO_PKG_VERSION"),

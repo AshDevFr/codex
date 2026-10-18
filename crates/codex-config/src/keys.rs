@@ -219,6 +219,7 @@ mod tests {
             "pdf_handle_cache.",
             "komga_api.",
             "koreader_api.",
+            "news.",
             "rate_limit.",
             "observability.",
         ] {
@@ -240,6 +241,7 @@ mod tests {
             "observability.browser.sample_ratio",
             "scheduler.timezone",
             "koreader_api.enabled",
+            "news.enabled",
             "email.smtp_password",
         ] {
             assert!(registry.contains(path), "missing `{path}`");

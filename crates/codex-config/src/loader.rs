@@ -634,6 +634,21 @@ auth:
         });
     }
 
+    /// News is on unless the operator says otherwise, and the environment has
+    /// to be able to say so before the first boot, when no file exists yet.
+    #[test]
+    fn news_defaults_on_and_the_environment_turns_it_off() {
+        Jail::expect_with(|jail| {
+            let config = Config::load(jail.directory().join("absent.yaml")).unwrap();
+            assert!(config.news.enabled);
+
+            jail.set_env("CODEX_NEWS__ENABLED", "false");
+            let config = Config::load(jail.directory().join("absent.yaml")).unwrap();
+            assert!(!config.news.enabled);
+            Ok(())
+        });
+    }
+
     /// v1 read `eq_ignore_ascii_case("true") || == "1"`, so a typo meant
     /// `false` and the operator never found out. Anything that is not a
     /// boolean is now an error, `1` included.
@@ -1045,6 +1060,7 @@ database:
             "rate_limit:",
             "komga_api:",
             "koreader_api:",
+            "news:",
             "email:",
             "observability:",
         ] {

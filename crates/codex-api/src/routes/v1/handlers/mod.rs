@@ -79,6 +79,7 @@ pub mod info;
 pub mod libraries;
 pub mod library_jobs;
 pub mod metrics;
+pub mod news;
 pub mod observability;
 pub mod oidc;
 pub mod pages;

@@ -41,6 +41,10 @@ pub mod users;
 pub mod oidc_connections;
 pub mod oidc_pending_states;
 
+// News for admins, imported from the Codex release feeds
+pub mod news_entries;
+pub mod news_feeds;
+
 // System-scoped plugin KV store (per-plugin, no user context)
 pub mod plugin_data;
 

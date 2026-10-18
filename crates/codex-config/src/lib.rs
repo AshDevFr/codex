@@ -13,7 +13,7 @@ mod types;
 pub use types::{
     ApiConfig, ApplicationConfig, AuthConfig, Config, ConfigError, DatabaseConfig, DatabaseType,
     EmailConfig, FilesConfig, ImagesConfig, KomgaApiConfig, KoreaderApiConfig, LoggingConfig,
-    ObservabilityBrowserConfig, ObservabilityConfig, ObservabilityMetricsConfig,
+    NewsConfig, ObservabilityBrowserConfig, ObservabilityConfig, ObservabilityMetricsConfig,
     ObservabilityTracesConfig, OidcConfig, OidcDefaultRole, OidcProviderConfig, OtlpConfig,
     OtlpProtocol, PdfConfig, PdfHandleCacheConfig, PgSslMode, PluginsConfig, PostgresConfig,
     RateLimitConfig, SQLiteConfig, ScannerConfig, SchedulerConfig, TaskConfig,

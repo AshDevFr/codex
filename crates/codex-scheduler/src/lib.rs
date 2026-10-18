@@ -27,6 +27,9 @@ pub struct Scheduler {
     default_tz: Tz,
     /// Reconcile state for the per-source release-polling jobs.
     release_sources: release_sources::ReleaseSourceSchedule,
+    /// Mirrors `news.enabled`. Off unless the caller opts in, so a scheduler
+    /// built without the config never schedules an outbound request.
+    news_enabled: bool,
 }
 
 impl Scheduler {
@@ -58,7 +61,14 @@ impl Scheduler {
             db,
             default_tz,
             release_sources: release_sources::ReleaseSourceSchedule::new(),
+            news_enabled: false,
         })
+    }
+
+    /// Schedule the daily news fetch. Mirrors the `news.enabled` config.
+    pub fn with_news_enabled(mut self, enabled: bool) -> Self {
+        self.news_enabled = enabled;
+        self
     }
 
     /// Trigger a release-source reconcile. Call after writes to the
@@ -77,6 +87,60 @@ impl Scheduler {
     }
 
     /// Start the scheduler and load all scheduled jobs
+    /// Fetch the news feeds once a day, and once now if the last successful
+    /// fetch is missing or stale, so a fresh install has news the same day.
+    ///
+    /// Does nothing at all when news is disabled: no job, no catch-up, no
+    /// outbound request.
+    async fn load_news_schedule(&mut self) -> Result<()> {
+        if !self.news_enabled {
+            debug!("News disabled, not scheduling the news fetch");
+            return Ok(());
+        }
+
+        // 04:17 every day. Off the hour so installs on the default config do
+        // not all hit the feed host at the same instant.
+        let cron = "0 17 4 * * *";
+
+        let db = self.db.clone();
+        let tz = self.default_tz;
+        let job = Job::new_async_tz(cron, tz, move |_uuid, _lock| {
+            let db = db.clone();
+            Box::pin(async move {
+                debug!("Triggering scheduled news fetch");
+                if let Err(e) = TaskRepository::enqueue(&db, TaskType::FetchNews, None).await {
+                    error!("Failed to enqueue news fetch: {}", e);
+                }
+            })
+        })
+        .context("Failed to create news fetch cron job")?;
+
+        self.scheduler
+            .add(job)
+            .await
+            .context("Failed to add news fetch job to scheduler")?;
+        info!("Added news fetch schedule: {}", cron);
+
+        self.enqueue_news_if_stale().await;
+        Ok(())
+    }
+
+    /// Enqueue one news fetch when the stored news is missing or stale.
+    /// Errors are logged, never propagated: news must not block startup.
+    async fn enqueue_news_if_stale(&self) {
+        match codex_services::news::needs_refresh(&self.db, Utc::now()).await {
+            Ok(true) => {
+                if let Err(e) = TaskRepository::enqueue(&self.db, TaskType::FetchNews, None).await {
+                    warn!("Failed to enqueue catch-up news fetch: {}", e);
+                } else {
+                    info!("News is missing or stale, enqueued a fetch");
+                }
+            }
+            Ok(false) => debug!("Stored news is fresh, no catch-up fetch"),
+            Err(e) => warn!("Could not check news freshness: {}", e),
+        }
+    }
+
     pub async fn start(&mut self) -> Result<()> {
         info!("Starting job scheduler");
 
@@ -106,6 +170,9 @@ impl Scheduler {
 
         // Load series exports cleanup schedule
         self.load_series_exports_cleanup_schedule().await?;
+
+        // Daily news fetch, plus a catch-up fetch when the stored news is stale
+        self.load_news_schedule().await?;
 
         // Load thumbnail generation schedules
         self.load_book_thumbnail_schedule().await?;
@@ -1085,6 +1152,55 @@ mod tests {
     use codex_models::ScanningStrategy;
     use codex_tasks::types::TaskType;
     use sea_orm::{ActiveModelTrait, Set};
+
+    async fn pending_news_fetches(db: &DatabaseConnection) -> usize {
+        use codex_db::entities::tasks;
+        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+        tasks::Entity::find()
+            .filter(tasks::Column::TaskType.eq("fetch_news"))
+            .all(db)
+            .await
+            .unwrap()
+            .len()
+    }
+
+    #[tokio::test]
+    async fn news_disabled_schedules_and_enqueues_nothing() {
+        let db = setup_test_db().await;
+        let mut scheduler = Scheduler::new(db.clone(), "UTC").await.unwrap();
+        scheduler.load_news_schedule().await.unwrap();
+        assert_eq!(pending_news_fetches(&db).await, 0);
+    }
+
+    #[tokio::test]
+    async fn news_enabled_with_nothing_stored_enqueues_one_catch_up_fetch() {
+        let db = setup_test_db().await;
+        let mut scheduler = Scheduler::new(db.clone(), "UTC")
+            .await
+            .unwrap()
+            .with_news_enabled(true);
+        scheduler.load_news_schedule().await.unwrap();
+        // A reload runs it again; the queue folds the duplicate.
+        scheduler.load_news_schedule().await.unwrap();
+        assert_eq!(pending_news_fetches(&db).await, 1);
+    }
+
+    #[tokio::test]
+    async fn news_enabled_and_fresh_needs_no_catch_up() {
+        use codex_db::repositories::NewsFeedRepository;
+        let db = setup_test_db().await;
+        for project in codex_services::news::NEWS_PROJECTS {
+            NewsFeedRepository::record_success(&db, project, None, Utc::now())
+                .await
+                .unwrap();
+        }
+        let mut scheduler = Scheduler::new(db.clone(), "UTC")
+            .await
+            .unwrap()
+            .with_news_enabled(true);
+        scheduler.load_news_schedule().await.unwrap();
+        assert_eq!(pending_news_fetches(&db).await, 0);
+    }
 
     #[test]
     fn test_scheduler_can_be_created() {

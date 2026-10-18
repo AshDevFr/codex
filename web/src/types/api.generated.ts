@@ -3135,6 +3135,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/news": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get news for the calling admin
+         * @description Codex releases and Codex Reader announcements, with what is unread for the
+         *     caller and whether a newer Codex release than the running one exists.
+         *
+         *     # Permission Required
+         *     - Admin access required
+         */
+        get: operations["get_news"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/news/seen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark news as seen
+         * @description Everything published so far stops counting as unread for the caller.
+         *     The web UI calls this when the news drawer opens.
+         *
+         *     # Permission Required
+         *     - Admin access required
+         */
+        post: operations["mark_news_seen"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/observability/config": {
         parameters: {
             query?: never;
@@ -15084,6 +15132,76 @@ export interface components {
              */
             sharingTagId: string;
         };
+        /** @description One news entry. */
+        NewsEntryDto: {
+            /** @description Markdown. Render without raw HTML. */
+            body: string;
+            /**
+             * @description Stable feed id.
+             * @example codex-v2.7.0
+             */
+            id: string;
+            /**
+             * @description `release` or `post`.
+             * @example release
+             */
+            kind: string;
+            /**
+             * @description Feed the entry came from: `codex` or `codex-ios`.
+             * @example codex
+             */
+            project: string;
+            /** Format: date-time */
+            publishedAt: string;
+            /** @description Plain text, a few hundred characters at most. */
+            summary: string;
+            /** @example Codex 2.7.0 */
+            title: string;
+            /** @description Unread by the calling admin. */
+            unread: boolean;
+            url?: string | null;
+            /** @example 2.7.0 */
+            version?: string | null;
+        };
+        /** @description The news drawer for the calling admin. */
+        NewsResponse: {
+            /**
+             * @description False when the server has news turned off (`news.enabled`). The other
+             *     fields are then empty and the UI should hide itself.
+             */
+            enabled: boolean;
+            /** @description Newest first, at most 50. */
+            entries: components["schemas"]["NewsEntryDto"][];
+            /**
+             * Format: date-time
+             * @description Most recent successful fetch of the news feeds, if any.
+             * @example 2026-10-18T04:17:00Z
+             */
+            lastFetchedAt?: string | null;
+            /**
+             * Format: int32
+             * @description Entries unread by the calling admin.
+             * @example 1
+             */
+            unreadCount: number;
+            /**
+             * @description Set when a Codex release newer than the running one exists. Absent,
+             *     not null, otherwise.
+             */
+            updateAvailable?: components["schemas"]["NewsUpdateAvailableDto"];
+        };
+        /** @description A newer Codex release than the one this server runs. */
+        NewsUpdateAvailableDto: {
+            /** @example 2.6.3 */
+            currentVersion: string;
+            /** @example 2.7.0 */
+            latestVersion: string;
+            /**
+             * @description Release notes for the latest version, when the feed links them.
+             * @example https://github.com/AshDevFr/codex/releases/tag/v2.7.0
+             */
+            url?: string | null;
+        };
         /**
          * @description Operators for numeric comparisons (year, page count, etc.).
          *
@@ -20705,6 +20823,9 @@ export interface components {
         } | {
             /** @enum {string} */
             type: "cleanup_oidc_pending_states";
+        } | {
+            /** @enum {string} */
+            type: "fetch_news";
         } | {
             /** Format: uuid */
             pluginId: string;
@@ -29590,6 +29711,58 @@ export interface operations {
             };
             /** @description Task metrics service not available */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_news: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description News for the calling admin */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewsResponse"];
+                };
+            };
+            /** @description Admin access required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mark_news_seen: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description News marked as seen */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Admin access required */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
