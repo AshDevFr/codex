@@ -53,6 +53,7 @@ export const newsHandlers = [
         currentVersion: "1.0.0-mock",
         latestVersion: "2.6.3",
         url: "https://github.com/AshDevFr/codex/releases/tag/v2.6.3",
+        releases: withState.filter((e) => e.project === "codex"),
       },
       entries: withState,
     };

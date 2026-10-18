@@ -15197,6 +15197,11 @@ export interface components {
             /** @example 2.7.0 */
             latestVersion: string;
             /**
+             * @description Every Codex release newer than the running one, highest version
+             *     first: what upgrading would bring.
+             */
+            releases: components["schemas"]["NewsEntryDto"][];
+            /**
              * @description Release notes for the latest version, when the feed links them.
              * @example https://github.com/AshDevFr/codex/releases/tag/v2.7.0
              */

@@ -40,6 +40,9 @@ pub struct NewsUpdateAvailableDto {
     /// Release notes for the latest version, when the feed links them.
     #[schema(example = "https://github.com/AshDevFr/codex/releases/tag/v2.7.0")]
     pub url: Option<String>,
+    /// Every Codex release newer than the running one, highest version
+    /// first: what upgrading would bring.
+    pub releases: Vec<NewsEntryDto>,
 }
 
 /// One news entry.

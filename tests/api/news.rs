@@ -262,3 +262,49 @@ async fn last_fetched_at_reports_the_latest_feed_success() {
     let fetched = get_news(&state, &token).await.last_fetched_at.unwrap();
     assert!((fetched - newer).num_seconds().abs() < 2);
 }
+
+#[tokio::test]
+async fn the_update_lists_every_newer_release_highest_first() {
+    let (db, _t) = setup_test_db().await;
+    let state = create_test_app_state(db.clone()).await;
+    let token = token_for(&db, &state, "admin", true).await;
+    let now = Utc::now();
+
+    NewsEntryRepository::upsert_many(
+        &db,
+        &[
+            entry("codex", "release", Some("999.0.1"), now - Duration::days(1)),
+            entry("codex", "release", Some("999.1.0"), now - Duration::days(2)),
+            entry("codex", "release", Some("999.0.0"), now - Duration::days(3)),
+            entry(
+                "codex",
+                "release",
+                Some(state.app_version),
+                now - Duration::days(4),
+            ),
+            entry("codex", "post", None, now),
+            entry("codex-ios", "release", Some("1000.0.0"), now),
+        ],
+        now,
+    )
+    .await
+    .unwrap();
+
+    let update = get_news(&state, &token)
+        .await
+        .update_available
+        .expect("newer releases exist");
+
+    assert_eq!(update.latest_version, "999.1.0");
+    let versions: Vec<String> = update
+        .releases
+        .iter()
+        .map(|r| r.version.clone().unwrap())
+        .collect();
+    assert_eq!(
+        versions,
+        vec!["999.1.0", "999.0.1", "999.0.0"],
+        "only newer Codex releases, highest version first"
+    );
+    assert!(update.releases.iter().all(|r| !r.body.is_empty()));
+}

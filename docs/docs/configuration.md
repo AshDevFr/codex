@@ -772,7 +772,9 @@ See [Third-Party Apps](./third-party-apps) for device-side setup.
 Admins get a news icon (a megaphone) in the header. It lists new Codex
 releases and Codex Reader (iOS) releases, marks what you have not seen yet,
 and says when a newer Codex release than the one you run is available.
-Regular users never see it.
+When one is, the version at the bottom of the sidebar shows the target
+(`v2.6.3 → 2.7.0`); click it for the release notes of every version between
+yours and the latest. Regular users never see any of this.
 
 ```yaml
 news:
