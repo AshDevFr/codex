@@ -889,7 +889,15 @@ mod tests {
     async fn wait_for_migrations_polls_over_the_connection_it_was_given() {
         let temp_dir = TempDir::new().unwrap();
         let db_path = temp_dir.path().join("migrated.db");
-        let config = sqlite_config_at(&db_path);
+        let mut config = sqlite_config_at(&db_path);
+        // One connection, so every query runs over the handle opened before the
+        // unlink. sqlx hands a released connection back to the pool from a
+        // spawned task; on a loaded machine the next query can arrive first,
+        // find the pool idle-empty and open a second connection, which lands
+        // on the fresh empty file and fails the test for the wrong reason.
+        let sqlite = config.sqlite.as_mut().unwrap();
+        sqlite.max_connections = 1;
+        sqlite.min_connections = 1;
 
         let db = Database::new(&config).await.unwrap();
         db.run_migrations().await.unwrap();
