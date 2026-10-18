@@ -17,6 +17,7 @@ import { infoHandlers } from "./info";
 import { libraryHandlers } from "./libraries";
 import { metadataHandlers } from "./metadata";
 import { metricsHandlers } from "./metrics";
+import { newsHandlers } from "./news";
 import { pdfCacheHandlers } from "./pdfCache";
 import { pluginStorageHandlers } from "./pluginStorage";
 import { pluginsHandlers } from "./plugins";
@@ -117,6 +118,7 @@ export const handlers = [
   ...apiKeysHandlers,
   ...authHandlers,
   ...infoHandlers,
+  ...newsHandlers,
   ...libraryHandlers,
   ...seriesHandlers,
   ...bookHandlers,
@@ -156,6 +158,7 @@ export { infoHandlers } from "./info";
 export { libraryHandlers } from "./libraries";
 export { metadataHandlers } from "./metadata";
 export { metricsHandlers } from "./metrics";
+export { newsHandlers } from "./news";
 export { pdfCacheHandlers } from "./pdfCache";
 export { pluginStorageHandlers } from "./pluginStorage";
 export { pluginsHandlers } from "./plugins";

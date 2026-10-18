@@ -9929,6 +9929,65 @@
         ]
       }
     },
+    "/api/v1/news": {
+      "get": {
+        "tags": [
+          "News"
+        ],
+        "summary": "Get news for the calling admin",
+        "description": "Codex releases and Codex Reader announcements, with what is unread for the\ncaller and whether a newer Codex release than the running one exists.\n\n# Permission Required\n- Admin access required",
+        "operationId": "get_news",
+        "responses": {
+          "200": {
+            "description": "News for the calling admin",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NewsResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Admin access required"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/news/seen": {
+      "post": {
+        "tags": [
+          "News"
+        ],
+        "summary": "Mark news as seen",
+        "description": "Everything published so far stops counting as unread for the caller.\nThe web UI calls this when the news drawer opens.\n\n# Permission Required\n- Admin access required",
+        "operationId": "mark_news_seen",
+        "responses": {
+          "204": {
+            "description": "News marked as seen"
+          },
+          "403": {
+            "description": "Admin access required"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/observability/config": {
       "get": {
         "tags": [
@@ -35889,6 +35948,138 @@
           }
         }
       },
+      "NewsEntryDto": {
+        "type": "object",
+        "description": "One news entry.",
+        "required": [
+          "id",
+          "project",
+          "kind",
+          "title",
+          "summary",
+          "body",
+          "publishedAt",
+          "unread"
+        ],
+        "properties": {
+          "body": {
+            "type": "string",
+            "description": "Markdown. Render without raw HTML."
+          },
+          "id": {
+            "type": "string",
+            "description": "Stable feed id.",
+            "example": "codex-v2.7.0"
+          },
+          "kind": {
+            "type": "string",
+            "description": "`release` or `post`.",
+            "example": "release"
+          },
+          "project": {
+            "type": "string",
+            "description": "Feed the entry came from: `codex` or `codex-ios`.",
+            "example": "codex"
+          },
+          "publishedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "summary": {
+            "type": "string",
+            "description": "Plain text, a few hundred characters at most."
+          },
+          "title": {
+            "type": "string",
+            "example": "Codex 2.7.0"
+          },
+          "unread": {
+            "type": "boolean",
+            "description": "Unread by the calling admin."
+          },
+          "url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "version": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "example": "2.7.0"
+          }
+        }
+      },
+      "NewsResponse": {
+        "type": "object",
+        "description": "The news drawer for the calling admin.",
+        "required": [
+          "enabled",
+          "unreadCount",
+          "entries"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "False when the server has news turned off (`news.enabled`). The other\nfields are then empty and the UI should hide itself."
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NewsEntryDto"
+            },
+            "description": "Newest first, at most 50."
+          },
+          "lastFetchedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Most recent successful fetch of the news feeds, if any.",
+            "example": "2026-10-18T04:17:00Z"
+          },
+          "unreadCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Entries unread by the calling admin.",
+            "example": 1,
+            "minimum": 0
+          },
+          "updateAvailable": {
+            "$ref": "#/components/schemas/NewsUpdateAvailableDto",
+            "description": "Set when a Codex release newer than the running one exists. Absent,\nnot null, otherwise."
+          }
+        }
+      },
+      "NewsUpdateAvailableDto": {
+        "type": "object",
+        "description": "A newer Codex release than the one this server runs.",
+        "required": [
+          "currentVersion",
+          "latestVersion"
+        ],
+        "properties": {
+          "currentVersion": {
+            "type": "string",
+            "example": "2.6.3"
+          },
+          "latestVersion": {
+            "type": "string",
+            "example": "2.7.0"
+          },
+          "url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Release notes for the latest version, when the feed links them.",
+            "example": "https://github.com/AshDevFr/codex/releases/tag/v2.7.0"
+          }
+        }
+      },
       "NumberOperator": {
         "oneOf": [
           {
@@ -45683,6 +45874,21 @@
           },
           {
             "type": "object",
+            "description": "Download the Codex news feeds and store their entries.\n\nA plain GET per feed with nothing that identifies the instance. Does\nnothing when `news.enabled` is off. Failures are logged and leave the\nstored entries alone. Idempotent.",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "fetch_news"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "Sync user plugin data with external service",
             "required": [
               "pluginId",
@@ -48380,6 +48586,10 @@
       "description": "Administrative operations (cleanup, maintenance)"
     },
     {
+      "name": "News",
+      "description": "Codex release and app announcements for admins"
+    },
+    {
       "name": "Settings",
       "description": "Runtime configuration settings (admin only)"
     },
@@ -48502,6 +48712,7 @@
       "name": "Administration",
       "tags": [
         "Admin",
+        "News",
         "Settings",
         "Plugins",
         "Plugin Actions",

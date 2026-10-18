@@ -44,5 +44,7 @@ futures = "0.3"
 
 [dev-dependencies]
 tempfile = { workspace = true }
+# Local feed-host stub for the fetch_news handler tests
+axum = "0.8"
 serial_test = { workspace = true }
 codex-db = { workspace = true, features = ["test-utils"] }

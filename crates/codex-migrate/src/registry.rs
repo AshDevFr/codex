@@ -56,6 +56,8 @@ macro_rules! for_each_entity {
         $op!(users);
         $op!(oidc_connections);
         $op!(oidc_pending_states);
+        $op!(news_entries);
+        $op!(news_feeds);
         $op!(plugin_data);
         $op!(user_plugin_data);
         $op!(user_plugin_oauth_states);

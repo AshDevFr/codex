@@ -373,6 +373,9 @@ pub struct AppState {
     pub export_storage: Option<Arc<codex_services::ExportStorage>>,
     /// Server-level default timezone for cron scheduling (IANA name, e.g. "America/Los_Angeles")
     pub scheduler_timezone: String,
+    /// Mirrors the `news.enabled` config. When off, the news endpoints report
+    /// `enabled: false` and the UI hides itself.
+    pub news_enabled: bool,
     /// In-memory fuzzy search index over series and books.
     /// Populated at startup; updates are driven by `event_broadcaster` in
     /// Phase 2. Queries are gated by the `search.fuzzy.enabled` setting in

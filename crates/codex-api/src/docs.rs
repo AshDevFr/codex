@@ -137,6 +137,8 @@ The following paths are exempt from rate limiting:
         // Health check and info
         v1::handlers::health_check,
         v1::handlers::info::get_app_info,
+        v1::handlers::news::get_news,
+        v1::handlers::news::mark_news_seen,
 
         // Setup endpoints
         v1::handlers::setup::setup_status,
@@ -731,6 +733,9 @@ The following paths are exempt from rate limiting:
 
             // App info
             v1::dto::AppInfoDto,
+            v1::dto::NewsResponse,
+            v1::dto::NewsUpdateAvailableDto,
+            v1::dto::NewsEntryDto,
 
             // Shared multipart bodies
             v1::dto::common::CoverUploadForm,
@@ -1365,6 +1370,7 @@ The following paths are exempt from rate limiting:
 
         // System Administration
         (name = "Admin", description = "Administrative operations (cleanup, maintenance)"),
+        (name = "News", description = "Codex release and app announcements for admins"),
         (name = "Settings", description = "Runtime configuration settings (admin only)"),
         (name = "Plugins", description = "Admin-managed external plugin processes"),
         (name = "Plugin Actions", description = "Plugin action discovery and execution for metadata fetching"),
@@ -1852,7 +1858,7 @@ impl utoipa::Modify for TagGroupsModifier {
             },
             {
                 "name": "Administration",
-                "tags": ["Admin", "Settings", "Plugins", "Plugin Actions", "Metrics", "Observability", "Filesystem", "Duplicates", "Access Groups", "Sharing Tags"]
+                "tags": ["Admin", "News", "Settings", "Plugins", "Plugin Actions", "Metrics", "Observability", "Filesystem", "Duplicates", "Access Groups", "Sharing Tags"]
             },
             {
                 "name": "Real-time Events",

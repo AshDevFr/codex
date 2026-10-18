@@ -16,6 +16,7 @@ import {
 } from "@tabler/icons-react";
 import { type RefObject, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { NewsButton } from "@/components/news/NewsButton";
 import {
   MobileSearchSheet,
   SearchInput,
@@ -114,6 +115,8 @@ export function Header({
           >
             <IconSearch size={20} />
           </ActionIcon>
+
+          <NewsButton />
 
           <ActionIcon
             variant="subtle"

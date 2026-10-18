@@ -211,6 +211,7 @@ pub async fn worker_command(config_path: PathBuf) -> anyhow::Result<()> {
         Some(plugin_manager),
         export_storage,
         task_progress_notifier,
+        config.news.enabled,
     );
 
     info!("All {} task workers started successfully", worker_count);

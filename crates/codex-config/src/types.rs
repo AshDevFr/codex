@@ -46,6 +46,26 @@ pub struct KoreaderApiConfig {
     pub enabled: bool,
 }
 
+/// Configuration for in-app news shown to admins.
+///
+/// When enabled, the server downloads the Codex release feeds from
+/// `updates.4sh.dev` once a day. The request is a plain GET carrying nothing
+/// that identifies the instance. This lives in the config file rather than in
+/// the runtime settings table so it can be turned off before the first boot,
+/// when the database does not exist yet.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(default)]
+pub struct NewsConfig {
+    /// Fetch the news feeds and show them to admins (default: true)
+    pub enabled: bool,
+}
+
+impl Default for NewsConfig {
+    fn default() -> Self {
+        Self { enabled: true }
+    }
+}
+
 /// Configuration for API rate limiting
 /// Uses token bucket algorithm with per-client tracking
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -316,6 +336,8 @@ pub struct Config {
     #[serde(default)]
     pub koreader_api: KoreaderApiConfig,
     #[serde(default)]
+    pub news: NewsConfig,
+    #[serde(default)]
     pub rate_limit: RateLimitConfig,
     #[serde(default)]
     pub observability: ObservabilityConfig,
@@ -523,6 +545,7 @@ impl Default for Config {
             pdf_handle_cache: PdfHandleCacheConfig::default(),
             komga_api: KomgaApiConfig::default(),
             koreader_api: KoreaderApiConfig::default(),
+            news: NewsConfig::default(),
             rate_limit: RateLimitConfig::default(),
             observability: ObservabilityConfig::default(),
         }
@@ -1827,6 +1850,7 @@ verification_url_base: https://codex.example.com
             pdf_handle_cache: PdfHandleCacheConfig::default(),
             komga_api: KomgaApiConfig::default(),
             koreader_api: KoreaderApiConfig::default(),
+            news: NewsConfig::default(),
             rate_limit: RateLimitConfig::default(),
             observability: ObservabilityConfig::default(),
         };

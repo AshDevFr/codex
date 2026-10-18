@@ -24,11 +24,15 @@ use std::sync::Arc;
 /// - Events: /events/stream
 /// - Scans: /scans/active, /scans/stream
 /// - Settings: /settings/branding (public), /settings/public
+/// - News: /news, /news/seen (admin only)
 pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
     Router::new()
         // Global scan routes
         .route("/scans/active", get(handlers::list_active_scans))
         .route("/scans/stream", get(handlers::scan_progress_stream))
+        // News for admins
+        .route("/news", get(handlers::news::get_news))
+        .route("/news/seen", post(handlers::news::mark_news_seen))
         // Real-time event routes
         .route("/events/stream", get(handlers::entity_events_stream))
         // Global genre routes (cleanup/delete require admin)

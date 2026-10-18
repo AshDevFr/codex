@@ -191,6 +191,13 @@ pub enum TaskType {
     /// runs it. Idempotent.
     CleanupOidcPendingStates,
 
+    /// Download the Codex news feeds and store their entries.
+    ///
+    /// A plain GET per feed with nothing that identifies the instance. Does
+    /// nothing when `news.enabled` is off. Failures are logged and leave the
+    /// stored entries alone. Idempotent.
+    FetchNews,
+
     /// Sync user plugin data with external service
     UserPluginSync {
         #[serde(rename = "pluginId")]
@@ -357,7 +364,8 @@ impl TaskType {
             | TaskType::CleanupPluginData
             | TaskType::CleanupSeriesExports
             | TaskType::CleanupRefreshTokens
-            | TaskType::CleanupOidcPendingStates => 100,
+            | TaskType::CleanupOidcPendingStates
+            | TaskType::FetchNews => 100,
         }
     }
 
@@ -388,6 +396,7 @@ impl TaskType {
             TaskType::CleanupSeriesExports => "cleanup_series_exports",
             TaskType::CleanupRefreshTokens => "cleanup_refresh_tokens",
             TaskType::CleanupOidcPendingStates => "cleanup_oidc_pending_states",
+            TaskType::FetchNews => "fetch_news",
             TaskType::ExportSeries { .. } => "export_series",
             TaskType::UserPluginSync { .. } => "user_plugin_sync",
             TaskType::UserPluginRecommendations { .. } => "user_plugin_recommendations",

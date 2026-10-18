@@ -32,6 +32,7 @@ mod library_jobs;
 mod metadata_locks;
 mod metadata_reset;
 mod metrics;
+mod news;
 mod observability;
 mod observability_proxy;
 mod oidc;

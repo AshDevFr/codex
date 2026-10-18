@@ -574,7 +574,16 @@ async fn sqlite_rollback_drops_only_orphans() {
         .await
         .unwrap();
 
-    Migrator::down(conn, Some(1)).await.unwrap();
+    // Roll back this migration and everything applied after it, so its `down`
+    // runs. Computed so later migrations do not change what is rolled back.
+    let migrations = Migrator::migrations();
+    let idx = migrations
+        .iter()
+        .position(|m| m.name() == "m20260927_000114_reading_history_survives_book_delete")
+        .expect("the reading-history migration should exist");
+    Migrator::down(conn, Some((migrations.len() - idx) as u32))
+        .await
+        .unwrap();
 
     for table in HISTORY_TABLES {
         assert!(

@@ -158,6 +158,12 @@ scheduler:
 # koreader_api:
 #   # enabled: false
 
+# In-app news for admins: once a day, a plain GET to
+# https://updates.4sh.dev/feeds/{codex,codex-ios}.json with nothing that
+# identifies this server. Set to false to never contact it.
+# news:
+#   # enabled: true
+
 # email:
 #   smtp_host: localhost
 #   smtp_port: 587

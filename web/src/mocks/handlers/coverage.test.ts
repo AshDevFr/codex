@@ -23,6 +23,8 @@ describe("mock handler coverage", () => {
     ["/api/v1/books/:id/full"],
     ["/api/v1/series/:id/full"],
     ["/api/v1/series/full"],
+    ["/api/v1/news"],
+    ["/api/v1/news/seen"],
   ])("serves %s", (path) => {
     expect(paths).toContain(path);
   });

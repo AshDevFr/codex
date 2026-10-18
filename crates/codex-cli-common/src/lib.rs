@@ -691,6 +691,7 @@ pub fn spawn_workers(
     plugin_manager: Option<Arc<codex_services::plugin::PluginManager>>,
     export_storage: Arc<codex_services::ExportStorage>,
     task_progress_notifier: Option<tokio::sync::mpsc::Sender<TaskProgressEvent>>,
+    news_enabled: bool,
 ) -> (
     Vec<tokio::task::JoinHandle<()>>,
     Vec<tokio::sync::broadcast::Sender<()>>,
@@ -712,7 +713,8 @@ pub fn spawn_workers(
             .with_event_broadcaster(event_broadcaster.clone())
             .with_settings_service(settings_service.clone())
             .with_thumbnail_service(thumbnail_service.clone())
-            .with_files_config(files_config.clone());
+            .with_files_config(files_config.clone())
+            .with_news_enabled(news_enabled);
 
         // Add task metrics service if available
         if let Some(ref metrics) = task_metrics_service {

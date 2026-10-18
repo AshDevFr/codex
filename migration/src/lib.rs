@@ -216,6 +216,7 @@ mod m20260826_000111_normalize_library_reading_direction;
 mod m20260826_000112_create_user_series_reader_settings;
 mod m20260828_000113_relax_renumber_series_task_dedup;
 mod m20260927_000114_reading_history_survives_book_delete;
+mod m20261018_000115_create_news;
 
 pub struct Migrator;
 
@@ -418,6 +419,8 @@ impl MigratorTrait for Migrator {
             // Reading history keeps its rows when the book is hard-deleted;
             // only the attribution is lost.
             Box::new(m20260927_000114_reading_history_survives_book_delete::Migration),
+            // News for admins, imported from the Codex release feeds.
+            Box::new(m20261018_000115_create_news::Migration),
         ]
     }
 }

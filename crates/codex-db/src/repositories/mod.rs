@@ -58,6 +58,9 @@ pub mod access_group;
 pub mod oidc_connection;
 pub mod oidc_pending_state;
 
+// News for admins
+pub mod news;
+
 // System-scoped plugin KV store (per-plugin, no user context)
 pub mod plugin_data;
 
@@ -144,6 +147,9 @@ pub use access_group::AccessGroupRepository;
 // OIDC authentication
 pub use oidc_connection::OidcConnectionRepository;
 pub use oidc_pending_state::{NewOidcPendingState, OidcPendingStateRepository};
+
+// News for admins
+pub use news::{NewNewsEntry, NewsEntryRepository, NewsFeedRepository};
 
 // System-scoped plugin KV store
 #[allow(unused_imports)]

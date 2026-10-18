@@ -107,6 +107,9 @@
   "koreader_api": {
     "enabled": false
   },
+  "news": {
+    "enabled": true
+  },
   "rate_limit": {
     "enabled": true,
     "anonymous_rps": 10,

@@ -767,6 +767,47 @@ koreader_api:
 
 See [Third-Party Apps](./third-party-apps) for device-side setup.
 
+## News
+
+Admins get a news icon (a megaphone) in the header. It lists new Codex
+releases and Codex Reader (iOS) releases, marks what you have not seen yet,
+and says when a newer Codex release than the one you run is available.
+Regular users never see it.
+
+```yaml
+news:
+  enabled: true
+```
+
+| Setting | Default | Environment variable | Description |
+|---------|---------|----------------------|-------------|
+| `enabled` | `true` | `CODEX_NEWS__ENABLED` | Fetch the news feeds and show them to admins |
+
+### What the server requests
+
+Once a day, and once at startup when the stored news is more than a day old,
+the server downloads two static files:
+
+- `https://updates.4sh.dev/feeds/codex.json`
+- `https://updates.4sh.dev/feeds/codex-ios.json`
+
+Each is a plain `GET` with `User-Agent: Codex` and no other identifying
+information: no instance id, no Codex version, no account or library data.
+Whether a release is new to your server is worked out locally from the
+downloaded file. Unchanged feeds are answered with `304 Not Modified`.
+
+If the server cannot reach the feed host (an air-gapped install, a proxy that
+blocks it), the fetch logs a warning and the news drawer stays empty. Nothing
+else is affected.
+
+### Turning it off
+
+Set `news.enabled: false`, or `CODEX_NEWS__ENABLED=false` in the environment.
+Use the environment variable (or the config file) **before the first start**
+if the server should never contact the feed host at all: with news disabled
+there is no scheduled fetch, no startup fetch and no outbound request, and the
+news icon is hidden.
+
 ## Rate Limiting
 
 Codex includes built-in API rate limiting to protect against abuse. Rate limiting is **enabled by default** and uses a token bucket algorithm with per-client tracking.

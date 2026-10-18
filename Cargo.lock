@@ -1170,6 +1170,7 @@ dependencies = [
  "reqwest 0.13.2",
  "resvg",
  "sea-orm",
+ "semver",
  "serde",
  "serde_json",
  "serial_test",
@@ -1193,6 +1194,7 @@ name = "codex-tasks"
 version = "2.6.3"
 dependencies = [
  "anyhow",
+ "axum",
  "chrono",
  "codex-config",
  "codex-db",
