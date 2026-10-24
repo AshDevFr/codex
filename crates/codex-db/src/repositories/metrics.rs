@@ -57,6 +57,54 @@ impl MetricsRepository {
         Ok(count as i64)
     }
 
+    /// Approximate count of pages, for callers that poll and can tolerate drift.
+    ///
+    /// `pages` holds one row per page of every book, so it is by far the
+    /// largest table and an exact `COUNT(*)` is a full sequential scan of it.
+    /// On PostgreSQL this reads the planner's row estimate instead, which is
+    /// refreshed by (auto)ANALYZE and VACUUM and so can lag the true count by
+    /// the rows changed since the last one. Falls back to the exact count when
+    /// no estimate exists: always on SQLite, and on PostgreSQL before the table
+    /// is first analyzed or right after a TRUNCATE.
+    pub async fn estimate_pages(db: &DatabaseConnection) -> Result<i64> {
+        match Self::estimated_row_count(db, "pages").await? {
+            Some(estimate) => Ok(estimate),
+            None => Self::count_pages(db).await,
+        }
+    }
+
+    /// The planner's row estimate for `table` (`pg_class.reltuples`).
+    ///
+    /// Returns `None` on backends that keep no such estimate (SQLite), and on
+    /// PostgreSQL when the table has no statistics yet, which it reports as
+    /// `-1`. Never scans the table.
+    pub async fn estimated_row_count(db: &DatabaseConnection, table: &str) -> Result<Option<i64>> {
+        use sea_orm::DbBackend;
+
+        let backend = db.get_database_backend();
+        if backend != DbBackend::Postgres {
+            return Ok(None);
+        }
+
+        let row = db
+            .query_one(Statement::from_sql_and_values(
+                backend,
+                "SELECT reltuples::bigint AS estimate FROM pg_class WHERE oid = $1::regclass",
+                [table.into()],
+            ))
+            .await
+            .with_context(|| format!("Failed to read row estimate for {table}"))?;
+
+        let estimate = match row {
+            Some(row) => row
+                .try_get::<i64>("", "estimate")
+                .with_context(|| format!("Failed to decode row estimate for {table}"))?,
+            None => return Ok(None),
+        };
+
+        Ok((estimate >= 0).then_some(estimate))
+    }
+
     /// Get total count of users
     pub async fn count_users(db: &DatabaseConnection) -> Result<i64> {
         let count = Users::find()
@@ -534,5 +582,48 @@ mod tests {
         assert_eq!(metrics[0].series_count, 1);
         assert_eq!(metrics[0].book_count, 1);
         assert_eq!(metrics[0].total_size, 1000000);
+    }
+
+    #[tokio::test]
+    async fn estimate_pages_is_exact_on_sqlite() {
+        use crate::entities::pages;
+        use crate::repositories::PageRepository;
+        use crate::test_helpers::{seed_library, seed_series, seed_tied_books};
+
+        let (db, _temp_dir) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+
+        // SQLite keeps no planner row estimate, so there is nothing to read.
+        assert_eq!(
+            MetricsRepository::estimated_row_count(conn, "pages")
+                .await
+                .unwrap(),
+            None
+        );
+        assert_eq!(MetricsRepository::estimate_pages(conn).await.unwrap(), 0);
+
+        let library = seed_library(conn, "Pages").await;
+        let series = seed_series(conn, library.id, "Pages Series").await;
+        let book = seed_tied_books(conn, library.id, series.id, 1)
+            .await
+            .inserted
+            .remove(0);
+        for page_number in 1..=3 {
+            let page = pages::Model {
+                id: Uuid::new_v4(),
+                book_id: book.id,
+                page_number,
+                file_name: format!("{page_number:03}.jpg"),
+                format: "jpeg".to_string(),
+                width: 800,
+                height: 1200,
+                file_size: 1024,
+                created_at: Utc::now(),
+            };
+            PageRepository::create(conn, &page).await.unwrap();
+        }
+
+        // With no estimate available it falls back to the exact count.
+        assert_eq!(MetricsRepository::estimate_pages(conn).await.unwrap(), 3);
     }
 }

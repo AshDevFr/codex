@@ -299,7 +299,11 @@ fn install_inventory_gauges() {
     let _ = gauge!(INVENTORY_SERIES, series, "Number of series");
     let _ = gauge!(INVENTORY_BOOKS, books, "Number of books");
     let _ = gauge!(INVENTORY_USERS, users, "Number of users");
-    let _ = gauge!(INVENTORY_PAGES, pages, "Number of pages indexed");
+    let _ = gauge!(
+        INVENTORY_PAGES,
+        pages,
+        "Number of pages indexed (estimated on PostgreSQL)"
+    );
 }
 
 /// Update the inventory snapshot with freshly counted values.

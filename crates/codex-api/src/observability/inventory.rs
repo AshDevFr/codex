@@ -5,6 +5,10 @@
 //! database from inside a sync gauge callback is not feasible because the
 //! SDK calls the callback from a non-tokio thread; we keep the DB queries
 //! on the async runtime and the gauge callbacks read the cached values.
+//!
+//! Only worth running when metric export is on: the gauges are registered
+//! with the real meter provider alone, so without one nothing reads the
+//! snapshot and every refresh is wasted database work.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -45,7 +49,10 @@ async fn refresh(db: &DatabaseConnection) {
     let series = MetricsRepository::count_series(db).await;
     let books = MetricsRepository::count_books(db).await;
     let users = MetricsRepository::count_users(db).await;
-    let pages = MetricsRepository::count_pages(db).await;
+    // An estimate, not a count: `pages` is the one table large enough that
+    // counting it on every tick costs a full sequential scan. The other tables
+    // are a page-count factor smaller, so their exact counts stay cheap.
+    let pages = MetricsRepository::estimate_pages(db).await;
 
     let (Ok(libraries), Ok(series), Ok(books), Ok(users), Ok(pages)) =
         (libraries, series, books, users, pages)
@@ -80,5 +87,6 @@ mod tests {
         assert_eq!(snap.libraries.load(Ordering::Relaxed), 0);
         assert_eq!(snap.series.load(Ordering::Relaxed), 0);
         assert_eq!(snap.books.load(Ordering::Relaxed), 0);
+        assert_eq!(snap.pages.load(Ordering::Relaxed), 0);
     }
 }

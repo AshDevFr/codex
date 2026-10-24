@@ -549,3 +549,67 @@ async fn test_postgres_grouped_sorts_break_ties_by_id() {
     LibraryRepository::delete(conn, library.id).await.unwrap();
     db.close().await;
 }
+
+/// The inventory gauges read the planner's row estimate instead of counting,
+/// because an exact count of a large table is a full sequential scan.
+///
+/// Uses a table private to this test: `pages` is truncated by other tests
+/// running concurrently against the same database, and a TRUNCATE resets its
+/// statistics, so its estimate cannot be pinned down here.
+#[tokio::test]
+#[ignore]
+async fn test_postgres_estimated_row_count_reads_planner_statistics() {
+    use codex::db::repositories::MetricsRepository;
+
+    let db = create_test_postgres_db().await;
+    let conn = db.sea_orm_connection();
+    let table = format!("estimate_probe_{}", Uuid::new_v4().simple());
+
+    conn.execute_unprepared(&format!("CREATE TABLE {table} (id int)"))
+        .await
+        .unwrap();
+
+    // Never analyzed: Postgres reports -1, which must not surface as a count.
+    assert_eq!(
+        MetricsRepository::estimated_row_count(conn, &table)
+            .await
+            .unwrap(),
+        None
+    );
+
+    conn.execute_unprepared(&format!("INSERT INTO {table} SELECT generate_series(1, 7)"))
+        .await
+        .unwrap();
+    conn.execute_unprepared(&format!("ANALYZE {table}"))
+        .await
+        .unwrap();
+    assert_eq!(
+        MetricsRepository::estimated_row_count(conn, &table)
+            .await
+            .unwrap(),
+        Some(7)
+    );
+
+    // Rows inserted after the last ANALYZE are not reflected, which proves the
+    // value comes from statistics rather than a scan. Two rows stay far below
+    // the autovacuum analyze threshold, so nothing refreshes it mid-test.
+    conn.execute_unprepared(&format!("INSERT INTO {table} VALUES (8), (9)"))
+        .await
+        .unwrap();
+    assert_eq!(
+        MetricsRepository::estimated_row_count(conn, &table)
+            .await
+            .unwrap(),
+        Some(7)
+    );
+
+    conn.execute_unprepared(&format!("DROP TABLE {table}"))
+        .await
+        .unwrap();
+
+    // The real table resolves and yields a usable value whether or not it has
+    // been analyzed (an unanalyzed table falls back to the exact count).
+    assert!(MetricsRepository::estimate_pages(conn).await.unwrap() >= 0);
+
+    db.close().await;
+}

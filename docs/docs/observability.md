@@ -119,7 +119,7 @@ The Rust SDK samples at the root span. If a downstream service (e.g. a plugin su
 Two flavors land in the OTLP pipeline:
 
 - **Counters and histograms** — dual-written from the in-process plugin and task metrics services. Histograms (not just averages) let p95/p99 be queried server-side.
-- **Observable gauges** — inventory snapshot (libraries, series, books, users, pages), refreshed every 30s; process CPU/memory; task in-flight count.
+- **Observable gauges** — inventory snapshot (libraries, series, books, users, pages), refreshed every 30s while metric export is on; process CPU/memory; task in-flight count. On PostgreSQL the pages gauge is the planner's row estimate rather than an exact count, so it can lag by the pages added or removed since the table was last analyzed. Counting that table exactly would scan every row on each refresh.
 
 Concrete metric names:
 

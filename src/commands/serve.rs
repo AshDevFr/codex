@@ -205,13 +205,23 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     info!("Task metrics background jobs started");
 
     // Refresh the inventory metric snapshot every 30s so the OTel observable
-    // gauges have current values. Cheap: five `COUNT(*)` queries. The poller
-    // exits as soon as the cancellation token fires.
-    let inventory_poller_handle = codex_api::observability::inventory::spawn_poller(
-        Arc::new(background_conn.clone()),
-        std::time::Duration::from_secs(30),
-        background_task_cancel.clone(),
-    );
+    // gauges have current values. Each pod runs it, so the cost multiplies
+    // with replicas. Skipped entirely unless metric export is on: the gauges
+    // only exist on a real meter provider, so otherwise nothing reads them.
+    //
+    // Per tick: exact `COUNT(*)` on libraries, series, books and users, which
+    // are small, plus the planner's row estimate for pages. Counting pages
+    // exactly is a full sequential scan of the largest table (one row per
+    // page of every book), slow on its own and enough to evict the rest of
+    // the working set from shared_buffers. The poller exits as soon as the
+    // cancellation token fires.
+    let inventory_poller_handle = tracing_handles.observability.metrics_enabled().then(|| {
+        codex_api::observability::inventory::spawn_poller(
+            Arc::new(background_conn.clone()),
+            std::time::Duration::from_secs(30),
+            background_task_cancel.clone(),
+        )
+    });
 
     // Initialize read progress batching service
     let read_progress_service = Arc::new(codex_services::ReadProgressService::new(
@@ -700,9 +710,11 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     }
 
     // Await inventory metrics poller completion
-    info!("Waiting for inventory metrics poller to complete...");
-    if let Err(e) = inventory_poller_handle.await {
-        tracing::warn!("Inventory metrics poller panicked: {}", e);
+    if let Some(handle) = inventory_poller_handle {
+        info!("Waiting for inventory metrics poller to complete...");
+        if let Err(e) = handle.await {
+            tracing::warn!("Inventory metrics poller panicked: {}", e);
+        }
     }
 
     // Await read progress background flush task completion
