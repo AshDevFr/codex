@@ -71,6 +71,8 @@ pub enum MembershipSource {
     Manual,
     /// Auto-assigned from an OIDC IdP group claim
     Oidc,
+    /// Added at account creation because the group was the default group
+    Default,
 }
 
 impl MembershipSource {
@@ -78,6 +80,7 @@ impl MembershipSource {
         match self {
             MembershipSource::Manual => "manual",
             MembershipSource::Oidc => "oidc",
+            MembershipSource::Default => "default",
         }
     }
 }
@@ -89,6 +92,7 @@ impl FromStr for MembershipSource {
         match s.to_lowercase().as_str() {
             "manual" => Ok(MembershipSource::Manual),
             "oidc" => Ok(MembershipSource::Oidc),
+            "default" => Ok(MembershipSource::Default),
             _ => Err(format!("Unknown membership source: {}", s)),
         }
     }

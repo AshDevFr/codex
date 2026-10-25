@@ -231,6 +231,54 @@
         ]
       }
     },
+    "/api/v1/access-groups/{group_id}/add-all-users": {
+      "post": {
+        "tags": [
+          "Access Groups"
+        ],
+        "summary": "Add every user who is not yet a member to an access group (admin only)",
+        "description": "Meant for a group that has just become the default, since the default only\napplies to accounts created afterwards. Existing memberships keep their\nsource; new ones are recorded as `default`.",
+        "operationId": "add_all_users_to_access_group",
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "description": "Access group ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Users added",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddAllUsersResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Missing permission"
+          },
+          "404": {
+            "description": "Access group not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/access-groups/{group_id}/grants": {
       "post": {
         "tags": [
@@ -23542,6 +23590,7 @@
         "required": [
           "id",
           "name",
+          "isDefault",
           "members",
           "grants",
           "oidcMappings",
@@ -23576,6 +23625,11 @@
             "description": "Unique access group identifier",
             "example": "550e8400-e29b-41d4-a716-446655440000"
           },
+          "isDefault": {
+            "type": "boolean",
+            "description": "Whether new users join this group when their account is created",
+            "example": false
+          },
           "members": {
             "type": "array",
             "items": {
@@ -23609,6 +23663,7 @@
         "required": [
           "id",
           "name",
+          "isDefault",
           "memberCount",
           "grantCount",
           "createdAt",
@@ -23641,6 +23696,11 @@
             "format": "uuid",
             "description": "Unique access group identifier",
             "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "isDefault": {
+            "type": "boolean",
+            "description": "Whether new users join this group when their account is created",
+            "example": false
           },
           "memberCount": {
             "type": "integer",
@@ -23845,6 +23905,22 @@
             "type": "string",
             "description": "OIDC group name from the IdP",
             "example": "library-staff"
+          }
+        }
+      },
+      "AddAllUsersResponse": {
+        "type": "object",
+        "description": "Result of adding every user to an access group",
+        "required": [
+          "added"
+        ],
+        "properties": {
+          "added": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Users who were not members yet and have been added",
+            "example": 12,
+            "minimum": 0
           }
         }
       },
@@ -35166,7 +35242,8 @@
         "description": "Provenance of a group membership",
         "enum": [
           "manual",
-          "oidc"
+          "oidc",
+          "default"
         ]
       },
       "MessageResponse": {
@@ -46464,6 +46541,14 @@
             ],
             "description": "New description (set to null to remove)",
             "example": "Updated description"
+          },
+          "isDefault": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Make this the default group (clearing any other default), or stop it\nbeing the default. Only affects accounts created afterwards.",
+            "example": true
           },
           "name": {
             "type": [

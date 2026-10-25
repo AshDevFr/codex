@@ -157,6 +157,10 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             post(handlers::access_groups::add_access_group_members),
         )
         .route(
+            "/access-groups/{group_id}/add-all-users",
+            post(handlers::access_groups::add_all_users_to_access_group),
+        )
+        .route(
             "/access-groups/{group_id}/members/{user_id}",
             delete(handlers::access_groups::remove_access_group_member),
         )

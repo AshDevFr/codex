@@ -41,6 +41,28 @@ export interface paths {
         patch: operations["update_access_group"];
         trace?: never;
     };
+    "/api/v1/access-groups/{group_id}/add-all-users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add every user who is not yet a member to an access group (admin only)
+         * @description Meant for a group that has just become the default, since the default only
+         *     applies to accounts created afterwards. Existing memberships keep their
+         *     source; new ones are recorded as `default`.
+         */
+        post: operations["add_all_users_to_access_group"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/access-groups/{group_id}/grants": {
         parameters: {
             query?: never;
@@ -8313,6 +8335,11 @@ export interface components {
              * @example 550e8400-e29b-41d4-a716-446655440000
              */
             id: string;
+            /**
+             * @description Whether new users join this group when their account is created
+             * @example false
+             */
+            isDefault: boolean;
             /** @description Members of the group */
             members: components["schemas"]["AccessGroupMemberDto"][];
             /**
@@ -8354,6 +8381,11 @@ export interface components {
              * @example 550e8400-e29b-41d4-a716-446655440000
              */
             id: string;
+            /**
+             * @description Whether new users join this group when their account is created
+             * @example false
+             */
+            isDefault: boolean;
             /**
              * Format: int64
              * @description Number of members in the group
@@ -8491,6 +8523,15 @@ export interface components {
              * @example library-staff
              */
             oidcGroupName: string;
+        };
+        /** @description Result of adding every user to an access group */
+        AddAllUsersResponse: {
+            /**
+             * Format: int64
+             * @description Users who were not members yet and have been added
+             * @example 12
+             */
+            added: number;
         };
         /** @description Request to add a single genre to a book */
         AddBookGenreRequest: {
@@ -14682,7 +14723,7 @@ export interface components {
          * @description Provenance of a group membership
          * @enum {string}
          */
-        MembershipSource: "manual" | "oidc";
+        MembershipSource: "manual" | "oidc" | "default";
         MessageResponse: {
             /**
              * @description Response message
@@ -21133,6 +21174,12 @@ export interface components {
              */
             description?: string | null;
             /**
+             * @description Make this the default group (clearing any other default), or stop it
+             *     being the default. Only affects accounts created afterwards.
+             * @example true
+             */
+            isDefault?: boolean | null;
+            /**
              * @description New display name (must be unique)
              * @example Manga & Comic Readers
              */
@@ -22434,6 +22481,43 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Forbidden - Missing permission */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Access group not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    add_all_users_to_access_group: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Access group ID */
+                group_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Users added */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AddAllUsersResponse"];
+                };
             };
             /** @description Forbidden - Missing permission */
             403: {

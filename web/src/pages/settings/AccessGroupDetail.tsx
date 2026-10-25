@@ -31,6 +31,7 @@ import { Link, useParams } from "react-router-dom";
 import { type AccessGroupDetailDto, accessGroupsApi } from "@/api/accessGroups";
 import { type AccessMode, sharingTagsApi } from "@/api/sharingTags";
 import { usersApi } from "@/api/users";
+import { DefaultGroupCard } from "@/components/access-groups/DefaultGroupCard";
 
 export function AccessGroupDetail() {
   const { groupId } = useParams<{ groupId: string }>();
@@ -86,6 +87,11 @@ export function AccessGroupDetail() {
             <Group gap="sm">
               <IconShieldCheck size={24} />
               <Title order={1}>{group.name}</Title>
+              {group.isDefault && (
+                <Badge variant="outline" color="teal">
+                  Default
+                </Badge>
+              )}
             </Group>
             {group.description && (
               <Text c="dimmed" size="sm" mt="xs">
@@ -94,6 +100,8 @@ export function AccessGroupDetail() {
             )}
           </div>
         </Group>
+
+        <DefaultGroupCard group={group} />
 
         {/* Members Section */}
         <MembersSection
@@ -211,6 +219,11 @@ function MembersSection({
                   {member.source === "oidc" && (
                     <Badge size="xs" variant="outline" color="violet">
                       OIDC
+                    </Badge>
+                  )}
+                  {member.source === "default" && (
+                    <Badge size="xs" variant="outline" color="teal">
+                      Default
                     </Badge>
                   )}
                 </Group>

@@ -178,6 +178,11 @@ export function AccessGroupsSettings() {
           >
             {group.name}
           </Text>
+          {group.isDefault && (
+            <Badge size="xs" variant="outline" color="teal">
+              Default
+            </Badge>
+          )}
         </Group>
       ),
     },

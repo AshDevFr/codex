@@ -6,8 +6,9 @@
 use super::super::dto::{
     AccessGroupDetailDto, AccessGroupDto, AccessGroupGrantDto, AccessGroupMemberDto,
     AccessGroupOidcMappingDto, AccessGroupSummaryDto, AddAccessGroupGrantRequest,
-    AddAccessGroupMembersRequest, AddAccessGroupOidcMappingRequest, CreateAccessGroupRequest,
-    EffectiveGrantDto, EffectiveGrantsResponse, GrantSourceDto, UpdateAccessGroupRequest,
+    AddAccessGroupMembersRequest, AddAccessGroupOidcMappingRequest, AddAllUsersResponse,
+    CreateAccessGroupRequest, EffectiveGrantDto, EffectiveGrantsResponse, GrantSourceDto,
+    UpdateAccessGroupRequest,
 };
 use crate::{
     error::ApiError,
@@ -200,11 +201,19 @@ pub async fn update_access_group(
         }
     }
 
-    let group =
+    let mut group =
         AccessGroupRepository::update(&state.db, group_id, request.name, request.description)
             .await
             .map_err(|e| ApiError::Internal(format!("Failed to update access group: {}", e)))?
             .ok_or_else(|| ApiError::NotFound("Access group not found".to_string()))?;
+
+    if let Some(is_default) = request.is_default
+        && is_default != group.is_default
+    {
+        group = AccessGroupRepository::set_default(&state.db, group_id, is_default)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to set default group: {}", e)))?;
+    }
 
     let member_count = AccessGroupRepository::list_members(&state.db, group.id)
         .await
@@ -302,6 +311,47 @@ pub async fn add_access_group_members(
     // Return current members
     let members = build_member_list(&state.db, group_id).await?;
     Ok(Json(members))
+}
+
+/// Add every user who is not yet a member to an access group (admin only)
+///
+/// Meant for a group that has just become the default, since the default only
+/// applies to accounts created afterwards. Existing memberships keep their
+/// source; new ones are recorded as `default`.
+#[utoipa::path(
+    post,
+    path = "/api/v1/access-groups/{group_id}/add-all-users",
+    params(
+        ("group_id" = Uuid, Path, description = "Access group ID")
+    ),
+    responses(
+        (status = 200, description = "Users added", body = AddAllUsersResponse),
+        (status = 404, description = "Access group not found"),
+        (status = 403, description = "Forbidden - Missing permission"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Access Groups"
+)]
+pub async fn add_all_users_to_access_group(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(group_id): Path<Uuid>,
+) -> Result<Json<AddAllUsersResponse>, ApiError> {
+    auth.require_permission(&Permission::SystemAdmin)?;
+
+    AccessGroupRepository::get_by_id(&state.db, group_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch access group: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Access group not found".to_string()))?;
+
+    let added = AccessGroupRepository::add_all_users(&state.db, group_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to add users: {}", e)))?;
+
+    Ok(Json(AddAllUsersResponse { added }))
 }
 
 /// Remove a user from an access group (admin only)
@@ -728,6 +778,7 @@ async fn build_group_detail(
         id: group.id,
         name: group.name,
         description: group.description,
+        is_default: group.is_default,
         members,
         grants,
         oidc_mappings,
