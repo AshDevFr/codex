@@ -3015,8 +3015,13 @@ export interface paths {
          * @description Returns counts and sizes for libraries, series, and books in the system.
          *     This endpoint provides an inventory overview of your digital library.
          *
+         *     The page count is an estimate by default. Pass `exact=true` for an exact
+         *     count; on PostgreSQL that scans the whole pages table, so it is limited to
+         *     admins.
+         *
          *     # Permission Required
          *     - `libraries:read` or admin status
+         *     - admin status for `exact=true`
          */
         get: operations["get_inventory_metrics"];
         put?: never;
@@ -15091,7 +15096,10 @@ export interface components {
             libraryCount: number;
             /**
              * Format: int64
-             * @description Number of pages across all books
+             * @description Number of pages across all books (approximate unless `exact=true` was
+             *     requested). On PostgreSQL this is the planner's row estimate, which can
+             *     lag the true count by the pages changed since the table was last
+             *     analyzed.
              * @example 175000
              */
             pageCount: number;
@@ -29519,7 +29527,13 @@ export interface operations {
     };
     get_inventory_metrics: {
         parameters: {
-            query?: never;
+            query?: {
+                /**
+                 * @description Count pages exactly instead of estimating. Admin only: on PostgreSQL an
+                 *     exact count is a full scan of the largest table.
+                 */
+                exact?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -29535,7 +29549,7 @@ export interface operations {
                     "application/json": components["schemas"]["MetricsDto"];
                 };
             };
-            /** @description Permission denied */
+            /** @description Permission denied, or `exact=true` requested without admin access */
             403: {
                 headers: {
                     [name: string]: unknown;

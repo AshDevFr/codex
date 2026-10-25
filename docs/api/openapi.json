@@ -9685,8 +9685,19 @@
           "Metrics"
         ],
         "summary": "Get inventory metrics (library/book counts)",
-        "description": "Returns counts and sizes for libraries, series, and books in the system.\nThis endpoint provides an inventory overview of your digital library.\n\n# Permission Required\n- `libraries:read` or admin status",
+        "description": "Returns counts and sizes for libraries, series, and books in the system.\nThis endpoint provides an inventory overview of your digital library.\n\nThe page count is an estimate by default. Pass `exact=true` for an exact\ncount; on PostgreSQL that scans the whole pages table, so it is limited to\nadmins.\n\n# Permission Required\n- `libraries:read` or admin status\n- admin status for `exact=true`",
         "operationId": "get_inventory_metrics",
+        "parameters": [
+          {
+            "name": "exact",
+            "in": "query",
+            "description": "Count pages exactly instead of estimating. Admin only: on PostgreSQL an\nexact count is a full scan of the largest table.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Inventory metrics retrieved successfully",
@@ -9699,7 +9710,7 @@
             }
           },
           "403": {
-            "description": "Permission denied"
+            "description": "Permission denied, or `exact=true` requested without admin access"
           }
         },
         "security": [
@@ -35894,7 +35905,7 @@
           "pageCount": {
             "type": "integer",
             "format": "int64",
-            "description": "Number of pages across all books",
+            "description": "Number of pages across all books (approximate unless `exact=true` was\nrequested). On PostgreSQL this is the planner's row estimate, which can\nlag the true count by the pages changed since the table was last\nanalyzed.",
             "example": 175000
           },
           "seriesCount": {

@@ -1,10 +1,13 @@
-use axum::{Json, extract::State};
+use axum::{
+    Json,
+    extract::{Query, State},
+};
 use chrono::Utc;
 use std::sync::Arc;
 
 use super::super::dto::{
-    LibraryMetricsDto, MetricsDto, PluginMethodMetricsDto, PluginMetricsDto, PluginMetricsResponse,
-    PluginMetricsSummaryDto,
+    InventoryMetricsQuery, LibraryMetricsDto, MetricsDto, PluginMethodMetricsDto, PluginMetricsDto,
+    PluginMetricsResponse, PluginMetricsSummaryDto,
 };
 use crate::{AppState, error::ApiError, extractors::AuthContext, permissions::Permission};
 use codex_db::repositories::MetricsRepository;
@@ -14,14 +17,20 @@ use codex_db::repositories::MetricsRepository;
 /// Returns counts and sizes for libraries, series, and books in the system.
 /// This endpoint provides an inventory overview of your digital library.
 ///
+/// The page count is an estimate by default. Pass `exact=true` for an exact
+/// count; on PostgreSQL that scans the whole pages table, so it is limited to
+/// admins.
+///
 /// # Permission Required
 /// - `libraries:read` or admin status
+/// - admin status for `exact=true`
 #[utoipa::path(
     get,
     path = "/api/v1/metrics/inventory",
+    params(InventoryMetricsQuery),
     responses(
         (status = 200, description = "Inventory metrics retrieved successfully", body = MetricsDto),
-        (status = 403, description = "Permission denied"),
+        (status = 403, description = "Permission denied, or `exact=true` requested without admin access"),
     ),
     security(
         ("jwt_bearer" = []),
@@ -32,9 +41,15 @@ use codex_db::repositories::MetricsRepository;
 pub async fn get_inventory_metrics(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
+    Query(query): Query<InventoryMetricsQuery>,
 ) -> Result<Json<MetricsDto>, ApiError> {
     // Check permission - metrics are considered system-level library information
     auth.require_permission(&Permission::LibrariesRead)?;
+    // Refuse rather than fall back to the estimate, so a caller that asked for
+    // an exact count never receives an estimate believing it is exact.
+    if query.exact {
+        auth.require_admin()?;
+    }
 
     // Gather all metrics in parallel
     let (
@@ -78,9 +93,12 @@ pub async fn get_inventory_metrics(
                 .map_err(|e| anyhow::anyhow!("database_size: {}", e))
         },
         async {
-            MetricsRepository::count_pages(&state.db)
-                .await
-                .map_err(|e| anyhow::anyhow!("count_pages: {}", e))
+            let pages = if query.exact {
+                MetricsRepository::count_pages(&state.db).await
+            } else {
+                MetricsRepository::estimate_pages(&state.db).await
+            };
+            pages.map_err(|e| anyhow::anyhow!("page count: {}", e))
         },
         async {
             MetricsRepository::library_metrics(&state.db)

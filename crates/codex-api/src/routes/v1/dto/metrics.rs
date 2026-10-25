@@ -32,12 +32,26 @@ pub struct MetricsDto {
     #[schema(example = 10485760)]
     pub database_size: i64,
 
-    /// Number of pages across all books
+    /// Number of pages across all books (approximate unless `exact=true` was
+    /// requested). On PostgreSQL this is the planner's row estimate, which can
+    /// lag the true count by the pages changed since the table was last
+    /// analyzed.
     #[schema(example = 175000)]
     pub page_count: i64,
 
     /// Breakdown by library
     pub libraries: Vec<LibraryMetricsDto>,
+}
+
+/// Query parameters for the inventory metrics endpoint
+#[derive(Debug, Clone, Default, Deserialize, utoipa::IntoParams)]
+#[serde(rename_all = "camelCase")]
+#[into_params(rename_all = "camelCase")]
+pub struct InventoryMetricsQuery {
+    /// Count pages exactly instead of estimating. Admin only: on PostgreSQL an
+    /// exact count is a full scan of the largest table.
+    #[serde(default)]
+    pub exact: bool,
 }
 
 /// Metrics for a single library

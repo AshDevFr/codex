@@ -352,3 +352,77 @@ async fn test_get_metrics_postgres() {
     assert_eq!(library_metrics.book_count, 2);
     assert_eq!(library_metrics.total_size, 15000000);
 }
+
+// ============================================================================
+// Exact page count (admin-only opt-in)
+// ============================================================================
+
+#[tokio::test]
+async fn test_get_metrics_exact_page_count_as_admin() {
+    use codex::db::repositories::PageRepository;
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/path", ScanningStrategy::Default)
+            .await
+            .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+    let book = create_test_book(
+        series.id,
+        library.id,
+        "/path/series/book1.cbz",
+        "book1.cbz",
+        "hash1",
+        "cbz",
+        3,
+    );
+    let book = BookRepository::create(&db, &book, None).await.unwrap();
+    for page_number in 1..=3 {
+        let page = create_test_page(book.id, page_number, "page.png", "png");
+        PageRepository::create(&db, &page).await.unwrap();
+    }
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request = get_request_with_auth("/api/v1/metrics/inventory?exact=true", &token);
+    let (status, response): (StatusCode, Option<MetricsDto>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(response.unwrap().page_count, 3);
+}
+
+#[tokio::test]
+async fn test_get_metrics_exact_page_count_requires_admin() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_readonly_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Rejected rather than silently downgraded to the estimate, so a caller
+    // that asked for an exact count never mistakes an estimate for one.
+    let request = get_request_with_auth("/api/v1/metrics/inventory?exact=true", &token);
+    let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn test_get_metrics_exact_false_is_allowed_for_readonly_user() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_readonly_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request = get_request_with_auth("/api/v1/metrics/inventory?exact=false", &token);
+    let (status, _): (StatusCode, Option<MetricsDto>) = make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+}
