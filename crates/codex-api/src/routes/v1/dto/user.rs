@@ -44,6 +44,26 @@ pub struct UserDto {
     /// Last account update timestamp
     #[schema(example = "2024-01-15T10:30:00Z")]
     pub updated_at: DateTime<Utc>,
+
+    /// Access groups the user belongs to, sorted by name
+    pub access_groups: Vec<UserAccessGroupDto>,
+}
+
+/// An access group membership as shown on a user
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UserAccessGroupDto {
+    /// Access group ID
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
+    pub id: uuid::Uuid,
+
+    /// Access group name
+    #[schema(example = "Kids")]
+    pub name: String,
+
+    /// Membership source (manual or oidc)
+    #[schema(example = "manual")]
+    pub source: String,
 }
 
 /// User detail DTO with sharing tag grants (for single user view)

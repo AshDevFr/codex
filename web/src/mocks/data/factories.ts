@@ -66,6 +66,7 @@ export const createUser = (overrides: Partial<UserDto> = {}): UserDto => ({
   lastLoginAt: faker.date.recent().toISOString(),
   createdAt: faker.date.past().toISOString(),
   updatedAt: faker.date.recent().toISOString(),
+  accessGroups: [],
   ...overrides,
 });
 

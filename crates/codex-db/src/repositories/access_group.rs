@@ -7,8 +7,10 @@
 use anyhow::Result;
 use chrono::Utc;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, Set,
+    ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, QueryFilter,
+    QueryOrder, Set, TransactionTrait,
 };
+use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 use crate::entities::{
@@ -101,7 +103,7 @@ impl AccessGroupRepository {
     /// Add a user to a group. Idempotent: if the membership already exists
     /// returns the existing row. Updates the `source` if it differs.
     pub async fn add_member(
-        db: &DatabaseConnection,
+        db: &impl ConnectionTrait,
         group_id: Uuid,
         user_id: Uuid,
         source: MembershipSource,
@@ -131,7 +133,7 @@ impl AccessGroupRepository {
 
     /// Remove a user from a group. Returns true if a row was deleted.
     pub async fn remove_member(
-        db: &DatabaseConnection,
+        db: &impl ConnectionTrait,
         group_id: Uuid,
         user_id: Uuid,
     ) -> Result<bool> {
@@ -190,6 +192,49 @@ impl AccessGroupRepository {
             .order_by_asc(access_groups::Column::Name)
             .all(db)
             .await?)
+    }
+
+    /// Group memberships for many users in two queries, keyed by user ID.
+    ///
+    /// Each user's groups are sorted by name and paired with the membership
+    /// row, which carries the source. Users with no memberships are absent.
+    pub async fn list_memberships_for_users(
+        db: &DatabaseConnection,
+        user_ids: &[Uuid],
+    ) -> Result<HashMap<Uuid, Vec<(access_groups::Model, user_access_groups::Model)>>> {
+        if user_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let memberships = user_access_groups::Entity::find()
+            .filter(user_access_groups::Column::UserId.is_in(user_ids.to_vec()))
+            .all(db)
+            .await?;
+        if memberships.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let group_ids: HashSet<Uuid> = memberships.iter().map(|m| m.access_group_id).collect();
+        let groups: HashMap<Uuid, access_groups::Model> = access_groups::Entity::find()
+            .filter(access_groups::Column::Id.is_in(group_ids))
+            .all(db)
+            .await?
+            .into_iter()
+            .map(|g| (g.id, g))
+            .collect();
+
+        let mut by_user: HashMap<Uuid, Vec<(access_groups::Model, user_access_groups::Model)>> =
+            HashMap::new();
+        for membership in memberships {
+            if let Some(group) = groups.get(&membership.access_group_id) {
+                by_user
+                    .entry(membership.user_id)
+                    .or_default()
+                    .push((group.clone(), membership));
+            }
+        }
+        for entries in by_user.values_mut() {
+            entries.sort_by(|a, b| a.0.name.cmp(&b.0.name));
+        }
+        Ok(by_user)
     }
 
     // ==================== Grants ====================
@@ -325,7 +370,10 @@ impl AccessGroupRepository {
         user_id: Uuid,
         oidc_groups: &[String],
     ) -> Result<(usize, usize)> {
-        use std::collections::HashSet;
+        // One transaction, so a failure part-way never leaves the user with
+        // half the IdP's groups applied.
+        let txn = db.begin().await?;
+        let db = &txn;
 
         // 1. Desired: access groups mapped to any of the user's OIDC group names
         let desired_group_ids: HashSet<Uuid> = if oidc_groups.is_empty() {
@@ -373,6 +421,7 @@ impl AccessGroupRepository {
             Self::remove_member(db, *group_id, user_id).await?;
         }
 
+        txn.commit().await?;
         Ok((to_add.len(), to_remove.len()))
     }
 }

@@ -41,7 +41,11 @@ import { type UserDto, type UserListParams, usersApi } from "@/api/users";
 import { PermissionPicker } from "@/components/common";
 import { TableSkeleton } from "@/components/skeletons";
 import { ResponsiveTable, type ResponsiveTableColumn } from "@/components/ui";
-import { UserEffectiveGrants, UserSharingTagGrants } from "@/components/users";
+import {
+  UserAccessGroupBadges,
+  UserEffectiveGrants,
+  UserSharingTagGrants,
+} from "@/components/users";
 import { useShowSkeleton } from "@/lib/motion/useShowSkeleton";
 import { useAuthStore } from "@/store/authStore";
 import { type Permission, ROLE_PERMISSIONS } from "@/types/permissions";
@@ -361,6 +365,11 @@ export function UsersSettings() {
               : "Reader"}
         </Badge>
       ),
+    },
+    {
+      key: "accessGroups",
+      header: "Access Groups",
+      accessor: (user) => <UserAccessGroupBadges groups={user.accessGroups} />,
     },
     {
       key: "status",

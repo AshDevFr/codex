@@ -518,6 +518,56 @@ async fn test_get_user_access_groups() {
     assert!(names.contains(&"Group B"));
 }
 
+#[tokio::test]
+async fn test_list_users_includes_access_groups() {
+    use codex::db::entities::user_access_groups::MembershipSource;
+    use codex::db::repositories::AccessGroupRepository;
+
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_, token) = create_admin_and_token(&db, &state).await;
+    let (alice_id, _) = create_reader_and_token(&db, &state, "alice").await;
+    let (bob_id, _) = create_reader_and_token(&db, &state, "bob").await;
+
+    let kids = AccessGroupRepository::create(&db, "Kids", None)
+        .await
+        .unwrap();
+    let manga = AccessGroupRepository::create(&db, "Manga", None)
+        .await
+        .unwrap();
+    AccessGroupRepository::add_member(&db, manga.id, alice_id, MembershipSource::Oidc)
+        .await
+        .unwrap();
+    AccessGroupRepository::add_member(&db, kids.id, alice_id, MembershipSource::Manual)
+        .await
+        .unwrap();
+
+    let app = create_test_router(state).await;
+    let request = get_request_with_auth("/api/v1/users", &token);
+    let (status, response): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+    let users = response.unwrap()["data"].as_array().unwrap().clone();
+
+    let groups_of = |id: uuid::Uuid| {
+        users.iter().find(|u| u["id"] == id.to_string()).unwrap()["accessGroups"]
+            .as_array()
+            .unwrap()
+            .clone()
+    };
+
+    // Sorted by name, with the membership source
+    let alice_groups = groups_of(alice_id);
+    assert_eq!(alice_groups.len(), 2);
+    assert_eq!(alice_groups[0]["name"], "Kids");
+    assert_eq!(alice_groups[0]["source"], "manual");
+    assert_eq!(alice_groups[0]["id"], kids.id.to_string());
+    assert_eq!(alice_groups[1]["name"], "Manga");
+    assert_eq!(alice_groups[1]["source"], "oidc");
+
+    assert!(groups_of(bob_id).is_empty());
+}
+
 // ============================================================================
 // Effective Grants Tests
 // ============================================================================

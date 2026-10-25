@@ -21677,6 +21677,25 @@ export interface components {
              */
             username?: string | null;
         };
+        /** @description An access group membership as shown on a user */
+        UserAccessGroupDto: {
+            /**
+             * Format: uuid
+             * @description Access group ID
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
+            id: string;
+            /**
+             * @description Access group name
+             * @example Kids
+             */
+            name: string;
+            /**
+             * @description Membership source (manual or oidc)
+             * @example manual
+             */
+            source: string;
+        };
         /** @description User detail DTO with sharing tag grants (for single user view) */
         UserDetailDto: {
             /**
@@ -21727,6 +21746,8 @@ export interface components {
         };
         /** @description User data transfer object */
         UserDto: {
+            /** @description Access groups the user belongs to, sorted by name */
+            accessGroups: components["schemas"]["UserAccessGroupDto"][];
             /**
              * Format: date-time
              * @description Account creation timestamp
