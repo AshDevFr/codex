@@ -8,7 +8,7 @@ use anyhow::Result;
 use chrono::Utc;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, QueryFilter,
-    QueryOrder, Set, TransactionTrait,
+    QueryOrder, Set, TransactionTrait, sea_query::Expr,
 };
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
@@ -34,6 +34,7 @@ impl AccessGroupRepository {
             id: Set(Uuid::new_v4()),
             name: Set(name.trim().to_string()),
             description: Set(description),
+            is_default: Set(false),
             created_at: Set(now),
             updated_at: Set(now),
         };
@@ -192,6 +193,126 @@ impl AccessGroupRepository {
             .order_by_asc(access_groups::Column::Name)
             .all(db)
             .await?)
+    }
+
+    // ==================== Default group ====================
+
+    /// The group new users join at account creation, if one is set.
+    pub async fn get_default(db: &impl ConnectionTrait) -> Result<Option<access_groups::Model>> {
+        Ok(access_groups::Entity::find()
+            .filter(access_groups::Column::IsDefault.eq(true))
+            .one(db)
+            .await?)
+    }
+
+    /// Make a group the default, or stop it being the default.
+    ///
+    /// Setting a new default clears the previous one in the same transaction.
+    /// Neither direction changes any membership: the default only applies to
+    /// accounts created afterwards (see [`Self::add_all_users`] for the rest).
+    pub async fn set_default(
+        db: &DatabaseConnection,
+        group_id: Uuid,
+        is_default: bool,
+    ) -> Result<access_groups::Model> {
+        let txn = db.begin().await?;
+        let group = access_groups::Entity::find_by_id(group_id)
+            .one(&txn)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Access group not found"))?;
+
+        if is_default {
+            access_groups::Entity::update_many()
+                .col_expr(access_groups::Column::IsDefault, Expr::value(false))
+                .filter(access_groups::Column::IsDefault.eq(true))
+                .filter(access_groups::Column::Id.ne(group_id))
+                .exec(&txn)
+                .await?;
+        }
+
+        let mut active: access_groups::ActiveModel = group.into();
+        active.is_default = Set(is_default);
+        active.updated_at = Set(Utc::now());
+        let updated = active.update(&txn).await?;
+        txn.commit().await?;
+        Ok(updated)
+    }
+
+    /// Add a user to the default group, if there is one.
+    ///
+    /// Called inside the user-creation transaction so every way of creating
+    /// an account gets the same baseline.
+    pub async fn join_default_group(db: &impl ConnectionTrait, user_id: Uuid) -> Result<()> {
+        if let Some(group) = Self::get_default(db).await? {
+            Self::add_member_if_absent(db, group.id, user_id, MembershipSource::Default).await?;
+        }
+        Ok(())
+    }
+
+    /// Add every user who is not yet a member, with source `default`.
+    /// Returns how many users were added.
+    pub async fn add_all_users(db: &DatabaseConnection, group_id: Uuid) -> Result<u64> {
+        let txn = db.begin().await?;
+        let existing: HashSet<Uuid> = user_access_groups::Entity::find()
+            .filter(user_access_groups::Column::AccessGroupId.eq(group_id))
+            .all(&txn)
+            .await?
+            .into_iter()
+            .map(|m| m.user_id)
+            .collect();
+        let user_ids: Vec<Uuid> = users::Entity::find()
+            .all(&txn)
+            .await?
+            .into_iter()
+            .map(|u| u.id)
+            .filter(|id| !existing.contains(id))
+            .collect();
+
+        let now = Utc::now();
+        for user_id in &user_ids {
+            user_access_groups::ActiveModel {
+                id: Set(Uuid::new_v4()),
+                user_id: Set(*user_id),
+                access_group_id: Set(group_id),
+                source: Set(MembershipSource::Default.as_str().to_string()),
+                created_at: Set(now),
+            }
+            .insert(&txn)
+            .await?;
+        }
+        txn.commit().await?;
+        Ok(user_ids.len() as u64)
+    }
+
+    /// Insert a membership unless the user is already in the group.
+    ///
+    /// Unlike [`Self::add_member`], this never rewrites the source of an
+    /// existing row. Turning an `oidc` membership into `default` would stop
+    /// the IdP from ever removing it. Returns true if a row was inserted.
+    pub async fn add_member_if_absent(
+        db: &impl ConnectionTrait,
+        group_id: Uuid,
+        user_id: Uuid,
+        source: MembershipSource,
+    ) -> Result<bool> {
+        let existing = user_access_groups::Entity::find()
+            .filter(user_access_groups::Column::UserId.eq(user_id))
+            .filter(user_access_groups::Column::AccessGroupId.eq(group_id))
+            .one(db)
+            .await?;
+        if existing.is_some() {
+            return Ok(false);
+        }
+        user_access_groups::ActiveModel {
+            id: Set(Uuid::new_v4()),
+            user_id: Set(user_id),
+            access_group_id: Set(group_id),
+            source: Set(source.as_str().to_string()),
+            created_at: Set(Utc::now()),
+        }
+        .insert(db)
+        .await?;
+        Ok(true)
     }
 
     /// Group memberships for many users in two queries, keyed by user ID.
@@ -448,6 +569,178 @@ mod tests {
             last_login_at: None,
         };
         UserRepository::create(db, &model).await.unwrap()
+    }
+
+    // ---------- Default group ----------
+
+    #[tokio::test]
+    async fn set_default_keeps_a_single_default() {
+        let db = setup_test_db().await;
+        let a = AccessGroupRepository::create(&db, "A", None).await.unwrap();
+        let b = AccessGroupRepository::create(&db, "B", None).await.unwrap();
+        assert!(!a.is_default);
+        assert!(
+            AccessGroupRepository::get_default(&db)
+                .await
+                .unwrap()
+                .is_none()
+        );
+
+        AccessGroupRepository::set_default(&db, a.id, true)
+            .await
+            .unwrap();
+        assert_eq!(
+            AccessGroupRepository::get_default(&db)
+                .await
+                .unwrap()
+                .unwrap()
+                .id,
+            a.id
+        );
+
+        // Moving the default clears it from the previous group
+        AccessGroupRepository::set_default(&db, b.id, true)
+            .await
+            .unwrap();
+        assert_eq!(
+            AccessGroupRepository::get_default(&db)
+                .await
+                .unwrap()
+                .unwrap()
+                .id,
+            b.id
+        );
+        let a = AccessGroupRepository::get_by_id(&db, a.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(!a.is_default);
+
+        AccessGroupRepository::set_default(&db, b.id, false)
+            .await
+            .unwrap();
+        assert!(
+            AccessGroupRepository::get_default(&db)
+                .await
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    /// The partial unique index is the backstop if two requests race.
+    #[tokio::test]
+    async fn database_rejects_a_second_default() {
+        use sea_orm::ActiveModelTrait;
+
+        let db = setup_test_db().await;
+        let a = AccessGroupRepository::create(&db, "A", None).await.unwrap();
+        let b = AccessGroupRepository::create(&db, "B", None).await.unwrap();
+        AccessGroupRepository::set_default(&db, a.id, true)
+            .await
+            .unwrap();
+
+        let mut active: access_groups::ActiveModel = b.into();
+        active.is_default = Set(true);
+        assert!(active.update(&db).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn new_user_joins_the_default_group() {
+        let db = setup_test_db().await;
+        let kids = AccessGroupRepository::create(&db, "Kids", None)
+            .await
+            .unwrap();
+        AccessGroupRepository::set_default(&db, kids.id, true)
+            .await
+            .unwrap();
+
+        let user = create_test_user(&db, "newbie").await;
+
+        let members = AccessGroupRepository::list_members(&db, kids.id)
+            .await
+            .unwrap();
+        assert_eq!(members.len(), 1);
+        assert_eq!(members[0].user_id, user.id);
+        assert_eq!(members[0].source, "default");
+    }
+
+    #[tokio::test]
+    async fn new_user_without_a_default_group_joins_nothing() {
+        let db = setup_test_db().await;
+        AccessGroupRepository::create(&db, "Kids", None)
+            .await
+            .unwrap();
+
+        let user = create_test_user(&db, "newbie").await;
+
+        assert!(
+            AccessGroupRepository::list_for_user(&db, user.id)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    /// Joining at creation is a one-off: once removed, the user stays out,
+    /// and making a group default later does not pull existing users in.
+    #[tokio::test]
+    async fn default_membership_is_removable_and_not_retroactive() {
+        let db = setup_test_db().await;
+        let existing = create_test_user(&db, "existing").await;
+        let kids = AccessGroupRepository::create(&db, "Kids", None)
+            .await
+            .unwrap();
+        AccessGroupRepository::set_default(&db, kids.id, true)
+            .await
+            .unwrap();
+        assert!(
+            AccessGroupRepository::list_for_user(&db, existing.id)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+
+        let newbie = create_test_user(&db, "newbie").await;
+        AccessGroupRepository::remove_member(&db, kids.id, newbie.id)
+            .await
+            .unwrap();
+        assert!(
+            AccessGroupRepository::list_for_user(&db, newbie.id)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[tokio::test]
+    async fn add_all_users_keeps_existing_memberships_as_they_are() {
+        let db = setup_test_db().await;
+        let group = AccessGroupRepository::create(&db, "Kids", None)
+            .await
+            .unwrap();
+        let via_oidc = create_test_user(&db, "via_oidc").await;
+        let outsider = create_test_user(&db, "outsider").await;
+        AccessGroupRepository::add_member(&db, group.id, via_oidc.id, MembershipSource::Oidc)
+            .await
+            .unwrap();
+
+        let added = AccessGroupRepository::add_all_users(&db, group.id)
+            .await
+            .unwrap();
+        assert_eq!(added, 1);
+
+        let members = AccessGroupRepository::list_members(&db, group.id)
+            .await
+            .unwrap();
+        let source_of = |id: Uuid| {
+            members
+                .iter()
+                .find(|m| m.user_id == id)
+                .map(|m| m.source.clone())
+        };
+        // An OIDC membership must stay OIDC, or the IdP could no longer remove it
+        assert_eq!(source_of(via_oidc.id).as_deref(), Some("oidc"));
+        assert_eq!(source_of(outsider.id).as_deref(), Some("default"));
     }
 
     // ---------- Group CRUD ----------

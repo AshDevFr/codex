@@ -23,6 +23,10 @@ pub struct AccessGroupDto {
     #[schema(example = "Users who can access manga content")]
     pub description: Option<String>,
 
+    /// Whether new users join this group when their account is created
+    #[schema(example = false)]
+    pub is_default: bool,
+
     /// Number of members in the group
     #[schema(example = 5)]
     pub member_count: u64,
@@ -55,6 +59,10 @@ pub struct AccessGroupDetailDto {
     /// Optional description
     #[schema(example = "Users who can access manga content")]
     pub description: Option<String>,
+
+    /// Whether new users join this group when their account is created
+    #[schema(example = false)]
+    pub is_default: bool,
 
     /// Members of the group
     pub members: Vec<AccessGroupMemberDto>,
@@ -157,6 +165,21 @@ pub struct UpdateAccessGroupRequest {
     /// New description (set to null to remove)
     #[schema(example = "Updated description")]
     pub description: Option<Option<String>>,
+
+    /// Make this the default group (clearing any other default), or stop it
+    /// being the default. Only affects accounts created afterwards.
+    #[serde(default)]
+    #[schema(example = true)]
+    pub is_default: Option<bool>,
+}
+
+/// Result of adding every user to an access group
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AddAllUsersResponse {
+    /// Users who were not members yet and have been added
+    #[schema(example = 12)]
+    pub added: u64,
 }
 
 /// Add members to an access group request
@@ -268,6 +291,7 @@ impl AccessGroupDto {
             id: model.id,
             name: model.name,
             description: model.description,
+            is_default: model.is_default,
             member_count,
             grant_count,
             created_at: model.created_at,

@@ -17,6 +17,9 @@ pub struct Model {
     #[sea_orm(unique)]
     pub name: String,
     pub description: Option<String>,
+    /// New users join the default group when their account is created.
+    /// At most one group has this set (partial unique index).
+    pub is_default: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }

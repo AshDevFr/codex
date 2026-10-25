@@ -2,6 +2,7 @@
 //
 // Tests repositories, authentication utilities, and database operations.
 
+mod access_groups;
 mod auth;
 mod book_duplicates;
 mod collections;

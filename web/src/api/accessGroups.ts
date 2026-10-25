@@ -26,6 +26,7 @@ export type EffectiveGrantsResponse =
   components["schemas"]["EffectiveGrantsResponse"];
 export type EffectiveGrantDto = components["schemas"]["EffectiveGrantDto"];
 export type GrantSourceDto = components["schemas"]["GrantSourceDto"];
+export type AddAllUsersResponse = components["schemas"]["AddAllUsersResponse"];
 
 export const accessGroupsApi = {
   // ============================================
@@ -83,6 +84,14 @@ export const accessGroupsApi = {
 
   removeMember: async (groupId: string, userId: string): Promise<void> => {
     await api.delete(`/access-groups/${groupId}/members/${userId}`);
+  },
+
+  /** Add every user who is not yet a member (existing memberships unchanged). */
+  addAllUsers: async (groupId: string): Promise<AddAllUsersResponse> => {
+    const response = await api.post<AddAllUsersResponse>(
+      `/access-groups/${groupId}/add-all-users`,
+    );
+    return response.data;
   },
 
   // ============================================

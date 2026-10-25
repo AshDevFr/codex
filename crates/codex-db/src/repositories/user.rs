@@ -1,4 +1,5 @@
 use crate::entities::{sharing_tags, user_sharing_tags, users, users::Entity as User};
+use crate::repositories::AccessGroupRepository;
 use crate::trace::db_system_str;
 use anyhow::Result;
 use chrono::Utc;
@@ -53,7 +54,12 @@ impl UserRepository {
             last_login_at: Set(model.last_login_at),
         };
 
-        let result = active_model.insert(db).await?;
+        // The default-group membership is written in the same transaction, so
+        // an account can never exist without the baseline it was meant to get.
+        let txn = db.begin().await?;
+        let result = active_model.insert(&txn).await?;
+        AccessGroupRepository::join_default_group(&txn, result.id).await?;
+        txn.commit().await?;
         Ok(result)
     }
 

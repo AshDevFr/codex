@@ -173,6 +173,7 @@ async fn test_update_access_group() {
     let update = UpdateAccessGroupRequest {
         name: Some("New Name".to_string()),
         description: Some(Some("Now with description".to_string())),
+        is_default: None,
     };
     let request = patch_json_request_with_auth(
         &format!("/api/v1/access-groups/{}", group.id),
@@ -852,4 +853,201 @@ async fn test_list_access_groups_with_counts() {
     assert_eq!(groups.len(), 1);
     assert_eq!(groups[0].member_count, 1);
     assert_eq!(groups[0].grant_count, 1);
+}
+
+// ============================================================================
+// Default Group Tests
+// ============================================================================
+
+async fn create_group(
+    state: &std::sync::Arc<codex::api::extractors::AuthState>,
+    token: &str,
+    name: &str,
+) -> AccessGroupDto {
+    let app = create_test_router(state.clone()).await;
+    let body = CreateAccessGroupRequest {
+        name: name.to_string(),
+        description: None,
+    };
+    let request = post_json_request_with_auth("/api/v1/access-groups", &body, token);
+    let (status, response): (StatusCode, Option<AccessGroupDto>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::CREATED);
+    response.unwrap()
+}
+
+async fn set_default(
+    state: &std::sync::Arc<codex::api::extractors::AuthState>,
+    token: &str,
+    group_id: uuid::Uuid,
+    is_default: bool,
+) -> AccessGroupDto {
+    let app = create_test_router(state.clone()).await;
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/access-groups/{}", group_id),
+        &serde_json::json!({ "isDefault": is_default }),
+        token,
+    );
+    let (status, response): (StatusCode, Option<AccessGroupDto>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+    response.unwrap()
+}
+
+async fn group_members(
+    state: &std::sync::Arc<codex::api::extractors::AuthState>,
+    token: &str,
+    group_id: uuid::Uuid,
+) -> AccessGroupDetailDto {
+    let app = create_test_router(state.clone()).await;
+    let request = get_request_with_auth(&format!("/api/v1/access-groups/{}", group_id), token);
+    let (status, response): (StatusCode, Option<AccessGroupDetailDto>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+    response.unwrap()
+}
+
+#[tokio::test]
+async fn test_mark_group_default_moves_the_default() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_, token) = create_admin_and_token(&db, &state).await;
+    let kids = create_group(&state, &token, "Kids").await;
+    let teens = create_group(&state, &token, "Teens").await;
+    assert!(!kids.is_default);
+
+    assert!(set_default(&state, &token, kids.id, true).await.is_default);
+    assert!(set_default(&state, &token, teens.id, true).await.is_default);
+
+    assert!(!group_members(&state, &token, kids.id).await.is_default);
+    assert!(group_members(&state, &token, teens.id).await.is_default);
+
+    assert!(
+        !set_default(&state, &token, teens.id, false)
+            .await
+            .is_default
+    );
+}
+
+#[tokio::test]
+async fn test_admin_created_user_joins_default_group() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_, token) = create_admin_and_token(&db, &state).await;
+    let kids = create_group(&state, &token, "Kids").await;
+    set_default(&state, &token, kids.id, true).await;
+
+    let app = create_test_router(state.clone()).await;
+    let request = post_json_request_with_auth(
+        "/api/v1/users",
+        &serde_json::json!({
+            "username": "kid",
+            "email": "kid@example.com",
+            "password": "securepassword123"
+        }),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+    let created = response.unwrap();
+    assert_eq!(created["accessGroups"][0]["name"], "Kids");
+    assert_eq!(created["accessGroups"][0]["source"], "default");
+
+    let detail = group_members(&state, &token, kids.id).await;
+    assert_eq!(detail.members.len(), 1);
+    assert_eq!(detail.members[0].username, "kid");
+}
+
+#[tokio::test]
+async fn test_registered_user_joins_default_group() {
+    use codex::db::repositories::SettingsRepository;
+
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (admin_id, token) = create_admin_and_token(&db, &state).await;
+    let kids = create_group(&state, &token, "Kids").await;
+    set_default(&state, &token, kids.id, true).await;
+    SettingsRepository::set(
+        &db,
+        "auth.registration_enabled",
+        "true".to_string(),
+        admin_id,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+
+    let app = create_test_router(state.clone()).await;
+    let request = post_json_request(
+        "/api/v1/auth/register",
+        &serde_json::json!({
+            "username": "kid",
+            "email": "kid@example.com",
+            "password": "securepassword123"
+        }),
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+    assert!(status.is_success(), "registration failed: {status}");
+
+    let detail = group_members(&state, &token, kids.id).await;
+    assert_eq!(detail.members.len(), 1);
+    assert_eq!(detail.members[0].username, "kid");
+    assert_eq!(detail.members[0].source, "default");
+}
+
+#[tokio::test]
+async fn test_add_all_users_to_group() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_, token) = create_admin_and_token(&db, &state).await;
+    create_reader_and_token(&db, &state, "alice").await;
+    create_reader_and_token(&db, &state, "bob").await;
+    let kids = create_group(&state, &token, "Kids").await;
+
+    let app = create_test_router(state.clone()).await;
+    let request = post_request_with_auth(
+        &format!("/api/v1/access-groups/{}/add-all-users", kids.id),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+    // The admin, alice and bob
+    assert_eq!(response.unwrap()["added"], 3);
+
+    // Running it again adds nobody
+    let app = create_test_router(state.clone()).await;
+    let request = post_request_with_auth(
+        &format!("/api/v1/access-groups/{}/add-all-users", kids.id),
+        &token,
+    );
+    let (_, response): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+    assert_eq!(response.unwrap()["added"], 0);
+
+    assert_eq!(
+        group_members(&state, &token, kids.id).await.members.len(),
+        3
+    );
+}
+
+#[tokio::test]
+async fn test_add_all_users_requires_admin() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_, token) = create_admin_and_token(&db, &state).await;
+    let (_, reader_token) = create_reader_and_token(&db, &state, "alice").await;
+    let kids = create_group(&state, &token, "Kids").await;
+
+    let app = create_test_router(state).await;
+    let request = post_request_with_auth(
+        &format!("/api/v1/access-groups/{}/add-all-users", kids.id),
+        &reader_token,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
 }
