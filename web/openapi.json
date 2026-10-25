@@ -47543,6 +47543,33 @@
           }
         }
       },
+      "UserAccessGroupDto": {
+        "type": "object",
+        "description": "An access group membership as shown on a user",
+        "required": [
+          "id",
+          "name",
+          "source"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Access group ID",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "name": {
+            "type": "string",
+            "description": "Access group name",
+            "example": "Kids"
+          },
+          "source": {
+            "type": "string",
+            "description": "Membership source (manual or oidc)",
+            "example": "manual"
+          }
+        }
+      },
       "UserDetailDto": {
         "type": "object",
         "description": "User detail DTO with sharing tag grants (for single user view)",
@@ -47631,9 +47658,17 @@
           "permissions",
           "isActive",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "accessGroups"
         ],
         "properties": {
+          "accessGroups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UserAccessGroupDto"
+            },
+            "description": "Access groups the user belongs to, sorted by name"
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time",

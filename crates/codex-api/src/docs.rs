@@ -1008,6 +1008,7 @@ The following paths are exempt from rate limiting:
             v1::dto::RetryErrorsResponse,
             v1::dto::PageDto,
             v1::dto::UserDto,
+            v1::dto::UserAccessGroupDto,
             v1::dto::UserDetailDto,
             v1::dto::CreateUserRequest,
             v1::dto::UpdateUserRequest,

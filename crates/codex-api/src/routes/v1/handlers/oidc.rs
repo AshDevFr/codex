@@ -294,20 +294,7 @@ pub async fn callback(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to update OIDC connection: {}", e)))?;
 
-        // Reconcile OIDC-sourced access group memberships
-        if let Err(e) = AccessGroupRepository::reconcile_oidc_group_memberships(
-            &state.db,
-            user.id,
-            &auth_result.groups,
-        )
-        .await
-        {
-            warn!(
-                user_id = %user.id,
-                error = %e,
-                "Failed to reconcile OIDC access group memberships (login continues)"
-            );
-        }
+        sync_access_groups_from_oidc(&state.db, user.id, &auth_result.groups).await?;
 
         // Sync role from IdP groups on every login
         let user = sync_role_from_groups(&state.db, user, &auth_result.mapped_role).await?;
@@ -415,20 +402,7 @@ pub async fn callback(
             .await
             .map_err(|e| ApiError::Internal(format!("Failed to create OIDC connection: {}", e)))?;
 
-        // Reconcile OIDC-sourced access group memberships for new connection
-        if let Err(e) = AccessGroupRepository::reconcile_oidc_group_memberships(
-            &state.db,
-            user.id,
-            &auth_result.groups,
-        )
-        .await
-        {
-            warn!(
-                user_id = %user.id,
-                error = %e,
-                "Failed to reconcile OIDC access group memberships (login continues)"
-            );
-        }
+        sync_access_groups_from_oidc(&state.db, user.id, &auth_result.groups).await?;
 
         (user, is_new)
     };
@@ -556,6 +530,28 @@ fn redirect_response(url: &str) -> Result<Response, ApiError> {
                 [(header::LOCATION, location)],
             )
                 .into_response()
+        })
+}
+
+/// Reconcile the user's OIDC-sourced access group memberships with the IdP's groups.
+///
+/// A failure here fails the login. Continuing would leave the user with stale or
+/// missing memberships, and a user with no groups sees the whole library.
+async fn sync_access_groups_from_oidc(
+    db: &sea_orm::DatabaseConnection,
+    user_id: Uuid,
+    oidc_groups: &[String],
+) -> Result<(), ApiError> {
+    AccessGroupRepository::reconcile_oidc_group_memberships(db, user_id, oidc_groups)
+        .await
+        .map(|_| ())
+        .map_err(|e| {
+            warn!(
+                user_id = %user_id,
+                error = %e,
+                "Failed to reconcile OIDC access group memberships, rejecting login"
+            );
+            ApiError::Internal("Failed to sync access groups".to_string())
         })
 }
 
@@ -959,6 +955,66 @@ mod tests {
             // Role downgrade from admin to reader
             let updated = sync_role_from_groups(&db, created, "reader").await.unwrap();
             assert_eq!(updated.role, "reader");
+        }
+
+        #[tokio::test]
+        async fn test_sync_access_groups_from_oidc_maps_groups() {
+            let db = setup_test_db().await;
+            let user = UserRepository::create(&db, &test_user("mapped"))
+                .await
+                .unwrap();
+            let group = AccessGroupRepository::create(&db, "Kids", None)
+                .await
+                .unwrap();
+            AccessGroupRepository::add_oidc_mapping(&db, group.id, "idp-kids")
+                .await
+                .unwrap();
+
+            sync_access_groups_from_oidc(&db, user.id, &["idp-kids".to_string()])
+                .await
+                .unwrap();
+
+            let groups = AccessGroupRepository::list_for_user(&db, user.id)
+                .await
+                .unwrap();
+            assert_eq!(groups.len(), 1);
+            assert_eq!(groups[0].id, group.id);
+        }
+
+        /// A user whose group sync fails would otherwise log in with no
+        /// groups, which under default-open visibility means seeing the whole
+        /// library. The sync failure has to fail the login instead.
+        #[tokio::test]
+        async fn test_sync_access_groups_from_oidc_fails_when_reconcile_fails() {
+            use sea_orm::ConnectionTrait;
+
+            let db = setup_test_db().await;
+            let user = UserRepository::create(&db, &test_user("broken"))
+                .await
+                .unwrap();
+            db.execute_unprepared("DROP TABLE access_group_oidc_mappings")
+                .await
+                .unwrap();
+
+            let result =
+                sync_access_groups_from_oidc(&db, user.id, &["idp-kids".to_string()]).await;
+            assert!(matches!(result, Err(ApiError::Internal(_))));
+        }
+
+        fn test_user(username: &str) -> users::Model {
+            users::Model {
+                id: Uuid::new_v4(),
+                username: username.to_string(),
+                email: format!("{username}@example.com"),
+                password_hash: "hash".to_string(),
+                role: "reader".to_string(),
+                is_active: true,
+                email_verified: false,
+                permissions: serde_json::json!([]),
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
+                last_login_at: None,
+            }
         }
     }
 }

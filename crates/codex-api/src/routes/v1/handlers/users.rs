@@ -1,6 +1,6 @@
 use super::super::dto::{
-    CreateUserRequest, PaginatedResponse, UpdateUserRequest, UserDetailDto, UserDto,
-    UserListParams, UserSharingTagGrantDto, common::PaginationLinkBuilder,
+    CreateUserRequest, PaginatedResponse, UpdateUserRequest, UserAccessGroupDto, UserDetailDto,
+    UserDto, UserListParams, UserSharingTagGrantDto, common::PaginationLinkBuilder,
 };
 use super::paginated_response;
 use crate::require_permission;
@@ -16,8 +16,11 @@ use axum::{
 };
 use chrono::Utc;
 use codex_db::entities::users;
-use codex_db::repositories::{SharingTagRepository, UserListFilter, UserRepository};
+use codex_db::repositories::{
+    AccessGroupRepository, SharingTagRepository, UserListFilter, UserRepository,
+};
 use codex_utils::password;
+use std::collections::HashMap;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -121,23 +124,14 @@ pub async fn list_users(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch users: {}", e)))?;
 
+    let user_ids: Vec<Uuid> = result.users.iter().map(|u| u.id).collect();
+    let mut groups = access_groups_by_user(&state.db, &user_ids).await?;
     let dtos: Vec<UserDto> = result
         .users
         .into_iter()
         .map(|user| {
-            let role = user.get_role();
-            let permissions = parse_permissions_json(&user.permissions);
-            UserDto {
-                id: user.id,
-                username: user.username,
-                email: user.email,
-                role,
-                permissions,
-                is_active: user.is_active,
-                last_login_at: user.last_login_at,
-                created_at: user.created_at,
-                updated_at: user.updated_at,
-            }
+            let user_groups = groups.remove(&user.id).unwrap_or_default();
+            user_to_dto(user, user_groups)
         })
         .collect();
 
@@ -287,19 +281,11 @@ pub async fn create_user(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to create user: {}", e)))?;
 
-    let role = user.get_role();
-    let permissions = parse_permissions_json(&user.permissions);
-    let dto = UserDto {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        role,
-        permissions,
-        is_active: user.is_active,
-        last_login_at: user.last_login_at,
-        created_at: user.created_at,
-        updated_at: user.updated_at,
-    };
+    let user_groups = access_groups_by_user(&state.db, &[user.id])
+        .await?
+        .remove(&user.id)
+        .unwrap_or_default();
+    let dto = user_to_dto(user, user_groups);
 
     Ok(Json(dto))
 }
@@ -392,19 +378,11 @@ pub async fn update_user(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to update user: {}", e)))?;
 
-    let role = updated.get_role();
-    let permissions = parse_permissions_json(&updated.permissions);
-    let dto = UserDto {
-        id: updated.id,
-        username: updated.username,
-        email: updated.email,
-        role,
-        permissions,
-        is_active: updated.is_active,
-        last_login_at: updated.last_login_at,
-        created_at: updated.created_at,
-        updated_at: updated.updated_at,
-    };
+    let user_groups = access_groups_by_user(&state.db, &[updated.id])
+        .await?
+        .remove(&updated.id)
+        .unwrap_or_default();
+    let dto = user_to_dto(updated, user_groups);
 
     Ok(Json(dto))
 }
@@ -446,4 +424,46 @@ pub async fn delete_user(
         .map_err(|e| ApiError::Internal(format!("Failed to delete user: {}", e)))?;
 
     Ok(())
+}
+
+/// Build the list-level user DTO from a user row and their group memberships.
+fn user_to_dto(user: users::Model, access_groups: Vec<UserAccessGroupDto>) -> UserDto {
+    let role = user.get_role();
+    let permissions = parse_permissions_json(&user.permissions);
+    UserDto {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        role,
+        permissions,
+        is_active: user.is_active,
+        last_login_at: user.last_login_at,
+        created_at: user.created_at,
+        updated_at: user.updated_at,
+        access_groups,
+    }
+}
+
+/// Access group memberships for a batch of users, keyed by user ID.
+async fn access_groups_by_user(
+    db: &sea_orm::DatabaseConnection,
+    user_ids: &[Uuid],
+) -> Result<HashMap<Uuid, Vec<UserAccessGroupDto>>, ApiError> {
+    let memberships = AccessGroupRepository::list_memberships_for_users(db, user_ids)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch access groups: {}", e)))?;
+    Ok(memberships
+        .into_iter()
+        .map(|(user_id, entries)| {
+            let dtos = entries
+                .into_iter()
+                .map(|(group, membership)| UserAccessGroupDto {
+                    id: group.id,
+                    name: group.name,
+                    source: membership.source,
+                })
+                .collect();
+            (user_id, dtos)
+        })
+        .collect())
 }
