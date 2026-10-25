@@ -230,7 +230,7 @@ cargo test -- --nocapture
 ```bash
 # Format code
 cargo fmt
-cd web && npm run format
+cd web && npx biome check --write .
 
 # Lint code
 cargo clippy -- -D warnings
