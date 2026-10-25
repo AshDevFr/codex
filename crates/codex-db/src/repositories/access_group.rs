@@ -101,8 +101,13 @@ impl AccessGroupRepository {
 
     // ==================== Memberships ====================
 
-    /// Add a user to a group. Idempotent: if the membership already exists
-    /// returns the existing row. Updates the `source` if it differs.
+    /// Add a user to a group. Idempotent: if the membership already exists,
+    /// the existing row is returned unchanged.
+    ///
+    /// The source of an existing row is never rewritten. Whoever added the
+    /// user first owns the membership: the IdP can only remove `oidc` rows, so
+    /// turning one into `manual` would make it permanent, and turning a manual
+    /// one into `oidc` would let the IdP remove what an admin assigned.
     pub async fn add_member(
         db: &impl ConnectionTrait,
         group_id: Uuid,
@@ -115,12 +120,7 @@ impl AccessGroupRepository {
             .one(db)
             .await?;
         if let Some(row) = existing {
-            if row.source == source.as_str() {
-                return Ok(row);
-            }
-            let mut active: user_access_groups::ActiveModel = row.into();
-            active.source = Set(source.as_str().to_string());
-            return Ok(active.update(db).await?);
+            return Ok(row);
         }
         let active = user_access_groups::ActiveModel {
             id: Set(Uuid::new_v4()),
@@ -244,7 +244,7 @@ impl AccessGroupRepository {
     /// an account gets the same baseline.
     pub async fn join_default_group(db: &impl ConnectionTrait, user_id: Uuid) -> Result<()> {
         if let Some(group) = Self::get_default(db).await? {
-            Self::add_member_if_absent(db, group.id, user_id, MembershipSource::Default).await?;
+            Self::add_member(db, group.id, user_id, MembershipSource::Default).await?;
         }
         Ok(())
     }
@@ -282,37 +282,6 @@ impl AccessGroupRepository {
         }
         txn.commit().await?;
         Ok(user_ids.len() as u64)
-    }
-
-    /// Insert a membership unless the user is already in the group.
-    ///
-    /// Unlike [`Self::add_member`], this never rewrites the source of an
-    /// existing row. Turning an `oidc` membership into `default` would stop
-    /// the IdP from ever removing it. Returns true if a row was inserted.
-    pub async fn add_member_if_absent(
-        db: &impl ConnectionTrait,
-        group_id: Uuid,
-        user_id: Uuid,
-        source: MembershipSource,
-    ) -> Result<bool> {
-        let existing = user_access_groups::Entity::find()
-            .filter(user_access_groups::Column::UserId.eq(user_id))
-            .filter(user_access_groups::Column::AccessGroupId.eq(group_id))
-            .one(db)
-            .await?;
-        if existing.is_some() {
-            return Ok(false);
-        }
-        user_access_groups::ActiveModel {
-            id: Set(Uuid::new_v4()),
-            user_id: Set(user_id),
-            access_group_id: Set(group_id),
-            source: Set(source.as_str().to_string()),
-            created_at: Set(Utc::now()),
-        }
-        .insert(db)
-        .await?;
-        Ok(true)
     }
 
     /// Group memberships for many users in two queries, keyed by user ID.
@@ -855,13 +824,82 @@ mod tests {
             1
         );
 
-        // Different source: same row, source updated
+        // Different source: same row, original source kept
         let m3 = AccessGroupRepository::add_member(&db, group.id, user.id, MembershipSource::Oidc)
             .await
             .unwrap();
         assert_eq!(m1.id, m3.id);
-        assert_eq!(m3.source, "oidc");
-        assert_eq!(m3.get_source(), MembershipSource::Oidc);
+        assert_eq!(m3.get_source(), MembershipSource::Manual);
+    }
+
+    /// An admin adding someone the IdP already put in the group must not take
+    /// the membership away from the IdP, or leaving the IdP group would no
+    /// longer remove them.
+    #[tokio::test]
+    async fn reconcile_still_removes_oidc_member_after_manual_add() {
+        let db = setup_test_db().await;
+        let user = create_test_user(&db, "alice").await;
+        let group = AccessGroupRepository::create(&db, "Team", None)
+            .await
+            .unwrap();
+        AccessGroupRepository::add_oidc_mapping(&db, group.id, "idp-team")
+            .await
+            .unwrap();
+        AccessGroupRepository::reconcile_oidc_group_memberships(
+            &db,
+            user.id,
+            &["idp-team".to_string()],
+        )
+        .await
+        .unwrap();
+
+        AccessGroupRepository::add_member(&db, group.id, user.id, MembershipSource::Manual)
+            .await
+            .unwrap();
+        AccessGroupRepository::reconcile_oidc_group_memberships(&db, user.id, &[])
+            .await
+            .unwrap();
+
+        assert!(
+            AccessGroupRepository::list_for_user(&db, user.id)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    /// The reverse: a manual membership in a group the IdP also maps must
+    /// survive the user leaving the IdP group.
+    #[tokio::test]
+    async fn reconcile_keeps_manual_member_when_idp_group_also_maps() {
+        let db = setup_test_db().await;
+        let user = create_test_user(&db, "alice").await;
+        let group = AccessGroupRepository::create(&db, "Team", None)
+            .await
+            .unwrap();
+        AccessGroupRepository::add_member(&db, group.id, user.id, MembershipSource::Manual)
+            .await
+            .unwrap();
+        AccessGroupRepository::add_oidc_mapping(&db, group.id, "idp-team")
+            .await
+            .unwrap();
+
+        AccessGroupRepository::reconcile_oidc_group_memberships(
+            &db,
+            user.id,
+            &["idp-team".to_string()],
+        )
+        .await
+        .unwrap();
+        AccessGroupRepository::reconcile_oidc_group_memberships(&db, user.id, &[])
+            .await
+            .unwrap();
+
+        let members = AccessGroupRepository::list_members(&db, group.id)
+            .await
+            .unwrap();
+        assert_eq!(members.len(), 1);
+        assert_eq!(members[0].source, "manual");
     }
 
     #[tokio::test]
