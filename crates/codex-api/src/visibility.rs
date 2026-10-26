@@ -228,3 +228,107 @@ fn series_not_found() -> ApiError {
 fn book_not_found() -> ApiError {
     ApiError::NotFound("Book not found".to_string())
 }
+
+#[cfg(test)]
+mod guard {
+    //! Keeps the rule "every handler that takes a series, book or library id
+    //! checks visibility" true as handlers are added. Visibility used to be a
+    //! per-handler convention that most handlers forgot; this test is what
+    //! stops that from coming back.
+
+    use std::path::{Path, PathBuf};
+
+    /// Names that, appearing in a handler body, mean it enforces visibility.
+    const CHECKS: &[&str] = &[
+        "ContentFilter",
+        "visibility::",
+        "require_visible_",
+        "ensure_series_visible",
+        "ensure_book_visible",
+        "ensure_book_id_visible",
+        "ensure_library_visible",
+        "user_visibility",
+        "to_visibility",
+        "find_book_by_hash",
+    ];
+
+    /// Path parameters that name content.
+    const CONTENT_IDS: &[&str] = &["series_id", "book_id", "library_id"];
+
+    fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
+        for entry in std::fs::read_dir(dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                rust_files(&path, out);
+            } else if path.extension().is_some_and(|e| e == "rs") {
+                out.push(path);
+            }
+        }
+    }
+
+    /// The names bound by the handler's `Path(...)` extractor, if any.
+    fn path_params(signature: &str) -> Vec<String> {
+        let Some(start) = signature.find("Path(") else {
+            return Vec::new();
+        };
+        let rest = &signature[start + "Path(".len()..];
+        let Some(end) = rest.find("):") else {
+            return Vec::new();
+        };
+        rest[..end]
+            .trim_start_matches('(')
+            .trim_end_matches(')')
+            .split(',')
+            .map(|n| n.trim().to_string())
+            .collect()
+    }
+
+    #[test]
+    fn every_content_id_handler_checks_visibility() {
+        let routes = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/routes");
+        let mut files = Vec::new();
+        rust_files(&routes, &mut files);
+
+        let mut missing = Vec::new();
+        for file in files {
+            let source = std::fs::read_to_string(&file).unwrap();
+            let mut rest = source.as_str();
+            while let Some(at) = rest.find("pub async fn ") {
+                let from = &rest[at..];
+                let Some(body_start) = from.find("{\n") else {
+                    break;
+                };
+                let body_end = from[body_start..]
+                    .find("\n}\n")
+                    .map(|e| body_start + e)
+                    .unwrap_or(from.len());
+                let signature = &from[..body_start];
+                let body = &from[body_start..body_end];
+                let name: String = from["pub async fn ".len()..]
+                    .chars()
+                    .take_while(|c| c.is_alphanumeric() || *c == '_')
+                    .collect();
+
+                let takes_content_id = path_params(signature)
+                    .iter()
+                    .any(|p| CONTENT_IDS.contains(&p.as_str()));
+                // Admins are never restricted, so admin-only handlers are exempt.
+                let admin_only = body.contains("Permission::SystemAdmin");
+                let checks = CHECKS.iter().any(|c| body.contains(c));
+                if takes_content_id && !admin_only && !checks {
+                    let relative = file.strip_prefix(&routes).unwrap_or(&file);
+                    missing.push(format!("{}: {}", relative.display(), name));
+                }
+                rest = &from[body_end.min(from.len())..];
+            }
+        }
+
+        assert!(
+            missing.is_empty(),
+            "These handlers take a series, book or library id but never check that the user \
+             can see it. Call crate::visibility::ensure_series_visible / \
+             ensure_book_id_visible / ensure_library_visible first:\n{}",
+            missing.join("\n")
+        );
+    }
+}
