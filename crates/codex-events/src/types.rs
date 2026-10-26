@@ -286,6 +286,43 @@ impl EntityChangeEvent {
         }
     }
 
+    /// The series this event is about, when it names one directly. A book
+    /// cover event only carries the book's id; see [`Self::book_id`].
+    pub fn series_id(&self) -> Option<Uuid> {
+        match &self.event {
+            EntityEvent::BookCreated { series_id, .. }
+            | EntityEvent::BookUpdated { series_id, .. }
+            | EntityEvent::BookDeleted { series_id, .. }
+            | EntityEvent::SeriesCreated { series_id, .. }
+            | EntityEvent::SeriesUpdated { series_id, .. }
+            | EntityEvent::SeriesDeleted { series_id, .. }
+            | EntityEvent::SeriesMetadataUpdated { series_id, .. }
+            | EntityEvent::SeriesBulkPurged { series_id, .. }
+            | EntityEvent::ReleaseAnnounced { series_id, .. } => Some(*series_id),
+            EntityEvent::CoverUpdated {
+                entity_type: EntityType::Series,
+                entity_id,
+                ..
+            } => Some(*entity_id),
+            _ => None,
+        }
+    }
+
+    /// The book this event is about, if any.
+    pub fn book_id(&self) -> Option<Uuid> {
+        match &self.event {
+            EntityEvent::BookCreated { book_id, .. }
+            | EntityEvent::BookUpdated { book_id, .. }
+            | EntityEvent::BookDeleted { book_id, .. } => Some(*book_id),
+            EntityEvent::CoverUpdated {
+                entity_type: EntityType::Book,
+                entity_id,
+                ..
+            } => Some(*entity_id),
+            _ => None,
+        }
+    }
+
     /// Create a shutdown signal event (internal use only)
     pub fn shutdown_signal() -> Self {
         Self {

@@ -373,13 +373,16 @@ pub async fn scan_progress_stream(
 
     // Create SSE stream that filters for scan_library tasks only
     let db = state.db.clone();
+    let user_id = auth.user_id;
     let stream = async_stream::stream! {
         loop {
             match receiver.recv().await {
                 Ok(event) => {
-                    // Only emit scan_library task events
+                    // Only emit scan_library task events, for libraries this
+                    // subscriber can see
                     if event.task_type == "scan_library"
-                        && let Some(library_id) = event.library_id {
+                        && let Some(library_id) = event.library_id
+                        && crate::visibility::task_event_visible(&db, user_id, &event).await {
                             let (files_processed, files_total) = if let Some(ref prog) = event.progress {
                                 (prog.current, prog.total)
                             } else {

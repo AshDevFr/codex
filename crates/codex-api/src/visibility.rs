@@ -147,6 +147,80 @@ pub async fn ensure_library_visible(
     }
 }
 
+/// Whether an entity change event may be sent to this user.
+///
+/// An event about a series, book or library the user cannot see is withheld,
+/// so the event streams never announce hidden content. Fails closed: if
+/// visibility cannot be determined, the event is withheld.
+pub async fn entity_event_visible(
+    db: &DatabaseConnection,
+    user_id: Uuid,
+    event: &codex_events::EntityChangeEvent,
+) -> bool {
+    let Ok(filter) = content_filter(db, user_id).await else {
+        return false;
+    };
+    if !filter.has_restrictions {
+        return true;
+    }
+    content_visible(
+        db,
+        &filter,
+        event.library_id(),
+        event.series_id(),
+        event.book_id(),
+    )
+    .await
+}
+
+/// Whether a task progress event may be sent to this user. Same rules as
+/// [`entity_event_visible`].
+pub async fn task_event_visible(
+    db: &DatabaseConnection,
+    user_id: Uuid,
+    event: &codex_events::TaskProgressEvent,
+) -> bool {
+    let Ok(filter) = content_filter(db, user_id).await else {
+        return false;
+    };
+    if !filter.has_restrictions {
+        return true;
+    }
+    content_visible(
+        db,
+        &filter,
+        event.library_id,
+        event.series_id,
+        event.book_id,
+    )
+    .await
+}
+
+async fn content_visible(
+    db: &DatabaseConnection,
+    filter: &ContentFilter,
+    library_id: Option<Uuid>,
+    series_id: Option<Uuid>,
+    book_id: Option<Uuid>,
+) -> bool {
+    if let Some(library_id) = library_id
+        && !filter.is_library_visible(library_id)
+    {
+        return false;
+    }
+    if let Some(series_id) = series_id {
+        return filter.is_series_visible(series_id);
+    }
+    if let Some(book_id) = book_id {
+        // Only book cover events name a book without its series.
+        return match BookRepository::get_by_id(db, book_id).await {
+            Ok(Some(book)) => filter.is_book_visible(book.series_id),
+            _ => false,
+        };
+    }
+    true
+}
+
 fn series_not_found() -> ApiError {
     ApiError::NotFound("Series not found".to_string())
 }

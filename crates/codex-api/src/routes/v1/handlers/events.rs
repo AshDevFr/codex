@@ -64,6 +64,8 @@ pub async fn entity_events_stream(
 
     // Clone broadcaster to check shutdown status
     let broadcaster = state.event_broadcaster.clone();
+    let db = state.db.clone();
+    let user_id = auth.user_id;
 
     // Create SSE stream with timeout to detect client disconnects
     let stream = async_stream::stream! {
@@ -82,6 +84,11 @@ pub async fn entity_events_stream(
                     if event.is_shutdown() {
                         debug!("Received shutdown signal, ending entity events stream");
                         break;
+                    }
+
+                    // Never announce content this subscriber cannot see
+                    if !crate::visibility::entity_event_visible(&db, user_id, &event).await {
+                        continue;
                     }
 
                     // Serialize event to JSON
@@ -190,6 +197,8 @@ pub async fn task_progress_stream(
 
     // Clone broadcaster to check shutdown status
     let broadcaster = state.event_broadcaster.clone();
+    let db = state.db.clone();
+    let user_id = auth.user_id;
 
     // Create SSE stream with timeout to detect client disconnects
     let stream = async_stream::stream! {
@@ -208,6 +217,11 @@ pub async fn task_progress_stream(
                     if event.is_shutdown() {
                         debug!("Received shutdown signal, ending task progress stream");
                         break;
+                    }
+
+                    // Never report work on content this subscriber cannot see
+                    if !crate::visibility::task_event_visible(&db, user_id, &event).await {
+                        continue;
                     }
 
                     // Serialize event to JSON

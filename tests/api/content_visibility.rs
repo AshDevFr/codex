@@ -33,6 +33,7 @@ pub struct Item {
 pub struct World {
     pub state: Arc<codex::api::extractors::AppState>,
     pub reader_token: String,
+    pub reader_id: Uuid,
     /// In the main library, no Adult genre
     pub visible: Item,
     /// In the main library, Adult genre
@@ -106,6 +107,7 @@ impl World {
         Self {
             state,
             reader_token,
+            reader_id: reader.id,
             visible,
             hidden,
             secret,
@@ -998,4 +1000,155 @@ async fn recommendations_do_not_reveal_hidden_series() {
     let text = body.to_string();
     assert!(!text.contains(&world.hidden.series_id.to_string()));
     assert!(!text.contains(&world.secret.series_id.to_string()));
+}
+
+// ============================================================================
+// Event streams
+// ============================================================================
+
+#[tokio::test]
+async fn entity_events_about_hidden_content_are_not_sent() {
+    use codex::api::visibility::entity_event_visible;
+    use codex::events::{EntityChangeEvent, EntityEvent, EntityType};
+    let world = World::new().await;
+    let visible_to_reader = |event: EntityEvent| {
+        let event = EntityChangeEvent::new(event, None);
+        let db = world.state.db.clone();
+        let user = world.reader_id;
+        async move { entity_event_visible(&db, user, &event).await }
+    };
+
+    for (label, item, expected) in [
+        ("visible", &world.visible, true),
+        ("hidden", &world.hidden, false),
+        ("secret", &world.secret, false),
+    ] {
+        let events = [
+            EntityEvent::BookUpdated {
+                book_id: item.book_id,
+                series_id: item.series_id,
+                library_id: item.library_id,
+                fields: None,
+            },
+            EntityEvent::SeriesUpdated {
+                series_id: item.series_id,
+                library_id: item.library_id,
+                fields: None,
+            },
+            EntityEvent::CoverUpdated {
+                entity_type: EntityType::Book,
+                entity_id: item.book_id,
+                library_id: Some(item.library_id),
+            },
+            EntityEvent::CoverUpdated {
+                entity_type: EntityType::Series,
+                entity_id: item.series_id,
+                library_id: Some(item.library_id),
+            },
+        ];
+        for event in events {
+            let debug = format!("{event:?}");
+            assert_eq!(visible_to_reader(event).await, expected, "{label}: {debug}");
+        }
+    }
+
+    // A library-level event for the denied library is withheld
+    assert!(
+        !visible_to_reader(EntityEvent::LibraryUpdated {
+            library_id: world.secret.library_id
+        })
+        .await
+    );
+    assert!(
+        visible_to_reader(EntityEvent::LibraryUpdated {
+            library_id: world.visible.library_id
+        })
+        .await
+    );
+}
+
+#[tokio::test]
+async fn task_events_about_hidden_content_are_not_sent() {
+    use codex::api::visibility::task_event_visible;
+    use codex::events::TaskProgressEvent;
+    let world = World::new().await;
+
+    for (item, expected) in [
+        (&world.visible, true),
+        (&world.hidden, false),
+        (&world.secret, false),
+    ] {
+        let event = TaskProgressEvent::started(
+            Uuid::new_v4(),
+            "analyze_book",
+            Some(item.library_id),
+            Some(item.series_id),
+            Some(item.book_id),
+        );
+        assert_eq!(
+            task_event_visible(&world.state.db, world.reader_id, &event).await,
+            expected
+        );
+    }
+}
+
+// ============================================================================
+// KOReader
+// ============================================================================
+
+#[tokio::test]
+async fn koreader_sync_treats_hidden_books_as_missing() {
+    use codex::db::entities::books;
+    use sea_orm::EntityTrait;
+    let world = World::new().await;
+    let hash_of = |item: &Item| {
+        let db = world.state.db.clone();
+        let id = item.book_id;
+        async move {
+            books::Entity::find_by_id(id)
+                .one(&db)
+                .await
+                .unwrap()
+                .unwrap()
+                .koreader_hash
+                .unwrap()
+        }
+    };
+
+    for (item, visible) in [
+        (&world.visible, true),
+        (&world.hidden, false),
+        (&world.secret, false),
+    ] {
+        let hash = hash_of(item).await;
+
+        let (status, body) = world
+            .send(
+                "PUT",
+                "/koreader/syncs/progress",
+                Some(serde_json::json!({
+                    "document": hash,
+                    "progress": "2",
+                    "percentage": 0.5,
+                    "device": "Kobo",
+                    "device_id": "kobo-1"
+                })),
+            )
+            .await;
+        if visible {
+            assert!(status.is_success(), "visible PUT: {status} {body}");
+        } else {
+            assert_eq!(status, StatusCode::NOT_FOUND, "hidden PUT: {body}");
+        }
+
+        let (status, body) = world
+            .get_json(&format!("/koreader/syncs/progress/{hash}"))
+            .await;
+        if visible {
+            assert!(status.is_success(), "visible GET: {status} {body}");
+        } else {
+            assert_eq!(status, StatusCode::NOT_FOUND);
+            assert_eq!(body["message"], "No book found with this hash", "{body}");
+        }
+    }
 }

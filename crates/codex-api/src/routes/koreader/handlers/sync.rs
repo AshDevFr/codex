@@ -27,7 +27,7 @@ pub async fn get_progress(
     auth.require_permission(&Permission::ProgressRead)?;
     let user_id = auth.user_id;
 
-    let book = find_book_by_hash(&state, &document_hash).await?;
+    let book = find_book_by_hash(&state, user_id, &document_hash).await?;
 
     let progress = ReadProgressRepository::get_by_user_and_book(&state.db, user_id, book.id)
         .await
@@ -82,7 +82,7 @@ pub async fn update_progress(
         "KOReader progress update request"
     );
 
-    let book = find_book_by_hash(&state, &request.document).await?;
+    let book = find_book_by_hash(&state, user_id, &request.document).await?;
 
     // Parse progress string to page number
     let current_page = parse_koreader_progress(&request.progress, &book.format);
@@ -122,10 +122,21 @@ pub async fn update_progress(
 }
 
 /// Find a single book by KOReader hash, returning appropriate errors.
-async fn find_book_by_hash(state: &AuthState, hash: &str) -> Result<books::Model, ApiError> {
-    let books = BookRepository::find_by_koreader_hash(&state.db, hash)
+///
+/// Books the user cannot see are dropped first, so a hidden book answers like a
+/// missing one and a hidden copy never makes a visible one ambiguous.
+async fn find_book_by_hash(
+    state: &AuthState,
+    user_id: uuid::Uuid,
+    hash: &str,
+) -> Result<books::Model, ApiError> {
+    let filter = crate::visibility::content_filter(&state.db, user_id).await?;
+    let books: Vec<books::Model> = BookRepository::find_by_koreader_hash(&state.db, hash)
         .await
-        .map_err(|e| ApiError::Internal(format!("Failed to find book: {}", e)))?;
+        .map_err(|e| ApiError::Internal(format!("Failed to find book: {}", e)))?
+        .into_iter()
+        .filter(|book| filter.is_book_visible(book.series_id))
+        .collect();
 
     if books.is_empty() {
         return Err(ApiError::NotFound(
