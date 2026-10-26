@@ -4,6 +4,7 @@
 
 #![allow(dead_code)]
 
+use super::access_group_rules::normalize_taxonomy_name;
 use anyhow::Result;
 use chrono::Utc;
 use sea_orm::{
@@ -28,7 +29,7 @@ impl TagRepository {
 
     /// Get a tag by normalized name
     pub async fn get_by_name(db: &DatabaseConnection, name: &str) -> Result<Option<tags::Model>> {
-        let normalized = name.to_lowercase().trim().to_string();
+        let normalized = normalize_taxonomy_name(name);
         let result = Tags::find()
             .filter(tags::Column::NormalizedName.eq(&normalized))
             .one(db)
@@ -47,7 +48,7 @@ impl TagRepository {
 
     /// Create a new tag
     pub async fn create(db: &DatabaseConnection, name: &str) -> Result<tags::Model> {
-        let normalized = name.to_lowercase().trim().to_string();
+        let normalized = normalize_taxonomy_name(name);
         let trimmed_name = name.trim().to_string();
 
         let active_model = tags::ActiveModel {
@@ -206,7 +207,7 @@ impl TagRepository {
     ) -> Result<Vec<Uuid>> {
         use crate::entities::series_tags::Entity as SeriesTags;
 
-        let normalized = tag_name.to_lowercase().trim().to_string();
+        let normalized = normalize_taxonomy_name(tag_name);
 
         // First find the tag
         let tag = Tags::find()

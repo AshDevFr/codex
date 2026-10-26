@@ -6,6 +6,12 @@ sidebar_position: 6
 
 Sharing tags provide content-level access control, allowing admins to restrict which series specific users can see. This is useful for family sharing scenarios where you want to limit access to age-appropriate content.
 
+Sharing tags are applied to series by hand. To restrict by library, genre or regular tag without tagging every series, use rules on an [access group](./access-groups).
+
+:::info Admins and maintainers are never restricted
+Sharing-tag grants and access groups do not apply to users with the **admin** or **maintainer** role.
+:::
+
 ## Overview
 
 Sharing tags work independently from [permissions](./permissions). While permissions control what actions users can perform (read, write, delete), sharing tags control what content users can see.

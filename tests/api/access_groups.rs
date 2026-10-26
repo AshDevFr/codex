@@ -1051,3 +1051,166 @@ async fn test_add_all_users_requires_admin() {
         make_json_request(app, request).await;
     assert_eq!(status, StatusCode::FORBIDDEN);
 }
+
+// ============================================================================
+// Rules Tests
+// ============================================================================
+
+async fn put_rules(
+    state: &std::sync::Arc<codex::api::extractors::AuthState>,
+    token: &str,
+    group_id: uuid::Uuid,
+    body: serde_json::Value,
+) -> (StatusCode, Option<serde_json::Value>) {
+    let app = create_test_router(state.clone()).await;
+    let request = put_json_request_with_auth(
+        &format!("/api/v1/access-groups/{}/rules", group_id),
+        &body,
+        token,
+    );
+    make_json_request(app, request).await
+}
+
+#[tokio::test]
+async fn test_replace_and_get_rules() {
+    use codex::db::ScanningStrategy;
+    use codex::db::repositories::LibraryRepository;
+
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_, token) = create_admin_and_token(&db, &state).await;
+    let group = create_group(&state, &token, "Kids").await;
+    let library = LibraryRepository::create(&db, "Kids", "/tmp/kids", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let tag = SharingTagRepository::create(&db, "family", None)
+        .await
+        .unwrap();
+
+    let (status, response) = put_rules(
+        &state,
+        &token,
+        group.id,
+        serde_json::json!({
+            "sharingTagMatch": "any",
+            "tagMatch": "any",
+            "genreMatch": "all",
+            "sharingTags": [{ "sharingTagId": tag.id, "accessMode": "allow" }],
+            "tags": [{ "name": "Gore", "accessMode": "deny" }],
+            "genres": [
+                { "name": "Adult", "accessMode": "deny" },
+                { "name": "Kids", "accessMode": "allow" }
+            ],
+            "libraries": [{ "libraryId": library.id, "accessMode": "allow" }]
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{response:?}");
+
+    let app = create_test_router(state.clone()).await;
+    let request =
+        get_request_with_auth(&format!("/api/v1/access-groups/{}/rules", group.id), &token);
+    let (status, response): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+    let rules = response.unwrap();
+    assert_eq!(rules["genreMatch"], "all");
+    assert_eq!(rules["sharingTags"][0]["name"], "family");
+    assert_eq!(rules["tags"][0]["name"], "Gore");
+    assert_eq!(rules["genres"].as_array().unwrap().len(), 2);
+    assert_eq!(rules["libraries"][0]["libraryId"], library.id.to_string());
+    assert_eq!(rules["libraries"][0]["name"], "Kids");
+    assert_eq!(rules["libraries"][0]["accessMode"], "allow");
+
+    // The group list counts every rule, not only sharing tags
+    let app = create_test_router(state.clone()).await;
+    let request = get_request_with_auth("/api/v1/access-groups", &token);
+    let (_, response): (StatusCode, Option<Vec<AccessGroupDto>>) =
+        make_json_request(app, request).await;
+    let listed = response.unwrap();
+    assert_eq!(listed[0].rule_count, 5);
+    assert_eq!(listed[0].grant_count, 1);
+}
+
+#[tokio::test]
+async fn test_replace_rules_rejects_duplicates() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_, token) = create_admin_and_token(&db, &state).await;
+    let group = create_group(&state, &token, "Kids").await;
+
+    let (status, _) = put_rules(
+        &state,
+        &token,
+        group.id,
+        serde_json::json!({
+            "genres": [
+                { "name": "Adult", "accessMode": "deny" },
+                { "name": "adult", "accessMode": "allow" }
+            ]
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn test_replace_rules_rejects_unknown_library_and_sharing_tag() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_, token) = create_admin_and_token(&db, &state).await;
+    let group = create_group(&state, &token, "Kids").await;
+
+    let (status, _) = put_rules(
+        &state,
+        &token,
+        group.id,
+        serde_json::json!({
+            "libraries": [{ "libraryId": uuid::Uuid::new_v4(), "accessMode": "allow" }]
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    let (status, _) = put_rules(
+        &state,
+        &token,
+        group.id,
+        serde_json::json!({
+            "sharingTags": [{ "sharingTagId": uuid::Uuid::new_v4(), "accessMode": "deny" }]
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn test_rules_endpoints_require_admin() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_, token) = create_admin_and_token(&db, &state).await;
+    let (_, reader_token) = create_reader_and_token(&db, &state, "alice").await;
+    let group = create_group(&state, &token, "Kids").await;
+
+    let (status, _) = put_rules(&state, &reader_token, group.id, serde_json::json!({})).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+
+    let app = create_test_router(state).await;
+    let request = get_request_with_auth(
+        &format!("/api/v1/access-groups/{}/rules", group.id),
+        &reader_token,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn test_rules_for_missing_group_is_not_found() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_, token) = create_admin_and_token(&db, &state).await;
+
+    let (status, _) = put_rules(&state, &token, uuid::Uuid::new_v4(), serde_json::json!({})).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}

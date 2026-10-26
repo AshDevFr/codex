@@ -6,10 +6,15 @@ type UserAccessGroup = components["schemas"]["UserAccessGroupDto"];
 
 interface UserAccessGroupBadgesProps {
   groups: UserAccessGroup[];
+  /** Admins and maintainers are never restricted, so their groups are shown as inactive */
+  unrestricted?: boolean;
 }
 
 /** Compact list of the access groups a user belongs to, for table cells. */
-export function UserAccessGroupBadges({ groups }: UserAccessGroupBadgesProps) {
+export function UserAccessGroupBadges({
+  groups,
+  unrestricted = false,
+}: UserAccessGroupBadgesProps) {
   if (groups.length === 0) {
     return (
       <Text size="sm" c="dimmed">
@@ -20,6 +25,11 @@ export function UserAccessGroupBadges({ groups }: UserAccessGroupBadgesProps) {
 
   return (
     <Group gap={4}>
+      {unrestricted && (
+        <Text size="xs" c="dimmed" w="100%">
+          Not restricted (role)
+        </Text>
+      )}
       {groups.map((group) => {
         const fromOidc = group.source === "oidc";
         return (
@@ -27,6 +37,7 @@ export function UserAccessGroupBadges({ groups }: UserAccessGroupBadgesProps) {
             key={group.id}
             size="sm"
             variant="light"
+            color={unrestricted ? "gray" : undefined}
             leftSection={fromOidc ? <IconCloud size={12} /> : undefined}
             aria-label={fromOidc ? `${group.name} (from OIDC)` : undefined}
             title={fromOidc ? "Assigned from an OIDC group" : undefined}

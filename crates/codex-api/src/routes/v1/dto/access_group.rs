@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use codex_db::entities::access_groups::RuleMatch;
 use codex_db::entities::user_sharing_tags::AccessMode;
 
 /// Access group data transfer object
@@ -31,9 +32,13 @@ pub struct AccessGroupDto {
     #[schema(example = 5)]
     pub member_count: u64,
 
-    /// Number of tag grants in the group
+    /// Number of sharing tag grants in the group
     #[schema(example = 3)]
     pub grant_count: u64,
+
+    /// Number of rules in the group, across sharing tags, tags, genres and libraries
+    #[schema(example = 5)]
+    pub rule_count: u64,
 
     /// Creation timestamp
     #[schema(example = "2024-01-01T00:00:00Z")]
@@ -286,6 +291,7 @@ impl AccessGroupDto {
         model: codex_db::entities::access_groups::Model,
         member_count: u64,
         grant_count: u64,
+        rule_count: u64,
     ) -> Self {
         Self {
             id: model.id,
@@ -294,6 +300,7 @@ impl AccessGroupDto {
             is_default: model.is_default,
             member_count,
             grant_count,
+            rule_count,
             created_at: model.created_at,
             updated_at: model.updated_at,
         }
@@ -308,4 +315,114 @@ impl From<codex_db::entities::access_groups::Model> for AccessGroupSummaryDto {
             description: model.description,
         }
     }
+}
+
+// ==================== Rules ====================
+
+/// Every rule of an access group
+///
+/// Within a group, values of the same type combine as "any of" or "all of"
+/// (per the match field for that type; libraries are always "any of"), and
+/// different types combine with AND. Across groups, what each group allows is
+/// combined with OR. Denies from every group always win. Admins and
+/// maintainers are never restricted.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AccessGroupRulesDto {
+    /// How allowed sharing tags combine
+    pub sharing_tag_match: RuleMatch,
+    /// How allowed tags combine
+    pub tag_match: RuleMatch,
+    /// How allowed genres combine
+    pub genre_match: RuleMatch,
+    /// Rules on sharing tags
+    pub sharing_tags: Vec<SharingTagRuleDto>,
+    /// Rules on regular tags, matched by name
+    pub tags: Vec<NameRuleDto>,
+    /// Rules on genres, matched by name
+    pub genres: Vec<NameRuleDto>,
+    /// Rules on libraries
+    pub libraries: Vec<LibraryRuleDto>,
+}
+
+/// A rule on a sharing tag
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SharingTagRuleDto {
+    /// Sharing tag ID
+    pub sharing_tag_id: Uuid,
+    /// Sharing tag name
+    #[schema(example = "Kids")]
+    pub name: String,
+    /// Allow or deny
+    pub access_mode: AccessMode,
+}
+
+/// A rule on a regular tag or a genre
+///
+/// Matched by name, case-insensitively, so the rule keeps applying when the
+/// tag or genre is removed by cleanup and created again later.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct NameRuleDto {
+    /// Tag or genre name
+    #[schema(example = "Adult")]
+    pub name: String,
+    /// Allow or deny
+    pub access_mode: AccessMode,
+}
+
+/// A rule on a library
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryRuleDto {
+    /// Library ID
+    pub library_id: Uuid,
+    /// Library name
+    #[schema(example = "Manga")]
+    pub name: String,
+    /// Allow or deny
+    pub access_mode: AccessMode,
+}
+
+/// Replace every rule of an access group
+///
+/// Omitted lists are treated as empty and omitted match fields as "any".
+#[derive(Debug, Default, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ReplaceAccessGroupRulesRequest {
+    /// How allowed sharing tags combine
+    pub sharing_tag_match: RuleMatch,
+    /// How allowed tags combine
+    pub tag_match: RuleMatch,
+    /// How allowed genres combine
+    pub genre_match: RuleMatch,
+    /// Rules on sharing tags
+    pub sharing_tags: Vec<SharingTagRuleInput>,
+    /// Rules on regular tags, matched by name
+    pub tags: Vec<NameRuleDto>,
+    /// Rules on genres, matched by name
+    pub genres: Vec<NameRuleDto>,
+    /// Rules on libraries
+    pub libraries: Vec<LibraryRuleInput>,
+}
+
+/// A sharing tag rule in a replace request
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SharingTagRuleInput {
+    /// Sharing tag ID
+    pub sharing_tag_id: Uuid,
+    /// Allow or deny
+    pub access_mode: AccessMode,
+}
+
+/// A library rule in a replace request
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryRuleInput {
+    /// Library ID
+    pub library_id: Uuid,
+    /// Allow or deny
+    pub access_mode: AccessMode,
 }

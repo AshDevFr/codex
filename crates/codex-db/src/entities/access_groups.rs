@@ -1,8 +1,8 @@
 //! `SeaORM` Entity for access_groups table
 //!
-//! Access groups bundle a set of sharing-tag allow/deny rules that can be
-//! assigned to multiple users. Per-user grants in `user_sharing_tags` act
-//! as overrides on top of group rules.
+//! Access groups bundle allow/deny rules on sharing tags, tags, genres and
+//! libraries, and are assigned to many users. A user's personal grants in
+//! `user_sharing_tags` count as one more group.
 
 use chrono::{DateTime, Utc};
 use sea_orm::entity::prelude::*;
@@ -20,6 +20,12 @@ pub struct Model {
     /// New users join the default group when their account is created.
     /// At most one group has this set (partial unique index).
     pub is_default: bool,
+    /// How allowed sharing tags combine: "any" (default) or "all"
+    pub sharing_tag_match: String,
+    /// How allowed tags combine: "any" (default) or "all"
+    pub tag_match: String,
+    /// How allowed genres combine: "any" (default) or "all"
+    pub genre_match: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -75,3 +81,49 @@ impl Related<super::sharing_tags::Entity> for Entity {
 }
 
 impl ActiveModelBehavior for ActiveModel {}
+
+/// How a group's allowed values of one rule type combine.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, utoipa::ToSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum RuleMatch {
+    /// A series matches if it carries any of the allowed values
+    #[default]
+    Any,
+    /// A series matches only if it carries every allowed value
+    All,
+}
+
+impl RuleMatch {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            RuleMatch::Any => "any",
+            RuleMatch::All => "all",
+        }
+    }
+}
+
+impl std::str::FromStr for RuleMatch {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "any" => Ok(RuleMatch::Any),
+            "all" => Ok(RuleMatch::All),
+            _ => Err(format!("Unknown rule match: {}", s)),
+        }
+    }
+}
+
+impl Model {
+    pub fn get_sharing_tag_match(&self) -> RuleMatch {
+        self.sharing_tag_match.parse().unwrap_or_default()
+    }
+
+    pub fn get_tag_match(&self) -> RuleMatch {
+        self.tag_match.parse().unwrap_or_default()
+    }
+
+    pub fn get_genre_match(&self) -> RuleMatch {
+        self.genre_match.parse().unwrap_or_default()
+    }
+}

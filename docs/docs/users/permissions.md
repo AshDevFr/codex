@@ -47,6 +47,7 @@ The default role for new users. Readers can:
 For users who manage content but not system settings. Maintainers can do everything Readers can, plus:
 
 - Create and modify libraries (but not delete them)
+- See all content: [access groups](./access-groups) and [sharing tags](./sharing-tags) only restrict readers
 - Full series management (create, edit, delete)
 - Full book management (create, edit, delete)
 - Create, edit, and delete collections and read lists
@@ -69,6 +70,7 @@ Full system access for server administrators. Admins can do everything Maintaine
 - Manage metadata plugins
 - Access system administration features
 - Manage sharing tags and content restrictions
+- See all content: [access groups](./access-groups) and [sharing tags](./sharing-tags) never restrict an admin
 
 **Additional Permissions (6 more, 29 total):**
 - `libraries-delete`
@@ -195,7 +197,7 @@ Custom permissions allow extending a user's access beyond their role. For exampl
 This user would have all Reader permissions plus `tasks-read`.
 
 :::tip
-Custom permissions extend roles - they never restrict. To limit access, use [Sharing Tags](./sharing-tags) for content-level restrictions.
+Custom permissions extend roles - they never restrict. To limit what content a user sees, use [access groups](./access-groups) and [sharing tags](./sharing-tags).
 :::
 
 ## API Token Permissions

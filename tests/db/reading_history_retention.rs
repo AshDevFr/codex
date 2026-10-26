@@ -23,7 +23,7 @@ use codex::db::entities::{books, read_completions, reading_sessions, users};
 use codex::db::repositories::{
     BookRepository, LibraryRepository, NewSession, ReadCompletionRepository,
     ReadProgressRepository, ReadingStatsRepository, SeriesRepository, StatsGranularity, StatsSort,
-    StatsWindow, UserRepository,
+    StatsWindow,
 };
 use common::*;
 use migration::{Migrator, MigratorTrait};
@@ -39,9 +39,14 @@ fn unique() -> String {
 }
 
 async fn persist_user(db: &DatabaseConnection) -> Uuid {
+    use sea_orm::{ActiveModelTrait, IntoActiveModel};
+
     let handle = format!("reader-{}", unique());
     let model = create_test_user(&handle, &format!("{handle}@test.test"), "hash", true);
-    UserRepository::create(db, &model).await.unwrap().id
+    // A plain row insert, not `UserRepository::create`: some scenarios run
+    // against the schema as it was before later migrations, and account
+    // creation also joins the default access group, which that schema lacks.
+    model.into_active_model().insert(db).await.unwrap().id
 }
 
 async fn persist_book(db: &DatabaseConnection) -> Uuid {

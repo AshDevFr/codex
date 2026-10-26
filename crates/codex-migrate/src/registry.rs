@@ -85,8 +85,11 @@ macro_rules! for_each_entity {
         $op!(series_sharing_tags);
         $op!(sharing_tags);
         $op!(user_sharing_tags);
+        $op!(access_group_genre_rules);
+        $op!(access_group_library_rules);
         $op!(access_group_oidc_mappings);
         $op!(access_group_sharing_tags);
+        $op!(access_group_tag_rules);
         $op!(access_groups);
         $op!(user_access_groups);
         $op!(collection_series);

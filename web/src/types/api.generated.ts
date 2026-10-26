@@ -165,6 +165,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/access-groups/{group_id}/rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get every rule of an access group (admin only) */
+        get: operations["get_access_group_rules"];
+        /**
+         * Replace every rule of an access group (admin only)
+         * @description The whole rule set is replaced atomically: anything not in the request is
+         *     removed. Sharing tag and library IDs must exist; tag and genre names need
+         *     not, so a rule can be set up before any series carries the name.
+         */
+        put: operations["replace_access_group_rules"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/cleanup-orphans": {
         parameters: {
             query?: never;
@@ -8371,7 +8394,7 @@ export interface components {
             description?: string | null;
             /**
              * Format: int64
-             * @description Number of tag grants in the group
+             * @description Number of sharing tag grants in the group
              * @example 3
              */
             grantCount: number;
@@ -8397,6 +8420,12 @@ export interface components {
              * @example Manga Readers
              */
             name: string;
+            /**
+             * Format: int64
+             * @description Number of rules in the group, across sharing tags, tags, genres and libraries
+             * @example 5
+             */
+            ruleCount: number;
             /**
              * Format: date-time
              * @description Last update timestamp
@@ -8470,6 +8499,31 @@ export interface components {
              * @example library-staff
              */
             oidcGroupName: string;
+        };
+        /**
+         * @description Every rule of an access group
+         *
+         *     Within a group, values of the same type combine as "any of" or "all of"
+         *     (per the match field for that type; libraries are always "any of"), and
+         *     different types combine with AND. Across groups, what each group allows is
+         *     combined with OR. Denies from every group always win. Admins and
+         *     maintainers are never restricted.
+         */
+        AccessGroupRulesDto: {
+            /** @description How allowed genres combine */
+            genreMatch: components["schemas"]["RuleMatch"];
+            /** @description Rules on genres, matched by name */
+            genres: components["schemas"]["NameRuleDto"][];
+            /** @description Rules on libraries */
+            libraries: components["schemas"]["LibraryRuleDto"][];
+            /** @description How allowed sharing tags combine */
+            sharingTagMatch: components["schemas"]["RuleMatch"];
+            /** @description Rules on sharing tags */
+            sharingTags: components["schemas"]["SharingTagRuleDto"][];
+            /** @description How allowed tags combine */
+            tagMatch: components["schemas"]["RuleMatch"];
+            /** @description Rules on regular tags, matched by name */
+            tags: components["schemas"]["NameRuleDto"][];
         };
         /** @description Access group summary (for user's group list) */
         AccessGroupSummaryDto: {
@@ -14583,6 +14637,31 @@ export interface components {
              */
             totalSize: number;
         };
+        /** @description A rule on a library */
+        LibraryRuleDto: {
+            /** @description Allow or deny */
+            accessMode: components["schemas"]["AccessMode"];
+            /**
+             * Format: uuid
+             * @description Library ID
+             */
+            libraryId: string;
+            /**
+             * @description Library name
+             * @example Manga
+             */
+            name: string;
+        };
+        /** @description A library rule in a replace request */
+        LibraryRuleInput: {
+            /** @description Allow or deny */
+            accessMode: components["schemas"]["AccessMode"];
+            /**
+             * Format: uuid
+             * @description Library ID
+             */
+            libraryId: string;
+        };
         /** @description Additional properties that can be attached to links */
         LinkProperties: {
             /**
@@ -15180,6 +15259,21 @@ export interface components {
              * @example 550e8400-e29b-41d4-a716-446655440000
              */
             sharingTagId: string;
+        };
+        /**
+         * @description A rule on a regular tag or a genre
+         *
+         *     Matched by name, case-insensitively, so the rule keeps applying when the
+         *     tag or genre is removed by cleanup and created again later.
+         */
+        NameRuleDto: {
+            /** @description Allow or deny */
+            accessMode: components["schemas"]["AccessMode"];
+            /**
+             * @description Tag or genre name
+             * @example Adult
+             */
+            name: string;
         };
         /** @description One news entry. */
         NewsEntryDto: {
@@ -18364,6 +18458,39 @@ export interface components {
             entryIds: string[];
         };
         /**
+         * @description Replace every rule of an access group
+         *
+         *     Omitted lists are treated as empty and omitted match fields as "any".
+         */
+        ReplaceAccessGroupRulesRequest: {
+            /** @default any */
+            genreMatch: components["schemas"]["RuleMatch"];
+            /**
+             * @description Rules on genres, matched by name
+             * @default []
+             */
+            genres: components["schemas"]["NameRuleDto"][];
+            /**
+             * @description Rules on libraries
+             * @default []
+             */
+            libraries: components["schemas"]["LibraryRuleInput"][];
+            /** @default any */
+            sharingTagMatch: components["schemas"]["RuleMatch"];
+            /**
+             * @description Rules on sharing tags
+             * @default []
+             */
+            sharingTags: components["schemas"]["SharingTagRuleInput"][];
+            /** @default any */
+            tagMatch: components["schemas"]["RuleMatch"];
+            /**
+             * @description Rules on regular tags, matched by name
+             * @default []
+             */
+            tags: components["schemas"]["NameRuleDto"][];
+        };
+        /**
          * @description PUT request for full replacement of book metadata
          *
          *     All metadata fields will be replaced with the values in this request.
@@ -18821,6 +18948,11 @@ export interface components {
              */
             tasksEnqueued: number;
         };
+        /**
+         * @description How a group's allowed values of one rule type combine.
+         * @enum {string}
+         */
+        RuleMatch: "any" | "all";
         /** @description Response for `POST .../run-now`. */
         RunNowResponse: {
             /** Format: uuid */
@@ -20276,6 +20408,31 @@ export interface components {
              * @example 10
              */
             total: number;
+        };
+        /** @description A rule on a sharing tag */
+        SharingTagRuleDto: {
+            /** @description Allow or deny */
+            accessMode: components["schemas"]["AccessMode"];
+            /**
+             * @description Sharing tag name
+             * @example Kids
+             */
+            name: string;
+            /**
+             * Format: uuid
+             * @description Sharing tag ID
+             */
+            sharingTagId: string;
+        };
+        /** @description A sharing tag rule in a replace request */
+        SharingTagRuleInput: {
+            /** @description Allow or deny */
+            accessMode: components["schemas"]["AccessMode"];
+            /**
+             * Format: uuid
+             * @description Sharing tag ID
+             */
+            sharingTagId: string;
         };
         /** @description Simplified sharing tag for lists (without counts) */
         SharingTagSummaryDto: {
@@ -22761,6 +22918,91 @@ export interface operations {
                 content?: never;
             };
             /** @description OIDC mapping not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_access_group_rules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Access group ID */
+                group_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The group's rules */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessGroupRulesDto"];
+                };
+            };
+            /** @description Forbidden - Missing permission */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Access group not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    replace_access_group_rules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Access group ID */
+                group_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplaceAccessGroupRulesRequest"];
+            };
+        };
+        responses: {
+            /** @description Rules replaced */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessGroupRulesDto"];
+                };
+            };
+            /** @description Duplicate rule, blank name, or unknown sharing tag or library */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden - Missing permission */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Access group not found */
             404: {
                 headers: {
                     [name: string]: unknown;

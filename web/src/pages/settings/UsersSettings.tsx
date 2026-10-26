@@ -369,7 +369,12 @@ export function UsersSettings() {
     {
       key: "accessGroups",
       header: "Access Groups",
-      accessor: (user) => <UserAccessGroupBadges groups={user.accessGroups} />,
+      accessor: (user) => (
+        <UserAccessGroupBadges
+          groups={user.accessGroups}
+          unrestricted={user.role === "admin" || user.role === "maintainer"}
+        />
+      ),
     },
     {
       key: "status",
