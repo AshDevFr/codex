@@ -184,13 +184,6 @@ body {
     background-color: var(--app-shell-main-bg);
   }
 
-  /* Header background. The bottom border is replaced by a shadow-based
-     hairline in the "Depth refresh" section below so the header reads as
-     floating over content rather than nailed to it. */
-  .mantine-AppShell-header {
-    background-color: #ffffff;
-  }
-
   /* Navbar/Sidebar background. Right edge is now a soft shadow (see the
      "Depth refresh" section). */
   .mantine-AppShell-navbar {
@@ -236,14 +229,10 @@ body {
 /* Dark theme - ensure consistent dark styling.
    Every dark-mode surface here is sourced from the elevation ladder
    (`--mantine-color-body` = `--surface-1`, `--card-bg` = `--surface-2`) so
-   the AppShell, header, navbar, and Card all land on the iOS systemBackground
+   the AppShell, navbar, and Card all land on the iOS systemBackground
    tiers (`#1c1c1e` / `#2c2c2e`) without per-element hex literals. */
 [data-mantine-color-scheme="dark"] {
   .mantine-AppShell-main {
-    background-color: var(--mantine-color-body);
-  }
-
-  .mantine-AppShell-header {
     background-color: var(--mantine-color-body);
   }
 
@@ -269,9 +258,11 @@ body {
 .mantine-AppShell-header {
   /* Hairline replaces the old 1px solid #dee2e6 / #373a40 line. */
   border-bottom: 1px solid var(--surface-border-hairline);
-  /* Translucent header so content scrolls through it. Gated by @supports
-     so non-supporting browsers fall back to the opaque background colour
-     defined per-scheme above. */
+  /* Translucent header so content scrolls through it. The @supports and
+     reduced-transparency rules below fall back to the opaque body colour.
+     The colour-scheme blocks above must not set a header background: they
+     are more specific than this rule and would make it opaque, leaving the
+     blur with nothing to show through. */
   background-color: color-mix(
     in srgb,
     var(--mantine-color-body) 75%,
@@ -297,6 +288,7 @@ body {
   }
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: only adds border/shadow; the colour-scheme blocks above set background-color alone */
 .mantine-AppShell-navbar {
   /* Replace the right border with a hairline + soft right-side shadow so
      the sidebar reads as a layer above the main content. */
@@ -318,6 +310,7 @@ body {
    a tighter blur so a 2-column grid doesn't bleed shadow into the gutter.
    Mobile column count + the gutter are the constraint that drives this -
    see Phase 2 mobile-considerations notes in ui-next.md. */
+/* biome-ignore lint/style/noDescendingSpecificity: only adds border/shadow; the colour-scheme blocks above set background-color alone */
 .mantine-Card-root {
   border-color: var(--card-border-hairline);
   box-shadow: var(--shadow-card-desktop);
@@ -331,6 +324,7 @@ body {
 
 /* Menu / Popover dropdowns float above cards; lift them on the shadow
    scale rather than the legacy 1px border. */
+/* biome-ignore lint/style/noDescendingSpecificity: only adds border/shadow; the colour-scheme blocks above set background-color alone */
 .mantine-Menu-dropdown,
 .mantine-Popover-dropdown {
   border-color: var(--surface-border-hairline);
@@ -355,6 +349,7 @@ body {
   }
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: only adds radius/shadow; the colour-scheme blocks above set background-color alone */
 .mantine-Modal-content {
   border-radius: 16px;
   box-shadow: var(--shadow-xl);
@@ -457,6 +452,7 @@ body {
 
 /* Hide read button overlay when in selection mode.
    !important is needed to override the :hover pseudo-class specificity. */
+/* biome-ignore lint/style/noDescendingSpecificity: sets display, which the :hover rule above never touches */
 .media-card--selection-mode .media-card-read-overlay {
   display: none !important;
 }
