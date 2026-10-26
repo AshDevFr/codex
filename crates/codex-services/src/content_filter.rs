@@ -50,6 +50,11 @@ pub struct ContentFilter {
     pub whitelist_mode: bool,
     /// Whether the user has any restrictions at all
     pub has_restrictions: bool,
+    /// Libraries hidden by a library deny rule
+    pub hidden_library_ids: HashSet<Uuid>,
+    /// In whitelist mode, the libraries the user may see: those named by an
+    /// allow rule and those holding at least one visible series
+    pub visible_library_ids: Option<HashSet<Uuid>>,
 }
 
 /// Series IDs per rule target, resolved once for every group of a user.
@@ -119,12 +124,44 @@ impl ContentFilter {
             }
         }
 
-        let has_restrictions = !excluded_series_ids.is_empty() || whitelist_mode;
+        let hidden_library_ids: HashSet<Uuid> = rule_sets
+            .iter()
+            .flat_map(|r| r.libraries.iter())
+            .filter(|r| r.access_mode == AccessMode::Deny)
+            .map(|r| r.library_id)
+            .collect();
+
+        let visible_library_ids = if whitelist_mode {
+            let visible_series: Vec<Uuid> = allowed
+                .iter()
+                .filter(|id| !excluded_series_ids.contains(id))
+                .copied()
+                .collect();
+            let mut libraries =
+                AccessGroupRulesRepository::library_ids_of_series(db, &visible_series).await?;
+            // A library an allow rule names is shown even before it has series.
+            libraries.extend(
+                rule_sets
+                    .iter()
+                    .filter(|r| r.has_allows())
+                    .flat_map(|r| r.libraries.iter())
+                    .filter(|r| r.access_mode == AccessMode::Allow)
+                    .map(|r| r.library_id),
+            );
+            Some(libraries)
+        } else {
+            None
+        };
+
+        let has_restrictions =
+            !excluded_series_ids.is_empty() || whitelist_mode || !hidden_library_ids.is_empty();
         Ok(Self {
             excluded_series_ids,
             allowed_series_ids: whitelist_mode.then_some(allowed),
             whitelist_mode,
             has_restrictions,
+            hidden_library_ids,
+            visible_library_ids,
         })
     }
 
@@ -282,6 +319,8 @@ impl ContentFilter {
             allowed_series_ids: Some(HashSet::new()),
             whitelist_mode: true,
             has_restrictions: true,
+            hidden_library_ids: HashSet::new(),
+            visible_library_ids: Some(HashSet::new()),
         }
     }
 
@@ -292,6 +331,8 @@ impl ContentFilter {
             allowed_series_ids: None,
             whitelist_mode: false,
             has_restrictions: false,
+            hidden_library_ids: HashSet::new(),
+            visible_library_ids: None,
         }
     }
 
@@ -316,6 +357,17 @@ impl ContentFilter {
         }
 
         true
+    }
+
+    /// Check if a library is visible to the user
+    pub fn is_library_visible(&self, library_id: Uuid) -> bool {
+        if self.hidden_library_ids.contains(&library_id) {
+            return false;
+        }
+        match &self.visible_library_ids {
+            Some(visible) => visible.contains(&library_id),
+            None => true,
+        }
     }
 
     /// Check if a book is visible to the user (based on its parent series)
@@ -406,6 +458,7 @@ mod tests {
             allowed_series_ids: None,
             whitelist_mode: false,
             has_restrictions: true,
+            ..Default::default()
         };
 
         assert!(filter.is_series_visible(allowed));
@@ -423,6 +476,7 @@ mod tests {
             allowed_series_ids: Some([allowed_tagged_series].into_iter().collect()),
             whitelist_mode: true,
             has_restrictions: true,
+            ..Default::default()
         };
 
         // Untagged series should NOT be visible in whitelist mode
@@ -441,6 +495,7 @@ mod tests {
             allowed_series_ids: Some([allowed_series].into_iter().collect()),
             whitelist_mode: true,
             has_restrictions: true,
+            ..Default::default()
         };
 
         assert!(filter.is_series_visible(allowed_series));
@@ -457,6 +512,7 @@ mod tests {
             allowed_series_ids: Some([allowed_series].into_iter().collect()),
             whitelist_mode: true,
             has_restrictions: true,
+            ..Default::default()
         };
 
         assert!(filter.is_series_visible(allowed_series));
@@ -473,6 +529,7 @@ mod tests {
             allowed_series_ids: Some([mixed_series].into_iter().collect()),
             whitelist_mode: true,
             has_restrictions: true,
+            ..Default::default()
         };
 
         // Deny wins, so series should be hidden
@@ -490,6 +547,7 @@ mod tests {
             allowed_series_ids: None,
             whitelist_mode: false,
             has_restrictions: false,
+            ..Default::default()
         };
 
         assert!(filter.is_series_visible(any_series));
@@ -507,6 +565,7 @@ mod tests {
             allowed_series_ids: Some([allowed].into_iter().collect()),
             whitelist_mode: true,
             has_restrictions: true,
+            ..Default::default()
         };
 
         let input = vec![allowed, excluded, untagged];
@@ -529,6 +588,7 @@ mod tests {
             allowed_series_ids: None,
             whitelist_mode: false,
             has_restrictions: true,
+            ..Default::default()
         };
 
         assert!(filter.is_book_visible(allowed_series));
@@ -963,6 +1023,88 @@ mod db_tests {
 
     async fn make_admin(db: &DatabaseConnection, username: &str) -> Uuid {
         make_with_role(db, username, "admin").await
+    }
+
+    // ---------- Library visibility ----------
+
+    #[tokio::test]
+    async fn a_denied_library_is_hidden() {
+        let f = Fixture::new().await;
+        let user = make_user(f.conn(), "kid").await;
+        let adult = f.library("Adult").await;
+        let manga = f.library("Manga").await;
+        f.group(
+            "No adult library",
+            user,
+            AccessGroupRules {
+                libraries: vec![deny_library(adult)],
+                ..Default::default()
+            },
+        )
+        .await;
+
+        let filter = f.filter(user).await;
+        assert!(!filter.is_library_visible(adult));
+        assert!(
+            filter.is_library_visible(manga),
+            "open mode keeps other libraries"
+        );
+    }
+
+    /// In whitelist mode a library is listed only if something in it is visible.
+    #[tokio::test]
+    async fn whitelist_mode_lists_only_libraries_with_visible_series() {
+        let f = Fixture::new().await;
+        let user = make_user(f.conn(), "kid").await;
+        let manga = f.library("Manga").await;
+        let comics = f.library("Comics").await;
+        let empty = f.library("Empty").await;
+        f.series(manga, "Kids manga", &["Kids"]).await;
+        f.series(comics, "Action comic", &["Action"]).await;
+        f.group(
+            "Kids genre",
+            user,
+            AccessGroupRules {
+                genres: vec![NameRule::new("Kids", AccessMode::Allow)],
+                ..Default::default()
+            },
+        )
+        .await;
+
+        let filter = f.filter(user).await;
+        assert!(filter.is_library_visible(manga));
+        assert!(!filter.is_library_visible(comics));
+        assert!(!filter.is_library_visible(empty));
+    }
+
+    /// A library allow shows the library even before it has any series.
+    #[tokio::test]
+    async fn an_allowed_library_is_listed_even_when_empty() {
+        let f = Fixture::new().await;
+        let user = make_user(f.conn(), "kid").await;
+        let kids = f.library("Kids").await;
+        let manga = f.library("Manga").await;
+        f.group(
+            "Kids",
+            user,
+            AccessGroupRules {
+                libraries: vec![allow_library(kids)],
+                ..Default::default()
+            },
+        )
+        .await;
+
+        let filter = f.filter(user).await;
+        assert!(filter.is_library_visible(kids));
+        assert!(!filter.is_library_visible(manga));
+    }
+
+    #[tokio::test]
+    async fn no_rules_shows_every_library() {
+        let f = Fixture::new().await;
+        let user = make_user(f.conn(), "reader").await;
+        let lib = f.library("Any").await;
+        assert!(f.filter(user).await.is_library_visible(lib));
     }
 
     /// Maintainers curate content (metadata, scans, covers), so they see all of it.

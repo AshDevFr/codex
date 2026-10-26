@@ -2843,6 +2843,7 @@ pub async fn enqueue_library_auto_match_tasks(
 ) -> Result<Json<EnqueueAutoMatchResponse>, ApiError> {
     // Check permission to edit series metadata
     auth.require_permission(&Permission::SeriesWrite)?;
+    crate::visibility::ensure_library_visible(&state.db, auth.user_id, library_id).await?;
 
     // Verify library exists
     let _library = LibraryRepository::get_by_id(&state.db, library_id)

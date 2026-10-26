@@ -1723,6 +1723,7 @@ pub async fn list_library_books(
     Query(query): Query<BookListQuery>,
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
+    crate::visibility::ensure_library_visible(&state.db, auth.user_id, library_id).await?;
 
     // Validate and normalize pagination params (1-indexed)
     let page = query.page.max(1);
@@ -1888,6 +1889,7 @@ pub async fn list_library_in_progress_books(
     Query(query): Query<BookListQuery>,
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
+    crate::visibility::ensure_library_visible(&state.db, auth.user_id, library_id).await?;
 
     // Validate and normalize pagination params (1-indexed)
     let page = query.page.max(1);
@@ -2026,6 +2028,7 @@ pub async fn list_library_on_deck_books(
     Query(query): Query<BookListQuery>,
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
+    crate::visibility::ensure_library_visible(&state.db, auth.user_id, library_id).await?;
 
     // Validate and normalize pagination params (1-indexed)
     let page = query.page.max(1);
@@ -2173,6 +2176,7 @@ pub async fn list_library_recently_added_books(
     Query(query): Query<BookListQuery>,
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
+    crate::visibility::ensure_library_visible(&state.db, auth.user_id, library_id).await?;
 
     // Validate and normalize pagination params (1-indexed)
     let page = query.page.max(1);
@@ -2304,6 +2308,7 @@ pub async fn list_library_recently_read_books(
     Query(query): Query<RecentBooksQuery>,
 ) -> Result<Json<Vec<BookDto>>, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
+    crate::visibility::ensure_library_visible(&state.db, auth.user_id, library_id).await?;
 
     let content_filter = ContentFilter::cached_for_user(&state.db, auth.user_id)
         .await
