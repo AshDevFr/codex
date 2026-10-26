@@ -756,6 +756,7 @@ pub async fn generate_library_book_thumbnails(
 
     // Check permission
     auth.require_permission(&Permission::TasksWrite)?;
+    crate::visibility::ensure_library_visible(&state.db, auth.user_id, library_id).await?;
 
     // Verify library exists
     LibraryRepository::get_by_id(&state.db, library_id)
@@ -991,6 +992,7 @@ pub async fn generate_library_series_thumbnails(
 ) -> Result<Json<CreateTaskResponse>, ApiError> {
     // Check permission
     auth.require_permission(&Permission::TasksWrite)?;
+    crate::visibility::ensure_library_visible(&state.db, auth.user_id, library_id).await?;
 
     // Verify library exists
     LibraryRepository::get_by_id(&state.db, library_id)
@@ -1191,6 +1193,7 @@ pub async fn reprocess_library_series_titles(
     use codex_services::metadata::preprocessing::apply_rules;
 
     auth.require_permission(&Permission::LibrariesWrite)?;
+    crate::visibility::ensure_library_visible(&state.db, auth.user_id, library_id).await?;
 
     // Fetch the library
     let library = LibraryRepository::get_by_id(&state.db, library_id)

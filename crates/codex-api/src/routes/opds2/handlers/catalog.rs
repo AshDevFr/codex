@@ -119,6 +119,11 @@ pub async fn libraries(
     let libraries = LibraryRepository::list_all(&state.db)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch libraries: {}", e)))?;
+    let filter = crate::visibility::content_filter(&state.db, auth.user_id).await?;
+    let libraries: Vec<_> = libraries
+        .into_iter()
+        .filter(|library| filter.is_library_visible(library.id))
+        .collect();
 
     let nav_links: Vec<Opds2Link> = libraries
         .iter()
@@ -171,6 +176,7 @@ pub async fn library_series(
     Query(pagination): Query<OpdsPaginationParams>,
 ) -> Result<Opds2Response, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
+    crate::visibility::ensure_library_visible(&state.db, auth.user_id, library_id).await?;
 
     let pagination = pagination.validate(100);
     let base_url = "/opds/v2";

@@ -61,6 +61,11 @@ pub async fn list_libraries(
     let libraries = LibraryRepository::list_all(&state.db)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch libraries: {}", e)))?;
+    let filter = crate::visibility::content_filter(&state.db, auth.user_id).await?;
+    let libraries: Vec<_> = libraries
+        .into_iter()
+        .filter(|library| filter.is_library_visible(library.id))
+        .collect();
 
     let dtos: Vec<KomgaLibraryDto> = libraries
         .into_iter()
@@ -113,6 +118,7 @@ pub async fn get_library(
     Path(library_id): Path<Uuid>,
 ) -> Result<Json<KomgaLibraryDto>, ApiError> {
     require_permission!(auth, Permission::LibrariesRead)?;
+    crate::visibility::ensure_library_visible(&state.db, auth.user_id, library_id).await?;
 
     let library = LibraryRepository::get_by_id(&state.db, library_id)
         .await
@@ -166,6 +172,7 @@ pub async fn get_library_thumbnail(
     Path(library_id): Path<Uuid>,
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::LibrariesRead)?;
+    crate::visibility::ensure_library_visible(&state.db, auth.user_id, library_id).await?;
 
     // Verify library exists
     let _library = LibraryRepository::get_by_id(&state.db, library_id)
@@ -174,9 +181,15 @@ pub async fn get_library_thumbnail(
         .ok_or_else(|| ApiError::NotFound("Library not found".to_string()))?;
 
     // Get the first series in this library to use as the thumbnail
-    let series_list = SeriesRepository::list_by_library(&state.db, library_id, None)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?;
+    let series_list = SeriesRepository::list_by_library(
+        &state.db,
+        library_id,
+        crate::visibility::user_visibility(&state.db, auth.user_id)
+            .await?
+            .as_ref(),
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?;
 
     let first_series = series_list
         .into_iter()

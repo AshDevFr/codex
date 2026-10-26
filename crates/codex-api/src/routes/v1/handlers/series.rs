@@ -2606,6 +2606,7 @@ pub async fn list_library_recently_added_series(
     Query(query): Query<RecentSeriesQuery>,
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
+    crate::visibility::ensure_library_visible(&state.db, auth.user_id, library_id).await?;
 
     let content_filter = ContentFilter::cached_for_user(&state.db, auth.user_id)
         .await
@@ -2719,6 +2720,7 @@ pub async fn list_library_recently_updated_series(
     Query(query): Query<RecentSeriesQuery>,
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
+    crate::visibility::ensure_library_visible(&state.db, auth.user_id, library_id).await?;
 
     let content_filter = ContentFilter::cached_for_user(&state.db, auth.user_id)
         .await
@@ -2777,6 +2779,7 @@ pub async fn list_library_series(
     Query(query): Query<SeriesListQuery>,
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
+    crate::visibility::ensure_library_visible(&state.db, auth.user_id, library_id).await?;
 
     // Validate and normalize pagination params (1-indexed)
     let page = query.page.max(1);
@@ -2898,6 +2901,7 @@ pub async fn list_library_in_progress_series(
     Query(query): Query<LibraryInProgressSeriesQuery>,
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
+    crate::visibility::ensure_library_visible(&state.db, auth.user_id, library_id).await?;
 
     let content_filter = ContentFilter::cached_for_user(&state.db, auth.user_id)
         .await

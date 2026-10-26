@@ -136,6 +136,7 @@ pub async fn list_jobs(
     Path(library_id): Path<Uuid>,
 ) -> Result<Json<ListLibraryJobsResponse>, ApiError> {
     require_permission!(auth, Permission::LibrariesRead)?;
+    crate::visibility::ensure_library_visible(&state.db, auth.user_id, library_id).await?;
     ensure_library_exists(&state, library_id).await?;
     let rows = LibraryJobRepository::list_for_library(&state.db, library_id)
         .await
@@ -172,6 +173,7 @@ pub async fn get_job(
     Path((library_id, job_id)): Path<(Uuid, Uuid)>,
 ) -> Result<Json<LibraryJobDto>, ApiError> {
     require_permission!(auth, Permission::LibrariesRead)?;
+    crate::visibility::ensure_library_visible(&state.db, auth.user_id, library_id).await?;
     let row = LibraryJobRepository::get_by_id(&state.db, job_id)
         .await
         .map_err(|e| anyhow_to_api_error(e, "Failed to load job"))?
@@ -213,6 +215,7 @@ pub async fn create_job(
     Json(body): Json<CreateLibraryJobRequest>,
 ) -> Result<(StatusCode, Json<LibraryJobDto>), ApiError> {
     require_permission!(auth, Permission::LibrariesWrite)?;
+    crate::visibility::ensure_library_visible(&state.db, auth.user_id, library_id).await?;
     ensure_library_exists(&state, library_id).await?;
 
     // Determine name (auto-generate when blank).
@@ -298,6 +301,7 @@ pub async fn patch_job(
     Json(patch): Json<PatchLibraryJobRequest>,
 ) -> Result<Json<LibraryJobDto>, ApiError> {
     require_permission!(auth, Permission::LibrariesWrite)?;
+    crate::visibility::ensure_library_visible(&state.db, auth.user_id, library_id).await?;
     let mut row = LibraryJobRepository::get_by_id(&state.db, job_id)
         .await
         .map_err(|e| anyhow_to_api_error(e, "Failed to load job"))?
@@ -394,6 +398,7 @@ pub async fn delete_job(
     Path((library_id, job_id)): Path<(Uuid, Uuid)>,
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::LibrariesWrite)?;
+    crate::visibility::ensure_library_visible(&state.db, auth.user_id, library_id).await?;
     let row = LibraryJobRepository::get_by_id(&state.db, job_id)
         .await
         .map_err(|e| anyhow_to_api_error(e, "Failed to load job"))?
@@ -449,6 +454,7 @@ pub async fn run_job_now(
     Path((library_id, job_id)): Path<(Uuid, Uuid)>,
 ) -> Result<Json<RunNowResponse>, ApiError> {
     require_permission!(auth, Permission::LibrariesWrite)?;
+    crate::visibility::ensure_library_visible(&state.db, auth.user_id, library_id).await?;
     let row = LibraryJobRepository::get_by_id(&state.db, job_id)
         .await
         .map_err(|e| anyhow_to_api_error(e, "Failed to load job"))?
@@ -517,6 +523,7 @@ pub async fn dry_run_job(
     Json(body): Json<DryRunRequest>,
 ) -> Result<Json<DryRunResponse>, ApiError> {
     require_permission!(auth, Permission::LibrariesWrite)?;
+    crate::visibility::ensure_library_visible(&state.db, auth.user_id, library_id).await?;
     let row = LibraryJobRepository::get_by_id(&state.db, job_id)
         .await
         .map_err(|e| anyhow_to_api_error(e, "Failed to load job"))?

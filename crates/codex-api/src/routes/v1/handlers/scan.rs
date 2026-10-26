@@ -87,6 +87,7 @@ pub async fn trigger_scan(
 ) -> Result<Json<ScanStatusDto>, ApiError> {
     // Check permission
     auth.require_permission(&Permission::LibrariesWrite)?;
+    crate::visibility::ensure_library_visible(&state.db, auth.user_id, library_id).await?;
 
     // Check if library exists
     LibraryRepository::get_by_id(&state.db, library_id)
@@ -175,6 +176,7 @@ pub async fn get_scan_status(
 ) -> Result<Json<ScanStatusDto>, ApiError> {
     // Check permission
     auth.require_permission(&Permission::LibrariesRead)?;
+    crate::visibility::ensure_library_visible(&state.db, auth.user_id, library_id).await?;
 
     // Find the most recent scan task for this library
     use codex_db::entities::{prelude::*, tasks};
@@ -256,6 +258,7 @@ pub async fn cancel_scan(
 ) -> Result<StatusCode, ApiError> {
     // Check permission
     auth.require_permission(&Permission::LibrariesWrite)?;
+    crate::visibility::ensure_library_visible(&state.db, auth.user_id, library_id).await?;
 
     // Find the active scan task for this library
     use codex_db::entities::{prelude::*, tasks};
@@ -574,6 +577,7 @@ pub async fn trigger_library_analysis(
 ) -> Result<Json<CreateTaskResponse>, ApiError> {
     // Check permission
     auth.require_permission(&Permission::LibrariesWrite)?;
+    crate::visibility::ensure_library_visible(&state.db, auth.user_id, library_id).await?;
 
     // Verify library exists
     LibraryRepository::get_by_id(&state.db, library_id)
@@ -675,6 +679,7 @@ pub async fn trigger_library_unanalyzed_analysis(
 ) -> Result<Json<CreateTaskResponse>, ApiError> {
     // Check permission
     auth.require_permission(&Permission::LibrariesWrite)?;
+    crate::visibility::ensure_library_visible(&state.db, auth.user_id, library_id).await?;
 
     // Verify library exists
     LibraryRepository::get_by_id(&state.db, library_id)

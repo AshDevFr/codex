@@ -420,6 +420,29 @@ impl AccessGroupRulesRepository {
     }
 }
 
+impl AccessGroupRulesRepository {
+    /// The libraries that hold the given series. Queried in chunks so a large
+    /// whitelist stays under the database's bound-parameter limit.
+    pub async fn library_ids_of_series(
+        db: &impl ConnectionTrait,
+        series_ids: &[Uuid],
+    ) -> Result<HashSet<Uuid>> {
+        let mut out = HashSet::new();
+        for chunk in series_ids.chunks(500) {
+            let rows: Vec<Uuid> = series::Entity::find()
+                .select_only()
+                .column(series::Column::LibraryId)
+                .distinct()
+                .filter(series::Column::Id.is_in(chunk.to_vec()))
+                .into_tuple()
+                .all(db)
+                .await?;
+            out.extend(rows);
+        }
+        Ok(out)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

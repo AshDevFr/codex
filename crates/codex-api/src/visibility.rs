@@ -131,6 +131,22 @@ pub async fn ensure_series_visible(
     }
 }
 
+/// Fail with 404 unless the user can see this library.
+pub async fn ensure_library_visible(
+    db: &DatabaseConnection,
+    user_id: Uuid,
+    library_id: Uuid,
+) -> Result<(), ApiError> {
+    if content_filter(db, user_id)
+        .await?
+        .is_library_visible(library_id)
+    {
+        Ok(())
+    } else {
+        Err(ApiError::NotFound("Library not found".to_string()))
+    }
+}
+
 fn series_not_found() -> ApiError {
     ApiError::NotFound("Series not found".to_string())
 }

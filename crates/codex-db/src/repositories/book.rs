@@ -2025,6 +2025,25 @@ impl BookRepository {
         Ok(())
     }
 
+    /// Count the non-deleted books in a library that pass a visibility filter
+    /// (`None` counts every book).
+    pub async fn count_visible_by_library(
+        db: &DatabaseConnection,
+        library_id: Uuid,
+        visibility: Option<&crate::repositories::SeriesVisibility>,
+    ) -> Result<i64> {
+        use sea_orm::PaginatorTrait;
+
+        let query = Books::find()
+            .filter(books::Column::LibraryId.eq(library_id))
+            .filter(books::Column::Deleted.eq(false));
+        let count = crate::repositories::visibility::apply_book_visibility(query, visibility)
+            .paginate(db, 1)
+            .num_items()
+            .await?;
+        Ok(count as i64)
+    }
+
     /// Count books in a library (excluding deleted books)
     pub async fn count_by_library(db: &DatabaseConnection, library_id: Uuid) -> Result<i64> {
         // Get all series in the library

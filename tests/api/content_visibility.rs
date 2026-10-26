@@ -602,3 +602,83 @@ async fn komga_writes_refuse_hidden_content() {
     )
     .await;
 }
+
+// ============================================================================
+// Libraries
+// ============================================================================
+
+#[tokio::test]
+async fn library_by_id_endpoints_hide_a_denied_library() {
+    let world = World::new().await;
+    let mut failures = Vec::new();
+    for template in [
+        "/api/v1/libraries/{library}",
+        "/api/v1/libraries/{library}/series",
+        "/api/v1/libraries/{library}/books",
+        "/api/v1/libraries/{library}/series/recently-added",
+        "/api/v1/libraries/{library}/books/recently-added",
+        "/opds/libraries/{library}",
+        "/opds/v2/libraries/{library}",
+        "/komga/api/v1/libraries/{library}",
+    ] {
+        let visible = world.get(&world.path(template, &world.visible)).await.0;
+        if visible == StatusCode::NOT_FOUND || visible.is_server_error() {
+            failures.push(format!("{template}: main library answered {visible}"));
+        }
+        let secret = world.get(&world.path(template, &world.secret)).await.0;
+        if secret != StatusCode::NOT_FOUND {
+            failures.push(format!("{template}: secret library answered {secret}"));
+        }
+    }
+    assert!(failures.is_empty(), "\n{}", failures.join("\n"));
+}
+
+#[tokio::test]
+async fn library_lists_leave_out_a_denied_library() {
+    let world = World::new().await;
+    let secret = world.secret.library_id.to_string();
+    let main = world.visible.library_id.to_string();
+
+    let (status, body) = world.get_json("/api/v1/libraries").await;
+    assert_eq!(status, StatusCode::OK);
+    let ids: Vec<String> = body["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|l| l["id"].as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(ids, vec![main.clone()], "v1");
+
+    let (status, body) = world.get_json("/komga/api/v1/libraries").await;
+    assert_eq!(status, StatusCode::OK);
+    let ids: Vec<&str> = body
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|l| l["id"].as_str().unwrap())
+        .collect();
+    assert_eq!(ids, vec![main.as_str()], "komga");
+
+    for feed in ["/opds/libraries", "/opds/v2/libraries"] {
+        let (status, body) = world.get(feed).await;
+        assert_eq!(status, StatusCode::OK, "{feed}");
+        let text = String::from_utf8_lossy(&body);
+        assert!(text.contains(&main), "{feed} lists the main library");
+        assert!(!text.contains(&secret), "{feed} leaks the secret library");
+        assert!(
+            !text.contains("Secret"),
+            "{feed} leaks the secret library name"
+        );
+    }
+}
+
+#[tokio::test]
+async fn library_counts_only_include_visible_content() {
+    let world = World::new().await;
+    let (_, body) = world
+        .get_json(&world.path("/api/v1/libraries/{library}", &world.visible))
+        .await;
+    // The main library holds the visible and the hidden series
+    assert_eq!(body["seriesCount"], 1, "{body}");
+    assert_eq!(body["bookCount"], 1, "{body}");
+}

@@ -27,14 +27,23 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 /// Helper function to convert a library entity to a DTO
-async fn library_to_dto(db: &DatabaseConnection, library: libraries::Model) -> LibraryDto {
-    // Get counts
-    let book_count = codex_db::repositories::BookRepository::count_by_library(db, library.id)
-        .await
-        .ok();
-    let series_count = codex_db::repositories::SeriesRepository::count_by_library(db, library.id)
-        .await
-        .ok();
+///
+/// Counts only include what `visibility` lets the user see.
+async fn library_to_dto(
+    db: &DatabaseConnection,
+    library: libraries::Model,
+    visibility: Option<&codex_db::repositories::SeriesVisibility>,
+) -> LibraryDto {
+    let book_count = codex_db::repositories::BookRepository::count_visible_by_library(
+        db, library.id, visibility,
+    )
+    .await
+    .ok();
+    let series_count = codex_db::repositories::SeriesRepository::count_visible_by_library(
+        db, library.id, visibility,
+    )
+    .await
+    .ok();
 
     // Parse allowed_formats from JSON string
     let allowed_formats = library
@@ -140,9 +149,14 @@ pub async fn list_libraries(
     let page = params.page.max(1);
     let page_size = params.page_size.clamp(1, MAX_PAGE_SIZE);
 
-    let libraries = LibraryRepository::list_all(&state.db)
+    let filter = crate::visibility::content_filter(&state.db, auth.user_id).await?;
+    let visibility = filter.to_visibility();
+    let libraries: Vec<_> = LibraryRepository::list_all(&state.db)
         .await
-        .map_err(|e| ApiError::Internal(format!("Failed to fetch libraries: {}", e)))?;
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch libraries: {}", e)))?
+        .into_iter()
+        .filter(|library| filter.is_library_visible(library.id))
+        .collect();
 
     let total = libraries.len() as u64;
     let total_pages = if page_size == 0 {
@@ -161,7 +175,7 @@ pub async fn list_libraries(
 
     let mut dtos = Vec::new();
     for library in paginated_libraries {
-        dtos.push(library_to_dto(&state.db, library).await);
+        dtos.push(library_to_dto(&state.db, library, visibility.as_ref()).await);
     }
 
     // Build pagination links
@@ -196,13 +210,17 @@ pub async fn get_library(
     Path(library_id): Path<Uuid>,
 ) -> Result<Json<LibraryDto>, ApiError> {
     require_permission!(auth, Permission::LibrariesRead)?;
+    crate::visibility::ensure_library_visible(&state.db, auth.user_id, library_id).await?;
 
     let library = LibraryRepository::get_by_id(&state.db, library_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch library: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Library not found".to_string()))?;
+    let visibility = crate::visibility::user_visibility(&state.db, auth.user_id).await?;
 
-    Ok(Json(library_to_dto(&state.db, library).await))
+    Ok(Json(
+        library_to_dto(&state.db, library, visibility.as_ref()).await,
+    ))
 }
 
 /// Create a new library
@@ -322,7 +340,10 @@ pub async fn create_library(
         // Don't fail the request - library was created successfully
     }
 
-    Ok(Json(library_to_dto(&state.db, library).await))
+    let visibility = crate::visibility::user_visibility(&state.db, auth.user_id).await?;
+    Ok(Json(
+        library_to_dto(&state.db, library, visibility.as_ref()).await,
+    ))
 }
 
 /// Update a library (partial update)
@@ -351,6 +372,7 @@ pub async fn update_library(
     Json(request): Json<UpdateLibraryRequest>,
 ) -> Result<Json<LibraryDto>, ApiError> {
     require_permission!(auth, Permission::LibrariesWrite)?;
+    crate::visibility::ensure_library_visible(&state.db, auth.user_id, library_id).await?;
 
     // Fetch existing library
     let mut library = LibraryRepository::get_by_id(&state.db, library_id)
@@ -487,7 +509,10 @@ pub async fn update_library(
         // Don't fail the request - library was updated successfully
     }
 
-    Ok(Json(library_to_dto(&state.db, updated).await))
+    let visibility = crate::visibility::user_visibility(&state.db, auth.user_id).await?;
+    Ok(Json(
+        library_to_dto(&state.db, updated, visibility.as_ref()).await,
+    ))
 }
 
 /// Delete a library
@@ -514,6 +539,7 @@ pub async fn delete_library(
     Path(library_id): Path<Uuid>,
 ) -> Result<(), ApiError> {
     require_permission!(auth, Permission::LibrariesDelete)?;
+    crate::visibility::ensure_library_visible(&state.db, auth.user_id, library_id).await?;
 
     LibraryRepository::delete(&state.db, library_id)
         .await
@@ -573,6 +599,7 @@ pub async fn purge_deleted_books(
     Path(library_id): Path<Uuid>,
 ) -> Result<Json<u64>, ApiError> {
     require_permission!(auth, Permission::LibrariesWrite)?;
+    crate::visibility::ensure_library_visible(&state.db, auth.user_id, library_id).await?;
 
     // Verify library exists
     LibraryRepository::get_by_id(&state.db, library_id)
