@@ -765,8 +765,7 @@ export const MediaCard = memo(function MediaCard({
                       {type === "book" ? (
                         <>
                           {/* Show Mark as Read if book is unread (no progress or not completed) */}
-                          {(!book?.readProgress ||
-                            !book.readProgress.completed) && (
+                          {!book?.readProgress?.completed && (
                             <Menu.Item
                               leftSection={<IconCheck size={14} />}
                               onClick={(e: React.MouseEvent) => {

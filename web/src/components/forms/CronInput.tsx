@@ -130,7 +130,7 @@ export function CronInput({
         }}
       />
 
-      {value.trim() && isValid && description && description.trim() && (
+      {value.trim() && isValid && description?.trim() && (
         <Group gap="xs" align="center">
           <Text size="sm" c="blue">
             {description}

@@ -114,7 +114,7 @@ export function ConfigSchemaHelp({
 }) {
   const [opened, { toggle }] = useDisclosure(defaultExpanded);
 
-  if (!schema || !schema.fields || schema.fields.length === 0) {
+  if (!schema?.fields || schema.fields.length === 0) {
     return null;
   }
 

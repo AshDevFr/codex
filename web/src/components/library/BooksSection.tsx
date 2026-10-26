@@ -186,7 +186,7 @@ export function BooksSection({
       {/* Books Grid */}
       {queryLoading ? (
         showSkeleton ? (
-          <CoverGridSkeleton count={pageSize > 12 ? 12 : pageSize} exactCount />
+          <CoverGridSkeleton count={Math.min(pageSize, 12)} exactCount />
         ) : null
       ) : booksData?.data && booksData.data.length > 0 ? (
         <>

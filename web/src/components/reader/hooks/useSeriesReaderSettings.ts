@@ -369,7 +369,7 @@ export function getSeriesSettingsForUser(
   try {
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (!key || !key.startsWith(keyPrefix)) continue;
+      if (!key?.startsWith(keyPrefix)) continue;
 
       // Extract series ID from key
       const seriesId = key.slice(keyPrefix.length);

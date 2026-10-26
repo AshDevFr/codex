@@ -283,7 +283,7 @@ export function SeriesSection({
       {/* Series Grid */}
       {queryLoading ? (
         showSkeleton ? (
-          <CoverGridSkeleton count={pageSize > 12 ? 12 : pageSize} exactCount />
+          <CoverGridSkeleton count={Math.min(pageSize, 12)} exactCount />
         ) : null
       ) : seriesData?.data && seriesData.data.length > 0 ? (
         <>

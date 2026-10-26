@@ -346,7 +346,7 @@ export async function downloadSeriesBatch(
 
     const onProgress = (p: ProgressUpdate) => {
       const cur = perBook.get(book.id);
-      if (!cur || cur.status !== "downloading") return;
+      if (cur?.status !== "downloading") return;
       setBookState(book.id, { loaded: p.loaded, total: p.total });
     };
 

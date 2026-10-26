@@ -336,7 +336,7 @@ export function SeriesBookList({
 
       {isLoading ? (
         showSkeleton ? (
-          <CoverGridSkeleton count={pageSize > 12 ? 12 : pageSize} exactCount />
+          <CoverGridSkeleton count={Math.min(pageSize, 12)} exactCount />
         ) : null
       ) : data?.data.length === 0 ? (
         <Text c="dimmed">No books in this series</Text>

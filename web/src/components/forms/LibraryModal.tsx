@@ -152,7 +152,7 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
       setLibraryPath(library.path);
       setReadingDirection(library.defaultReadingDirection || "ltr");
 
-      if (!library.scanningConfig || !library.scanningConfig.enabled) {
+      if (!library.scanningConfig?.enabled) {
         setScanStrategy("manual");
       } else {
         setScanStrategy("auto");

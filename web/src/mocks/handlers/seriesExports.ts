@@ -570,7 +570,7 @@ export const seriesExportsHandlers = [
   http.get("/api/v1/user/exports/series/:id/download", async ({ params }) => {
     await delay(200);
     const exp = mockExports.find((e) => e.id === params.id);
-    if (!exp || exp.status !== "completed") {
+    if (exp?.status !== "completed") {
       return HttpResponse.json({ error: "Export not ready" }, { status: 409 });
     }
 
