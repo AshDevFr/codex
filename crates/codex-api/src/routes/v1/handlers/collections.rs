@@ -465,6 +465,7 @@ pub async fn remove_collection_series(
     Path((collection_id, series_id)): Path<(Uuid, Uuid)>,
 ) -> Result<StatusCode, ApiError> {
     require_permission!(auth, Permission::CollectionsWrite)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
     let collection = get_collection_or_404(&state, collection_id).await?;
     reject_manual_mutation(&collection, "removed")?;
     CollectionRepository::remove_series(&state.db, collection_id, series_id)
@@ -572,6 +573,7 @@ pub async fn get_series_collections(
     Path(series_id): Path<Uuid>,
 ) -> Result<Json<CollectionListResponse>, ApiError> {
     require_permission!(auth, Permission::CollectionsRead)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
     let vis = user_visibility(&state.db, auth.user_id).await?;
 
     let collections = CollectionRepository::get_collections_for_series(&state.db, series_id)

@@ -127,6 +127,7 @@ pub async fn get_book(
     Path(book_id): Path<Uuid>,
 ) -> Result<Json<KomgaBookDto>, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     let user_id = Some(auth.user_id);
 
@@ -207,6 +208,7 @@ pub async fn get_book_thumbnail(
     Path(book_id): Path<Uuid>,
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     // Serve from the on-disk thumbnail cache without touching the database.
     // A Komga client painting a shelf asks for every cover at once, and the
@@ -787,6 +789,7 @@ pub async fn download_book_file(
     Path(book_id): Path<Uuid>,
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     // Fetch book from database
     let book = BookRepository::get_by_id(&state.db, book_id)

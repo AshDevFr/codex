@@ -286,6 +286,7 @@ pub async fn series_books(
     Path(series_id): Path<Uuid>,
 ) -> Result<Opds2Response, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     let base_url = "/opds/v2";
 

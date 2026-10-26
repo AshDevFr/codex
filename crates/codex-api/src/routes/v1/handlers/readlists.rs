@@ -372,6 +372,7 @@ pub async fn remove_readlist_book(
     Path((read_list_id, book_id)): Path<(Uuid, Uuid)>,
 ) -> Result<StatusCode, ApiError> {
     require_permission!(auth, Permission::ReadListsWrite)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
     ReadListRepository::remove_book(&state.db, read_list_id, book_id)
         .await
         .map_err(internal("Failed to remove book from read list"))?;
@@ -463,6 +464,7 @@ pub async fn get_book_readlists(
     Path(book_id): Path<Uuid>,
 ) -> Result<Json<ReadListListResponse>, ApiError> {
     require_permission!(auth, Permission::ReadListsRead)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
     let vis = user_visibility(&state.db, auth.user_id).await?;
 
     let read_lists = ReadListRepository::get_read_lists_for_book(&state.db, book_id)

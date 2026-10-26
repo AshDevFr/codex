@@ -76,6 +76,7 @@ pub async fn get_page_image(
     Query(query): Query<PageImageQuery>,
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::PagesRead)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     // Validate page number
     if page_number < 1 {
@@ -462,6 +463,7 @@ pub async fn get_book_thumbnail(
     Path(book_id): Path<Uuid>,
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     // OPTIMIZATION: Check disk cache FIRST before hitting the database.
     // This avoids acquiring a DB connection for cached thumbnails, preventing

@@ -466,6 +466,7 @@ pub async fn get_series_collections(
     require_permission!(auth, Permission::SeriesRead)?;
     let sid = Uuid::parse_str(&series_id)
         .map_err(|_| ApiError::NotFound("Series not found".to_string()))?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, sid).await?;
     let vis = user_visibility(&state.db, auth.user_id).await?;
 
     let collections = CollectionRepository::get_collections_for_series(&state.db, sid)

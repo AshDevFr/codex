@@ -109,13 +109,16 @@ pub async fn record_reading_sessions(
             continue;
         }
 
+        // A book the user cannot see is rejected exactly like one that does
+        // not exist.
         let book_exists = match known_books.get(&session.book_id) {
             Some(exists) => *exists,
             None => {
+                let filter = crate::visibility::content_filter(&state.db, auth.user_id).await?;
                 let exists = BookRepository::get_by_id(&state.db, session.book_id)
                     .await
                     .map_err(|e| ApiError::Internal(format!("Failed to get book: {}", e)))?
-                    .is_some();
+                    .is_some_and(|book| filter.is_book_visible(book.series_id));
                 known_books.insert(session.book_id, exists);
                 exists
             }

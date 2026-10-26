@@ -553,10 +553,12 @@ pub struct SearchTitleQuery {
 )]
 pub async fn get_series_search_title(
     State(state): State<Arc<AppState>>,
-    _auth: AuthContext,
+    auth: AuthContext,
     Path(series_id): Path<Uuid>,
     Query(query): Query<SearchTitleQuery>,
 ) -> Result<Json<SearchTitleResponse>, ApiError> {
+    auth.require_permission(&Permission::SeriesRead)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
     // Get the series
     let series = SeriesRepository::get_by_id(&state.db, series_id)
         .await
@@ -671,6 +673,7 @@ pub async fn preview_series_metadata(
 ) -> Result<Json<MetadataPreviewResponse>, ApiError> {
     // Check permission to edit series metadata
     auth.require_permission(&Permission::SeriesWrite)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Get the series (verify it exists)
     let series = SeriesRepository::get_by_id(&state.db, series_id)
@@ -1393,6 +1396,7 @@ pub async fn apply_series_metadata(
 ) -> Result<Json<MetadataApplyResponse>, ApiError> {
     // Check permission to edit series metadata
     auth.require_permission(&Permission::SeriesWrite)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Get the series (verify it exists and get library_id for events)
     let series = SeriesRepository::get_by_id(&state.db, series_id)
@@ -1551,6 +1555,7 @@ pub async fn auto_match_series_metadata(
 ) -> Result<Json<MetadataAutoMatchResponse>, ApiError> {
     // Check permission to edit series metadata
     auth.require_permission(&Permission::SeriesWrite)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Get the series (verify it exists and get its title)
     let series = SeriesRepository::get_by_id(&state.db, series_id)
@@ -1745,6 +1750,7 @@ pub async fn preview_book_metadata(
 ) -> Result<Json<MetadataPreviewResponse>, ApiError> {
     // Check permission to edit book metadata
     auth.require_permission(&Permission::BooksWrite)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     // Get the book (verify it exists and get library_id)
     let book = BookRepository::get_by_id(&state.db, book_id)
@@ -2302,6 +2308,7 @@ pub async fn apply_book_metadata(
 ) -> Result<Json<MetadataApplyResponse>, ApiError> {
     // Check permission to edit book metadata
     auth.require_permission(&Permission::BooksWrite)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     // Dry-run is currently only supported on the series apply path. Reject
     // it explicitly here so the user doesn't get a silent real-apply.
@@ -2628,6 +2635,7 @@ pub async fn enqueue_auto_match_task(
 ) -> Result<Json<EnqueueAutoMatchResponse>, ApiError> {
     // Check permission to edit series metadata
     auth.require_permission(&Permission::SeriesWrite)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Verify series exists
     let series = SeriesRepository::get_by_id(&state.db, series_id)

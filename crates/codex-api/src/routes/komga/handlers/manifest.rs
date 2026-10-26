@@ -63,6 +63,7 @@ pub async fn get_epub_manifest(
     Path(book_id): Path<Uuid>,
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     let book = BookRepository::get_by_id(&state.db, book_id)
         .await
@@ -407,6 +408,7 @@ pub async fn get_epub_resource(
     Path((book_id, resource)): Path<(Uuid, String)>,
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     // Decode percent-encoded path; strip leading '/' from wildcard capture
     let resource = resource.strip_prefix('/').unwrap_or(&resource);

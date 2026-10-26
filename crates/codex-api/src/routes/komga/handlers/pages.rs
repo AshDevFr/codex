@@ -62,6 +62,7 @@ pub async fn list_pages(
     Path(book_id): Path<Uuid>,
 ) -> Result<Json<Vec<KomgaPageDto>>, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     // Verify book exists and get book info
     let book = BookRepository::get_by_id(&state.db, book_id)
@@ -150,6 +151,7 @@ pub async fn get_page(
     Path((book_id, page_number)): Path<(Uuid, i32)>,
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     // Validate page number
     if page_number < 1 {
@@ -245,6 +247,7 @@ pub async fn get_page_thumbnail(
     Path((book_id, page_number)): Path<(Uuid, i32)>,
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     // Validate page number
     if page_number < 1 {

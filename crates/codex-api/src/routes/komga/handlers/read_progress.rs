@@ -68,6 +68,7 @@ pub async fn update_progress(
     axum::Json(request): axum::Json<KomgaReadProgressUpdateDto>,
 ) -> Result<StatusCode, ApiError> {
     require_permission!(auth, Permission::ProgressWrite)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     let user_id = auth.user_id;
 
@@ -154,6 +155,7 @@ pub async fn delete_progress(
     Path(book_id): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {
     require_permission!(auth, Permission::ProgressWrite)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     let user_id = auth.user_id;
 
@@ -251,6 +253,7 @@ pub async fn get_progression(
     Path(book_id): Path<Uuid>,
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::ProgressRead)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     // Verify book exists
     BookRepository::get_by_id(&state.db, book_id)
@@ -312,6 +315,7 @@ pub async fn put_progression(
     axum::Json(body): axum::Json<serde_json::Value>,
 ) -> Result<StatusCode, ApiError> {
     require_permission!(auth, Permission::ProgressWrite)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     let book = BookRepository::get_by_id(&state.db, book_id)
         .await
@@ -446,6 +450,7 @@ pub async fn mark_series_as_read(
     Path(series_id): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {
     require_permission!(auth, Permission::ProgressWrite)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     let user_id = auth.user_id;
 
@@ -518,6 +523,7 @@ pub async fn mark_series_as_unread(
     Path(series_id): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {
     require_permission!(auth, Permission::ProgressWrite)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     let user_id = auth.user_id;
 

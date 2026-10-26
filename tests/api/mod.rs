@@ -15,6 +15,7 @@ mod books;
 mod bulk_metadata;
 mod bulk_operations;
 mod collections;
+mod content_visibility;
 mod covers;
 mod current_user;
 mod duplicates;

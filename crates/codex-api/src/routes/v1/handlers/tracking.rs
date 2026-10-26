@@ -64,6 +64,7 @@ pub async fn get_series_tracking(
     Path(series_id): Path<Uuid>,
 ) -> Result<Json<SeriesTrackingDto>, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     SeriesRepository::get_by_id(&state.db, series_id)
         .await
@@ -106,6 +107,7 @@ pub async fn update_series_tracking(
     Json(request): Json<UpdateSeriesTrackingRequest>,
 ) -> Result<Json<SeriesTrackingDto>, ApiError> {
     require_permission!(auth, Permission::SeriesWrite)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     let series = SeriesRepository::get_by_id(&state.db, series_id)
         .await
@@ -195,6 +197,7 @@ pub async fn list_series_aliases(
     Path(series_id): Path<Uuid>,
 ) -> Result<Json<SeriesAliasListResponse>, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     SeriesRepository::get_by_id(&state.db, series_id)
         .await
@@ -241,6 +244,7 @@ pub async fn create_series_alias(
     Json(request): Json<CreateSeriesAliasRequest>,
 ) -> Result<(StatusCode, Json<SeriesAliasDto>), ApiError> {
     require_permission!(auth, Permission::SeriesWrite)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     let series = SeriesRepository::get_by_id(&state.db, series_id)
         .await
@@ -323,6 +327,7 @@ pub async fn delete_series_alias(
     Path((series_id, alias_id)): Path<(Uuid, Uuid)>,
 ) -> Result<StatusCode, ApiError> {
     require_permission!(auth, Permission::SeriesWrite)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     let series = SeriesRepository::get_by_id(&state.db, series_id)
         .await
