@@ -4272,9 +4272,19 @@ pub async fn list_genres(
     let page = params.page.max(1);
     let page_size = params.page_size.clamp(1, MAX_PAGE_SIZE);
 
-    let genres = GenreRepository::list_all(&state.db)
+    // Counts only include series the user can see, and a restricted user
+    // only sees genres carried by at least one such series.
+    let filter = crate::visibility::content_filter(&state.db, auth.user_id).await?;
+    let visibility = filter.to_visibility();
+    let counts = GenreRepository::series_counts(&state.db, visibility.as_ref())
         .await
-        .map_err(|e| ApiError::Internal(format!("Failed to fetch genres: {}", e)))?;
+        .map_err(|e| ApiError::Internal(format!("Failed to count genres: {}", e)))?;
+    let genres: Vec<_> = GenreRepository::list_all(&state.db)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch genres: {}", e)))?
+        .into_iter()
+        .filter(|g| !filter.has_restrictions || counts.contains_key(&g.id))
+        .collect();
 
     let total = genres.len() as u64;
     let total_pages = if page_size == 0 {
@@ -4293,9 +4303,7 @@ pub async fn list_genres(
 
     let mut dtos: Vec<GenreDto> = Vec::with_capacity(paginated_genres.len());
     for g in paginated_genres {
-        let count = GenreRepository::count_series_with_genre(&state.db, g.id)
-            .await
-            .ok();
+        let count = Some(counts.get(&g.id).copied().unwrap_or(0));
         dtos.push(GenreDto {
             id: g.id,
             name: g.name,
@@ -4476,9 +4484,19 @@ pub async fn list_tags(
     let page = params.page.max(1);
     let page_size = params.page_size.clamp(1, MAX_PAGE_SIZE);
 
-    let tags = TagRepository::list_all(&state.db)
+    // Counts only include series the user can see, and a restricted user
+    // only sees tags carried by at least one such series.
+    let filter = crate::visibility::content_filter(&state.db, auth.user_id).await?;
+    let visibility = filter.to_visibility();
+    let counts = TagRepository::series_counts(&state.db, visibility.as_ref())
         .await
-        .map_err(|e| ApiError::Internal(format!("Failed to fetch tags: {}", e)))?;
+        .map_err(|e| ApiError::Internal(format!("Failed to count tags: {}", e)))?;
+    let tags: Vec<_> = TagRepository::list_all(&state.db)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch tags: {}", e)))?
+        .into_iter()
+        .filter(|g| !filter.has_restrictions || counts.contains_key(&g.id))
+        .collect();
 
     let total = tags.len() as u64;
     let total_pages = if page_size == 0 {
@@ -4497,9 +4515,7 @@ pub async fn list_tags(
 
     let mut dtos: Vec<TagDto> = Vec::with_capacity(paginated_tags.len());
     for t in paginated_tags {
-        let count = TagRepository::count_series_with_tag(&state.db, t.id)
-            .await
-            .ok();
+        let count = Some(counts.get(&t.id).copied().unwrap_or(0));
         dtos.push(TagDto {
             id: t.id,
             name: t.name,

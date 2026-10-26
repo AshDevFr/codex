@@ -2546,6 +2546,7 @@ impl BookRepository {
         series_id: Option<Uuid>,
         error_type: Option<BookErrorType>,
         window: Window,
+        visibility: Option<&crate::repositories::SeriesVisibility>,
     ) -> Result<(Vec<(books::Model, BookErrors)>, u64)> {
         let (offset, limit) = (window.offset(), window.limit());
         use crate::entities::book_error::parse_analysis_errors;
@@ -2561,6 +2562,7 @@ impl BookRepository {
         if let Some(ser_id) = series_id {
             query = query.filter(books::Column::SeriesId.eq(ser_id));
         }
+        query = crate::repositories::visibility::apply_book_visibility(query, visibility);
 
         // First, get all matching books
         let all_books: Vec<books::Model> = query
@@ -2607,6 +2609,7 @@ impl BookRepository {
     pub async fn count_errors_by_type(
         db: &DatabaseConnection,
         library_id: Option<Uuid>,
+        visibility: Option<&crate::repositories::SeriesVisibility>,
     ) -> Result<std::collections::HashMap<BookErrorType, u64>> {
         use crate::entities::book_error::parse_analysis_errors;
 
@@ -2617,6 +2620,7 @@ impl BookRepository {
         if let Some(lib_id) = library_id {
             query = query.filter(books::Column::LibraryId.eq(lib_id));
         }
+        query = crate::repositories::visibility::apply_book_visibility(query, visibility);
 
         let books = query
             .all(db)
@@ -4271,6 +4275,7 @@ mod tests {
             None,
             None,
             Window::from_offset(0, 10),
+            None,
         )
         .await
         .unwrap();
@@ -4285,6 +4290,7 @@ mod tests {
             None,
             Some(BookErrorType::Parser),
             Window::from_offset(0, 10),
+            None,
         )
         .await
         .unwrap();
@@ -4299,6 +4305,7 @@ mod tests {
             None,
             Some(BookErrorType::Thumbnail),
             Window::from_offset(0, 10),
+            None,
         )
         .await
         .unwrap();
@@ -4314,6 +4321,7 @@ mod tests {
             None,
             None,
             Window::from_offset(0, 1),
+            None,
         )
         .await
         .unwrap();
@@ -4333,6 +4341,7 @@ mod tests {
             None,
             None,
             Window::from_offset(1, 2),
+            None,
         )
         .await
         .unwrap();
@@ -4419,7 +4428,7 @@ mod tests {
         .unwrap();
 
         // Count errors by type
-        let counts = BookRepository::count_errors_by_type(db.sea_orm_connection(), None)
+        let counts = BookRepository::count_errors_by_type(db.sea_orm_connection(), None, None)
             .await
             .unwrap();
 
@@ -4863,6 +4872,7 @@ mod tests {
             None,
             None,
             Window::from_offset(0, 6),
+            None,
         )
         .await
         .unwrap();
@@ -4879,6 +4889,7 @@ mod tests {
                 None,
                 None,
                 Window::from_offset(offset, 3),
+                None,
             )
             .await
             .unwrap();

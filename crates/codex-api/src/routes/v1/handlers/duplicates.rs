@@ -47,9 +47,42 @@ pub async fn list_duplicates(
     // Check permission
     auth.require_permission(&Permission::BooksRead)?;
 
-    let duplicates = BookDuplicatesRepository::find_all(&state.db)
+    let mut duplicates = BookDuplicatesRepository::find_all(&state.db)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to list duplicates: {}", e)))?;
+
+    // A restricted user only sees the members they can see, and only groups
+    // that still hold a duplicate once the hidden members are gone.
+    let filter = crate::visibility::content_filter(&state.db, auth.user_id).await?;
+    if filter.has_restrictions {
+        let all_ids: Vec<Uuid> = duplicates
+            .iter()
+            .flat_map(|d| serde_json::from_str::<Vec<Uuid>>(&d.book_ids).unwrap_or_default())
+            .collect();
+        let visible: HashSet<Uuid> =
+            codex_db::repositories::BookRepository::get_by_ids(&state.db, &all_ids)
+                .await
+                .map_err(|e| ApiError::Internal(format!("Failed to load duplicate books: {}", e)))?
+                .into_iter()
+                .filter(|book| filter.is_book_visible(book.series_id))
+                .map(|book| book.id)
+                .collect();
+        duplicates = duplicates
+            .into_iter()
+            .filter_map(|mut d| {
+                let ids: Vec<Uuid> = serde_json::from_str::<Vec<Uuid>>(&d.book_ids)
+                    .unwrap_or_default()
+                    .into_iter()
+                    .filter(|id| visible.contains(id))
+                    .collect();
+                (ids.len() >= 2).then(|| {
+                    d.duplicate_count = ids.len() as i32;
+                    d.book_ids = serde_json::to_string(&ids).unwrap_or_default();
+                    d
+                })
+            })
+            .collect();
+    }
 
     let total_groups = duplicates.len();
     let total_duplicate_books: usize = duplicates.iter().map(|d| d.duplicate_count as usize).sum();
@@ -228,11 +261,24 @@ pub async fn list_series_duplicates(
 
     // Decode each group's stored UUID list once so we can both batch-load
     // member details and reuse the parsed list when emitting DTOs.
+    // A restricted user only sees the members they can see, and only groups
+    // that still hold a duplicate once the hidden members are gone.
+    let filter = crate::visibility::content_filter(&state.db, auth.user_id).await?;
     let parsed: Vec<(_, Vec<Uuid>)> = groups
         .into_iter()
-        .map(|g| {
-            let ids: Vec<Uuid> = serde_json::from_str(&g.series_ids).unwrap_or_default();
-            (g, ids)
+        .filter_map(|mut g| {
+            let ids: Vec<Uuid> = serde_json::from_str::<Vec<Uuid>>(&g.series_ids)
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|id| filter.is_series_visible(*id))
+                .collect();
+            if filter.has_restrictions {
+                if ids.len() < 2 {
+                    return None;
+                }
+                g.duplicate_count = ids.len() as i32;
+            }
+            Some((g, ids))
         })
         .collect();
 

@@ -188,6 +188,37 @@ impl TagRepository {
         Ok(result.rows_affected > 0)
     }
 
+    /// Series count per tag, counting only series `visibility` lets through
+    /// (`None` counts every series). Tags with no counted series are absent.
+    pub async fn series_counts(
+        db: &DatabaseConnection,
+        visibility: Option<&crate::repositories::SeriesVisibility>,
+    ) -> Result<std::collections::HashMap<Uuid, u64>> {
+        use sea_orm::QuerySelect;
+
+        let mut query = series_tags::Entity::find()
+            .select_only()
+            .column(series_tags::Column::TagId)
+            .column_as(series_tags::Column::SeriesId.count(), "count")
+            .group_by(series_tags::Column::TagId);
+        if let Some(vis) = visibility {
+            if vis.is_empty_whitelist() {
+                return Ok(std::collections::HashMap::new());
+            }
+            if let Some(predicate) = crate::repositories::visibility::visibility_predicate(
+                series_tags::Column::SeriesId,
+                vis,
+            ) {
+                query = query.filter(predicate);
+            }
+        }
+        let rows: Vec<(Uuid, i64)> = query.into_tuple().all(db).await?;
+        Ok(rows
+            .into_iter()
+            .map(|(id, count)| (id, count.max(0) as u64))
+            .collect())
+    }
+
     /// Count series using a tag
     pub async fn count_series_with_tag(db: &DatabaseConnection, tag_id: Uuid) -> Result<u64> {
         use crate::entities::series_tags::Entity as SeriesTags;

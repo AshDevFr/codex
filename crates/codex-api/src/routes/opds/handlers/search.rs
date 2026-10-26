@@ -155,9 +155,15 @@ pub async fn search(
     .add_link(OpdsLink::start_link(base_url.to_string()));
 
     // Search series by name
-    let series_list = SeriesRepository::search_by_name(&state.db, query, None)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to search series: {}", e)))?;
+    let series_list = SeriesRepository::search_by_name(
+        &state.db,
+        query,
+        crate::visibility::user_visibility(&state.db, auth.user_id)
+            .await?
+            .as_ref(),
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to search series: {}", e)))?;
 
     // Add series entries (navigation to series books)
     // Fetch series metadata for names (title is now in series_metadata table)

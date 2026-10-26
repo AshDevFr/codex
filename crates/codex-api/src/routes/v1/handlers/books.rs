@@ -4720,10 +4720,14 @@ pub async fn list_books_with_errors(
         query.page_size.min(100)
     };
 
+    // Only books the user can see, in the list and in its summary
+    let visibility = crate::visibility::user_visibility(&state.db, auth.user_id).await?;
+
     // Get error counts by type (for the summary)
-    let error_counts = BookRepository::count_errors_by_type(&state.db, query.library_id)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to count errors: {}", e)))?;
+    let error_counts =
+        BookRepository::count_errors_by_type(&state.db, query.library_id, visibility.as_ref())
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to count errors: {}", e)))?;
 
     // Convert internal error type to DTO if provided
     let error_type_filter = query.error_type.map(|t| t.into());
@@ -4734,6 +4738,7 @@ pub async fn list_books_with_errors(
         query.series_id,
         error_type_filter,
         Window::from_page(page, page_size),
+        visibility.as_ref(),
     )
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to fetch books with errors: {}", e)))?;
@@ -4972,12 +4977,14 @@ pub async fn retry_all_book_errors(
 
     // Fetch all books with errors (unpaginated - we need all for bulk retry)
     // Use a large page size to get all results
+    let visibility = crate::visibility::user_visibility(&state.db, auth.user_id).await?;
     let (books_with_errors, _) = BookRepository::list_with_errors(
         &state.db,
         request.library_id,
         None, // No series filter for bulk retry
         error_type_filter,
         Window::unbounded(),
+        visibility.as_ref(),
     )
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to fetch books with errors: {}", e)))?;

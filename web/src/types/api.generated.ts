@@ -29896,7 +29896,7 @@ export interface operations {
                     "application/json": components["schemas"]["MetricsDto"];
                 };
             };
-            /** @description Permission denied, or `exact=true` requested without admin access */
+            /** @description Permission denied, `exact=true` requested without admin access, or the account has content restrictions */
             403: {
                 headers: {
                     [name: string]: unknown;

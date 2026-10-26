@@ -67,9 +67,15 @@ pub async fn search(
     let mut publications: Vec<Publication> = Vec::new();
 
     // Search series by name and add as navigation-like entries with links to books
-    let series_list = SeriesRepository::search_by_name(&state.db, query, None)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to search series: {}", e)))?;
+    let series_list = SeriesRepository::search_by_name(
+        &state.db,
+        query,
+        crate::visibility::user_visibility(&state.db, auth.user_id)
+            .await?
+            .as_ref(),
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to search series: {}", e)))?;
 
     // For series results, we create publications with links to browse the series
     // Fetch series metadata for names (title is now in series_metadata table)
