@@ -4,6 +4,7 @@
 
 #![allow(dead_code)]
 
+use super::access_group_rules::normalize_taxonomy_name;
 use anyhow::Result;
 use chrono::Utc;
 use sea_orm::{
@@ -28,7 +29,7 @@ impl GenreRepository {
 
     /// Get a genre by normalized name
     pub async fn get_by_name(db: &DatabaseConnection, name: &str) -> Result<Option<genres::Model>> {
-        let normalized = name.to_lowercase().trim().to_string();
+        let normalized = normalize_taxonomy_name(name);
         let result = Genres::find()
             .filter(genres::Column::NormalizedName.eq(&normalized))
             .one(db)
@@ -47,7 +48,7 @@ impl GenreRepository {
 
     /// Create a new genre
     pub async fn create(db: &DatabaseConnection, name: &str) -> Result<genres::Model> {
-        let normalized = name.to_lowercase().trim().to_string();
+        let normalized = normalize_taxonomy_name(name);
         let trimmed_name = name.trim().to_string();
 
         let active_model = genres::ActiveModel {
@@ -206,7 +207,7 @@ impl GenreRepository {
     ) -> Result<Vec<Uuid>> {
         use crate::entities::series_genres::Entity as SeriesGenres;
 
-        let normalized = genre_name.to_lowercase().trim().to_string();
+        let normalized = normalize_taxonomy_name(genre_name);
 
         // First find the genre
         let genre = Genres::find()

@@ -72,9 +72,14 @@ pub use super::user_sharing_tags::Entity as UserSharingTags;
 
 // Access groups
 #[allow(unused_imports)]
+pub use super::access_group_genre_rules::Entity as AccessGroupGenreRules;
+#[allow(unused_imports)]
+pub use super::access_group_library_rules::Entity as AccessGroupLibraryRules;
 pub use super::access_group_oidc_mappings::Entity as AccessGroupOidcMappings;
 #[allow(unused_imports)]
 pub use super::access_group_sharing_tags::Entity as AccessGroupSharingTags;
+#[allow(unused_imports)]
+pub use super::access_group_tag_rules::Entity as AccessGroupTagRules;
 #[allow(unused_imports)]
 pub use super::access_groups::Entity as AccessGroups;
 #[allow(unused_imports)]

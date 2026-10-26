@@ -165,6 +165,11 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             delete(handlers::access_groups::remove_access_group_member),
         )
         .route(
+            "/access-groups/{group_id}/rules",
+            get(handlers::access_groups::get_access_group_rules)
+                .put(handlers::access_groups::replace_access_group_rules),
+        )
+        .route(
             "/access-groups/{group_id}/grants",
             post(handlers::access_groups::add_access_group_grant),
         )

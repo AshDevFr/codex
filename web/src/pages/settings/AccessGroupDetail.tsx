@@ -20,7 +20,6 @@ import {
   IconArrowLeft,
   IconLink,
   IconPlus,
-  IconShare,
   IconShieldCheck,
   IconTrash,
   IconUsers,
@@ -29,8 +28,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { type AccessGroupDetailDto, accessGroupsApi } from "@/api/accessGroups";
-import { type AccessMode, sharingTagsApi } from "@/api/sharingTags";
 import { usersApi } from "@/api/users";
+import { AccessGroupRulesCard } from "@/components/access-groups/AccessGroupRulesCard";
 import { DefaultGroupCard } from "@/components/access-groups/DefaultGroupCard";
 
 export function AccessGroupDetail() {
@@ -110,12 +109,7 @@ export function AccessGroupDetail() {
           queryClient={queryClient}
         />
 
-        {/* Grants Section */}
-        <GrantsSection
-          groupId={groupId!}
-          group={group}
-          queryClient={queryClient}
-        />
+        <AccessGroupRulesCard groupId={groupId!} />
 
         {/* OIDC Mappings Section */}
         <OidcMappingsSection
@@ -268,182 +262,6 @@ function MembersSection({
                 }
                 disabled={!selectedUserId || addMemberMutation.isPending}
                 loading={addMemberMutation.isPending}
-              >
-                <IconPlus size={16} />
-              </ActionIcon>
-            </Tooltip>
-          </Group>
-        )}
-      </Stack>
-    </Card>
-  );
-}
-
-// ==================== Grants Section ====================
-
-function GrantsSection({
-  groupId,
-  group,
-  queryClient,
-}: {
-  groupId: string;
-  group: AccessGroupDetailDto;
-  queryClient: ReturnType<typeof useQueryClient>;
-}) {
-  const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
-  const [selectedAccessMode, setSelectedAccessMode] =
-    useState<AccessMode>("allow");
-
-  const { data: allTags } = useQuery({
-    queryKey: ["sharing-tags"],
-    queryFn: sharingTagsApi.list,
-  });
-
-  const addGrantMutation = useMutation({
-    mutationFn: ({
-      tagId,
-      accessMode,
-    }: {
-      tagId: string;
-      accessMode: AccessMode;
-    }) => accessGroupsApi.addGrant(groupId, tagId, accessMode),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["access-group", groupId] });
-      queryClient.invalidateQueries({ queryKey: ["access-groups"] });
-      setSelectedTagId(null);
-      notifications.show({
-        title: "Success",
-        message: "Grant added",
-        color: "green",
-      });
-    },
-    onError: (error: { message?: string }) => {
-      notifications.show({
-        title: "Error",
-        message: error.message || "Failed to add grant",
-        color: "red",
-      });
-    },
-  });
-
-  const removeGrantMutation = useMutation({
-    mutationFn: (tagId: string) => accessGroupsApi.removeGrant(groupId, tagId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["access-group", groupId] });
-      queryClient.invalidateQueries({ queryKey: ["access-groups"] });
-      notifications.show({
-        title: "Success",
-        message: "Grant removed",
-        color: "green",
-      });
-    },
-    onError: (error: { message?: string }) => {
-      notifications.show({
-        title: "Error",
-        message: error.message || "Failed to remove grant",
-        color: "red",
-      });
-    },
-  });
-
-  const grantTagIds = new Set(group.grants.map((g) => g.sharingTagId));
-  const availableTags =
-    allTags?.filter((tag) => !grantTagIds.has(tag.id)) || [];
-  const tagOptions = availableTags.map((tag) => ({
-    value: tag.id,
-    label: tag.name,
-  }));
-
-  const accessModeOptions = [
-    { value: "allow", label: "Allow" },
-    { value: "deny", label: "Deny" },
-  ];
-
-  return (
-    <Card withBorder p="md">
-      <Stack gap="md">
-        <Group gap="sm">
-          <IconShare size={20} />
-          <Title order={4}>Tag Grants</Title>
-          <Badge variant="light" size="sm">
-            {group.grants.length}
-          </Badge>
-        </Group>
-
-        <Text size="sm" c="dimmed">
-          Members of this group inherit these sharing-tag grants. "Deny" always
-          wins over "Allow" across all sources.
-        </Text>
-
-        {group.grants.length > 0 ? (
-          <Stack gap="xs">
-            {group.grants.map((grant) => (
-              <Group key={grant.sharingTagId} justify="space-between">
-                <Group gap="sm">
-                  <Badge
-                    variant="light"
-                    color={grant.accessMode === "deny" ? "red" : "green"}
-                  >
-                    {grant.accessMode === "deny" ? "Deny" : "Allow"}
-                  </Badge>
-                  <Text size="sm">{grant.sharingTagName}</Text>
-                </Group>
-                <Tooltip label="Remove grant">
-                  <ActionIcon
-                    size="sm"
-                    variant="subtle"
-                    color="red"
-                    onClick={() =>
-                      removeGrantMutation.mutate(grant.sharingTagId)
-                    }
-                    disabled={removeGrantMutation.isPending}
-                  >
-                    <IconTrash size={14} />
-                  </ActionIcon>
-                </Tooltip>
-              </Group>
-            ))}
-          </Stack>
-        ) : (
-          <Text size="sm" c="dimmed">
-            No grants configured.
-          </Text>
-        )}
-
-        {tagOptions.length > 0 && (
-          <Group gap="sm" align="flex-end">
-            <Select
-              label="Add grant"
-              placeholder="Select tag..."
-              data={tagOptions}
-              value={selectedTagId}
-              onChange={setSelectedTagId}
-              searchable
-              style={{ flex: 1 }}
-            />
-            <Select
-              label="Access"
-              data={accessModeOptions}
-              value={selectedAccessMode}
-              onChange={(value) =>
-                setSelectedAccessMode((value as AccessMode) || "allow")
-              }
-              w={100}
-            />
-            <Tooltip label="Add grant">
-              <ActionIcon
-                variant="filled"
-                color="blue"
-                size="lg"
-                onClick={() =>
-                  selectedTagId &&
-                  addGrantMutation.mutate({
-                    tagId: selectedTagId,
-                    accessMode: selectedAccessMode,
-                  })
-                }
-                disabled={!selectedTagId || addGrantMutation.isPending}
-                loading={addGrantMutation.isPending}
               >
                 <IconPlus size={16} />
               </ActionIcon>

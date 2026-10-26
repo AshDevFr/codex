@@ -1,8 +1,8 @@
 //! Repository for access groups, group memberships, group grants, and OIDC mappings.
 //!
-//! Access groups bundle a set of sharing-tag allow/deny rules that can be
-//! assigned to many users. Per-user grants in `user_sharing_tags` act as
-//! overrides on top of group rules (see `SharingTagRepository::get_effective_grants`).
+//! Access groups bundle allow/deny rules that can be assigned to many users.
+//! The rules themselves live in `access_group_rules`; how they combine into
+//! what a user can see is `ContentFilter` in codex-services.
 
 use anyhow::Result;
 use chrono::Utc;
@@ -14,8 +14,8 @@ use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 use crate::entities::{
-    access_group_oidc_mappings, access_group_sharing_tags, access_groups, user_access_groups,
-    user_access_groups::MembershipSource, user_sharing_tags::AccessMode, users,
+    access_group_oidc_mappings, access_group_sharing_tags, access_groups, access_groups::RuleMatch,
+    user_access_groups, user_access_groups::MembershipSource, user_sharing_tags::AccessMode, users,
 };
 
 pub struct AccessGroupRepository;
@@ -35,6 +35,9 @@ impl AccessGroupRepository {
             name: Set(name.trim().to_string()),
             description: Set(description),
             is_default: Set(false),
+            sharing_tag_match: Set(RuleMatch::Any.as_str().to_string()),
+            tag_match: Set(RuleMatch::Any.as_str().to_string()),
+            genre_match: Set(RuleMatch::Any.as_str().to_string()),
             created_at: Set(now),
             updated_at: Set(now),
         };

@@ -1,13 +1,15 @@
 //! Handlers for access group operations
 //!
-//! Access groups bundle a set of sharing-tag allow/deny rules that can be
-//! assigned to multiple users. All endpoints require admin permissions.
+//! Access groups bundle allow/deny rules on sharing tags, tags, genres and
+//! libraries, and are assigned to many users. All endpoints require admin
+//! permissions.
 
 use super::super::dto::{
     AccessGroupDetailDto, AccessGroupDto, AccessGroupGrantDto, AccessGroupMemberDto,
-    AccessGroupOidcMappingDto, AccessGroupSummaryDto, AddAccessGroupGrantRequest,
-    AddAccessGroupMembersRequest, AddAccessGroupOidcMappingRequest, AddAllUsersResponse,
-    CreateAccessGroupRequest, EffectiveGrantDto, EffectiveGrantsResponse, GrantSourceDto,
+    AccessGroupOidcMappingDto, AccessGroupRulesDto, AccessGroupSummaryDto,
+    AddAccessGroupGrantRequest, AddAccessGroupMembersRequest, AddAccessGroupOidcMappingRequest,
+    AddAllUsersResponse, CreateAccessGroupRequest, EffectiveGrantDto, EffectiveGrantsResponse,
+    GrantSourceDto, LibraryRuleDto, NameRuleDto, ReplaceAccessGroupRulesRequest, SharingTagRuleDto,
     UpdateAccessGroupRequest,
 };
 use crate::{
@@ -20,8 +22,14 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
 };
+use codex_db::entities::sharing_tags;
 use codex_db::entities::user_access_groups::MembershipSource;
-use codex_db::repositories::{AccessGroupRepository, SharingTagRepository};
+use codex_db::repositories::{
+    AccessGroupRepository, AccessGroupRules, AccessGroupRulesRepository, LibraryRepository,
+    LibraryRule, NameRule, SharingTagRepository, SharingTagRule,
+};
+use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+use std::collections::HashMap;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -51,20 +59,25 @@ pub async fn list_access_groups(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch access groups: {}", e)))?;
 
+    let group_ids: Vec<Uuid> = groups.iter().map(|g| g.id).collect();
+    let rules = AccessGroupRulesRepository::load_for_groups(&state.db, &group_ids)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch access group rules: {}", e)))?;
+
     let mut items = Vec::with_capacity(groups.len());
     for group in groups {
         let member_count = AccessGroupRepository::list_members(&state.db, group.id)
             .await
             .map(|m| m.len() as u64)
             .unwrap_or(0);
-        let grant_count = AccessGroupRepository::list_grants(&state.db, group.id)
-            .await
-            .map(|g| g.len() as u64)
-            .unwrap_or(0);
+        let group_rules = rules.get(&group.id);
+        let grant_count = group_rules.map_or(0, |r| r.sharing_tags.len() as u64);
+        let rule_count = group_rules.map_or(0, rule_count);
         items.push(AccessGroupDto::from_model_with_counts(
             group,
             member_count,
             grant_count,
+            rule_count,
         ));
     }
 
@@ -151,7 +164,7 @@ pub async fn create_access_group(
 
     Ok((
         StatusCode::CREATED,
-        Json(AccessGroupDto::from_model_with_counts(group, 0, 0)),
+        Json(AccessGroupDto::from_model_with_counts(group, 0, 0, 0)),
     ))
 }
 
@@ -219,15 +232,16 @@ pub async fn update_access_group(
         .await
         .map(|m| m.len() as u64)
         .unwrap_or(0);
-    let grant_count = AccessGroupRepository::list_grants(&state.db, group.id)
+    let rules = AccessGroupRulesRepository::get(&state.db, group.id)
         .await
-        .map(|g| g.len() as u64)
-        .unwrap_or(0);
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch access group rules: {}", e)))?
+        .unwrap_or_default();
 
     Ok(Json(AccessGroupDto::from_model_with_counts(
         group,
         member_count,
-        grant_count,
+        rules.sharing_tags.len() as u64,
+        rule_count(&rules),
     )))
 }
 
@@ -612,6 +626,231 @@ pub async fn remove_access_group_oidc_mapping(
     }
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+// ==================== Rules ====================
+
+/// Get every rule of an access group (admin only)
+#[utoipa::path(
+    get,
+    path = "/api/v1/access-groups/{group_id}/rules",
+    params(
+        ("group_id" = Uuid, Path, description = "Access group ID")
+    ),
+    responses(
+        (status = 200, description = "The group's rules", body = AccessGroupRulesDto),
+        (status = 404, description = "Access group not found"),
+        (status = 403, description = "Forbidden - Missing permission"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Access Groups"
+)]
+pub async fn get_access_group_rules(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(group_id): Path<Uuid>,
+) -> Result<Json<AccessGroupRulesDto>, ApiError> {
+    auth.require_permission(&Permission::SystemAdmin)?;
+
+    let rules = AccessGroupRulesRepository::get(&state.db, group_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch access group rules: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Access group not found".to_string()))?;
+
+    Ok(Json(rules_to_dto(&state.db, rules).await?))
+}
+
+/// Replace every rule of an access group (admin only)
+///
+/// The whole rule set is replaced atomically: anything not in the request is
+/// removed. Sharing tag and library IDs must exist; tag and genre names need
+/// not, so a rule can be set up before any series carries the name.
+#[utoipa::path(
+    put,
+    path = "/api/v1/access-groups/{group_id}/rules",
+    params(
+        ("group_id" = Uuid, Path, description = "Access group ID")
+    ),
+    request_body = ReplaceAccessGroupRulesRequest,
+    responses(
+        (status = 200, description = "Rules replaced", body = AccessGroupRulesDto),
+        (status = 400, description = "Duplicate rule, blank name, or unknown sharing tag or library"),
+        (status = 404, description = "Access group not found"),
+        (status = 403, description = "Forbidden - Missing permission"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Access Groups"
+)]
+pub async fn replace_access_group_rules(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(group_id): Path<Uuid>,
+    Json(request): Json<ReplaceAccessGroupRulesRequest>,
+) -> Result<Json<AccessGroupRulesDto>, ApiError> {
+    auth.require_permission(&Permission::SystemAdmin)?;
+
+    AccessGroupRepository::get_by_id(&state.db, group_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch access group: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Access group not found".to_string()))?;
+
+    let rules = AccessGroupRules {
+        sharing_tag_match: request.sharing_tag_match,
+        tag_match: request.tag_match,
+        genre_match: request.genre_match,
+        sharing_tags: request
+            .sharing_tags
+            .into_iter()
+            .map(|r| SharingTagRule {
+                sharing_tag_id: r.sharing_tag_id,
+                access_mode: r.access_mode,
+            })
+            .collect(),
+        tags: request
+            .tags
+            .into_iter()
+            .map(|r| NameRule::new(r.name, r.access_mode))
+            .collect(),
+        genres: request
+            .genres
+            .into_iter()
+            .map(|r| NameRule::new(r.name, r.access_mode))
+            .collect(),
+        libraries: request
+            .libraries
+            .into_iter()
+            .map(|r| LibraryRule {
+                library_id: r.library_id,
+                access_mode: r.access_mode,
+            })
+            .collect(),
+    };
+    rules.validate().map_err(ApiError::BadRequest)?;
+
+    let sharing_tag_ids: Vec<Uuid> = rules
+        .sharing_tags
+        .iter()
+        .map(|r| r.sharing_tag_id)
+        .collect();
+    let known_tags = sharing_tag_names(&state.db, &sharing_tag_ids).await?;
+    if let Some(missing) = sharing_tag_ids
+        .iter()
+        .find(|id| !known_tags.contains_key(id))
+    {
+        return Err(ApiError::BadRequest(format!(
+            "Sharing tag {} does not exist",
+            missing
+        )));
+    }
+    let library_ids: Vec<Uuid> = rules.libraries.iter().map(|r| r.library_id).collect();
+    let known_libraries = LibraryRepository::get_by_ids(&state.db, &library_ids)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch libraries: {}", e)))?;
+    if let Some(missing) = library_ids
+        .iter()
+        .find(|id| !known_libraries.contains_key(id))
+    {
+        return Err(ApiError::BadRequest(format!(
+            "Library {} does not exist",
+            missing
+        )));
+    }
+
+    AccessGroupRulesRepository::replace(&state.db, group_id, &rules)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to replace access group rules: {}", e)))?;
+
+    Ok(Json(rules_to_dto(&state.db, rules).await?))
+}
+
+fn rule_count(rules: &AccessGroupRules) -> u64 {
+    (rules.sharing_tags.len() + rules.tags.len() + rules.genres.len() + rules.libraries.len())
+        as u64
+}
+
+async fn sharing_tag_names(
+    db: &sea_orm::DatabaseConnection,
+    ids: &[Uuid],
+) -> Result<HashMap<Uuid, String>, ApiError> {
+    if ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+    Ok(sharing_tags::Entity::find()
+        .filter(sharing_tags::Column::Id.is_in(ids.to_vec()))
+        .all(db)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch sharing tags: {}", e)))?
+        .into_iter()
+        .map(|t| (t.id, t.name))
+        .collect())
+}
+
+async fn rules_to_dto(
+    db: &sea_orm::DatabaseConnection,
+    rules: AccessGroupRules,
+) -> Result<AccessGroupRulesDto, ApiError> {
+    let tag_ids: Vec<Uuid> = rules
+        .sharing_tags
+        .iter()
+        .map(|r| r.sharing_tag_id)
+        .collect();
+    let tag_names = sharing_tag_names(db, &tag_ids).await?;
+    let library_ids: Vec<Uuid> = rules.libraries.iter().map(|r| r.library_id).collect();
+    let libraries = LibraryRepository::get_by_ids(db, &library_ids)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch libraries: {}", e)))?;
+
+    Ok(AccessGroupRulesDto {
+        sharing_tag_match: rules.sharing_tag_match,
+        tag_match: rules.tag_match,
+        genre_match: rules.genre_match,
+        sharing_tags: rules
+            .sharing_tags
+            .into_iter()
+            .map(|r| SharingTagRuleDto {
+                name: tag_names
+                    .get(&r.sharing_tag_id)
+                    .cloned()
+                    .unwrap_or_default(),
+                sharing_tag_id: r.sharing_tag_id,
+                access_mode: r.access_mode,
+            })
+            .collect(),
+        tags: rules
+            .tags
+            .into_iter()
+            .map(|r| NameRuleDto {
+                name: r.name,
+                access_mode: r.access_mode,
+            })
+            .collect(),
+        genres: rules
+            .genres
+            .into_iter()
+            .map(|r| NameRuleDto {
+                name: r.name,
+                access_mode: r.access_mode,
+            })
+            .collect(),
+        libraries: rules
+            .libraries
+            .into_iter()
+            .map(|r| LibraryRuleDto {
+                name: libraries
+                    .get(&r.library_id)
+                    .map(|l| l.name.clone())
+                    .unwrap_or_default(),
+                library_id: r.library_id,
+                access_mode: r.access_mode,
+            })
+            .collect(),
+    })
 }
 
 // ==================== Effective Grants Debug ====================

@@ -36,4 +36,17 @@ describe("UserAccessGroupBadges", () => {
 
     expect(screen.getByText("None")).toBeInTheDocument();
   });
+
+  it("says the groups do not restrict an admin or maintainer", () => {
+    renderWithProviders(
+      <UserAccessGroupBadges
+        unrestricted
+        groups={[{ id: "1", name: "Kids", source: "default" }]}
+      />,
+    );
+
+    expect(
+      screen.getByText(/not restricted/i, { exact: false }),
+    ).toBeInTheDocument();
+  });
 });

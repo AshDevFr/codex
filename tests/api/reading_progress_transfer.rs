@@ -55,6 +55,26 @@ async fn admin_and_token(
     (created.id, token)
 }
 
+async fn reader_and_token(
+    db: &DatabaseConnection,
+    state: &codex::api::extractors::AuthState,
+    username: &str,
+) -> (Uuid, String) {
+    let password_hash = password::hash_password("pw123456").unwrap();
+    let user = create_test_user(
+        username,
+        &format!("{username}@example.com"),
+        &password_hash,
+        false,
+    );
+    let created = UserRepository::create(db, &user).await.unwrap();
+    let token = state
+        .jwt_service
+        .generate_token(created.id, created.username.clone(), created.get_role())
+        .unwrap();
+    (created.id, token)
+}
+
 fn book_model(
     series_id: Uuid,
     library_id: Uuid,
@@ -594,7 +614,8 @@ async fn exercise_visibility_denies_unmatched(db: &DatabaseConnection) {
     // Relative, because the PostgreSQL run shares one database across scenarios.
     let before = table_counts(db).await;
     let state = create_test_auth_state(db.clone()).await;
-    let (user_id, token) = admin_and_token(db, &state, "restricted-reader").await;
+    // A reader: admins are never restricted by sharing tags.
+    let (user_id, token) = reader_and_token(db, &state, "restricted-reader").await;
 
     let library = LibraryRepository::create(db, "Lib", "/lib", ScanningStrategy::Default)
         .await

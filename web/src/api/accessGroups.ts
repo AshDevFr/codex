@@ -27,6 +27,10 @@ export type EffectiveGrantsResponse =
 export type EffectiveGrantDto = components["schemas"]["EffectiveGrantDto"];
 export type GrantSourceDto = components["schemas"]["GrantSourceDto"];
 export type AddAllUsersResponse = components["schemas"]["AddAllUsersResponse"];
+export type AccessGroupRulesDto = components["schemas"]["AccessGroupRulesDto"];
+export type ReplaceAccessGroupRulesRequest =
+  components["schemas"]["ReplaceAccessGroupRulesRequest"];
+export type RuleMatch = components["schemas"]["RuleMatch"];
 
 export const accessGroupsApi = {
   // ============================================
@@ -90,6 +94,29 @@ export const accessGroupsApi = {
   addAllUsers: async (groupId: string): Promise<AddAllUsersResponse> => {
     const response = await api.post<AddAllUsersResponse>(
       `/access-groups/${groupId}/add-all-users`,
+    );
+    return response.data;
+  },
+
+  // ============================================
+  // Rules (sharing tags, tags, genres, libraries)
+  // ============================================
+
+  getRules: async (groupId: string): Promise<AccessGroupRulesDto> => {
+    const response = await api.get<AccessGroupRulesDto>(
+      `/access-groups/${groupId}/rules`,
+    );
+    return response.data;
+  },
+
+  /** Replace the group's whole rule set; anything not included is removed. */
+  replaceRules: async (
+    groupId: string,
+    request: ReplaceAccessGroupRulesRequest,
+  ): Promise<AccessGroupRulesDto> => {
+    const response = await api.put<AccessGroupRulesDto>(
+      `/access-groups/${groupId}/rules`,
+      request,
     );
     return response.data;
   },

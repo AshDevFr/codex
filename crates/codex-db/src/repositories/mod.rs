@@ -53,6 +53,7 @@ pub mod visibility;
 
 // Access groups: reusable bundles of sharing-tag grants assignable to users
 pub mod access_group;
+pub mod access_group_rules;
 
 // OIDC authentication
 pub mod oidc_connection;
@@ -143,6 +144,10 @@ pub use visibility::{
 
 // Access groups
 pub use access_group::AccessGroupRepository;
+pub use access_group_rules::{
+    AccessGroupRules, AccessGroupRulesRepository, LibraryRule, NameRule, SharingTagRule,
+    normalize_taxonomy_name,
+};
 
 // OIDC authentication
 pub use oidc_connection::OidcConnectionRepository;

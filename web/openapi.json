@@ -603,6 +603,112 @@
         ]
       }
     },
+    "/api/v1/access-groups/{group_id}/rules": {
+      "get": {
+        "tags": [
+          "Access Groups"
+        ],
+        "summary": "Get every rule of an access group (admin only)",
+        "operationId": "get_access_group_rules",
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "description": "Access group ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The group's rules",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessGroupRulesDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Missing permission"
+          },
+          "404": {
+            "description": "Access group not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Access Groups"
+        ],
+        "summary": "Replace every rule of an access group (admin only)",
+        "description": "The whole rule set is replaced atomically: anything not in the request is\nremoved. Sharing tag and library IDs must exist; tag and genre names need\nnot, so a rule can be set up before any series carries the name.",
+        "operationId": "replace_access_group_rules",
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "description": "Access group ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceAccessGroupRulesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Rules replaced",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessGroupRulesDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Duplicate rule, blank name, or unknown sharing tag or library"
+          },
+          "403": {
+            "description": "Forbidden - Missing permission"
+          },
+          "404": {
+            "description": "Access group not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/admin/cleanup-orphans": {
       "post": {
         "tags": [
@@ -23666,6 +23772,7 @@
           "isDefault",
           "memberCount",
           "grantCount",
+          "ruleCount",
           "createdAt",
           "updatedAt"
         ],
@@ -23687,7 +23794,7 @@
           "grantCount": {
             "type": "integer",
             "format": "int64",
-            "description": "Number of tag grants in the group",
+            "description": "Number of sharing tag grants in the group",
             "example": 3,
             "minimum": 0
           },
@@ -23713,6 +23820,13 @@
             "type": "string",
             "description": "Display name of the access group",
             "example": "Manga Readers"
+          },
+          "ruleCount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of rules in the group, across sharing tags, tags, genres and libraries",
+            "example": 5,
+            "minimum": 0
           },
           "updatedAt": {
             "type": "string",
@@ -23814,6 +23928,61 @@
             "type": "string",
             "description": "OIDC group name from the IdP",
             "example": "library-staff"
+          }
+        }
+      },
+      "AccessGroupRulesDto": {
+        "type": "object",
+        "description": "Every rule of an access group\n\nWithin a group, values of the same type combine as \"any of\" or \"all of\"\n(per the match field for that type; libraries are always \"any of\"), and\ndifferent types combine with AND. Across groups, what each group allows is\ncombined with OR. Denies from every group always win. Admins and\nmaintainers are never restricted.",
+        "required": [
+          "sharingTagMatch",
+          "tagMatch",
+          "genreMatch",
+          "sharingTags",
+          "tags",
+          "genres",
+          "libraries"
+        ],
+        "properties": {
+          "genreMatch": {
+            "$ref": "#/components/schemas/RuleMatch",
+            "description": "How allowed genres combine"
+          },
+          "genres": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NameRuleDto"
+            },
+            "description": "Rules on genres, matched by name"
+          },
+          "libraries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LibraryRuleDto"
+            },
+            "description": "Rules on libraries"
+          },
+          "sharingTagMatch": {
+            "$ref": "#/components/schemas/RuleMatch",
+            "description": "How allowed sharing tags combine"
+          },
+          "sharingTags": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SharingTagRuleDto"
+            },
+            "description": "Rules on sharing tags"
+          },
+          "tagMatch": {
+            "$ref": "#/components/schemas/RuleMatch",
+            "description": "How allowed tags combine"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NameRuleDto"
+            },
+            "description": "Rules on regular tags, matched by name"
           }
         }
       },
@@ -34997,6 +35166,50 @@
           }
         }
       },
+      "LibraryRuleDto": {
+        "type": "object",
+        "description": "A rule on a library",
+        "required": [
+          "libraryId",
+          "name",
+          "accessMode"
+        ],
+        "properties": {
+          "accessMode": {
+            "$ref": "#/components/schemas/AccessMode",
+            "description": "Allow or deny"
+          },
+          "libraryId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Library ID"
+          },
+          "name": {
+            "type": "string",
+            "description": "Library name",
+            "example": "Manga"
+          }
+        }
+      },
+      "LibraryRuleInput": {
+        "type": "object",
+        "description": "A library rule in a replace request",
+        "required": [
+          "libraryId",
+          "accessMode"
+        ],
+        "properties": {
+          "accessMode": {
+            "$ref": "#/components/schemas/AccessMode",
+            "description": "Allow or deny"
+          },
+          "libraryId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Library ID"
+          }
+        }
+      },
       "LinkProperties": {
         "type": "object",
         "description": "Additional properties that can be attached to links",
@@ -36033,6 +36246,25 @@
             "format": "uuid",
             "description": "Sharing tag ID",
             "example": "550e8400-e29b-41d4-a716-446655440000"
+          }
+        }
+      },
+      "NameRuleDto": {
+        "type": "object",
+        "description": "A rule on a regular tag or a genre\n\nMatched by name, case-insensitively, so the rule keeps applying when the\ntag or genre is removed by cleanup and created again later.",
+        "required": [
+          "name",
+          "accessMode"
+        ],
+        "properties": {
+          "accessMode": {
+            "$ref": "#/components/schemas/AccessMode",
+            "description": "Allow or deny"
+          },
+          "name": {
+            "type": "string",
+            "description": "Tag or genre name",
+            "example": "Adult"
           }
         }
       },
@@ -41572,6 +41804,71 @@
           }
         }
       },
+      "ReplaceAccessGroupRulesRequest": {
+        "type": "object",
+        "description": "Replace every rule of an access group\n\nOmitted lists are treated as empty and omitted match fields as \"any\".",
+        "properties": {
+          "genreMatch": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/RuleMatch",
+                "description": "How allowed genres combine"
+              }
+            ],
+            "default": "any"
+          },
+          "genres": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NameRuleDto"
+            },
+            "description": "Rules on genres, matched by name",
+            "default": []
+          },
+          "libraries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LibraryRuleInput"
+            },
+            "description": "Rules on libraries",
+            "default": []
+          },
+          "sharingTagMatch": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/RuleMatch",
+                "description": "How allowed sharing tags combine"
+              }
+            ],
+            "default": "any"
+          },
+          "sharingTags": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SharingTagRuleInput"
+            },
+            "description": "Rules on sharing tags",
+            "default": []
+          },
+          "tagMatch": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/RuleMatch",
+                "description": "How allowed tags combine"
+              }
+            ],
+            "default": "any"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NameRuleDto"
+            },
+            "description": "Rules on regular tags, matched by name",
+            "default": []
+          }
+        }
+      },
       "ReplaceBookMetadataRequest": {
         "type": "object",
         "description": "PUT request for full replacement of book metadata\n\nAll metadata fields will be replaced with the values in this request.\nOmitting a field (or setting it to null) will clear that field.",
@@ -42286,6 +42583,14 @@
             "minimum": 0
           }
         }
+      },
+      "RuleMatch": {
+        "type": "string",
+        "description": "How a group's allowed values of one rule type combine.",
+        "enum": [
+          "any",
+          "all"
+        ]
       },
       "RunNowResponse": {
         "type": "object",
@@ -44627,6 +44932,50 @@
             "description": "Total count",
             "example": 10,
             "minimum": 0
+          }
+        }
+      },
+      "SharingTagRuleDto": {
+        "type": "object",
+        "description": "A rule on a sharing tag",
+        "required": [
+          "sharingTagId",
+          "name",
+          "accessMode"
+        ],
+        "properties": {
+          "accessMode": {
+            "$ref": "#/components/schemas/AccessMode",
+            "description": "Allow or deny"
+          },
+          "name": {
+            "type": "string",
+            "description": "Sharing tag name",
+            "example": "Kids"
+          },
+          "sharingTagId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Sharing tag ID"
+          }
+        }
+      },
+      "SharingTagRuleInput": {
+        "type": "object",
+        "description": "A sharing tag rule in a replace request",
+        "required": [
+          "sharingTagId",
+          "accessMode"
+        ],
+        "properties": {
+          "accessMode": {
+            "$ref": "#/components/schemas/AccessMode",
+            "description": "Allow or deny"
+          },
+          "sharingTagId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Sharing tag ID"
           }
         }
       },
