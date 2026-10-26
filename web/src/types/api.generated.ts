@@ -29962,8 +29962,8 @@ export interface operations {
         parameters: {
             query?: {
                 /**
-                 * @description Count pages exactly instead of estimating. Admin only: on PostgreSQL an
-                 *     exact count is a full scan of the largest table.
+                 * @description Count pages exactly instead of estimating. On PostgreSQL an exact count
+                 *     is a full scan of the largest table.
                  */
                 exact?: boolean;
             };
@@ -29982,7 +29982,7 @@ export interface operations {
                     "application/json": components["schemas"]["MetricsDto"];
                 };
             };
-            /** @description Permission denied, `exact=true` requested without admin access, or the account has content restrictions */
+            /** @description Admin only */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -30009,7 +30009,7 @@ export interface operations {
                     "application/json": components["schemas"]["PluginMetricsResponse"];
                 };
             };
-            /** @description Permission denied */
+            /** @description Admin only */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -30036,7 +30036,7 @@ export interface operations {
                     "application/json": components["schemas"]["TaskMetricsResponse"];
                 };
             };
-            /** @description Permission denied */
+            /** @description Admin only */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -30154,7 +30154,7 @@ export interface operations {
                     "application/json": components["schemas"]["TaskMetricsHistoryResponse"];
                 };
             };
-            /** @description Permission denied */
+            /** @description Admin only */
             403: {
                 headers: {
                     [name: string]: unknown;

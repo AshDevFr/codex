@@ -141,7 +141,7 @@ async fn test_get_plugin_metrics_requires_auth() {
 }
 
 #[tokio::test]
-async fn test_get_plugin_metrics_allowed_for_reader() {
+async fn test_get_plugin_metrics_refused_to_reader() {
     let (db, _temp_dir) = setup_test_db().await;
     let state = create_test_app_state(db.clone()).await;
 
@@ -160,10 +160,9 @@ async fn test_get_plugin_metrics_allowed_for_reader() {
     let app = create_test_router_with_app_state(state);
     let request = get_request_with_auth("/api/v1/metrics/plugins", &token);
 
-    let (status, response): (StatusCode, Option<PluginMetricsResponse>) =
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
         make_json_request(app, request).await;
 
-    // Reader should have libraries:read permission which is required
-    assert_eq!(status, StatusCode::OK);
-    assert!(response.is_some());
+    // Server metrics are admin-only, like the Settings > Metrics page
+    assert_eq!(status, StatusCode::FORBIDDEN);
 }

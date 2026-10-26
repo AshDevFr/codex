@@ -9845,7 +9845,7 @@
           {
             "name": "exact",
             "in": "query",
-            "description": "Count pages exactly instead of estimating. Admin only: on PostgreSQL an\nexact count is a full scan of the largest table.",
+            "description": "Count pages exactly instead of estimating. On PostgreSQL an exact count\nis a full scan of the largest table.",
             "required": false,
             "schema": {
               "type": "boolean"
@@ -9864,7 +9864,7 @@
             }
           },
           "403": {
-            "description": "Permission denied, `exact=true` requested without admin access, or the account has content restrictions"
+            "description": "Admin only"
           }
         },
         "security": [
@@ -9897,7 +9897,7 @@
             }
           },
           "403": {
-            "description": "Permission denied"
+            "description": "Admin only"
           }
         },
         "security": [
@@ -9930,7 +9930,7 @@
             }
           },
           "403": {
-            "description": "Permission denied"
+            "description": "Admin only"
           },
           "503": {
             "description": "Task metrics service not available"
@@ -10078,7 +10078,7 @@
             }
           },
           "403": {
-            "description": "Permission denied"
+            "description": "Admin only"
           },
           "503": {
             "description": "Task metrics service not available"

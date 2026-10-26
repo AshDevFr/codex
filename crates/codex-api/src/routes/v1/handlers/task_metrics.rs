@@ -7,7 +7,7 @@ use super::super::dto::{
     TaskMetricsHistoryQuery, TaskMetricsHistoryResponse, TaskMetricsResponse,
     TaskMetricsSummaryDto, TaskTypeMetricsDto,
 };
-use crate::{AppState, error::ApiError, extractors::AuthContext, permissions::Permission};
+use crate::{AppState, error::ApiError, extractors::AuthContext};
 use codex_db::repositories::TaskRepository;
 
 /// Get current task metrics
@@ -24,7 +24,7 @@ use codex_db::repositories::TaskRepository;
     path = "/api/v1/metrics/tasks",
     responses(
         (status = 200, description = "Task metrics retrieved successfully", body = TaskMetricsResponse),
-        (status = 403, description = "Permission denied"),
+        (status = 403, description = "Admin only"),
         (status = 503, description = "Task metrics service not available"),
     ),
     security(
@@ -37,7 +37,7 @@ pub async fn get_task_metrics(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
 ) -> Result<Json<TaskMetricsResponse>, ApiError> {
-    auth.require_permission(&Permission::LibrariesRead)?;
+    auth.require_admin()?;
 
     let metrics_service = state
         .task_metrics_service
@@ -118,7 +118,7 @@ pub async fn get_task_metrics(
     params(TaskMetricsHistoryQuery),
     responses(
         (status = 200, description = "Task metrics history retrieved successfully", body = TaskMetricsHistoryResponse),
-        (status = 403, description = "Permission denied"),
+        (status = 403, description = "Admin only"),
         (status = 503, description = "Task metrics service not available"),
     ),
     security(
@@ -132,7 +132,7 @@ pub async fn get_task_metrics_history(
     auth: AuthContext,
     Query(query): Query<TaskMetricsHistoryQuery>,
 ) -> Result<Json<TaskMetricsHistoryResponse>, ApiError> {
-    auth.require_permission(&Permission::LibrariesRead)?;
+    auth.require_admin()?;
 
     let metrics_service = state
         .task_metrics_service

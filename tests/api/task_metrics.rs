@@ -279,6 +279,24 @@ async fn test_task_metrics_requires_auth() {
 }
 
 #[tokio::test]
+async fn test_task_metrics_reads_require_admin() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_app_state_with_metrics(db.clone()).await;
+    let token = create_regular_user_and_token(&db, &state).await;
+
+    for uri in [
+        "/api/v1/metrics/tasks",
+        "/api/v1/metrics/tasks/history?days=7&granularity=hour",
+    ] {
+        let app = create_test_router_with_app_state(state.clone());
+        let request = get_request_with_auth(uri, &token);
+        let (status, _): (StatusCode, Option<ErrorResponse>) =
+            make_json_request(app, request).await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "{uri}");
+    }
+}
+
+#[tokio::test]
 async fn test_metrics_cleanup_requires_admin() {
     let (db, _temp_dir) = setup_test_db().await;
     let state = create_test_app_state_with_metrics(db.clone()).await;
