@@ -29982,7 +29982,7 @@ export interface operations {
                     "application/json": components["schemas"]["MetricsDto"];
                 };
             };
-            /** @description Admin only */
+            /** @description Requires tasks:read (admins and maintainers) */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -30009,7 +30009,7 @@ export interface operations {
                     "application/json": components["schemas"]["PluginMetricsResponse"];
                 };
             };
-            /** @description Admin only */
+            /** @description Requires tasks:read (admins and maintainers) */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -30036,7 +30036,7 @@ export interface operations {
                     "application/json": components["schemas"]["TaskMetricsResponse"];
                 };
             };
-            /** @description Admin only */
+            /** @description Requires tasks:read (admins and maintainers) */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -30154,7 +30154,7 @@ export interface operations {
                     "application/json": components["schemas"]["TaskMetricsHistoryResponse"];
                 };
             };
-            /** @description Admin only */
+            /** @description Requires tasks:read (admins and maintainers) */
             403: {
                 headers: {
                     [name: string]: unknown;

@@ -9864,7 +9864,7 @@
             }
           },
           "403": {
-            "description": "Admin only"
+            "description": "Requires tasks:read (admins and maintainers)"
           }
         },
         "security": [
@@ -9897,7 +9897,7 @@
             }
           },
           "403": {
-            "description": "Admin only"
+            "description": "Requires tasks:read (admins and maintainers)"
           }
         },
         "security": [
@@ -9930,7 +9930,7 @@
             }
           },
           "403": {
-            "description": "Admin only"
+            "description": "Requires tasks:read (admins and maintainers)"
           },
           "503": {
             "description": "Task metrics service not available"
@@ -10078,7 +10078,7 @@
             }
           },
           "403": {
-            "description": "Admin only"
+            "description": "Requires tasks:read (admins and maintainers)"
           },
           "503": {
             "description": "Task metrics service not available"

@@ -9,7 +9,7 @@ use super::super::dto::{
     InventoryMetricsQuery, LibraryMetricsDto, MetricsDto, PluginMethodMetricsDto, PluginMetricsDto,
     PluginMetricsResponse, PluginMetricsSummaryDto,
 };
-use crate::{AppState, error::ApiError, extractors::AuthContext};
+use crate::{AppState, error::ApiError, extractors::AuthContext, permissions::Permission};
 use codex_db::repositories::MetricsRepository;
 
 /// Get inventory metrics (library/book counts)
@@ -30,7 +30,7 @@ use codex_db::repositories::MetricsRepository;
     params(InventoryMetricsQuery),
     responses(
         (status = 200, description = "Inventory metrics retrieved successfully", body = MetricsDto),
-        (status = 403, description = "Admin only"),
+        (status = 403, description = "Requires tasks:read (admins and maintainers)"),
     ),
     security(
         ("jwt_bearer" = []),
@@ -44,8 +44,10 @@ pub async fn get_inventory_metrics(
     Query(query): Query<InventoryMetricsQuery>,
 ) -> Result<Json<MetricsDto>, ApiError> {
     // Server metrics (user count, database size, every library's totals) are
-    // for admins, like the Settings > Metrics page that shows them.
-    auth.require_admin()?;
+    // for the people who run the server: admins and maintainers, who also see
+    // them from the iOS app's Tasks screen. Readers have no use for them, and
+    // the totals would tell a restricted reader how much is hidden from them.
+    auth.require_permission(&Permission::TasksRead)?;
 
     // Gather all metrics in parallel
     let (
@@ -142,7 +144,7 @@ pub async fn get_inventory_metrics(
     path = "/api/v1/metrics/plugins",
     responses(
         (status = 200, description = "Plugin metrics retrieved successfully", body = PluginMetricsResponse),
-        (status = 403, description = "Admin only"),
+        (status = 403, description = "Requires tasks:read (admins and maintainers)"),
     ),
     security(
         ("jwt_bearer" = []),
@@ -154,7 +156,7 @@ pub async fn get_plugin_metrics(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
 ) -> Result<Json<PluginMetricsResponse>, ApiError> {
-    auth.require_admin()?;
+    auth.require_permission(&Permission::TasksRead)?;
 
     let summary = state.plugin_metrics_service.get_summary().await;
     let plugin_snapshots = state.plugin_metrics_service.get_all_metrics().await;
