@@ -187,9 +187,30 @@ curl -X DELETE http://localhost:8080/api/v1/access-groups/{id}/oidc-mappings/{ma
 OIDC group names are matched exactly as stored. If your IdP sends `Library-Staff` but the mapping says `library-staff`, it will not match.
 :::
 
-## Debugging Sharing-Tag Grants
+## Checking What a User Sees
 
-`GET /api/v1/users/{user_id}/effective-grants` (and the **Effective Grants** panel when editing a user) lists the user's sharing-tag rules and which group or personal grant each comes from. It covers sharing tags only, not library, genre or tag rules.
+Open **Settings** > **Users**, edit a user, and look at **What this user sees**:
+
+- how many series they can and cannot see, and which libraries are visible to them;
+- **Check a series**: pick any series to see whether the user can see it and why: the deny rule that hides it and the group it comes from, the group whose allow rules let it through, or that none of their allow rules matches it.
+
+It uses the same rules Codex enforces, so it cannot disagree with what the user actually gets. Admins and maintainers are reported as never restricted.
+
+**Via API:**
+```bash
+curl "http://localhost:8080/api/v1/users/{user_id}/visibility-preview?seriesId={series_id}" \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+```
+
+`GET /api/v1/users/{user_id}/effective-grants` still lists a user's sharing-tag rules and where each comes from.
+
+## Where Restrictions Apply
+
+A restricted reader gets the same view everywhere: the web app, the native API, OPDS 1.2 and 2.0 feeds, the [Komga-compatible API](../third-party-apps), KOReader sync, and live updates (new or changed series and books are not announced for content they cannot see). Hidden content answers exactly like content that does not exist: it is missing from lists, search, genre and tag lists and library counts, and opening it by id returns "not found".
+
+Server-wide statistics (**Settings** > **Metrics**) are not available to accounts with content restrictions, since they describe the whole library.
+
+Restriction changes take effect on the next request. When Codex runs as several server processes, the others pick them up within 30 seconds. New series from a scan are covered by deny rules within 30 seconds of the scan, and by allow rules immediately (a new series is hidden until a rule allows it).
 
 ## Example: A Kids Account
 
@@ -198,6 +219,7 @@ OIDC group names are matched exactly as stored. If your IdP sends `Library-Staff
    - deny genre *Adult*
 2. Mark **Kids** as the default group, so every new account starts there.
 3. For adult family members, remove them from **Kids** and add them to a group such as **Everyone** with no allow rules (or no group at all, which sees everything).
+4. Check a kid's account under **What this user sees** before handing it over.
 
 A kid's account sees the Kids library and nothing else. If a kid is later added to another group by mistake, the *Adult* deny still applies to everything that group grants.
 

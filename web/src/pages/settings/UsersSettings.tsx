@@ -45,6 +45,7 @@ import {
   UserAccessGroupBadges,
   UserEffectiveGrants,
   UserSharingTagGrants,
+  UserVisibilityPreview,
 } from "@/components/users";
 import { useShowSkeleton } from "@/lib/motion/useShowSkeleton";
 import { useAuthStore } from "@/store/authStore";
@@ -703,6 +704,7 @@ export function UsersSettings() {
 
             {/* Effective Grants (combined user + group view) */}
             {selectedUser && <UserEffectiveGrants userId={selectedUser.id} />}
+            {selectedUser && <UserVisibilityPreview userId={selectedUser.id} />}
 
             {/* Custom Permissions */}
             {selectedUser && selectedUser.role !== "admin" && (

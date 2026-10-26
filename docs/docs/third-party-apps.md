@@ -310,9 +310,8 @@ The Komga-compatible API has some limitations compared to the native Komga serve
 ### Differences from Komga
 
 - **User permissions** - Uses Codex's permission model (admin, maintainer, reader)
-- **Library restrictions** - Not implemented (all libraries are shared)
-- **Age restrictions** - Not implemented
-- **Content restrictions** - Not implemented
+- **Library and content restrictions** - Use Codex [access groups](./users/access-groups) rather than Komga's per-user library sharing and labels. A restricted reader sees exactly the same libraries, series and books through the Komga API as in the Codex web app.
+- **Age restrictions** - Not implemented as a separate setting; use access group rules (for example, deny a genre)
 
 ## Security Considerations
 

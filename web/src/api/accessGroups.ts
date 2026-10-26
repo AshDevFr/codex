@@ -31,6 +31,8 @@ export type AccessGroupRulesDto = components["schemas"]["AccessGroupRulesDto"];
 export type ReplaceAccessGroupRulesRequest =
   components["schemas"]["ReplaceAccessGroupRulesRequest"];
 export type RuleMatch = components["schemas"]["RuleMatch"];
+export type VisibilityPreviewDto =
+  components["schemas"]["VisibilityPreviewDto"];
 
 export const accessGroupsApi = {
   // ============================================
@@ -170,6 +172,18 @@ export const accessGroupsApi = {
   getForUser: async (userId: string): Promise<AccessGroupSummaryDto[]> => {
     const response = await api.get<AccessGroupSummaryDto[]>(
       `/users/${userId}/access-groups`,
+    );
+    return response.data;
+  },
+
+  /** What a user can see, and optionally why one series is shown or hidden. */
+  getVisibilityPreview: async (
+    userId: string,
+    seriesId?: string,
+  ): Promise<VisibilityPreviewDto> => {
+    const response = await api.get<VisibilityPreviewDto>(
+      `/users/${userId}/visibility-preview`,
+      { params: seriesId ? { seriesId } : undefined },
     );
     return response.data;
   },

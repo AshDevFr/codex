@@ -19977,6 +19977,67 @@
         ]
       }
     },
+    "/api/v1/users/{user_id}/visibility-preview": {
+      "get": {
+        "tags": [
+          "Access Groups"
+        ],
+        "summary": "Preview what a user can see (admin only)",
+        "description": "Counts the series the user can and cannot see and lists every library with\nwhether they can see it. With `seriesId`, also explains that series: which\ndeny rules hide it (and from which group), or which groups let it through,\nor that no allow rule matches it. Uses the same rules as enforcement, built\nfresh rather than from the cache.",
+        "operationId": "get_visibility_preview",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "description": "User ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "seriesId",
+            "in": "query",
+            "description": "Explain whether the user can see this series",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "What the user can see",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisibilityPreviewDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Missing permission"
+          },
+          "404": {
+            "description": "User or series not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/want-to-read": {
       "get": {
         "tags": [
@@ -23690,6 +23751,17 @@
   },
   "components": {
     "schemas": {
+      "AccessDecision": {
+        "type": "string",
+        "description": "The outcome for one series, and the reason for it.",
+        "enum": [
+          "unrestricted",
+          "open",
+          "allowed",
+          "notAllowed",
+          "denied"
+        ]
+      },
       "AccessGroupDetailDto": {
         "type": "object",
         "description": "Access group detail (includes members, grants, and OIDC mappings)",
@@ -35210,6 +35282,27 @@
           }
         }
       },
+      "LibraryVisibilityDto": {
+        "type": "object",
+        "description": "A library and whether the previewed user can see it",
+        "required": [
+          "id",
+          "name",
+          "visible"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "visible": {
+            "type": "boolean"
+          }
+        }
+      },
       "LinkProperties": {
         "type": "object",
         "description": "Additional properties that can be attached to links",
@@ -35447,6 +35540,27 @@
             "type": "string",
             "description": "Message describing the operation",
             "example": "Marked 5 books as read"
+          }
+        }
+      },
+      "MatchedRuleDto": {
+        "type": "object",
+        "description": "A deny rule that matches a series",
+        "required": [
+          "ruleType",
+          "value",
+          "source"
+        ],
+        "properties": {
+          "ruleType": {
+            "$ref": "#/components/schemas/RuleTypeLabel"
+          },
+          "source": {
+            "$ref": "#/components/schemas/GrantSourceDto"
+          },
+          "value": {
+            "type": "string",
+            "description": "The tag or genre name, or the sharing tag or library name"
           }
         }
       },
@@ -42592,6 +42706,16 @@
           "all"
         ]
       },
+      "RuleTypeLabel": {
+        "type": "string",
+        "description": "The kind of value a rule names.",
+        "enum": [
+          "sharingTag",
+          "tag",
+          "genre",
+          "library"
+        ]
+      },
       "RunNowResponse": {
         "type": "object",
         "description": "Response for `POST .../run-now`.",
@@ -42851,6 +42975,47 @@
           "source": {
             "type": "string",
             "description": "Cover source: \"default\" (first book cover) or \"custom\" (uploaded cover)"
+          }
+        }
+      },
+      "SeriesAccessDto": {
+        "type": "object",
+        "description": "Whether the previewed user can see one series, and why",
+        "required": [
+          "seriesId",
+          "title",
+          "visible",
+          "decision",
+          "deniedBy",
+          "allowedBy"
+        ],
+        "properties": {
+          "allowedBy": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GrantSourceDto"
+            },
+            "description": "Every group (or personal grant) whose allow rules let it through"
+          },
+          "decision": {
+            "$ref": "#/components/schemas/AccessDecision"
+          },
+          "deniedBy": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MatchedRuleDto"
+            },
+            "description": "Every deny rule that matches this series"
+          },
+          "seriesId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "visible": {
+            "type": "boolean"
           }
         }
       },
@@ -48800,6 +48965,56 @@
           "user": {
             "$ref": "#/components/schemas/UserInfo",
             "description": "User information"
+          }
+        }
+      },
+      "VisibilityPreviewDto": {
+        "type": "object",
+        "description": "What a user can see, for an admin checking an access setup",
+        "required": [
+          "userId",
+          "restricted",
+          "roleBypass",
+          "visibleSeriesCount",
+          "hiddenSeriesCount",
+          "libraries"
+        ],
+        "properties": {
+          "hiddenSeriesCount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Series hidden from the user",
+            "minimum": 0
+          },
+          "libraries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LibraryVisibilityDto"
+            },
+            "description": "Every library, and whether the user can see it"
+          },
+          "restricted": {
+            "type": "boolean",
+            "description": "False for admins and maintainers, and for users no rule applies to"
+          },
+          "roleBypass": {
+            "type": "boolean",
+            "description": "The user's role exempts them from access groups (admin or maintainer)"
+          },
+          "series": {
+            "$ref": "#/components/schemas/SeriesAccessDto",
+            "description": "Present when a series was asked about"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The previewed user"
+          },
+          "visibleSeriesCount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Series the user can see",
+            "minimum": 0
           }
         }
       },

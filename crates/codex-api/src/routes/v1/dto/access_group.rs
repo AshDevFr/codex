@@ -426,3 +426,66 @@ pub struct LibraryRuleInput {
     /// Allow or deny
     pub access_mode: AccessMode,
 }
+
+// ==================== Visibility preview ====================
+
+/// What a user can see, for an admin checking an access setup
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct VisibilityPreviewDto {
+    /// The previewed user
+    pub user_id: Uuid,
+    /// False for admins and maintainers, and for users no rule applies to
+    pub restricted: bool,
+    /// The user's role exempts them from access groups (admin or maintainer)
+    pub role_bypass: bool,
+    /// Series the user can see
+    pub visible_series_count: u64,
+    /// Series hidden from the user
+    pub hidden_series_count: u64,
+    /// Every library, and whether the user can see it
+    pub libraries: Vec<LibraryVisibilityDto>,
+    /// Present when a series was asked about
+    pub series: Option<SeriesAccessDto>,
+}
+
+/// A library and whether the previewed user can see it
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryVisibilityDto {
+    pub id: Uuid,
+    pub name: String,
+    pub visible: bool,
+}
+
+/// Whether the previewed user can see one series, and why
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SeriesAccessDto {
+    pub series_id: Uuid,
+    pub title: String,
+    pub visible: bool,
+    pub decision: codex_services::content_filter::AccessDecision,
+    /// Every deny rule that matches this series
+    pub denied_by: Vec<MatchedRuleDto>,
+    /// Every group (or personal grant) whose allow rules let it through
+    pub allowed_by: Vec<GrantSourceDto>,
+}
+
+/// A deny rule that matches a series
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct MatchedRuleDto {
+    pub rule_type: codex_services::content_filter::RuleTypeLabel,
+    /// The tag or genre name, or the sharing tag or library name
+    pub value: String,
+    pub source: GrantSourceDto,
+}
+
+/// Query parameters for the visibility preview
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[serde(rename_all = "camelCase")]
+pub struct VisibilityPreviewQuery {
+    /// Explain whether the user can see this series
+    pub series_id: Option<Uuid>,
+}

@@ -1152,3 +1152,85 @@ async fn koreader_sync_treats_hidden_books_as_missing() {
         }
     }
 }
+
+// ============================================================================
+// Visibility preview (admin tool)
+// ============================================================================
+
+#[tokio::test]
+async fn admins_can_preview_what_a_reader_sees_and_why() {
+    let world = World::new().await;
+    let password_hash = codex::utils::password::hash_password("admin123").unwrap();
+    let admin = UserRepository::create(
+        &world.state.db,
+        &create_test_user("boss", "boss@example.com", &password_hash, true),
+    )
+    .await
+    .unwrap();
+    let admin_token = world
+        .state
+        .jwt_service
+        .generate_token(admin.id, admin.username.clone(), admin.get_role())
+        .unwrap();
+    let get = |uri: String, token: String| {
+        let app = world.router();
+        async move {
+            let (status, body) = make_raw_request(app, get_request_with_auth(&uri, &token)).await;
+            (
+                status,
+                serde_json::from_slice::<serde_json::Value>(&body).unwrap_or_default(),
+            )
+        }
+    };
+    let preview = format!("/api/v1/users/{}/visibility-preview", world.reader_id);
+
+    let (status, body) = get(preview.clone(), admin_token.clone()).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["restricted"], true);
+    assert_eq!(body["roleBypass"], false);
+    assert_eq!(body["visibleSeriesCount"], 1);
+    assert_eq!(body["hiddenSeriesCount"], 2);
+    let library_visible = |id: Uuid| {
+        body["libraries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|l| l["id"] == id.to_string())
+            .map(|l| l["visible"].clone())
+    };
+    assert_eq!(library_visible(world.visible.library_id), Some(true.into()));
+    assert_eq!(library_visible(world.secret.library_id), Some(false.into()));
+
+    let explain = |item: &Item| format!("{preview}?seriesId={}", item.series_id);
+    let (_, body) = get(explain(&world.hidden), admin_token.clone()).await;
+    let series = &body["series"];
+    assert_eq!(series["visible"], false, "{body}");
+    assert_eq!(series["decision"], "denied");
+    assert_eq!(series["deniedBy"][0]["ruleType"], "genre");
+    assert_eq!(series["deniedBy"][0]["value"], "Adult");
+    assert_eq!(series["deniedBy"][0]["source"]["groupName"], "Kids");
+
+    let (_, body) = get(explain(&world.secret), admin_token.clone()).await;
+    assert_eq!(
+        body["series"]["deniedBy"][0]["ruleType"], "library",
+        "{body}"
+    );
+    assert_eq!(body["series"]["deniedBy"][0]["value"], "Secret");
+
+    let (_, body) = get(explain(&world.visible), admin_token.clone()).await;
+    assert_eq!(body["series"]["visible"], true, "{body}");
+    assert_eq!(body["series"]["decision"], "open");
+
+    // Admins are reported as exempt
+    let (_, body) = get(
+        format!("/api/v1/users/{}/visibility-preview", admin.id),
+        admin_token,
+    )
+    .await;
+    assert_eq!(body["roleBypass"], true, "{body}");
+    assert_eq!(body["restricted"], false);
+
+    // Readers cannot use it
+    let (status, _) = get(preview, world.reader_token.clone()).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+}

@@ -25,7 +25,8 @@
 //! visible = (union over groups with allows of: AND over types of: match) minus denies
 
 use codex_db::entities::{
-    access_groups::RuleMatch, user_access_groups, user_sharing_tags, user_sharing_tags::AccessMode,
+    access_groups, access_groups::RuleMatch, user_access_groups, user_sharing_tags,
+    user_sharing_tags::AccessMode,
 };
 use codex_db::repositories::{
     AccessGroupRules, AccessGroupRulesRepository, SeriesVisibility, UserRepository,
@@ -81,34 +82,11 @@ impl ContentFilter {
             return Ok(Self::allow_all());
         }
 
-        // Personal sharing-tag grants act as one more group.
-        let mut personal = AccessGroupRules::default();
-        for grant in user_sharing_tags::Entity::find()
-            .filter(user_sharing_tags::Column::UserId.eq(user_id))
-            .all(db)
-            .await?
-        {
-            personal
-                .sharing_tags
-                .push(codex_db::repositories::SharingTagRule {
-                    sharing_tag_id: grant.sharing_tag_id,
-                    access_mode: grant.get_access_mode(),
-                });
-        }
-
-        let group_ids: Vec<Uuid> = user_access_groups::Entity::find()
-            .filter(user_access_groups::Column::UserId.eq(user_id))
-            .all(db)
+        let rule_sets: Vec<AccessGroupRules> = load_rule_sets(db, user_id)
             .await?
             .into_iter()
-            .map(|m| m.access_group_id)
+            .map(|(_, rules)| rules)
             .collect();
-        let mut rule_sets: Vec<AccessGroupRules> =
-            AccessGroupRulesRepository::load_for_groups(db, &group_ids)
-                .await?
-                .into_values()
-                .collect();
-        rule_sets.push(personal);
 
         let targets = Self::resolve_targets(db, &rule_sets).await?;
 
@@ -176,6 +154,132 @@ impl ContentFilter {
         crate::content_filter_cache::ContentFilterCache::global()
             .get(db, user_id)
             .await
+    }
+
+    /// Explain whether a user can see a series, and why.
+    ///
+    /// Uses the same matching as [`Self::for_user`], fed with only this
+    /// series, so the verdict cannot disagree with what is enforced.
+    pub async fn explain_series(
+        db: &DatabaseConnection,
+        user_id: Uuid,
+        series_id: Uuid,
+    ) -> anyhow::Result<SeriesAccessExplanation> {
+        use codex_db::repositories::{
+            GenreRepository, LibraryRepository, SeriesRepository, SharingTagRepository,
+            TagRepository, normalize_taxonomy_name,
+        };
+
+        let unrestricted = SeriesAccessExplanation {
+            visible: true,
+            decision: AccessDecision::Unrestricted,
+            denied_by: Vec::new(),
+            allowed_by: Vec::new(),
+        };
+        let Some(user) = UserRepository::get_by_id(db, user_id).await? else {
+            anyhow::bail!("User not found");
+        };
+        if bypasses_content_filter(user.get_role()) {
+            return Ok(unrestricted);
+        }
+        let Some(series) = SeriesRepository::get_by_id(db, series_id).await? else {
+            anyhow::bail!("Series not found");
+        };
+
+        let sharing_tags = SharingTagRepository::get_tags_for_series(db, series_id).await?;
+        let tags = TagRepository::get_tags_for_series(db, series_id).await?;
+        let genres = GenreRepository::get_genres_for_series(db, series_id).await?;
+        let only = |_: ()| HashSet::from([series_id]);
+        let targets = ResolvedTargets {
+            sharing_tags: sharing_tags.iter().map(|t| (t.id, only(()))).collect(),
+            tags: tags
+                .iter()
+                .map(|t| (normalize_taxonomy_name(&t.name), only(())))
+                .collect(),
+            genres: genres
+                .iter()
+                .map(|g| (normalize_taxonomy_name(&g.name), only(())))
+                .collect(),
+            libraries: HashMap::from([(series.library_id, only(()))]),
+        };
+        let sharing_tag_names: HashMap<Uuid, String> =
+            sharing_tags.into_iter().map(|t| (t.id, t.name)).collect();
+        let library_name = LibraryRepository::get_by_id(db, series.library_id)
+            .await?
+            .map(|l| l.name)
+            .unwrap_or_default();
+
+        let rule_sets = load_rule_sets(db, user_id).await?;
+        let mut denied_by = Vec::new();
+        let mut allowed_by = Vec::new();
+        let mut whitelist = false;
+        for (source, rules) in &rule_sets {
+            for rule in rules
+                .sharing_tags
+                .iter()
+                .filter(|r| r.access_mode == AccessMode::Deny)
+            {
+                if targets.sharing_tags.contains_key(&rule.sharing_tag_id) {
+                    denied_by.push(MatchedRule {
+                        rule_type: RuleTypeLabel::SharingTag,
+                        value: sharing_tag_names
+                            .get(&rule.sharing_tag_id)
+                            .cloned()
+                            .unwrap_or_default(),
+                        source: source.clone(),
+                    });
+                }
+            }
+            for (rule_type, list, map) in [
+                (RuleTypeLabel::Tag, &rules.tags, &targets.tags),
+                (RuleTypeLabel::Genre, &rules.genres, &targets.genres),
+            ] {
+                for rule in list.iter().filter(|r| r.access_mode == AccessMode::Deny) {
+                    if map.contains_key(&rule.normalized_name()) {
+                        denied_by.push(MatchedRule {
+                            rule_type,
+                            value: rule.name.clone(),
+                            source: source.clone(),
+                        });
+                    }
+                }
+            }
+            for rule in rules
+                .libraries
+                .iter()
+                .filter(|r| r.access_mode == AccessMode::Deny)
+            {
+                if rule.library_id == series.library_id {
+                    denied_by.push(MatchedRule {
+                        rule_type: RuleTypeLabel::Library,
+                        value: library_name.clone(),
+                        source: source.clone(),
+                    });
+                }
+            }
+            if let Some(granted) = Self::granted_by(rules, &targets) {
+                whitelist = true;
+                if granted.contains(&series_id) {
+                    allowed_by.push(source.clone());
+                }
+            }
+        }
+
+        let decision = if !denied_by.is_empty() {
+            AccessDecision::Denied
+        } else if !whitelist {
+            AccessDecision::Open
+        } else if allowed_by.is_empty() {
+            AccessDecision::NotAllowed
+        } else {
+            AccessDecision::Allowed
+        };
+        Ok(SeriesAccessExplanation {
+            visible: matches!(decision, AccessDecision::Open | AccessDecision::Allowed),
+            decision,
+            denied_by,
+            allowed_by,
+        })
     }
 
     /// Resolve every target named by any rule to its series, one query per type.
@@ -409,6 +513,119 @@ impl ContentFilter {
                 .map(|s| s.iter().copied().collect()),
         })
     }
+}
+
+/// The kind of value a rule names.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, utoipa::ToSchema,
+)]
+#[serde(rename_all = "camelCase")]
+pub enum RuleTypeLabel {
+    SharingTag,
+    Tag,
+    Genre,
+    Library,
+}
+
+/// One deny rule that matches a series.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MatchedRule {
+    pub rule_type: RuleTypeLabel,
+    /// Display value: the tag or genre name, or the sharing tag or library name
+    pub value: String,
+    pub source: RuleSource,
+}
+
+/// The outcome for one series, and the reason for it.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, utoipa::ToSchema,
+)]
+#[serde(rename_all = "camelCase")]
+pub enum AccessDecision {
+    /// Admin or maintainer: no rule applies
+    Unrestricted,
+    /// No allow rule applies to the user, and no deny matches
+    Open,
+    /// At least one group (or personal grant) lets it through, and no deny matches
+    Allowed,
+    /// The user's rules whitelist content and none of them matches this series
+    NotAllowed,
+    /// A deny rule matches; denies always win
+    Denied,
+}
+
+/// Why a user can or cannot see a series.
+#[derive(Debug, Clone)]
+pub struct SeriesAccessExplanation {
+    pub visible: bool,
+    pub decision: AccessDecision,
+    /// Every deny rule that matches the series
+    pub denied_by: Vec<MatchedRule>,
+    /// Every rule set whose allow rules let the series through
+    pub allowed_by: Vec<RuleSource>,
+}
+
+/// Where a rule set comes from.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RuleSource {
+    /// An access group the user is a member of
+    Group { id: Uuid, name: String },
+    /// The user's personal sharing-tag grants
+    Personal,
+}
+
+/// Every rule set that applies to a user: one per access group they are in,
+/// plus their personal sharing-tag grants as one more.
+async fn load_rule_sets(
+    db: &DatabaseConnection,
+    user_id: Uuid,
+) -> anyhow::Result<Vec<(RuleSource, AccessGroupRules)>> {
+    let mut personal = AccessGroupRules::default();
+    for grant in user_sharing_tags::Entity::find()
+        .filter(user_sharing_tags::Column::UserId.eq(user_id))
+        .all(db)
+        .await?
+    {
+        personal
+            .sharing_tags
+            .push(codex_db::repositories::SharingTagRule {
+                sharing_tag_id: grant.sharing_tag_id,
+                access_mode: grant.get_access_mode(),
+            });
+    }
+
+    let group_ids: Vec<Uuid> = user_access_groups::Entity::find()
+        .filter(user_access_groups::Column::UserId.eq(user_id))
+        .all(db)
+        .await?
+        .into_iter()
+        .map(|m| m.access_group_id)
+        .collect();
+    let names: HashMap<Uuid, String> = access_groups::Entity::find()
+        .filter(access_groups::Column::Id.is_in(group_ids.clone()))
+        .all(db)
+        .await?
+        .into_iter()
+        .map(|g| (g.id, g.name))
+        .collect();
+    let mut sets: Vec<(RuleSource, AccessGroupRules)> =
+        AccessGroupRulesRepository::load_for_groups(db, &group_ids)
+            .await?
+            .into_iter()
+            .map(|(id, rules)| {
+                let name = names.get(&id).cloned().unwrap_or_default();
+                (RuleSource::Group { id, name }, rules)
+            })
+            .collect();
+    // Stable order for explanations: groups by name, personal grants last.
+    sets.sort_by(|a, b| match (&a.0, &b.0) {
+        (RuleSource::Group { name: x, .. }, RuleSource::Group { name: y, .. }) => x.cmp(y),
+        (RuleSource::Group { .. }, RuleSource::Personal) => std::cmp::Ordering::Less,
+        (RuleSource::Personal, RuleSource::Group { .. }) => std::cmp::Ordering::Greater,
+        _ => std::cmp::Ordering::Equal,
+    });
+    sets.push((RuleSource::Personal, personal));
+    Ok(sets)
 }
 
 /// Roles that access groups and sharing-tag grants never restrict.
@@ -1023,6 +1240,183 @@ mod db_tests {
 
     async fn make_admin(db: &DatabaseConnection, username: &str) -> Uuid {
         make_with_role(db, username, "admin").await
+    }
+
+    // ---------- Explanations ----------
+
+    use super::{AccessDecision, RuleSource, RuleTypeLabel};
+
+    #[tokio::test]
+    async fn explains_a_deny_with_its_group() {
+        let f = Fixture::new().await;
+        let user = make_user(f.conn(), "kid").await;
+        let lib = f.library("Manga").await;
+        let adult = f.series(lib, "Adult", &["Adult"]).await;
+        let group = f
+            .group(
+                "Kids",
+                user,
+                AccessGroupRules {
+                    genres: vec![NameRule::new("Adult", AccessMode::Deny)],
+                    ..Default::default()
+                },
+            )
+            .await;
+
+        let explanation = ContentFilter::explain_series(f.conn(), user, adult)
+            .await
+            .unwrap();
+        assert!(!explanation.visible);
+        assert_eq!(explanation.decision, AccessDecision::Denied);
+        assert_eq!(explanation.denied_by.len(), 1);
+        let rule = &explanation.denied_by[0];
+        assert_eq!(rule.rule_type, RuleTypeLabel::Genre);
+        assert_eq!(rule.value, "Adult");
+        assert_eq!(
+            rule.source,
+            RuleSource::Group {
+                id: group,
+                name: "Kids".to_string()
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn explains_a_series_no_allow_rule_matches() {
+        let f = Fixture::new().await;
+        let user = make_user(f.conn(), "kid").await;
+        let kids = f.library("Kids").await;
+        let manga = f.library("Manga").await;
+        f.series(kids, "Bluey", &[]).await;
+        let berserk = f.series(manga, "Berserk", &[]).await;
+        f.group(
+            "Kids",
+            user,
+            AccessGroupRules {
+                libraries: vec![allow_library(kids)],
+                ..Default::default()
+            },
+        )
+        .await;
+
+        let explanation = ContentFilter::explain_series(f.conn(), user, berserk)
+            .await
+            .unwrap();
+        assert!(!explanation.visible);
+        assert_eq!(explanation.decision, AccessDecision::NotAllowed);
+        assert!(explanation.denied_by.is_empty());
+        assert!(explanation.allowed_by.is_empty());
+    }
+
+    #[tokio::test]
+    async fn explains_which_group_lets_a_series_through() {
+        let f = Fixture::new().await;
+        let user = make_user(f.conn(), "kid").await;
+        let kids = f.library("Kids").await;
+        let bluey = f.series(kids, "Bluey", &[]).await;
+        let group = f
+            .group(
+                "Kids",
+                user,
+                AccessGroupRules {
+                    libraries: vec![allow_library(kids)],
+                    ..Default::default()
+                },
+            )
+            .await;
+
+        let explanation = ContentFilter::explain_series(f.conn(), user, bluey)
+            .await
+            .unwrap();
+        assert!(explanation.visible);
+        assert_eq!(explanation.decision, AccessDecision::Allowed);
+        assert_eq!(
+            explanation.allowed_by,
+            vec![RuleSource::Group {
+                id: group,
+                name: "Kids".to_string()
+            }]
+        );
+    }
+
+    #[tokio::test]
+    async fn explains_bypass_roles() {
+        let f = Fixture::new().await;
+        let admin = make_admin(f.conn(), "admin").await;
+        let lib = f.library("Any").await;
+        let series = f.series(lib, "S", &["Adult"]).await;
+        let explanation = ContentFilter::explain_series(f.conn(), admin, series)
+            .await
+            .unwrap();
+        assert!(explanation.visible);
+        assert_eq!(explanation.decision, AccessDecision::Unrestricted);
+    }
+
+    /// The explanation must never disagree with what is enforced.
+    #[tokio::test]
+    async fn explanations_agree_with_the_filter() {
+        let f = Fixture::new().await;
+        let user = make_user(f.conn(), "reader").await;
+        let manga = f.library("Manga").await;
+        let comics = f.library("Comics").await;
+        let secret = f.library("Secret").await;
+        let mut all = Vec::new();
+        for (lib, name, genres) in [
+            (manga, "Kids manga", vec!["Kids"]),
+            (manga, "Adult manga", vec!["Adult", "Kids"]),
+            (manga, "Action manga", vec!["Action"]),
+            (comics, "Kids comic", vec!["Kids", "Comedy"]),
+            (comics, "Comedy comic", vec!["Comedy"]),
+            (secret, "Secret kids", vec!["Kids"]),
+        ] {
+            all.push(f.series(lib, name, &genres).await);
+        }
+        let tag = SharingTagRepository::create(f.conn(), "shared", None)
+            .await
+            .unwrap();
+        SharingTagRepository::add_tag_to_series(f.conn(), all[2], tag.id)
+            .await
+            .unwrap();
+        SharingTagRepository::set_user_grant(f.conn(), user, tag.id, AccessMode::Allow)
+            .await
+            .unwrap();
+        f.group(
+            "Kids manga",
+            user,
+            AccessGroupRules {
+                genres: vec![NameRule::new("Kids", AccessMode::Allow)],
+                libraries: vec![allow_library(manga)],
+                ..Default::default()
+            },
+        )
+        .await;
+        f.group(
+            "Comics, no adult",
+            user,
+            AccessGroupRules {
+                genre_match: RuleMatch::All,
+                genres: vec![
+                    NameRule::new("Kids", AccessMode::Allow),
+                    NameRule::new("Comedy", AccessMode::Allow),
+                    NameRule::new("Adult", AccessMode::Deny),
+                ],
+                libraries: vec![allow_library(comics), deny_library(secret)],
+                ..Default::default()
+            },
+        )
+        .await;
+
+        let filter = f.filter(user).await;
+        for series in all {
+            let explanation = ContentFilter::explain_series(f.conn(), user, series)
+                .await
+                .unwrap();
+            assert_eq!(
+                explanation.visible,
+                filter.is_series_visible(series),
+                "{explanation:?}"
+            );
+        }
     }
 
     // ---------- Library visibility ----------

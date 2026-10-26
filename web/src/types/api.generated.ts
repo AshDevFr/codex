@@ -6647,6 +6647,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/users/{user_id}/visibility-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview what a user can see (admin only)
+         * @description Counts the series the user can and cannot see and lists every library with
+         *     whether they can see it. With `seriesId`, also explains that series: which
+         *     deny rules hide it (and from which group), or which groups let it through,
+         *     or that no allow rule matches it. Uses the same rules as enforcement, built
+         *     fresh rather than from the cache.
+         */
+        get: operations["get_visibility_preview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/want-to-read": {
         parameters: {
             query?: never;
@@ -8337,6 +8361,11 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * @description The outcome for one series, and the reason for it.
+         * @enum {string}
+         */
+        AccessDecision: "unrestricted" | "open" | "allowed" | "notAllowed" | "denied";
         /** @description Access group detail (includes members, grants, and OIDC mappings) */
         AccessGroupDetailDto: {
             /**
@@ -14662,6 +14691,13 @@ export interface components {
              */
             libraryId: string;
         };
+        /** @description A library and whether the previewed user can see it */
+        LibraryVisibilityDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            visible: boolean;
+        };
         /** @description Additional properties that can be attached to links */
         LinkProperties: {
             /**
@@ -14797,6 +14833,13 @@ export interface components {
              * @example Marked 5 books as read
              */
             message: string;
+        };
+        /** @description A deny rule that matches a series */
+        MatchedRuleDto: {
+            ruleType: components["schemas"]["RuleTypeLabel"];
+            source: components["schemas"]["GrantSourceDto"];
+            /** @description The tag or genre name, or the sharing tag or library name */
+            value: string;
         };
         /**
          * @description Provenance of a group membership
@@ -18953,6 +18996,11 @@ export interface components {
          * @enum {string}
          */
         RuleMatch: "any" | "all";
+        /**
+         * @description The kind of value a rule names.
+         * @enum {string}
+         */
+        RuleTypeLabel: "sharingTag" | "tag" | "genre" | "library";
         /** @description Response for `POST .../run-now`. */
         RunNowResponse: {
             /** Format: uuid */
@@ -19121,6 +19169,18 @@ export interface components {
         SelectCoverSourceRequest: {
             /** @description Cover source: "default" (first book cover) or "custom" (uploaded cover) */
             source: string;
+        };
+        /** @description Whether the previewed user can see one series, and why */
+        SeriesAccessDto: {
+            /** @description Every group (or personal grant) whose allow rules let it through */
+            allowedBy: components["schemas"]["GrantSourceDto"][];
+            decision: components["schemas"]["AccessDecision"];
+            /** @description Every deny rule that matches this series */
+            deniedBy: components["schemas"]["MatchedRuleDto"][];
+            /** Format: uuid */
+            seriesId: string;
+            title: string;
+            visible: boolean;
         };
         /**
          * @description Title alias used by release-source plugins to match incoming releases by
@@ -22354,6 +22414,32 @@ export interface components {
             tokenType: string;
             /** @description User information */
             user: components["schemas"]["UserInfo"];
+        };
+        /** @description What a user can see, for an admin checking an access setup */
+        VisibilityPreviewDto: {
+            /**
+             * Format: int64
+             * @description Series hidden from the user
+             */
+            hiddenSeriesCount: number;
+            /** @description Every library, and whether the user can see it */
+            libraries: components["schemas"]["LibraryVisibilityDto"][];
+            /** @description False for admins and maintainers, and for users no rule applies to */
+            restricted: boolean;
+            /** @description The user's role exempts them from access groups (admin or maintainer) */
+            roleBypass: boolean;
+            /** @description Present when a series was asked about */
+            series?: components["schemas"]["SeriesAccessDto"];
+            /**
+             * Format: uuid
+             * @description The previewed user
+             */
+            userId: string;
+            /**
+             * Format: int64
+             * @description Series the user can see
+             */
+            visibleSeriesCount: number;
         };
         /**
          * @description A single entry in a user's want-to-read queue. Exactly one of `series_id` /
@@ -37750,6 +37836,46 @@ export interface operations {
                 content?: never;
             };
             /** @description Grant not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_visibility_preview: {
+        parameters: {
+            query?: {
+                /** @description Explain whether the user can see this series */
+                seriesId?: string | null;
+            };
+            header?: never;
+            path: {
+                /** @description User ID */
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description What the user can see */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VisibilityPreviewDto"];
+                };
+            };
+            /** @description Forbidden - Missing permission */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description User or series not found */
             404: {
                 headers: {
                     [name: string]: unknown;

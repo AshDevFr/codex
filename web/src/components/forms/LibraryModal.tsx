@@ -734,6 +734,15 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
         </>
       )}
 
+      {!isEditMode && (
+        <Alert icon={<IconInfoCircle size={16} />} color="gray" variant="light">
+          Readers whose access groups use allow rules only see content their
+          access groups allow, so they will not see this library until a group
+          allows it (or allows something in it). Readers with no allow rules see
+          it as soon as it is created.
+        </Alert>
+      )}
+
       <Paper p="md" withBorder>
         <Stack gap="xs">
           <Text size="sm" fw={500}>
