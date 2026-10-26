@@ -2,7 +2,8 @@ import { Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 import { useAuthStore } from "@/store/authStore";
 import { renderWithProviders, screen } from "@/test/utils";
-import { AdminRoute } from "./AdminRoute";
+import { PERMISSIONS } from "@/types/permissions";
+import { RequirePermission } from "./RequirePermission";
 
 function signIn(role: "admin" | "maintainer" | "reader") {
   useAuthStore.setState({
@@ -25,9 +26,9 @@ function renderAt(path: string) {
       <Route
         path="/settings/metrics"
         element={
-          <AdminRoute>
+          <RequirePermission permission={PERMISSIONS.TASKS_READ}>
             <div>Metrics page</div>
-          </AdminRoute>
+          </RequirePermission>
         }
       />
       <Route path="/" element={<div>Home page</div>} />
@@ -36,7 +37,7 @@ function renderAt(path: string) {
   );
 }
 
-describe("AdminRoute", () => {
+describe("RequirePermission", () => {
   beforeEach(() => {
     useAuthStore.setState({
       user: null,
@@ -45,14 +46,17 @@ describe("AdminRoute", () => {
     } as never);
   });
 
-  it("shows the page to an admin", () => {
-    signIn("admin");
+  it.each([
+    "admin",
+    "maintainer",
+  ] as const)("shows the page to a %s", (role) => {
+    signIn(role);
     renderAt("/settings/metrics");
     expect(screen.getByText("Metrics page")).toBeInTheDocument();
   });
 
-  it("sends anyone else home", () => {
-    signIn("maintainer");
+  it("sends a reader home", () => {
+    signIn("reader");
     renderAt("/settings/metrics");
     expect(screen.queryByText("Metrics page")).not.toBeInTheDocument();
     expect(screen.getByText("Home page")).toBeInTheDocument();

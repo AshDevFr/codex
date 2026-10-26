@@ -11,7 +11,7 @@ import {
 } from "react-router-dom";
 import { onRateLimitNotification } from "@/api/client";
 import { setupApi } from "@/api/setup";
-import { AdminRoute } from "@/components/auth/AdminRoute";
+import { RequirePermission } from "@/components/auth/RequirePermission";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useEntityEvents } from "@/hooks/useEntityEvents";
 import { BookDetail } from "@/pages/BookDetail";
@@ -57,6 +57,7 @@ import { WantToRead } from "@/pages/WantToRead";
 import { navigationService } from "@/services/navigation";
 import { useAuthStore } from "@/store/authStore";
 import { useBulkSelectionStore } from "@/store/bulkSelectionStore";
+import { PERMISSIONS } from "@/types/permissions";
 import { migrateSeriesReadingDirections } from "@/utils/readingDirectionMigration";
 
 // Protected route wrapper
@@ -546,11 +547,11 @@ function App() {
           path="/settings/metrics"
           element={
             <ProtectedRoute>
-              <AdminRoute>
+              <RequirePermission permission={PERMISSIONS.TASKS_READ}>
                 <AppLayout>
                   <MetricsSettings />
                 </AppLayout>
-              </AdminRoute>
+              </RequirePermission>
             </ProtectedRoute>
           }
         />

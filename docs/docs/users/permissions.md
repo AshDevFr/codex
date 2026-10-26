@@ -158,7 +158,7 @@ Shared groupings of series (collections) and books (read lists). See [Collection
 
 | Permission | Description |
 |------------|-------------|
-| `tasks-read` | View background tasks and queue status |
+| `tasks-read` | View background tasks, queue status and server metrics |
 | `tasks-write` | Cancel tasks, trigger operations |
 
 ### Plugin Permissions
@@ -171,7 +171,7 @@ Shared groupings of series (collections) and books (read lists). See [Collection
 
 | Permission | Description |
 |------------|-------------|
-| `system-health` | View health status (server metrics are admin-only) |
+| `system-health` | View health status (server metrics need `tasks-read`) |
 | `system-admin` | Full administrative access, server settings |
 
 ## Effective Permissions

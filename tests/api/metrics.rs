@@ -425,3 +425,29 @@ async fn test_get_metrics_exact_false_is_refused_to_readonly_user() {
 
     assert_eq!(status, StatusCode::FORBIDDEN);
 }
+
+/// Maintainers run tasks and the iOS app shows them metrics from its Tasks
+/// screen, so metrics reads are open to them, though not to readers. Task
+/// metrics are covered in `task_metrics.rs`, which wires the metrics service.
+#[tokio::test]
+async fn test_metrics_reads_are_open_to_maintainers() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+
+    let password_hash = password::hash_password("maint123").unwrap();
+    let mut user = create_test_user("maint", "maint@example.com", &password_hash, false);
+    user.role = "maintainer".to_string();
+    let created = UserRepository::create(&db, &user).await.unwrap();
+    let token = state
+        .jwt_service
+        .generate_token(created.id, created.username.clone(), created.get_role())
+        .unwrap();
+
+    for uri in ["/api/v1/metrics/inventory", "/api/v1/metrics/plugins"] {
+        let app = create_test_router(state.clone()).await;
+        let request = get_request_with_auth(uri, &token);
+        let (status, _): (StatusCode, Option<serde_json::Value>) =
+            make_json_request(app, request).await;
+        assert_eq!(status, StatusCode::OK, "{uri}");
+    }
+}

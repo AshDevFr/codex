@@ -279,7 +279,32 @@ async fn test_task_metrics_requires_auth() {
 }
 
 #[tokio::test]
-async fn test_task_metrics_reads_require_admin() {
+async fn test_task_metrics_reads_are_open_to_maintainers() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_app_state_with_metrics(db.clone()).await;
+    let password_hash = password::hash_password("maint123").unwrap();
+    let mut user = create_test_user("maint", "maint@example.com", &password_hash, false);
+    user.role = "maintainer".to_string();
+    let created = UserRepository::create(&db, &user).await.unwrap();
+    let token = state
+        .jwt_service
+        .generate_token(created.id, created.username.clone(), created.get_role())
+        .unwrap();
+
+    for uri in [
+        "/api/v1/metrics/tasks",
+        "/api/v1/metrics/tasks/history?days=7&granularity=hour",
+    ] {
+        let app = create_test_router_with_app_state(state.clone());
+        let request = get_request_with_auth(uri, &token);
+        let (status, _): (StatusCode, Option<serde_json::Value>) =
+            make_json_request(app, request).await;
+        assert_eq!(status, StatusCode::OK, "{uri}");
+    }
+}
+
+#[tokio::test]
+async fn test_task_metrics_reads_are_refused_to_readers() {
     let (db, _temp_dir) = setup_test_db().await;
     let state = create_test_app_state_with_metrics(db.clone()).await;
     let token = create_regular_user_and_token(&db, &state).await;
