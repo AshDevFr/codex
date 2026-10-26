@@ -75,6 +75,7 @@ pub async fn update_reading_progress(
 ) -> Result<Json<ReadProgressResponse>, ApiError> {
     // Check permission - users can manage their own reading progress
     auth.require_permission(&Permission::ProgressWrite)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     // Look up the book to get its page count for auto-completion detection
     let book = BookRepository::get_by_id(&state.db, book_id)
@@ -139,6 +140,7 @@ pub async fn get_reading_progress(
 ) -> Result<Response, ApiError> {
     // Check permission
     auth.require_permission(&Permission::ProgressRead)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     // Verify the book exists
     BookRepository::get_by_id(&state.db, book_id)
@@ -184,6 +186,7 @@ pub async fn delete_reading_progress(
 ) -> Result<StatusCode, ApiError> {
     // Check permission
     auth.require_permission(&Permission::ProgressWrite)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     // Delete progress
     ReadProgressRepository::delete_with_device(
@@ -255,6 +258,7 @@ pub async fn mark_book_as_read(
 ) -> Result<Json<ReadProgressResponse>, ApiError> {
     // Check permission
     auth.require_permission(&Permission::ProgressWrite)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     // Get the book to get its page count
     let book = BookRepository::get_by_id(&state.db, book_id)
@@ -300,6 +304,7 @@ pub async fn mark_book_as_unread(
 ) -> Result<StatusCode, ApiError> {
     // Check permission
     auth.require_permission(&Permission::ProgressWrite)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     // Mark as unread (delete progress)
     ReadProgressRepository::delete_with_device(
@@ -339,6 +344,7 @@ pub async fn get_progression(
     Path(book_id): Path<Uuid>,
 ) -> Result<Response, ApiError> {
     auth.require_permission(&Permission::ProgressRead)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     BookRepository::get_by_id(&state.db, book_id)
         .await
@@ -386,6 +392,7 @@ pub async fn put_progression(
     Json(body): Json<serde_json::Value>,
 ) -> Result<StatusCode, ApiError> {
     auth.require_permission(&Permission::ProgressWrite)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     let book = BookRepository::get_by_id(&state.db, book_id)
         .await
@@ -524,6 +531,7 @@ pub async fn get_book_read_history(
     Path(book_id): Path<Uuid>,
 ) -> Result<Json<ReadHistoryResponse>, ApiError> {
     auth.require_permission(&Permission::ProgressRead)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     BookRepository::get_by_id(&state.db, book_id)
         .await
@@ -567,6 +575,7 @@ pub async fn clear_book_read_history(
     Path(book_id): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {
     auth.require_permission(&Permission::ProgressWrite)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     BookRepository::get_by_id(&state.db, book_id)
         .await
@@ -616,6 +625,7 @@ pub async fn delete_book_read_history_entry(
     Path((book_id, completion_id)): Path<(Uuid, Uuid)>,
 ) -> Result<StatusCode, ApiError> {
     auth.require_permission(&Permission::ProgressWrite)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     BookRepository::get_by_id(&state.db, book_id)
         .await
@@ -666,6 +676,7 @@ pub async fn get_series_read_history(
     Path(series_id): Path<Uuid>,
 ) -> Result<Json<ReadHistoryResponse>, ApiError> {
     auth.require_permission(&Permission::ProgressRead)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     SeriesRepository::get_by_id(&state.db, series_id)
         .await
@@ -717,6 +728,7 @@ pub async fn clear_series_read_history(
     Path(series_id): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {
     auth.require_permission(&Permission::ProgressWrite)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     SeriesRepository::get_by_id(&state.db, series_id)
         .await

@@ -470,6 +470,7 @@ pub async fn trigger_series_analysis(
 ) -> Result<Json<CreateTaskResponse>, ApiError> {
     // Check permission
     auth.require_permission(&Permission::SeriesWrite)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Verify series exists
     SeriesRepository::get_by_id(&state.db, series_id)
@@ -519,6 +520,7 @@ pub async fn trigger_book_analysis(
 ) -> Result<Json<CreateTaskResponse>, ApiError> {
     // Check permission
     auth.require_permission(&Permission::BooksWrite)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     // Verify book exists
     BookRepository::get_by_id(&state.db, book_id)
@@ -769,6 +771,7 @@ pub async fn trigger_series_unanalyzed_analysis(
 ) -> Result<Json<CreateTaskResponse>, ApiError> {
     // Check permission
     auth.require_permission(&Permission::SeriesWrite)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Verify series exists
     SeriesRepository::get_by_id(&state.db, series_id)
@@ -865,6 +868,7 @@ pub async fn trigger_book_unanalyzed_analysis(
 ) -> Result<Json<CreateTaskResponse>, ApiError> {
     // Check permission
     auth.require_permission(&Permission::BooksWrite)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     // Verify book exists
     BookRepository::get_by_id(&state.db, book_id)
@@ -928,6 +932,7 @@ pub async fn renumber_series(
     auth: AuthContext,
 ) -> Result<Json<CreateTaskResponse>, ApiError> {
     auth.require_permission(&Permission::SeriesWrite)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Verify series exists before enqueuing
     SeriesRepository::get_by_id(&state.db, series_id)

@@ -549,6 +549,7 @@ pub async fn get_series(
     Path(series_id): Path<Uuid>,
 ) -> Result<Json<KomgaSeriesDto>, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     let user_id = Some(auth.user_id);
 
@@ -597,6 +598,7 @@ pub async fn get_series_thumbnail(
     Path(series_id): Path<Uuid>,
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Serve from the on-disk series thumbnail cache before touching the
     // database: a Komga client painting a series shelf asks for every cover at
@@ -702,6 +704,7 @@ pub async fn get_series_books(
     Query(query): Query<SeriesPaginationQuery>,
 ) -> Result<Json<KomgaPage<KomgaBookDto>>, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     let user_id = Some(auth.user_id);
     let page = query.page.max(0) as u64;

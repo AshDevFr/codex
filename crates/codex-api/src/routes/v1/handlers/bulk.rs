@@ -62,10 +62,14 @@ pub async fn bulk_mark_books_as_read(
         }));
     }
 
-    // Get book data (id, page_count) for all valid books
+    // Get book data (id, page_count) for every book that exists and that the
+    // user can see; the rest are skipped like unknown ids.
+    let filter = crate::visibility::content_filter(&state.db, auth.user_id).await?;
     let mut book_data: Vec<(Uuid, i32)> = Vec::new();
     for book_id in &request.book_ids {
-        if let Ok(Some(book)) = BookRepository::get_by_id(&state.db, *book_id).await {
+        if let Ok(Some(book)) = BookRepository::get_by_id(&state.db, *book_id).await
+            && filter.is_book_visible(book.series_id)
+        {
             book_data.push((book.id, book.page_count));
         }
     }
@@ -128,12 +132,26 @@ pub async fn bulk_mark_books_as_unread(
         }));
     }
 
+    // Books the user cannot see are skipped like unknown ids.
+    let filter = crate::visibility::content_filter(&state.db, auth.user_id).await?;
+    let book_ids: Vec<Uuid> = if filter.has_restrictions {
+        BookRepository::get_by_ids(&state.db, &request.book_ids)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to fetch books: {}", e)))?
+            .into_iter()
+            .filter(|book| filter.is_book_visible(book.series_id))
+            .map(|book| book.id)
+            .collect()
+    } else {
+        request.book_ids
+    };
+
     // Mark all books as unread (delete progress records), attributing the
     // reset events to the requesting device.
     let count = ReadProgressRepository::mark_series_as_unread_with_device(
         &state.db,
         auth.user_id,
-        request.book_ids,
+        book_ids,
         &auth.client_device_context(&headers),
     )
     .await
@@ -250,13 +268,15 @@ pub async fn bulk_mark_series_as_read(
 
     let mut total_count = 0;
 
+    let filter = crate::visibility::content_filter(&state.db, auth.user_id).await?;
     for series_id in &request.series_ids {
-        // Verify series exists
-        if SeriesRepository::get_by_id(&state.db, *series_id)
-            .await
-            .ok()
-            .flatten()
-            .is_none()
+        // Skip series that do not exist or that the user cannot see
+        if !filter.is_series_visible(*series_id)
+            || SeriesRepository::get_by_id(&state.db, *series_id)
+                .await
+                .ok()
+                .flatten()
+                .is_none()
         {
             continue;
         }
@@ -335,13 +355,15 @@ pub async fn bulk_mark_series_as_unread(
 
     let mut total_count: u64 = 0;
 
+    let filter = crate::visibility::content_filter(&state.db, auth.user_id).await?;
     for series_id in &request.series_ids {
-        // Verify series exists
-        if SeriesRepository::get_by_id(&state.db, *series_id)
-            .await
-            .ok()
-            .flatten()
-            .is_none()
+        // Skip series that do not exist or that the user cannot see
+        if !filter.is_series_visible(*series_id)
+            || SeriesRepository::get_by_id(&state.db, *series_id)
+                .await
+                .ok()
+                .flatten()
+                .is_none()
         {
             continue;
         }
@@ -416,13 +438,15 @@ pub async fn bulk_analyze_series(
 
     let mut enqueued = 0;
 
+    let filter = crate::visibility::content_filter(&state.db, auth.user_id).await?;
     for series_id in &request.series_ids {
-        // Verify series exists
-        if SeriesRepository::get_by_id(&state.db, *series_id)
-            .await
-            .ok()
-            .flatten()
-            .is_none()
+        // Skip series that do not exist or that the user cannot see
+        if !filter.is_series_visible(*series_id)
+            || SeriesRepository::get_by_id(&state.db, *series_id)
+                .await
+                .ok()
+                .flatten()
+                .is_none()
         {
             continue;
         }

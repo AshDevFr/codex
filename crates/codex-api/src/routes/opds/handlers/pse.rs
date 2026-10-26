@@ -60,6 +60,7 @@ pub async fn book_pages(
     Path(book_id): Path<Uuid>,
 ) -> Result<OpdsPseResponse, ApiError> {
     require_permission!(auth, Permission::PagesRead)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     let now = Utc::now();
     let base_url = "/opds";
@@ -154,6 +155,7 @@ pub async fn book_page_image(
     Path((book_id, page_number)): Path<(Uuid, i32)>,
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::PagesRead)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     // Record reading progress for OPDS clients.
     // Fetch book to get page_count for the progress service.

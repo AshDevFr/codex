@@ -1349,6 +1349,7 @@ pub async fn patch_series(
     use sea_orm::{ActiveModelTrait, Set};
 
     require_permission!(auth, Permission::SeriesWrite)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Verify series exists
     let series_model = SeriesRepository::get_by_id(&state.db, series_id)
@@ -1919,6 +1920,7 @@ pub async fn get_series_books(
     Query(query): Query<ListBooksQuery>,
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Verify series exists
     SeriesRepository::get_by_id(&state.db, series_id)
@@ -1966,6 +1968,7 @@ pub async fn purge_series_deleted_books(
     Path(series_id): Path<Uuid>,
 ) -> Result<Json<u64>, ApiError> {
     require_permission!(auth, Permission::SeriesWrite)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Verify series exists and get library_id
     let series = SeriesRepository::get_by_id(&state.db, series_id)
@@ -2026,6 +2029,7 @@ pub async fn upload_series_cover(
     mut multipart: Multipart,
 ) -> Result<StatusCode, ApiError> {
     require_permission!(auth, Permission::SeriesWrite)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Verify series exists and get its library_id
     let series = SeriesRepository::get_by_id(&state.db, series_id)
@@ -2159,6 +2163,7 @@ pub async fn set_series_cover_source(
     Json(request): Json<SelectCoverSourceRequest>,
 ) -> Result<StatusCode, ApiError> {
     require_permission!(auth, Permission::SeriesWrite)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Verify series exists and get library_id
     let series = SeriesRepository::get_by_id(&state.db, series_id)
@@ -2227,6 +2232,7 @@ pub async fn get_series_thumbnail(
     Path(series_id): Path<Uuid>,
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // OPTIMIZATION 1: Check disk cache FIRST before hitting the database.
     // This avoids acquiring a DB connection for cached thumbnails.
@@ -2957,6 +2963,7 @@ pub async fn mark_series_as_read(
     Path(series_id): Path<Uuid>,
 ) -> Result<Json<MarkReadResponse>, ApiError> {
     require_permission!(auth, Permission::ProgressWrite)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Verify series exists
     let _series = SeriesRepository::get_by_id(&state.db, series_id)
@@ -3024,6 +3031,7 @@ pub async fn mark_series_as_unread(
     Path(series_id): Path<Uuid>,
 ) -> Result<Json<MarkReadResponse>, ApiError> {
     require_permission!(auth, Permission::ProgressWrite)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Verify series exists
     let _series = SeriesRepository::get_by_id(&state.db, series_id)
@@ -3089,6 +3097,7 @@ pub async fn download_series(
     Path(series_id): Path<Uuid>,
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Fetch series to verify it exists
     let _series = SeriesRepository::get_by_id(&state.db, series_id)
@@ -3232,6 +3241,7 @@ pub async fn replace_series_metadata(
     Json(request): Json<ReplaceSeriesMetadataRequest>,
 ) -> Result<Json<SeriesMetadataResponse>, ApiError> {
     require_permission!(auth, Permission::SeriesWrite)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Find the series
     let existing_series = SeriesRepository::get_by_id(&state.db, series_id)
@@ -3385,6 +3395,7 @@ pub async fn reset_series_metadata(
     Path(series_id): Path<Uuid>,
 ) -> Result<Json<FullSeriesMetadataResponse>, ApiError> {
     require_permission!(auth, Permission::SeriesWrite)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Verify series exists
     let series = SeriesRepository::get_by_id(&state.db, series_id)
@@ -3588,6 +3599,7 @@ pub async fn patch_series_metadata(
     Json(request): Json<PatchSeriesMetadataRequest>,
 ) -> Result<Json<SeriesMetadataResponse>, ApiError> {
     require_permission!(auth, Permission::SeriesWrite)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Find the series
     let existing_series = SeriesRepository::get_by_id(&state.db, series_id)
@@ -3811,6 +3823,7 @@ pub async fn get_series_metadata(
     Path(series_id): Path<Uuid>,
 ) -> Result<Json<FullSeriesMetadataResponse>, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Verify series exists
     let _series = SeriesRepository::get_by_id(&state.db, series_id)
@@ -4002,6 +4015,7 @@ pub async fn update_metadata_locks(
     Json(request): Json<UpdateMetadataLocksRequest>,
 ) -> Result<Json<MetadataLocks>, ApiError> {
     require_permission!(auth, Permission::SeriesWrite)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Verify series exists
     SeriesRepository::get_by_id(&state.db, series_id)
@@ -4153,6 +4167,7 @@ pub async fn get_metadata_locks(
     Path(series_id): Path<Uuid>,
 ) -> Result<Json<MetadataLocks>, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Verify series exists
     SeriesRepository::get_by_id(&state.db, series_id)
@@ -4317,6 +4332,7 @@ pub async fn get_series_genres(
     Path(series_id): Path<Uuid>,
 ) -> Result<Json<GenreListResponse>, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Verify series exists
     SeriesRepository::get_by_id(&state.db, series_id)
@@ -4367,6 +4383,7 @@ pub async fn set_series_genres(
     Json(request): Json<SetSeriesGenresRequest>,
 ) -> Result<Json<GenreListResponse>, ApiError> {
     require_permission!(auth, Permission::SeriesWrite)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Verify series exists and get library_id
     let series = SeriesRepository::get_by_id(&state.db, series_id)
@@ -4519,6 +4536,7 @@ pub async fn get_series_tags(
     Path(series_id): Path<Uuid>,
 ) -> Result<Json<TagListResponse>, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Verify series exists
     SeriesRepository::get_by_id(&state.db, series_id)
@@ -4569,6 +4587,7 @@ pub async fn set_series_tags(
     Json(request): Json<SetSeriesTagsRequest>,
 ) -> Result<Json<TagListResponse>, ApiError> {
     require_permission!(auth, Permission::SeriesWrite)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Verify series exists and get library_id
     let series = SeriesRepository::get_by_id(&state.db, series_id)
@@ -4631,6 +4650,7 @@ pub async fn add_series_genre(
     Json(request): Json<AddSeriesGenreRequest>,
 ) -> Result<Json<GenreDto>, ApiError> {
     require_permission!(auth, Permission::SeriesWrite)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Verify series exists and get library_id
     let series = SeriesRepository::get_by_id(&state.db, series_id)
@@ -4687,6 +4707,7 @@ pub async fn remove_series_genre(
     Path((series_id, genre_id)): Path<(Uuid, Uuid)>,
 ) -> Result<StatusCode, ApiError> {
     require_permission!(auth, Permission::SeriesWrite)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Verify series exists and get library_id
     let series = SeriesRepository::get_by_id(&state.db, series_id)
@@ -4811,6 +4832,7 @@ pub async fn add_series_tag(
     Json(request): Json<AddSeriesTagRequest>,
 ) -> Result<Json<TagDto>, ApiError> {
     require_permission!(auth, Permission::SeriesWrite)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Verify series exists and get library_id
     let series = SeriesRepository::get_by_id(&state.db, series_id)
@@ -4867,6 +4889,7 @@ pub async fn remove_series_tag(
     Path((series_id, tag_id)): Path<(Uuid, Uuid)>,
 ) -> Result<StatusCode, ApiError> {
     require_permission!(auth, Permission::SeriesWrite)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Verify series exists and get library_id
     let series = SeriesRepository::get_by_id(&state.db, series_id)
@@ -4997,6 +5020,7 @@ pub async fn get_series_rating(
     Path(series_id): Path<Uuid>,
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Verify series exists
     SeriesRepository::get_by_id(&state.db, series_id)
@@ -5052,6 +5076,7 @@ pub async fn set_series_rating(
     Json(request): Json<SetUserRatingRequest>,
 ) -> Result<Json<UserSeriesRatingDto>, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Validate rating range
     if !(1..=100).contains(&request.rating) {
@@ -5110,6 +5135,7 @@ pub async fn delete_series_rating(
     Path(series_id): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Verify series exists
     SeriesRepository::get_by_id(&state.db, series_id)
@@ -5198,6 +5224,7 @@ pub async fn get_series_alternate_titles(
     Path(series_id): Path<Uuid>,
 ) -> Result<Json<AlternateTitleListResponse>, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Verify series exists
     SeriesRepository::get_by_id(&state.db, series_id)
@@ -5250,6 +5277,7 @@ pub async fn create_alternate_title(
     Json(request): Json<CreateAlternateTitleRequest>,
 ) -> Result<(StatusCode, Json<AlternateTitleDto>), ApiError> {
     require_permission!(auth, Permission::SeriesWrite)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Verify series exists and get library_id
     let series = SeriesRepository::get_by_id(&state.db, series_id)
@@ -5321,6 +5349,7 @@ pub async fn update_alternate_title(
     Json(request): Json<UpdateAlternateTitleRequest>,
 ) -> Result<Json<AlternateTitleDto>, ApiError> {
     require_permission!(auth, Permission::SeriesWrite)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Verify series exists and get library_id
     let series = SeriesRepository::get_by_id(&state.db, series_id)
@@ -5395,6 +5424,7 @@ pub async fn delete_alternate_title(
     Path((series_id, title_id)): Path<(Uuid, Uuid)>,
 ) -> Result<StatusCode, ApiError> {
     require_permission!(auth, Permission::SeriesWrite)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Verify series exists and get library_id
     let series = SeriesRepository::get_by_id(&state.db, series_id)
@@ -5462,6 +5492,7 @@ pub async fn get_series_external_ratings(
     Path(series_id): Path<Uuid>,
 ) -> Result<Json<ExternalRatingListResponse>, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Verify series exists
     SeriesRepository::get_by_id(&state.db, series_id)
@@ -5516,6 +5547,7 @@ pub async fn create_external_rating(
     Json(request): Json<CreateExternalRatingRequest>,
 ) -> Result<Json<ExternalRatingDto>, ApiError> {
     require_permission!(auth, Permission::SeriesWrite)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Verify series exists and get library_id
     let series = SeriesRepository::get_by_id(&state.db, series_id)
@@ -5586,6 +5618,7 @@ pub async fn delete_external_rating(
     Path((series_id, source)): Path<(Uuid, String)>,
 ) -> Result<StatusCode, ApiError> {
     require_permission!(auth, Permission::SeriesWrite)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Verify series exists and get library_id
     let series = SeriesRepository::get_by_id(&state.db, series_id)
@@ -5648,6 +5681,7 @@ pub async fn get_series_average_rating(
     Path(series_id): Path<Uuid>,
 ) -> Result<Json<SeriesAverageRatingResponse>, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Verify series exists
     SeriesRepository::get_by_id(&state.db, series_id)
@@ -5696,6 +5730,7 @@ pub async fn get_series_external_links(
     Path(series_id): Path<Uuid>,
 ) -> Result<Json<ExternalLinkListResponse>, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Verify series exists
     SeriesRepository::get_by_id(&state.db, series_id)
@@ -5749,6 +5784,7 @@ pub async fn create_external_link(
     Json(request): Json<CreateExternalLinkRequest>,
 ) -> Result<Json<ExternalLinkDto>, ApiError> {
     require_permission!(auth, Permission::SeriesWrite)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Verify series exists and get library_id
     let series = SeriesRepository::get_by_id(&state.db, series_id)
@@ -5814,6 +5850,7 @@ pub async fn delete_external_link(
     Path((series_id, link_id)): Path<(Uuid, Uuid)>,
 ) -> Result<StatusCode, ApiError> {
     require_permission!(auth, Permission::SeriesWrite)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Verify series exists and get library_id
     let series = SeriesRepository::get_by_id(&state.db, series_id)
@@ -5877,6 +5914,7 @@ pub async fn list_series_external_ids(
     Path(series_id): Path<Uuid>,
 ) -> Result<Json<SeriesExternalIdListResponse>, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Verify series exists
     SeriesRepository::get_by_id(&state.db, series_id)
@@ -5922,6 +5960,7 @@ pub async fn create_series_external_id(
     Json(request): Json<CreateSeriesExternalIdRequest>,
 ) -> Result<Json<SeriesExternalIdDto>, ApiError> {
     require_permission!(auth, Permission::SeriesWrite)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Verify series exists and get library_id
     let series = SeriesRepository::get_by_id(&state.db, series_id)
@@ -5980,6 +6019,7 @@ pub async fn delete_series_external_id(
     Path((series_id, external_id_id)): Path<(Uuid, Uuid)>,
 ) -> Result<StatusCode, ApiError> {
     require_permission!(auth, Permission::SeriesWrite)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Verify series exists and get library_id
     let series = SeriesRepository::get_by_id(&state.db, series_id)
@@ -6044,6 +6084,7 @@ pub async fn list_series_covers(
     Path(series_id): Path<Uuid>,
 ) -> Result<Json<SeriesCoverListResponse>, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Verify series exists
     SeriesRepository::get_by_id(&state.db, series_id)
@@ -6099,6 +6140,7 @@ pub async fn select_series_cover(
     Path((series_id, cover_id)): Path<(Uuid, Uuid)>,
 ) -> Result<Json<SeriesCoverDto>, ApiError> {
     require_permission!(auth, Permission::SeriesWrite)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Verify series exists and get library_id
     let series = SeriesRepository::get_by_id(&state.db, series_id)
@@ -6179,6 +6221,7 @@ pub async fn reset_series_cover(
     Path(series_id): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {
     require_permission!(auth, Permission::SeriesWrite)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Verify series exists and get library_id
     let series = SeriesRepository::get_by_id(&state.db, series_id)
@@ -6240,6 +6283,7 @@ pub async fn delete_series_cover(
     Path((series_id, cover_id)): Path<(Uuid, Uuid)>,
 ) -> Result<StatusCode, ApiError> {
     require_permission!(auth, Permission::SeriesWrite)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Verify series exists and get library_id
     let series = SeriesRepository::get_by_id(&state.db, series_id)
@@ -6344,6 +6388,7 @@ pub async fn get_series_cover_image(
     Path((series_id, cover_id)): Path<(Uuid, Uuid)>,
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Verify series exists
     let _series = SeriesRepository::get_by_id(&state.db, series_id)

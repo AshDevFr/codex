@@ -74,6 +74,31 @@ pub async fn require_visible_book(
     Ok(book)
 }
 
+/// Fail with 404 unless the user can see the book, when the handler does not
+/// need the book itself.
+///
+/// For a user with no restrictions this runs no query at all (the filter is
+/// cached), which matters on paths that are meant to stay off the database,
+/// such as thumbnails served from the disk cache. A book that does not exist
+/// is left for the handler to report.
+pub async fn ensure_book_id_visible(
+    db: &DatabaseConnection,
+    user_id: Uuid,
+    book_id: Uuid,
+) -> Result<(), ApiError> {
+    let filter = content_filter(db, user_id).await?;
+    if !filter.has_restrictions {
+        return Ok(());
+    }
+    let book = BookRepository::get_by_id(db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch book: {}", e)))?;
+    match book {
+        Some(book) if !filter.is_book_visible(book.series_id) => Err(book_not_found()),
+        _ => Ok(()),
+    }
+}
+
 /// Fail with 404 unless the user can see this already-loaded book.
 pub async fn ensure_book_visible(
     db: &DatabaseConnection,

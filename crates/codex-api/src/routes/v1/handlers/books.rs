@@ -1474,6 +1474,7 @@ pub async fn patch_book(
     use sea_orm::prelude::Decimal;
 
     require_permission!(auth, Permission::BooksWrite)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     // Verify book exists
     let book = BookRepository::get_by_id(&state.db, book_id)
@@ -1657,6 +1658,7 @@ pub async fn get_adjacent_books(
     Path(book_id): Path<Uuid>,
 ) -> Result<Json<AdjacentBooksResponse>, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     let content_filter = ContentFilter::cached_for_user(&state.db, auth.user_id)
         .await
@@ -2483,6 +2485,7 @@ pub async fn replace_book_metadata(
     Json(request): Json<ReplaceBookMetadataRequest>,
 ) -> Result<Json<BookMetadataResponse>, ApiError> {
     require_permission!(auth, Permission::BooksWrite)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     // Verify book exists
     let book = BookRepository::get_by_id(&state.db, book_id)
@@ -2839,6 +2842,7 @@ pub async fn patch_book_metadata(
     Json(request): Json<PatchBookMetadataRequest>,
 ) -> Result<Json<BookMetadataResponse>, ApiError> {
     require_permission!(auth, Permission::BooksWrite)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     // Verify book exists
     let book = BookRepository::get_by_id(&state.db, book_id)
@@ -3446,6 +3450,7 @@ pub async fn get_book_metadata_locks(
     Path(book_id): Path<Uuid>,
 ) -> Result<Json<BookMetadataLocks>, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     // Verify book exists
     BookRepository::get_by_id(&state.db, book_id)
@@ -3530,6 +3535,7 @@ pub async fn update_book_metadata_locks(
     Json(request): Json<UpdateBookMetadataLocksRequest>,
 ) -> Result<Json<BookMetadataLocks>, ApiError> {
     require_permission!(auth, Permission::BooksWrite)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     // Verify book exists
     let book = BookRepository::get_by_id(&state.db, book_id)
@@ -3758,6 +3764,7 @@ pub async fn upload_book_cover(
     mut multipart: Multipart,
 ) -> Result<StatusCode, ApiError> {
     require_permission!(auth, Permission::BooksWrite)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     // Verify book exists and get its library_id/series_id
     let book = BookRepository::get_by_id(&state.db, book_id)
@@ -3898,6 +3905,7 @@ pub async fn list_book_external_ids(
     Path(book_id): Path<Uuid>,
 ) -> Result<Json<BookExternalIdListResponse>, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     // Verify book exists
     BookRepository::get_by_id(&state.db, book_id)
@@ -3944,6 +3952,7 @@ pub async fn create_book_external_id(
     Json(request): Json<CreateBookExternalIdRequest>,
 ) -> Result<Json<super::super::dto::BookExternalIdDto>, ApiError> {
     require_permission!(auth, Permission::BooksWrite)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     // Verify book exists
     let book = BookRepository::get_by_id(&state.db, book_id)
@@ -4003,6 +4012,7 @@ pub async fn delete_book_external_id(
     Path((book_id, external_id_id)): Path<(Uuid, Uuid)>,
 ) -> Result<StatusCode, ApiError> {
     require_permission!(auth, Permission::BooksWrite)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     // Verify book exists
     let book = BookRepository::get_by_id(&state.db, book_id)
@@ -4077,6 +4087,7 @@ pub async fn list_book_external_links(
     Path(book_id): Path<Uuid>,
 ) -> Result<Json<BookExternalLinkListResponse>, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     // Verify book exists
     BookRepository::get_by_id(&state.db, book_id)
@@ -4122,6 +4133,7 @@ pub async fn create_book_external_link(
     Json(request): Json<CreateBookExternalLinkRequest>,
 ) -> Result<Json<BookExternalLinkDto>, ApiError> {
     require_permission!(auth, Permission::BooksWrite)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     // Verify book exists
     let book = BookRepository::get_by_id(&state.db, book_id)
@@ -4180,6 +4192,7 @@ pub async fn delete_book_external_link(
     Path((book_id, source)): Path<(Uuid, String)>,
 ) -> Result<StatusCode, ApiError> {
     require_permission!(auth, Permission::BooksWrite)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     // Verify book exists
     let book = BookRepository::get_by_id(&state.db, book_id)
@@ -4239,6 +4252,7 @@ pub async fn list_book_covers(
     Path(book_id): Path<Uuid>,
 ) -> Result<Json<BookCoverListResponse>, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     // Verify book exists
     BookRepository::get_by_id(&state.db, book_id)
@@ -4281,6 +4295,7 @@ pub async fn select_book_cover(
     Path((book_id, cover_id)): Path<(Uuid, Uuid)>,
 ) -> Result<Json<super::super::dto::BookCoverDto>, ApiError> {
     require_permission!(auth, Permission::BooksWrite)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     // Verify book exists
     let book = BookRepository::get_by_id(&state.db, book_id)
@@ -4363,6 +4378,7 @@ pub async fn reset_book_cover(
     Path(book_id): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {
     require_permission!(auth, Permission::BooksWrite)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     // Verify book exists
     let book = BookRepository::get_by_id(&state.db, book_id)
@@ -4430,6 +4446,7 @@ pub async fn get_book_cover_image(
     Path((book_id, cover_id)): Path<(Uuid, Uuid)>,
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     // Verify book exists
     BookRepository::get_by_id(&state.db, book_id)
@@ -4532,6 +4549,7 @@ pub async fn delete_book_cover(
     Path((book_id, cover_id)): Path<(Uuid, Uuid)>,
 ) -> Result<StatusCode, ApiError> {
     require_permission!(auth, Permission::BooksWrite)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     // Verify book exists
     let book = BookRepository::get_by_id(&state.db, book_id)
@@ -4830,6 +4848,7 @@ pub async fn retry_book_errors(
     Json(request): Json<RetryBookErrorsRequest>,
 ) -> Result<Json<RetryErrorsResponse>, ApiError> {
     require_permission!(auth, Permission::BooksWrite)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     // Verify book exists
     let book = BookRepository::get_by_id(&state.db, book_id)
@@ -5148,6 +5167,7 @@ pub async fn get_book_genres(
     Path(book_id): Path<Uuid>,
 ) -> Result<Json<GenreListResponse>, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     // Verify book exists
     BookRepository::get_by_id(&state.db, book_id)
@@ -5198,6 +5218,7 @@ pub async fn set_book_genres(
     Json(request): Json<SetBookGenresRequest>,
 ) -> Result<Json<GenreListResponse>, ApiError> {
     require_permission!(auth, Permission::BooksWrite)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     // Verify book exists
     let book = BookRepository::get_by_id(&state.db, book_id)
@@ -5261,6 +5282,7 @@ pub async fn add_book_genre(
     Json(request): Json<AddBookGenreRequest>,
 ) -> Result<Json<GenreDto>, ApiError> {
     require_permission!(auth, Permission::BooksWrite)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     // Verify book exists
     let book = BookRepository::get_by_id(&state.db, book_id)
@@ -5318,6 +5340,7 @@ pub async fn remove_book_genre(
     Path((book_id, genre_id)): Path<(Uuid, Uuid)>,
 ) -> Result<StatusCode, ApiError> {
     require_permission!(auth, Permission::BooksWrite)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     // Verify book exists
     let book = BookRepository::get_by_id(&state.db, book_id)
@@ -5379,6 +5402,7 @@ pub async fn get_book_tags(
     Path(book_id): Path<Uuid>,
 ) -> Result<Json<TagListResponse>, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     // Verify book exists
     BookRepository::get_by_id(&state.db, book_id)
@@ -5429,6 +5453,7 @@ pub async fn set_book_tags(
     Json(request): Json<SetBookTagsRequest>,
 ) -> Result<Json<TagListResponse>, ApiError> {
     require_permission!(auth, Permission::BooksWrite)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     // Verify book exists
     let book = BookRepository::get_by_id(&state.db, book_id)
@@ -5492,6 +5517,7 @@ pub async fn add_book_tag(
     Json(request): Json<AddBookTagRequest>,
 ) -> Result<Json<TagDto>, ApiError> {
     require_permission!(auth, Permission::BooksWrite)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     // Verify book exists
     let book = BookRepository::get_by_id(&state.db, book_id)
@@ -5549,6 +5575,7 @@ pub async fn remove_book_tag(
     Path((book_id, tag_id)): Path<(Uuid, Uuid)>,
 ) -> Result<StatusCode, ApiError> {
     require_permission!(auth, Permission::BooksWrite)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     // Verify book exists
     let book = BookRepository::get_by_id(&state.db, book_id)

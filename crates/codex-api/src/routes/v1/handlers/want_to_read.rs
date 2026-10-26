@@ -107,19 +107,13 @@ pub async fn add_want_to_read(
 
     let entry = match (request.series_id, request.book_id) {
         (Some(series_id), None) => {
-            SeriesRepository::get_by_id(&state.db, series_id)
-                .await
-                .map_err(|e| ApiError::Internal(format!("Failed to look up series: {e}")))?
-                .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
+            crate::visibility::require_visible_series(&state.db, auth.user_id, series_id).await?;
             WantToReadRepository::add_series(&state.db, auth.user_id, series_id)
                 .await
                 .map_err(|e| ApiError::Internal(format!("Failed to add series: {e}")))?
         }
         (None, Some(book_id)) => {
-            BookRepository::get_by_id(&state.db, book_id)
-                .await
-                .map_err(|e| ApiError::Internal(format!("Failed to look up book: {e}")))?
-                .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
+            crate::visibility::require_visible_book(&state.db, auth.user_id, book_id).await?;
             WantToReadRepository::add_book(&state.db, auth.user_id, book_id)
                 .await
                 .map_err(|e| ApiError::Internal(format!("Failed to add book: {e}")))?
@@ -164,6 +158,8 @@ pub async fn bulk_add_want_to_read(
 
     let mut added = 0;
     let mut already_present = 0;
+    // Ids the user cannot see are skipped like ids that do not exist.
+    let filter = crate::visibility::content_filter(&state.db, auth.user_id).await?;
 
     if !request.series_ids.is_empty() {
         // Filter to series that actually exist so phantom IDs don't violate the
@@ -177,7 +173,7 @@ pub async fn bulk_add_want_to_read(
             .series_ids
             .iter()
             .copied()
-            .filter(|id| existing.contains(id) && seen.insert(*id))
+            .filter(|id| existing.contains(id) && filter.is_series_visible(*id) && seen.insert(*id))
             .collect();
         let inserted = WantToReadRepository::add_series_bulk(&state.db, auth.user_id, &valid)
             .await
@@ -187,9 +183,14 @@ pub async fn bulk_add_want_to_read(
     }
 
     if !request.book_ids.is_empty() {
-        let existing = BookRepository::get_existing_ids(&state.db, &request.book_ids)
-            .await
-            .map_err(|e| ApiError::Internal(format!("Failed to look up books: {e}")))?;
+        let existing: std::collections::HashSet<Uuid> =
+            BookRepository::get_by_ids(&state.db, &request.book_ids)
+                .await
+                .map_err(|e| ApiError::Internal(format!("Failed to look up books: {e}")))?
+                .into_iter()
+                .filter(|book| filter.is_book_visible(book.series_id))
+                .map(|book| book.id)
+                .collect();
         let mut seen = std::collections::HashSet::new();
         let valid: Vec<Uuid> = request
             .book_ids
@@ -262,6 +263,7 @@ pub async fn remove_want_to_read_series(
     Path(series_id): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {
     auth.require_permission(&Permission::SeriesRead)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     WantToReadRepository::remove_series(&state.db, auth.user_id, series_id)
         .await
@@ -289,6 +291,7 @@ pub async fn remove_want_to_read_book(
     Path(book_id): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {
     auth.require_permission(&Permission::SeriesRead)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     WantToReadRepository::remove_book(&state.db, auth.user_id, book_id)
         .await

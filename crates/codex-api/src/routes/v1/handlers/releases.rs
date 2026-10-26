@@ -137,6 +137,7 @@ pub async fn list_series_releases(
     Query(params): Query<SeriesReleaseListParams>,
 ) -> Result<Response, ApiError> {
     auth.require_permission(&Permission::SeriesRead)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     let series = SeriesRepository::get_by_id(&state.db, series_id)
         .await

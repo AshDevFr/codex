@@ -456,6 +456,7 @@ pub async fn get_book_readlists(
     require_permission!(auth, Permission::BooksRead)?;
     let bid =
         Uuid::parse_str(&book_id).map_err(|_| ApiError::NotFound("Book not found".to_string()))?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, bid).await?;
     let vis = user_visibility(&state.db, auth.user_id).await?;
 
     let read_lists = ReadListRepository::get_read_lists_for_book(&state.db, bid)

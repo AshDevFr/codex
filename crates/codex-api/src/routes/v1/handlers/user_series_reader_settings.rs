@@ -133,6 +133,7 @@ pub async fn get_series_reader_settings(
     auth: AuthContext,
     Path(series_id): Path<Uuid>,
 ) -> Result<Json<SeriesReaderSettingsResponse>, ApiError> {
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
     let series = require_series(&state, series_id).await?;
 
     let settings =
@@ -184,6 +185,7 @@ pub async fn patch_series_reader_settings(
     Path(series_id): Path<Uuid>,
     Json(request): Json<PatchSeriesReaderSettingsRequest>,
 ) -> Result<Json<SeriesReaderSettingsResponse>, ApiError> {
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
     let series = require_series(&state, series_id).await?;
 
     let current =
@@ -238,6 +240,7 @@ pub async fn delete_series_reader_settings(
     auth: AuthContext,
     Path(series_id): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
     require_series(&state, series_id).await?;
 
     UserSeriesReaderSettingsRepository::delete(&state.db, auth.user_id, series_id)

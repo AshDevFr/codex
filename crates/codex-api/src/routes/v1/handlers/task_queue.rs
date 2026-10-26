@@ -812,6 +812,7 @@ pub async fn generate_book_thumbnail(
 
     // Check permission
     auth.require_permission(&Permission::TasksWrite)?;
+    crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     // Verify book exists
     BookRepository::get_by_id(&state.db, book_id)
@@ -866,6 +867,7 @@ pub async fn generate_series_thumbnail(
 
     // Check permission
     auth.require_permission(&Permission::TasksWrite)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Verify series exists
     SeriesRepository::get_by_id(&state.db, series_id)
@@ -1063,6 +1065,7 @@ pub async fn reprocess_series_title(
     use codex_services::metadata::preprocessing::apply_rules;
 
     auth.require_permission(&Permission::SeriesWrite)?;
+    crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Verify series exists
     let series = SeriesRepository::get_by_id(&state.db, series_id)
