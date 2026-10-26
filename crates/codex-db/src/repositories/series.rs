@@ -40,6 +40,8 @@ pub struct SeriesQueryOptions<'a> {
     pub page: u64,
     /// Page size
     pub page_size: u64,
+    /// Only series this lets through (`None` for no visibility constraint)
+    pub visibility: Option<&'a SeriesVisibility>,
 }
 
 /// Sort configuration for series queries
@@ -275,6 +277,7 @@ impl SeriesRepository {
         if let Some(library_id) = options.library_id {
             query = query.filter(series::Column::LibraryId.eq(library_id));
         }
+        query = apply_series_visibility(query, options.visibility);
 
         // Handle text search
         if let Some(search) = options.search
@@ -372,6 +375,7 @@ impl SeriesRepository {
         if let Some(library_id) = options.library_id {
             query = query.filter(series::Column::LibraryId.eq(library_id));
         }
+        query = apply_series_visibility(query, options.visibility);
 
         // Handle text search
         if let Some(search) = options.search
@@ -394,6 +398,7 @@ impl SeriesRepository {
         } else {
             count_query
         };
+        count_query = apply_series_visibility(count_query, options.visibility);
 
         if let Some(search) = options.search
             && !search.is_empty()
@@ -463,6 +468,7 @@ impl SeriesRepository {
         if let Some(library_id) = options.library_id {
             query = query.filter(series::Column::LibraryId.eq(library_id));
         }
+        query = apply_series_visibility(query, options.visibility);
 
         // Handle text search
         if let Some(search) = options.search
@@ -485,6 +491,7 @@ impl SeriesRepository {
         } else {
             count_query
         };
+        count_query = apply_series_visibility(count_query, options.visibility);
 
         if let Some(search) = options.search
             && !search.is_empty()
@@ -587,6 +594,7 @@ impl SeriesRepository {
         if let Some(library_id) = options.library_id {
             base_query = base_query.filter(series::Column::LibraryId.eq(library_id));
         }
+        base_query = apply_series_visibility(base_query, options.visibility);
 
         if let Some(search) = options.search
             && !search.is_empty()
@@ -605,6 +613,7 @@ impl SeriesRepository {
         if let Some(library_id) = options.library_id {
             count_query = count_query.filter(series::Column::LibraryId.eq(library_id));
         }
+        count_query = apply_series_visibility(count_query, options.visibility);
         if let Some(search) = options.search
             && !search.is_empty()
         {

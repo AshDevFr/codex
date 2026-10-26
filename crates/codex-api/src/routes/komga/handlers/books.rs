@@ -512,6 +512,7 @@ pub async fn search_books(
         .or(body.search_term.as_deref().filter(|s| !s.is_empty()));
 
     // Use composable query with database-level sorting
+    let visibility = crate::visibility::user_visibility(&state.db, user_id).await?;
     let options = BookQueryOptions {
         library_id,
         series_id,
@@ -523,6 +524,7 @@ pub async fn search_books(
         sort,
         page,
         page_size: size,
+        visibility: visibility.as_ref(),
     };
 
     let (books, total) = BookRepository::query(&state.db, options)
