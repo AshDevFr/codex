@@ -81,6 +81,8 @@ pub struct LedgerInboxFilter {
     pub language: Option<String>,
     /// Restrict to series belonging to this library.
     pub library_id: Option<Uuid>,
+    /// Only rows for series this lets through (`None` for no constraint).
+    pub visibility: Option<crate::repositories::SeriesVisibility>,
 }
 
 /// Sortable column for the cross-series inbox view.
@@ -625,6 +627,14 @@ where
     if let Some(ref lang) = filter.language {
         query = query.filter(release_ledger::Column::Language.eq(lang));
     }
+    if let Some(vis) = &filter.visibility
+        && let Some(predicate) = crate::repositories::visibility::visibility_predicate(
+            release_ledger::Column::SeriesId,
+            vis,
+        )
+    {
+        query = query.filter(predicate);
+    }
     if let Some(lib_id) = filter.library_id {
         if !series_already_joined {
             query = query.join(JoinType::InnerJoin, release_ledger::Relation::Series.def());
@@ -690,6 +700,61 @@ mod tests {
             released_at: None,
             initial_state: None,
         }
+    }
+
+    /// The inbox, its count and its facets only cover series the visibility
+    /// filter lets through.
+    #[tokio::test]
+    async fn inbox_respects_visibility() {
+        use crate::repositories::SeriesVisibility;
+        use codex_models::pagination::Window;
+
+        let (db, _temp) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let (visible_id, source_id) = setup_world(conn).await;
+        let library_id = SeriesRepository::get_by_id(conn, visible_id)
+            .await
+            .unwrap()
+            .unwrap()
+            .library_id;
+        let hidden_id = SeriesRepository::create(conn, library_id, "Hidden", None)
+            .await
+            .unwrap()
+            .id;
+        ReleaseLedgerRepository::record(conn, entry(visible_id, source_id, "rel-v"))
+            .await
+            .unwrap();
+        ReleaseLedgerRepository::record(conn, entry(hidden_id, source_id, "rel-h"))
+            .await
+            .unwrap();
+
+        let filter = LedgerInboxFilter {
+            visibility: Some(SeriesVisibility {
+                excluded_series_ids: vec![hidden_id],
+                allowed_series_ids: None,
+            }),
+            ..Default::default()
+        };
+        let rows = ReleaseLedgerRepository::list_inbox_sorted(
+            conn,
+            filter.clone(),
+            InboxSort::default(),
+            Window::unbounded(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].series_id, visible_id);
+        assert_eq!(
+            ReleaseLedgerRepository::count_inbox(conn, filter.clone())
+                .await
+                .unwrap(),
+            1
+        );
+        let facets = ReleaseLedgerRepository::list_series_facets(conn, filter)
+            .await
+            .unwrap();
+        assert_eq!(facets.len(), 1);
     }
 
     #[tokio::test]

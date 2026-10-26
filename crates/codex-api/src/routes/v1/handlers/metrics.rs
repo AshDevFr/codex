@@ -30,7 +30,7 @@ use codex_db::repositories::MetricsRepository;
     params(InventoryMetricsQuery),
     responses(
         (status = 200, description = "Inventory metrics retrieved successfully", body = MetricsDto),
-        (status = 403, description = "Permission denied, or `exact=true` requested without admin access"),
+        (status = 403, description = "Permission denied, `exact=true` requested without admin access, or the account has content restrictions"),
     ),
     security(
         ("jwt_bearer" = []),
@@ -49,6 +49,17 @@ pub async fn get_inventory_metrics(
     // an exact count never receives an estimate believing it is exact.
     if query.exact {
         auth.require_admin()?;
+    }
+    // Library-wide totals and per-library counts would reveal how much content
+    // a restricted reader cannot see, so they get none.
+    if crate::visibility::content_filter(&state.db, auth.user_id)
+        .await?
+        .has_restrictions
+    {
+        return Err(ApiError::Forbidden(
+            "Library statistics are not available to accounts with content restrictions"
+                .to_string(),
+        ));
     }
 
     // Gather all metrics in parallel

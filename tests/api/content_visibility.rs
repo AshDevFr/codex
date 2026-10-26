@@ -746,3 +746,256 @@ async fn komga_lists_leave_out_hidden_content() {
     assert_eq!(status, StatusCode::OK);
     assert_list("POST books/list", body.to_string().as_bytes(), book, &world);
 }
+
+#[tokio::test]
+async fn genre_and_tag_lists_leave_out_hidden_names() {
+    let world = World::new().await;
+
+    let (_, body) = world.get_json("/api/v1/genres?pageSize=100").await;
+    let names: Vec<&str> = body["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|g| g["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, vec!["Action"], "v1 genres");
+    assert_eq!(body["data"][0]["seriesCount"], 1);
+
+    let (_, body) = world.get_json("/api/v1/tags?pageSize=100").await;
+    let names: Vec<&str> = body["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, vec!["shonen"], "v1 tags");
+
+    let (_, body) = world.get_json("/komga/api/v1/genres").await;
+    assert_eq!(body, serde_json::json!(["Action"]), "komga genres");
+    let (_, body) = world.get_json("/komga/api/v1/tags").await;
+    assert_eq!(body, serde_json::json!(["shonen"]), "komga tags");
+}
+
+#[tokio::test]
+async fn opds_search_leaves_out_hidden_series() {
+    let world = World::new().await;
+    for uri in ["/opds/search?q=e", "/opds/v2/search?query=e"] {
+        let (status, body) = world.get(uri).await;
+        assert_eq!(status, StatusCode::OK, "{uri}");
+        let text = String::from_utf8_lossy(&body);
+        assert!(
+            text.contains(&world.visible.series_id.to_string()),
+            "{uri}: visible missing"
+        );
+        assert!(
+            !text.contains(&world.hidden.series_id.to_string()),
+            "{uri}: hidden listed"
+        );
+        assert!(
+            !text.contains(&world.secret.series_id.to_string()),
+            "{uri}: secret listed"
+        );
+    }
+}
+
+#[tokio::test]
+async fn books_with_errors_leave_out_hidden_books() {
+    use codex::db::entities::books;
+    use sea_orm::{ActiveModelTrait, EntityTrait, Set};
+    let world = World::new().await;
+    let errors = r#"{"parser":{"message":"broken","occurred_at":"2026-01-01T00:00:00Z"}}"#;
+    for item in [&world.visible, &world.hidden, &world.secret] {
+        let book = books::Entity::find_by_id(item.book_id)
+            .one(&world.state.db)
+            .await
+            .unwrap()
+            .unwrap();
+        let mut active: books::ActiveModel = book.into();
+        active.analysis_errors = Set(Some(errors.to_string()));
+        active.update(&world.state.db).await.unwrap();
+    }
+
+    let (status, body) = world.get("/api/v1/books/errors").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_list("books/errors", &body, |i| i.book_id, &world);
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["totalBooksWithErrors"], 1, "{json}");
+}
+
+#[tokio::test]
+async fn duplicate_groups_only_show_visible_members() {
+    use codex::db::entities::{book_duplicates, series_duplicates};
+    use sea_orm::{ActiveModelTrait, Set};
+    let world = World::new().await;
+    let now = chrono::Utc::now();
+
+    // Visible + hidden: only one visible member left, so the group disappears
+    book_duplicates::ActiveModel {
+        id: Set(Uuid::new_v4()),
+        file_hash: Set("h".to_string()),
+        book_ids: Set(
+            serde_json::to_string(&[world.visible.book_id, world.hidden.book_id]).unwrap(),
+        ),
+        duplicate_count: Set(2),
+        created_at: Set(now),
+        updated_at: Set(now),
+    }
+    .insert(&world.state.db)
+    .await
+    .unwrap();
+    series_duplicates::ActiveModel {
+        id: Set(Uuid::new_v4()),
+        match_type: Set("title".to_string()),
+        match_key: Set("hidden".to_string()),
+        library_id: Set(Some(world.visible.library_id)),
+        series_ids: Set(
+            serde_json::to_string(&[world.visible.series_id, world.hidden.series_id]).unwrap(),
+        ),
+        duplicate_count: Set(2),
+        created_at: Set(now),
+        updated_at: Set(now),
+    }
+    .insert(&world.state.db)
+    .await
+    .unwrap();
+
+    let (status, body) = world.get_json("/api/v1/duplicates").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["totalGroups"], 0, "{body}");
+    let (status, body) = world.get_json("/api/v1/duplicates/series").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["totalGroups"], 0, "{body}");
+}
+
+#[tokio::test]
+async fn inventory_metrics_are_refused_to_restricted_readers() {
+    let world = World::new().await;
+    let (status, _) = world.get("/api/v1/metrics/inventory").await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+}
+
+/// Recommendations say whether the recommended series is already in Codex;
+/// for a hidden series that would reveal it exists.
+#[tokio::test]
+async fn recommendations_do_not_reveal_hidden_series() {
+    use codex::db::repositories::{
+        PluginsRepository, SeriesExternalIdRepository, UserPluginDataRepository,
+        UserPluginsRepository,
+    };
+    use serde_json::json;
+
+    static INIT: std::sync::Once = std::sync::Once::new();
+    INIT.call_once(|| {
+        if std::env::var("CODEX_ENCRYPTION_KEY").is_err() {
+            // SAFETY: set once, before any test in this process reads it.
+            unsafe {
+                std::env::set_var(
+                    "CODEX_ENCRYPTION_KEY",
+                    "dGVzdGtleXRlc3RrZXl0ZXN0a2V5dGVzdGtleTEyMzQ=",
+                );
+            }
+        }
+    });
+
+    let world = World::new().await;
+    let db = &world.state.db;
+    let plugin = PluginsRepository::create(
+        db,
+        "recs",
+        "Recs",
+        None,
+        "user",
+        "echo",
+        vec![],
+        vec![],
+        None,
+        vec![],
+        vec![],
+        vec![],
+        None,
+        "none",
+        None,
+        true,
+        None,
+        None,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+    PluginsRepository::update_manifest(
+        db,
+        plugin.id,
+        Some(json!({
+            "name": "recs",
+            "displayName": "Recs",
+            "version": "1.0.0",
+            "protocolVersion": "1.0",
+            "pluginType": "user",
+            "capabilities": {
+                "userRecommendationProvider": true,
+                "externalIdSource": "anilist"
+            }
+        })),
+    )
+    .await
+    .unwrap();
+    let (status, _) = world
+        .send(
+            "POST",
+            &format!("/api/v1/user/plugins/{}/enable", plugin.id),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+
+    for (item, external_id) in [
+        (&world.visible, "1"),
+        (&world.hidden, "2"),
+        (&world.secret, "3"),
+    ] {
+        SeriesExternalIdRepository::create(db, item.series_id, "anilist", external_id, None, None)
+            .await
+            .unwrap();
+    }
+    let reader = UserRepository::get_by_username(db, "kid")
+        .await
+        .unwrap()
+        .unwrap();
+    let instance = UserPluginsRepository::get_by_user_and_plugin(db, reader.id, plugin.id)
+        .await
+        .unwrap()
+        .unwrap();
+    UserPluginDataRepository::set(
+        db,
+        instance.id,
+        "recommendations",
+        json!({
+            "recommendations": [
+                { "externalId": "1", "title": "Visible", "score": 0.9, "reason": "r" },
+                { "externalId": "2", "title": "Hidden", "score": 0.9, "reason": "r" },
+                { "externalId": "3", "title": "Secret", "score": 0.9, "reason": "r" }
+            ],
+            "generatedAt": "2026-01-01T00:00:00Z",
+            "cached": true
+        }),
+        None,
+    )
+    .await
+    .unwrap();
+
+    let (status, body) = world.get_json("/api/v1/user/recommendations").await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let recs = body["recommendations"].as_array().unwrap();
+    let in_codex = |id: &str| {
+        recs.iter()
+            .find(|r| r["externalId"] == id)
+            .map(|r| r["inCodex"].as_bool().unwrap_or(false))
+    };
+    assert_eq!(in_codex("1"), Some(true), "{body}");
+    assert_eq!(in_codex("2"), Some(false), "{body}");
+    assert_eq!(in_codex("3"), Some(false), "{body}");
+    let text = body.to_string();
+    assert!(!text.contains(&world.hidden.series_id.to_string()));
+    assert!(!text.contains(&world.secret.series_id.to_string()));
+}

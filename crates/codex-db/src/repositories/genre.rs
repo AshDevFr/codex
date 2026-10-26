@@ -188,6 +188,37 @@ impl GenreRepository {
         Ok(result.rows_affected > 0)
     }
 
+    /// Series count per genre, counting only series `visibility` lets through
+    /// (`None` counts every series). Genres with no counted series are absent.
+    pub async fn series_counts(
+        db: &DatabaseConnection,
+        visibility: Option<&crate::repositories::SeriesVisibility>,
+    ) -> Result<std::collections::HashMap<Uuid, u64>> {
+        use sea_orm::QuerySelect;
+
+        let mut query = series_genres::Entity::find()
+            .select_only()
+            .column(series_genres::Column::GenreId)
+            .column_as(series_genres::Column::SeriesId.count(), "count")
+            .group_by(series_genres::Column::GenreId);
+        if let Some(vis) = visibility {
+            if vis.is_empty_whitelist() {
+                return Ok(std::collections::HashMap::new());
+            }
+            if let Some(predicate) = crate::repositories::visibility::visibility_predicate(
+                series_genres::Column::SeriesId,
+                vis,
+            ) {
+                query = query.filter(predicate);
+            }
+        }
+        let rows: Vec<(Uuid, i64)> = query.into_tuple().all(db).await?;
+        Ok(rows
+            .into_iter()
+            .map(|(id, count)| (id, count.max(0) as u64))
+            .collect())
+    }
+
     /// Count series using a genre
     pub async fn count_series_with_genre(db: &DatabaseConnection, genre_id: Uuid) -> Result<u64> {
         use crate::entities::series_genres::Entity as SeriesGenres;

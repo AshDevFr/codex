@@ -286,6 +286,7 @@ pub async fn list_release_inbox(
         source_id: params.source_id,
         language: params.language.clone(),
         library_id: params.library_id,
+        visibility: crate::visibility::user_visibility(&state.db, auth.user_id).await?,
     };
     let sort = params
         .sort
@@ -555,6 +556,7 @@ pub async fn list_release_facets(
         source_id: params.source_id,
         language: params.language.clone(),
         library_id: params.library_id,
+        visibility: crate::visibility::user_visibility(&state.db, auth.user_id).await?,
     };
 
     // Each facet excludes its own dimension from the filter so it always

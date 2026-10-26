@@ -47,11 +47,25 @@ pub async fn list_genres(
 ) -> Result<Json<Vec<String>>, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
 
+    let filter = crate::visibility::content_filter(&state.db, auth.user_id).await?;
     let genres = GenreRepository::list_all(&state.db)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch genres: {}", e)))?;
 
-    let genre_names: Vec<String> = genres.into_iter().map(|g| g.name).collect();
+    // A restricted user only sees genres carried by a series they can see.
+    let genre_names: Vec<String> = if filter.has_restrictions {
+        let visibility = filter.to_visibility();
+        let counts = GenreRepository::series_counts(&state.db, visibility.as_ref())
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to count genres: {}", e)))?;
+        genres
+            .into_iter()
+            .filter(|g| counts.contains_key(&g.id))
+            .map(|g| g.name)
+            .collect()
+    } else {
+        genres.into_iter().map(|g| g.name).collect()
+    };
     Ok(Json(genre_names))
 }
 
@@ -88,11 +102,24 @@ pub async fn list_tags(
 ) -> Result<Json<Vec<String>>, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
 
+    let filter = crate::visibility::content_filter(&state.db, auth.user_id).await?;
     let tags = TagRepository::list_all(&state.db)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch tags: {}", e)))?;
 
-    let tag_names: Vec<String> = tags.into_iter().map(|t| t.name).collect();
+    // A restricted user only sees tags carried by a series they can see.
+    let tag_names: Vec<String> = if filter.has_restrictions {
+        let visibility = filter.to_visibility();
+        let counts = TagRepository::series_counts(&state.db, visibility.as_ref())
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to count tags: {}", e)))?;
+        tags.into_iter()
+            .filter(|t| counts.contains_key(&t.id))
+            .map(|t| t.name)
+            .collect()
+    } else {
+        tags.into_iter().map(|t| t.name).collect()
+    };
     Ok(Json(tag_names))
 }
 

@@ -9864,7 +9864,7 @@
             }
           },
           "403": {
-            "description": "Permission denied, or `exact=true` requested without admin access"
+            "description": "Permission denied, `exact=true` requested without admin access, or the account has content restrictions"
           }
         },
         "security": [

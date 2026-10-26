@@ -116,9 +116,10 @@ pub async fn get_recommendations(
     let mut all_recommendations: Vec<RecommendationDto> = Vec::new();
     let mut sources: Vec<RecommendationSourceDto> = Vec::new();
 
+    let filter = crate::visibility::content_filter(&state.db, auth.user_id).await?;
     for (plugin, instance) in &instances {
         let (recs, source) =
-            collect_instance_recommendations(&state, auth.user_id, plugin, instance).await;
+            collect_instance_recommendations(&state, auth.user_id, plugin, instance, &filter).await;
         all_recommendations.extend(recs);
         sources.push(source);
     }
@@ -141,6 +142,7 @@ async fn collect_instance_recommendations(
     user_id: Uuid,
     plugin: &codex_db::entities::plugins::Model,
     instance: &codex_db::entities::user_plugins::Model,
+    filter: &codex_services::content_filter::ContentFilter,
 ) -> (Vec<RecommendationDto>, RecommendationSourceDto) {
     let source = plugin_source(plugin).unwrap_or_default();
 
@@ -225,7 +227,7 @@ async fn collect_instance_recommendations(
         None => (Vec::new(), None, false),
     };
 
-    enrich_and_filter_codex_presence(&state.db, &mut recommendations, plugin).await;
+    enrich_and_filter_codex_presence(&state.db, &mut recommendations, plugin, filter).await;
 
     let source_dto = RecommendationSourceDto {
         plugin_id: plugin.id,
@@ -406,6 +408,7 @@ async fn enrich_and_filter_codex_presence(
     db: &sea_orm::DatabaseConnection,
     recommendations: &mut [RecommendationDto],
     plugin: &codex_db::entities::plugins::Model,
+    filter: &codex_services::content_filter::ContentFilter,
 ) {
     // Resolve the external_id_source from the plugin manifest
     let source = plugin
@@ -436,7 +439,11 @@ async fn enrich_and_filter_codex_presence(
         Ok(matches) => {
             let mut enriched = 0;
             for rec in recommendations.iter_mut() {
-                if let Some(ext_id_record) = matches.get(&rec.external_id) {
+                // A series the user cannot see is reported as not in Codex, so
+                // a recommendation never reveals that it exists.
+                if let Some(ext_id_record) = matches.get(&rec.external_id)
+                    && filter.is_series_visible(ext_id_record.series_id)
+                {
                     rec.in_codex = true;
                     rec.codex_series_id = Some(ext_id_record.series_id.to_string());
                     enriched += 1;
