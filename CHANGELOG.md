@@ -7,6 +7,21 @@ release. A patch release may fix an API bug; it may not add an operation, a para
 field, or a new behaviour on an existing route. A client may therefore treat the release a feature
 first appears under in the 🔌 API sections below as a floor it can rely on.
 
+## [2.8.1] - 2026-10-26
+
+### 🐛 Bug Fixes
+
+- *(ci)* Keep plugin lockfiles when publishing to npm
+- *(web)* Let the app header's translucent background apply
+
+### 🚜 Refactor
+
+- *(web)* Apply Biome 2.6 optional-chain and min/max suggestions
+
+### ⚙️ Miscellaneous Tasks
+
+- Pin Biome 2.6.3 and give list rows stable keys
+
 ## [2.8.0] - 2026-10-26
 
 ### 🔌 API (breaking)
