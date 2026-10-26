@@ -31,10 +31,8 @@ pub struct Item {
 }
 
 pub struct World {
-    pub db: sea_orm::DatabaseConnection,
     pub state: Arc<codex::api::extractors::AppState>,
     pub reader_token: String,
-    pub reader_id: Uuid,
     /// In the main library, no Adult genre
     pub visible: Item,
     /// In the main library, Adult genre
@@ -106,10 +104,8 @@ impl World {
             .unwrap();
 
         Self {
-            db,
             state,
             reader_token,
-            reader_id: reader.id,
             visible,
             hidden,
             secret,
@@ -130,10 +126,6 @@ impl World {
             .replace("{series}", &item.series_id.to_string())
             .replace("{book}", &item.book_id.to_string())
             .replace("{library}", &item.library_id.to_string())
-    }
-
-    pub async fn status(&self, request: hyper::Request<String>) -> StatusCode {
-        make_request(self.router(), request).await.0
     }
 
     pub async fn get(&self, uri: &str) -> (StatusCode, Vec<u8>) {
