@@ -60,6 +60,7 @@ impl UserRepository {
         let result = active_model.insert(&txn).await?;
         AccessGroupRepository::join_default_group(&txn, result.id).await?;
         txn.commit().await?;
+        crate::access_control_version::bump();
         Ok(result)
     }
 
@@ -162,6 +163,8 @@ impl UserRepository {
             updated_at: Set(Utc::now()),
         };
         let result = active_model.update(db).await?;
+        // The role decides whether access groups apply at all.
+        crate::access_control_version::bump();
         Ok(result)
     }
 
@@ -178,6 +181,7 @@ impl UserRepository {
     )]
     pub async fn delete(db: &DatabaseConnection, id: Uuid) -> Result<()> {
         User::delete_by_id(id).exec(db).await?;
+        crate::access_control_version::bump();
         Ok(())
     }
 

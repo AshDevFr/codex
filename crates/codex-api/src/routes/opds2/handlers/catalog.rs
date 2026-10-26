@@ -181,7 +181,7 @@ pub async fn library_series(
         .map_err(|e| ApiError::Internal(format!("Failed to fetch library: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Library not found".to_string()))?;
 
-    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+    let content_filter = ContentFilter::cached_for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
     let visibility = content_filter.to_visibility();
@@ -416,7 +416,7 @@ pub async fn recent(
     let pagination = pagination.validate(50);
     let base_url = "/opds/v2";
 
-    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+    let content_filter = ContentFilter::cached_for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
     let visibility = content_filter.to_visibility();
@@ -567,7 +567,7 @@ pub async fn collection_series(
         .map_err(|e| ApiError::Internal(format!("Failed to fetch collection: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Collection not found".to_string()))?;
 
-    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+    let content_filter = ContentFilter::cached_for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
     let visibility = content_filter.to_visibility();
@@ -678,7 +678,7 @@ pub async fn readlist_books(
         .map_err(|e| ApiError::Internal(format!("Failed to fetch read list: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Read list not found".to_string()))?;
 
-    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+    let content_filter = ContentFilter::cached_for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
     let visibility = content_filter.to_visibility();

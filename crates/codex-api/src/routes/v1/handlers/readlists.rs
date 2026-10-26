@@ -10,9 +10,10 @@ use super::super::dto::{
     ReadListListResponse, ReorderReadListBooksRequest, UpdateReadListRequest,
 };
 use crate::require_permission;
+use crate::visibility::user_visibility;
 use crate::{
     error::ApiError,
-    extractors::{AuthContext, AuthState, ContentFilter, FlexibleAuthContext},
+    extractors::{AuthContext, AuthState, FlexibleAuthContext},
     permissions::Permission,
 };
 use axum::{
@@ -73,16 +74,6 @@ async fn readlist_dto(
     Ok(ReadListDto::from_model(model, count))
 }
 
-async fn user_visibility(
-    state: &AuthState,
-    user_id: Uuid,
-) -> Result<Option<SeriesVisibility>, ApiError> {
-    let filter = ContentFilter::for_user(&state.db, user_id)
-        .await
-        .map_err(internal("Failed to load content filter"))?;
-    Ok(filter.to_visibility())
-}
-
 async fn ensure_readlist_exists(state: &AuthState, read_list_id: Uuid) -> Result<(), ApiError> {
     get_readlist_or_404(state, read_list_id).await.map(|_| ())
 }
@@ -114,7 +105,7 @@ pub async fn list_readlists(
     auth: AuthContext,
 ) -> Result<Json<ReadListListResponse>, ApiError> {
     require_permission!(auth, Permission::ReadListsRead)?;
-    let vis = user_visibility(&state, auth.user_id).await?;
+    let vis = user_visibility(&state.db, auth.user_id).await?;
 
     let read_lists = ReadListRepository::list_all(&state.db)
         .await
@@ -194,7 +185,7 @@ pub async fn get_readlist(
         .await
         .map_err(internal("Failed to fetch read list"))?
         .ok_or_else(|| ApiError::NotFound("Read list not found".to_string()))?;
-    let vis = user_visibility(&state, auth.user_id).await?;
+    let vis = user_visibility(&state.db, auth.user_id).await?;
     Ok(Json(readlist_dto(&state.db, model, vis.as_ref()).await?))
 }
 
@@ -251,7 +242,7 @@ pub async fn update_readlist(
     .map_err(internal("Failed to update read list"))?
     .ok_or_else(|| ApiError::NotFound("Read list not found".to_string()))?;
 
-    let vis = user_visibility(&state, auth.user_id).await?;
+    let vis = user_visibility(&state.db, auth.user_id).await?;
     Ok(Json(readlist_dto(&state.db, model, vis.as_ref()).await?))
 }
 
@@ -307,7 +298,7 @@ pub async fn get_readlist_books(
     require_permission!(auth, Permission::ReadListsRead)?;
     let read_list = get_readlist_or_404(&state, read_list_id).await?;
 
-    let vis = user_visibility(&state, auth.user_id).await?;
+    let vis = user_visibility(&state.db, auth.user_id).await?;
     let members = ReadListRepository::get_books(
         &state.db,
         &read_list,
@@ -360,7 +351,7 @@ pub async fn add_readlist_books(
             .map_err(internal("Failed to add book to read list"))?;
     }
 
-    let vis = user_visibility(&state, auth.user_id).await?;
+    let vis = user_visibility(&state.db, auth.user_id).await?;
     Ok(Json(readlist_dto(&state.db, model, vis.as_ref()).await?))
 }
 
@@ -432,7 +423,7 @@ pub async fn get_readlist_thumbnail(
 ) -> Result<Redirect, ApiError> {
     auth.require_permission(&Permission::ReadListsRead)?;
     let read_list = get_readlist_or_404(&state, read_list_id).await?;
-    let vis = user_visibility(&state, auth.user_id).await?;
+    let vis = user_visibility(&state.db, auth.user_id).await?;
     let members = ReadListRepository::get_books(
         &state.db,
         &read_list,
@@ -472,7 +463,7 @@ pub async fn get_book_readlists(
     Path(book_id): Path<Uuid>,
 ) -> Result<Json<ReadListListResponse>, ApiError> {
     require_permission!(auth, Permission::ReadListsRead)?;
-    let vis = user_visibility(&state, auth.user_id).await?;
+    let vis = user_visibility(&state.db, auth.user_id).await?;
 
     let read_lists = ReadListRepository::get_read_lists_for_book(&state.db, book_id)
         .await

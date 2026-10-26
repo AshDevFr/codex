@@ -108,6 +108,7 @@ impl SharingTagRepository {
     /// Delete a sharing tag by ID
     pub async fn delete(db: &DatabaseConnection, id: Uuid) -> Result<bool> {
         let result = SharingTags::delete_by_id(id).exec(db).await?;
+        crate::access_control_version::bump();
         Ok(result.rows_affected > 0)
     }
 
@@ -180,6 +181,7 @@ impl SharingTagRepository {
             .await?;
 
         if tag_ids.is_empty() {
+            crate::access_control_version::bump();
             return Ok(vec![]);
         }
 
@@ -191,6 +193,7 @@ impl SharingTagRepository {
             };
             link.insert(db).await?;
         }
+        crate::access_control_version::bump();
 
         // Return the tags
         let tags = SharingTags::find()
@@ -226,6 +229,7 @@ impl SharingTagRepository {
             sharing_tag_id: Set(tag_id),
         };
         link.insert(db).await?;
+        crate::access_control_version::bump();
 
         Ok(true)
     }
@@ -243,6 +247,7 @@ impl SharingTagRepository {
             .filter(series_sharing_tags::Column::SharingTagId.eq(tag_id))
             .exec(db)
             .await?;
+        crate::access_control_version::bump();
 
         Ok(result.rows_affected > 0)
     }
@@ -499,6 +504,7 @@ impl SharingTagRepository {
             let mut active_model: user_sharing_tags::ActiveModel = existing.into();
             active_model.access_mode = Set(access_mode.as_str().to_string());
             let model = active_model.update(db).await?;
+            crate::access_control_version::bump();
             Ok(model)
         } else {
             // Create new grant
@@ -510,6 +516,7 @@ impl SharingTagRepository {
                 created_at: Set(Utc::now()),
             };
             let model = active_model.insert(db).await?;
+            crate::access_control_version::bump();
             Ok(model)
         }
     }
@@ -527,6 +534,7 @@ impl SharingTagRepository {
             .filter(user_sharing_tags::Column::SharingTagId.eq(tag_id))
             .exec(db)
             .await?;
+        crate::access_control_version::bump();
 
         Ok(result.rows_affected > 0)
     }
@@ -540,6 +548,7 @@ impl SharingTagRepository {
             .filter(user_sharing_tags::Column::UserId.eq(user_id))
             .exec(db)
             .await?;
+        crate::access_control_version::bump();
 
         Ok(result.rows_affected)
     }

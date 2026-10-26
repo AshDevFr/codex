@@ -128,6 +128,19 @@ impl ContentFilter {
         })
     }
 
+    /// The user's filter, reused from the per-process cache while it is valid.
+    ///
+    /// Handlers should use this rather than [`Self::for_user`]: see
+    /// [`crate::content_filter_cache`] for when a cached filter is rebuilt.
+    pub async fn cached_for_user(
+        db: &DatabaseConnection,
+        user_id: Uuid,
+    ) -> anyhow::Result<std::sync::Arc<Self>> {
+        crate::content_filter_cache::ContentFilterCache::global()
+            .get(db, user_id)
+            .await
+    }
+
     /// Resolve every target named by any rule to its series, one query per type.
     async fn resolve_targets(
         db: &DatabaseConnection,
