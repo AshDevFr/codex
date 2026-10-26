@@ -12,6 +12,10 @@ use super::super::dto::{
     GrantSourceDto, LibraryRuleDto, NameRuleDto, ReplaceAccessGroupRulesRequest, SharingTagRuleDto,
     UpdateAccessGroupRequest,
 };
+use crate::routes::v1::dto::{
+    LibraryVisibilityDto, MatchedRuleDto, SeriesAccessDto, VisibilityPreviewDto,
+    VisibilityPreviewQuery,
+};
 use crate::{
     error::ApiError,
     extractors::{AuthContext, AuthState},
@@ -19,7 +23,7 @@ use crate::{
 };
 use axum::{
     Json,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
 };
 use codex_db::entities::sharing_tags;
@@ -851,6 +855,130 @@ async fn rules_to_dto(
             })
             .collect(),
     })
+}
+
+// ==================== Visibility preview ====================
+
+/// Preview what a user can see (admin only)
+///
+/// Counts the series the user can and cannot see and lists every library with
+/// whether they can see it. With `seriesId`, also explains that series: which
+/// deny rules hide it (and from which group), or which groups let it through,
+/// or that no allow rule matches it. Uses the same rules as enforcement, built
+/// fresh rather than from the cache.
+#[utoipa::path(
+    get,
+    path = "/api/v1/users/{user_id}/visibility-preview",
+    params(
+        ("user_id" = Uuid, Path, description = "User ID"),
+        VisibilityPreviewQuery
+    ),
+    responses(
+        (status = 200, description = "What the user can see", body = VisibilityPreviewDto),
+        (status = 404, description = "User or series not found"),
+        (status = 403, description = "Forbidden - Missing permission"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Access Groups"
+)]
+pub async fn get_visibility_preview(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(user_id): Path<Uuid>,
+    Query(query): Query<VisibilityPreviewQuery>,
+) -> Result<Json<VisibilityPreviewDto>, ApiError> {
+    use codex_db::repositories::{SeriesMetadataRepository, SeriesRepository, UserRepository};
+    use codex_services::content_filter::{ContentFilter, RuleSource, bypasses_content_filter};
+
+    auth.require_permission(&Permission::SystemAdmin)?;
+
+    let user = UserRepository::get_by_id(&state.db, user_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch user: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("User not found".to_string()))?;
+    let filter = ContentFilter::for_user(&state.db, user_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to build content filter: {}", e)))?;
+
+    let visibility = filter.to_visibility();
+    let total = SeriesRepository::count_visible(&state.db, None)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to count series: {}", e)))?;
+    let visible = SeriesRepository::count_visible(&state.db, visibility.as_ref())
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to count series: {}", e)))?;
+
+    let libraries = LibraryRepository::list_all(&state.db)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch libraries: {}", e)))?
+        .into_iter()
+        .map(|library| LibraryVisibilityDto {
+            visible: filter.is_library_visible(library.id),
+            id: library.id,
+            name: library.name,
+        })
+        .collect();
+
+    let source_dto = |source: &RuleSource| match source {
+        RuleSource::Group { id, name } => GrantSourceDto {
+            kind: "group".to_string(),
+            group_id: Some(*id),
+            group_name: Some(name.clone()),
+        },
+        RuleSource::Personal => GrantSourceDto {
+            kind: "user".to_string(),
+            group_id: None,
+            group_name: None,
+        },
+    };
+
+    let series = match query.series_id {
+        None => None,
+        Some(series_id) => {
+            SeriesRepository::get_by_id(&state.db, series_id)
+                .await
+                .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
+                .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
+            let title = SeriesMetadataRepository::get_by_series_id(&state.db, series_id)
+                .await
+                .ok()
+                .flatten()
+                .map(|m| m.title)
+                .unwrap_or_default();
+            let explanation = ContentFilter::explain_series(&state.db, user_id, series_id)
+                .await
+                .map_err(|e| ApiError::Internal(format!("Failed to explain access: {}", e)))?;
+            Some(SeriesAccessDto {
+                series_id,
+                title,
+                visible: explanation.visible,
+                decision: explanation.decision,
+                denied_by: explanation
+                    .denied_by
+                    .iter()
+                    .map(|rule| MatchedRuleDto {
+                        rule_type: rule.rule_type,
+                        value: rule.value.clone(),
+                        source: source_dto(&rule.source),
+                    })
+                    .collect(),
+                allowed_by: explanation.allowed_by.iter().map(source_dto).collect(),
+            })
+        }
+    };
+
+    Ok(Json(VisibilityPreviewDto {
+        user_id,
+        restricted: filter.has_restrictions,
+        role_bypass: bypasses_content_filter(user.get_role()),
+        visible_series_count: visible,
+        hidden_series_count: total.saturating_sub(visible),
+        libraries,
+        series,
+    }))
 }
 
 // ==================== Effective Grants Debug ====================

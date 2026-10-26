@@ -49,6 +49,10 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
         )
         // Effective grants debug endpoint (admin only)
         .route(
+            "/users/{user_id}/visibility-preview",
+            get(handlers::access_groups::get_visibility_preview),
+        )
+        .route(
             "/users/{user_id}/effective-grants",
             get(handlers::access_groups::get_user_effective_grants),
         )

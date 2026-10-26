@@ -609,6 +609,7 @@ The following paths are exempt from rate limiting:
         v1::handlers::access_groups::add_access_group_oidc_mapping,
         v1::handlers::access_groups::remove_access_group_oidc_mapping,
         v1::handlers::access_groups::get_user_effective_grants,
+        v1::handlers::access_groups::get_visibility_preview,
 
         // Sharing Tags endpoints
         v1::handlers::sharing_tags::list_sharing_tags,
@@ -967,6 +968,12 @@ The following paths are exempt from rate limiting:
             v1::dto::UpdateAccessGroupRequest,
             v1::dto::AddAllUsersResponse,
             v1::dto::AccessGroupRulesDto,
+            v1::dto::VisibilityPreviewDto,
+            v1::dto::LibraryVisibilityDto,
+            v1::dto::SeriesAccessDto,
+            v1::dto::MatchedRuleDto,
+            codex_services::content_filter::AccessDecision,
+            codex_services::content_filter::RuleTypeLabel,
             v1::dto::SharingTagRuleDto,
             v1::dto::NameRuleDto,
             v1::dto::LibraryRuleDto,

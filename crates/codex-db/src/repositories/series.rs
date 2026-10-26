@@ -1046,6 +1046,20 @@ impl SeriesRepository {
         Ok(count as i64)
     }
 
+    /// Count all series that pass a visibility filter (`None` counts every series).
+    pub async fn count_visible(
+        db: &DatabaseConnection,
+        visibility: Option<&SeriesVisibility>,
+    ) -> Result<u64> {
+        use sea_orm::PaginatorTrait;
+
+        apply_series_visibility(Series::find(), visibility)
+            .paginate(db, 1)
+            .num_items()
+            .await
+            .context("Failed to count series")
+    }
+
     /// Count the series in a library that pass a visibility filter
     /// (`None` counts every series).
     pub async fn count_visible_by_library(

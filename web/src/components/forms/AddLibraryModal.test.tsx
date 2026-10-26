@@ -131,6 +131,17 @@ describe("LibraryModal (Add Mode)", () => {
     expect(scanStrategy).toBeInTheDocument();
   });
 
+  it("warns that restricted readers will not see the new library automatically", async () => {
+    renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
+
+    const modal = await screen.findByRole("dialog", {}, { timeout: 2000 });
+    expect(
+      await within(modal).findByText(
+        /only see content their access groups allow/i,
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("should open path browser when Browse button is clicked", async () => {
     const user = userEvent.setup();
     renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
