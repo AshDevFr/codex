@@ -649,7 +649,14 @@ jobs:
           echo "::error::@ashdev/codex-plugin-sdk@$SDK_VERSION never became resolvable"
           exit 1
       # The rewrite above desyncs the committed lockfile, so `npm ci` would fail
-      # and this publish-only step must regenerate it with `npm install`.
+      # and this publish-only step uses `npm install` instead. The lockfile is
+      # kept on purpose so every other dependency stays at its locked version;
+      # deleting it lets caret ranges float to whatever is newest, which once
+      # pulled in a Biome release whose new formatting rules failed the
+      # `prepublishOnly` lint. The SDK is named explicitly because a bare
+      # `npm install` keeps the locked `file:` link: the local SDK at this tag
+      # already satisfies the rewritten range, so it would never be fetched
+      # from the registry.
       #
       # Retried even though the step above waited: `npm view` and `npm install`
       # do not necessarily hit the same CDN edge, so one seeing the version does
@@ -659,8 +666,8 @@ jobs:
         working-directory: plugins/${{ matrix.plugin }}
         run: |
           for attempt in 1 2 3 4 5; do
-            rm -rf node_modules package-lock.json
-            if npm install --prefer-online; then
+            rm -rf node_modules
+            if npm install --prefer-online "@ashdev/codex-plugin-sdk@^$SDK_VERSION"; then
               echo "npm install succeeded on attempt $attempt"
               exit 0
             fi
