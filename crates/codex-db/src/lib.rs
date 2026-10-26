@@ -1,3 +1,4 @@
+pub mod access_control_version;
 pub mod connection;
 pub mod entities;
 pub mod repositories;

@@ -12,6 +12,7 @@ pub mod metrics;
 pub mod cleanup_subscriber;
 pub mod collection_membership;
 pub mod content_filter;
+pub mod content_filter_cache;
 pub mod email;
 pub mod entity_event_publisher;
 pub mod export_storage;

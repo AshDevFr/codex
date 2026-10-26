@@ -128,7 +128,7 @@ pub async fn search(
     let now = Utc::now();
     let base_url = "/opds";
 
-    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+    let content_filter = ContentFilter::cached_for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
     let visibility = content_filter.to_visibility();

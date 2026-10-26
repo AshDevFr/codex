@@ -18,9 +18,10 @@ use super::collections::{
 };
 use crate::require_permission;
 use crate::routes::v1::handlers::pages::generate_book_thumbnail;
+use crate::visibility::user_visibility;
 use crate::{
     error::ApiError,
-    extractors::{AuthState, ContentFilter, FlexibleAuthContext},
+    extractors::{AuthState, FlexibleAuthContext},
     permissions::Permission,
 };
 use axum::{
@@ -77,16 +78,6 @@ fn parse_komga_readlist_sort(sort: Option<&str>) -> Option<BookSortParam> {
     };
 
     Some(BookSortParam { field, direction })
-}
-
-async fn user_visibility(
-    state: &AuthState,
-    user_id: Uuid,
-) -> Result<Option<SeriesVisibility>, ApiError> {
-    let filter = ContentFilter::for_user(&state.db, user_id)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {e}")))?;
-    Ok(filter.to_visibility())
 }
 
 async fn build_want_to_read_dto(
@@ -149,7 +140,7 @@ pub async fn list_readlists(
     Query(query): Query<StubPaginationQuery>,
 ) -> Result<Json<KomgaPage<KomgaReadListDto>>, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
-    let vis = user_visibility(&state, auth.user_id).await?;
+    let vis = user_visibility(&state.db, auth.user_id).await?;
 
     let read_lists = ReadListRepository::list_all(&state.db)
         .await
@@ -193,7 +184,7 @@ pub async fn get_readlist(
     Path(read_list_id): Path<String>,
 ) -> Result<Json<KomgaReadListDto>, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
-    let vis = user_visibility(&state, auth.user_id).await?;
+    let vis = user_visibility(&state.db, auth.user_id).await?;
     if read_list_id == WANT_TO_READ_ID {
         return Ok(Json(
             build_want_to_read_dto(&state, auth.user_id, vis.as_ref()).await?,
@@ -227,7 +218,7 @@ pub async fn get_readlist_books(
     Query(query): Query<StubPaginationQuery>,
 ) -> Result<Json<KomgaPage<KomgaBookDto>>, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
-    let vis = user_visibility(&state, auth.user_id).await?;
+    let vis = user_visibility(&state.db, auth.user_id).await?;
     let members = if read_list_id == WANT_TO_READ_ID {
         WantToReadRepository::queued_books(&state.db, auth.user_id, vis.as_ref())
             .await
@@ -334,7 +325,7 @@ pub async fn get_readlist_thumbnail(
     Path(read_list_id): Path<String>,
 ) -> Result<Response, ApiError> {
     auth.require_permission(&Permission::BooksRead)?;
-    let vis = user_visibility(&state, auth.user_id).await?;
+    let vis = user_visibility(&state.db, auth.user_id).await?;
     let members = if read_list_id == WANT_TO_READ_ID {
         WantToReadRepository::queued_books(&state.db, auth.user_id, vis.as_ref())
             .await
@@ -465,7 +456,7 @@ pub async fn get_book_readlists(
     require_permission!(auth, Permission::BooksRead)?;
     let bid =
         Uuid::parse_str(&book_id).map_err(|_| ApiError::NotFound("Book not found".to_string()))?;
-    let vis = user_visibility(&state, auth.user_id).await?;
+    let vis = user_visibility(&state.db, auth.user_id).await?;
 
     let read_lists = ReadListRepository::get_read_lists_for_book(&state.db, bid)
         .await

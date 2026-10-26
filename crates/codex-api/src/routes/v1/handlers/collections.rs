@@ -10,9 +10,10 @@ use super::super::dto::{
     CreateCollectionRequest, ReorderCollectionSeriesRequest, SeriesDto, UpdateCollectionRequest,
 };
 use crate::require_permission;
+use crate::visibility::user_visibility;
 use crate::{
     error::ApiError,
-    extractors::{AuthContext, AuthState, ContentFilter, FlexibleAuthContext},
+    extractors::{AuthContext, AuthState, FlexibleAuthContext},
     permissions::Permission,
 };
 use axum::{
@@ -111,16 +112,6 @@ fn reject_manual_mutation(
     Ok(())
 }
 
-async fn user_visibility(
-    state: &AuthState,
-    user_id: Uuid,
-) -> Result<Option<SeriesVisibility>, ApiError> {
-    let filter = ContentFilter::for_user(&state.db, user_id)
-        .await
-        .map_err(internal("Failed to load content filter"))?;
-    Ok(filter.to_visibility())
-}
-
 /// List all collections.
 #[utoipa::path(
     get,
@@ -138,7 +129,7 @@ pub async fn list_collections(
     auth: AuthContext,
 ) -> Result<Json<CollectionListResponse>, ApiError> {
     require_permission!(auth, Permission::CollectionsRead)?;
-    let vis = user_visibility(&state, auth.user_id).await?;
+    let vis = user_visibility(&state.db, auth.user_id).await?;
 
     let collections = CollectionRepository::list_all(&state.db)
         .await
@@ -251,7 +242,7 @@ pub async fn get_collection(
         .await
         .map_err(internal("Failed to fetch collection"))?
         .ok_or_else(|| ApiError::NotFound("Collection not found".to_string()))?;
-    let vis = user_visibility(&state, auth.user_id).await?;
+    let vis = user_visibility(&state.db, auth.user_id).await?;
     Ok(Json(collection_dto(&state.db, model, vis.as_ref()).await?))
 }
 
@@ -341,7 +332,7 @@ pub async fn update_collection(
     .map_err(internal("Failed to update collection"))?
     .ok_or_else(|| ApiError::NotFound("Collection not found".to_string()))?;
 
-    let vis = user_visibility(&state, auth.user_id).await?;
+    let vis = user_visibility(&state.db, auth.user_id).await?;
     Ok(Json(collection_dto(&state.db, model, vis.as_ref()).await?))
 }
 
@@ -397,7 +388,7 @@ pub async fn get_collection_series(
     require_permission!(auth, Permission::CollectionsRead)?;
     let collection = get_collection_or_404(&state, collection_id).await?;
 
-    let vis = user_visibility(&state, auth.user_id).await?;
+    let vis = user_visibility(&state.db, auth.user_id).await?;
     let members = CollectionMembershipService::members(
         &state.db,
         &collection,
@@ -453,7 +444,7 @@ pub async fn add_collection_series(
             .map_err(internal("Failed to add series to collection"))?;
     }
 
-    let vis = user_visibility(&state, auth.user_id).await?;
+    let vis = user_visibility(&state.db, auth.user_id).await?;
     Ok(Json(collection_dto(&state.db, model, vis.as_ref()).await?))
 }
 
@@ -528,7 +519,7 @@ pub async fn get_collection_thumbnail(
 ) -> Result<impl IntoResponse, ApiError> {
     auth.require_permission(&Permission::CollectionsRead)?;
     let collection = get_collection_or_404(&state, collection_id).await?;
-    let vis = user_visibility(&state, auth.user_id).await?;
+    let vis = user_visibility(&state.db, auth.user_id).await?;
     let first = CollectionMembershipService::cover(
         &state.db,
         &collection,
@@ -581,7 +572,7 @@ pub async fn get_series_collections(
     Path(series_id): Path<Uuid>,
 ) -> Result<Json<CollectionListResponse>, ApiError> {
     require_permission!(auth, Permission::CollectionsRead)?;
-    let vis = user_visibility(&state, auth.user_id).await?;
+    let vis = user_visibility(&state.db, auth.user_id).await?;
 
     let collections = CollectionRepository::get_collections_for_series(&state.db, series_id)
         .await

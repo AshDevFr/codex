@@ -99,6 +99,7 @@ impl AccessGroupRepository {
     /// Delete an access group (cascades memberships, grants, OIDC mappings via FK).
     pub async fn delete(db: &DatabaseConnection, id: Uuid) -> Result<bool> {
         let res = access_groups::Entity::delete_by_id(id).exec(db).await?;
+        crate::access_control_version::bump();
         Ok(res.rows_affected > 0)
     }
 
@@ -132,7 +133,11 @@ impl AccessGroupRepository {
             source: Set(source.as_str().to_string()),
             created_at: Set(Utc::now()),
         };
-        Ok(active.insert(db).await?)
+        let row = active.insert(db).await?;
+        // Inside a transaction this runs before the commit; such callers bump
+        // again after committing.
+        crate::access_control_version::bump();
+        Ok(row)
     }
 
     /// Remove a user from a group. Returns true if a row was deleted.
@@ -146,6 +151,7 @@ impl AccessGroupRepository {
             .filter(user_access_groups::Column::AccessGroupId.eq(group_id))
             .exec(db)
             .await?;
+        crate::access_control_version::bump();
         Ok(res.rows_affected > 0)
     }
 
@@ -284,6 +290,7 @@ impl AccessGroupRepository {
             .await?;
         }
         txn.commit().await?;
+        crate::access_control_version::bump();
         Ok(user_ids.len() as u64)
     }
 
@@ -348,7 +355,9 @@ impl AccessGroupRepository {
         if let Some(row) = existing {
             let mut active: access_group_sharing_tags::ActiveModel = row.into();
             active.access_mode = Set(access_mode.as_str().to_string());
-            return Ok(active.update(db).await?);
+            let row = active.update(db).await?;
+            crate::access_control_version::bump();
+            return Ok(row);
         }
         let active = access_group_sharing_tags::ActiveModel {
             id: Set(Uuid::new_v4()),
@@ -357,7 +366,9 @@ impl AccessGroupRepository {
             access_mode: Set(access_mode.as_str().to_string()),
             created_at: Set(Utc::now()),
         };
-        Ok(active.insert(db).await?)
+        let row = active.insert(db).await?;
+        crate::access_control_version::bump();
+        Ok(row)
     }
 
     /// Remove a group's grant for a sharing tag. Returns true if a row was deleted.
@@ -371,6 +382,7 @@ impl AccessGroupRepository {
             .filter(access_group_sharing_tags::Column::SharingTagId.eq(tag_id))
             .exec(db)
             .await?;
+        crate::access_control_version::bump();
         Ok(res.rows_affected > 0)
     }
 
@@ -515,6 +527,7 @@ impl AccessGroupRepository {
         }
 
         txn.commit().await?;
+        crate::access_control_version::bump();
         Ok((to_add.len(), to_remove.len()))
     }
 }

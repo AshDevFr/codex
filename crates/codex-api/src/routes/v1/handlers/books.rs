@@ -895,7 +895,7 @@ pub async fn list_books(
     };
 
     // Load content filter for sharing tags
-    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+    let content_filter = ContentFilter::cached_for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
 
@@ -1066,7 +1066,7 @@ pub async fn list_books_filtered(
     let use_relevance_order = sort.field == BookSortField::Relevance && has_fuzzy_search_query;
 
     // Every branch needs to honor sharing-tag visibility, so load it up front.
-    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+    let content_filter = ContentFilter::cached_for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
     let visibility = content_filter.to_visibility();
@@ -1282,7 +1282,7 @@ pub async fn get_book_full(
         .map_err(|e| ApiError::Internal(format!("Failed to fetch book: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
 
-    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+    let content_filter = ContentFilter::cached_for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
 
@@ -1330,7 +1330,7 @@ pub async fn get_book(
         .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
 
     // Check sharing tag access for the book's series
-    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+    let content_filter = ContentFilter::cached_for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
 
@@ -1658,7 +1658,7 @@ pub async fn get_adjacent_books(
 ) -> Result<Json<AdjacentBooksResponse>, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
 
-    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+    let content_filter = ContentFilter::cached_for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
     let visibility = content_filter.to_visibility();
@@ -1738,7 +1738,7 @@ pub async fn list_library_books(
         .map(|s| BookSortParam::parse(s))
         .unwrap_or_default();
 
-    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+    let content_filter = ContentFilter::cached_for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
     let visibility = content_filter.to_visibility();
@@ -1816,7 +1816,7 @@ pub async fn list_in_progress_books(
     };
     let offset = (page - 1) * page_size;
 
-    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+    let content_filter = ContentFilter::cached_for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
     let visibility = content_filter.to_visibility();
@@ -1896,7 +1896,7 @@ pub async fn list_library_in_progress_books(
     };
     let offset = (page - 1) * page_size;
 
-    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+    let content_filter = ContentFilter::cached_for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
     let visibility = content_filter.to_visibility();
@@ -1964,7 +1964,7 @@ pub async fn list_on_deck_books(
     };
     let offset = (page - 1) * page_size;
 
-    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+    let content_filter = ContentFilter::cached_for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
     let visibility = content_filter.to_visibility();
@@ -2034,7 +2034,7 @@ pub async fn list_library_on_deck_books(
     };
     let offset = (page - 1) * page_size;
 
-    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+    let content_filter = ContentFilter::cached_for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
     let visibility = content_filter.to_visibility();
@@ -2102,7 +2102,7 @@ pub async fn list_recently_added_books(
     };
     let offset = (page - 1) * page_size;
 
-    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+    let content_filter = ContentFilter::cached_for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
     let visibility = content_filter.to_visibility();
@@ -2181,7 +2181,7 @@ pub async fn list_library_recently_added_books(
     };
     let offset = (page - 1) * page_size;
 
-    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+    let content_filter = ContentFilter::cached_for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
     let visibility = content_filter.to_visibility();
@@ -2257,7 +2257,7 @@ pub async fn list_recently_read_books(
 ) -> Result<Json<Vec<BookDto>>, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
 
-    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+    let content_filter = ContentFilter::cached_for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
     let visibility = content_filter.to_visibility();
@@ -2303,7 +2303,7 @@ pub async fn list_library_recently_read_books(
 ) -> Result<Json<Vec<BookDto>>, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
 
-    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+    let content_filter = ContentFilter::cached_for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
     let visibility = content_filter.to_visibility();
@@ -2394,7 +2394,7 @@ pub async fn get_book_file(
 
     // Check sharing tag access for the book's series. This runs before the file
     // is touched, so a 206 is never a way around a check a 200 has to pass.
-    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+    let content_filter = ContentFilter::cached_for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
 
@@ -5083,7 +5083,7 @@ pub async fn list_book_pages(
         .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
 
     // Check sharing tag access for the book's series
-    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+    let content_filter = ContentFilter::cached_for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
 

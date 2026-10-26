@@ -342,7 +342,7 @@ pub async fn get_books_ondeck(
     let size = query.size.clamp(1, 500) as u64;
     let offset = page * size;
 
-    let content_filter = ContentFilter::for_user(&state.db, user_id)
+    let content_filter = ContentFilter::cached_for_user(&state.db, user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
     let visibility = content_filter.to_visibility();
@@ -609,7 +609,7 @@ pub async fn get_next_book(
 
     let user_id = Some(auth.user_id);
 
-    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+    let content_filter = ContentFilter::cached_for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
     let visibility = content_filter.to_visibility();
@@ -701,7 +701,7 @@ pub async fn get_previous_book(
 
     let user_id = Some(auth.user_id);
 
-    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+    let content_filter = ContentFilter::cached_for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
     let visibility = content_filter.to_visibility();

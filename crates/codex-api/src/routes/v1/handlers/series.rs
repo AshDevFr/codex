@@ -951,7 +951,7 @@ async fn list_series_impl(
     };
 
     // Sharing-tag visibility goes into the repository queries below.
-    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+    let content_filter = ContentFilter::cached_for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
     let visibility = content_filter.to_visibility();
@@ -1109,7 +1109,7 @@ pub async fn list_series_external_index(
     let offset = (page - 1) * page_size;
 
     // Honor sharing-tag visibility: only export series this user can access.
-    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+    let content_filter = ContentFilter::cached_for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
     let visibility = content_filter.to_visibility();
@@ -1246,7 +1246,7 @@ pub async fn get_series_full(
         .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
 
-    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+    let content_filter = ContentFilter::cached_for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
 
@@ -1295,7 +1295,7 @@ pub async fn get_series(
         .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
 
     // Check sharing tag access
-    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+    let content_filter = ContentFilter::cached_for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
 
@@ -1486,7 +1486,7 @@ pub async fn search_series(
     require_permission!(auth, Permission::SeriesRead)?;
 
     // Apply sharing tag content filter
-    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+    let content_filter = ContentFilter::cached_for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
     let visibility = content_filter.to_visibility();
@@ -1627,7 +1627,7 @@ pub async fn list_series_filtered(
     let use_relevance_order = sort.field == SeriesSortField::Relevance && has_fuzzy_search_query;
 
     // Apply sharing tag content filter
-    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+    let content_filter = ContentFilter::cached_for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
     let visibility = content_filter.to_visibility();
@@ -1819,7 +1819,7 @@ pub async fn list_series_alphabetical_groups(
     require_permission!(auth, Permission::SeriesRead)?;
 
     // Apply sharing tag content filter at the SQL layer.
-    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+    let content_filter = ContentFilter::cached_for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
     let visibility = content_filter.to_visibility();
@@ -2455,7 +2455,7 @@ pub async fn list_in_progress_series(
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
 
-    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+    let content_filter = ContentFilter::cached_for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
     let visibility = content_filter.to_visibility();
@@ -2542,7 +2542,7 @@ pub async fn list_recently_added_series(
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
 
-    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+    let content_filter = ContentFilter::cached_for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
     let visibility = content_filter.to_visibility();
@@ -2601,7 +2601,7 @@ pub async fn list_library_recently_added_series(
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
 
-    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+    let content_filter = ContentFilter::cached_for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
     let visibility = content_filter.to_visibility();
@@ -2656,7 +2656,7 @@ pub async fn list_recently_updated_series(
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
 
-    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+    let content_filter = ContentFilter::cached_for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
     let visibility = content_filter.to_visibility();
@@ -2714,7 +2714,7 @@ pub async fn list_library_recently_updated_series(
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
 
-    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+    let content_filter = ContentFilter::cached_for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
     let visibility = content_filter.to_visibility();
@@ -2788,7 +2788,7 @@ pub async fn list_library_series(
         .unwrap_or_default();
 
     // Load content filter for sharing tags
-    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+    let content_filter = ContentFilter::cached_for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
     let visibility = content_filter.to_visibility();
@@ -2893,7 +2893,7 @@ pub async fn list_library_in_progress_series(
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
 
-    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+    let content_filter = ContentFilter::cached_for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
     let visibility = content_filter.to_visibility();

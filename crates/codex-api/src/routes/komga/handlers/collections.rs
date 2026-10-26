@@ -15,9 +15,10 @@ use super::super::dto::series::KomgaSeriesDto;
 use super::super::dto::stubs::{KomgaCollectionDto, StubPaginationQuery};
 use super::series::{build_series_dto, generate_series_thumbnail};
 use crate::require_permission;
+use crate::visibility::user_visibility;
 use crate::{
     error::ApiError,
-    extractors::{AuthState, ContentFilter, FlexibleAuthContext},
+    extractors::{AuthState, FlexibleAuthContext},
     permissions::Permission,
 };
 use axum::{
@@ -95,16 +96,6 @@ fn parse_komga_collection_sort(sort: Option<&str>) -> Option<SeriesSortParam> {
     };
 
     Some(SeriesSortParam { field, direction })
-}
-
-async fn user_visibility(
-    state: &AuthState,
-    user_id: Uuid,
-) -> Result<Option<SeriesVisibility>, ApiError> {
-    let filter = ContentFilter::for_user(&state.db, user_id)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {e}")))?;
-    Ok(filter.to_visibility())
 }
 
 /// Created/modified dates for a virtual queue-backed DTO: first and last
@@ -190,7 +181,7 @@ pub async fn list_collections(
     Query(query): Query<StubPaginationQuery>,
 ) -> Result<Json<KomgaPage<KomgaCollectionDto>>, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
-    let vis = user_visibility(&state, auth.user_id).await?;
+    let vis = user_visibility(&state.db, auth.user_id).await?;
 
     let collections = CollectionRepository::list_all(&state.db)
         .await
@@ -234,7 +225,7 @@ pub async fn get_collection(
     Path(collection_id): Path<String>,
 ) -> Result<Json<KomgaCollectionDto>, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
-    let vis = user_visibility(&state, auth.user_id).await?;
+    let vis = user_visibility(&state.db, auth.user_id).await?;
     if collection_id == WANT_TO_READ_ID {
         return Ok(Json(
             build_want_to_read_dto(&state, auth.user_id, vis.as_ref()).await?,
@@ -270,7 +261,7 @@ pub async fn get_collection_series(
     Query(query): Query<StubPaginationQuery>,
 ) -> Result<Json<KomgaPage<KomgaSeriesDto>>, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
-    let vis = user_visibility(&state, auth.user_id).await?;
+    let vis = user_visibility(&state.db, auth.user_id).await?;
     let members = if collection_id == WANT_TO_READ_ID {
         WantToReadRepository::queued_series(&state.db, auth.user_id, vis.as_ref())
             .await
@@ -353,7 +344,7 @@ pub async fn get_collection_thumbnail(
     Path(collection_id): Path<String>,
 ) -> Result<Response, ApiError> {
     auth.require_permission(&Permission::SeriesRead)?;
-    let vis = user_visibility(&state, auth.user_id).await?;
+    let vis = user_visibility(&state.db, auth.user_id).await?;
     let members = if collection_id == WANT_TO_READ_ID {
         WantToReadRepository::queued_series(&state.db, auth.user_id, vis.as_ref())
             .await
@@ -475,7 +466,7 @@ pub async fn get_series_collections(
     require_permission!(auth, Permission::SeriesRead)?;
     let sid = Uuid::parse_str(&series_id)
         .map_err(|_| ApiError::NotFound("Series not found".to_string()))?;
-    let vis = user_visibility(&state, auth.user_id).await?;
+    let vis = user_visibility(&state.db, auth.user_id).await?;
 
     let collections = CollectionRepository::get_collections_for_series(&state.db, sid)
         .await

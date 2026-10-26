@@ -321,6 +321,7 @@ impl AccessGroupRulesRepository {
         active.update(&txn).await?;
 
         txn.commit().await?;
+        crate::access_control_version::bump();
         Ok(())
     }
 

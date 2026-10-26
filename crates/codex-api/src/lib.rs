@@ -9,6 +9,7 @@ pub mod page_extract;
 pub mod permissions;
 pub mod ranged_file;
 pub mod routes;
+pub mod visibility;
 pub mod web;
 
 #[allow(unused_imports)]

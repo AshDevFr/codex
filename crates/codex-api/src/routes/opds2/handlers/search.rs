@@ -103,7 +103,7 @@ pub async fn search(
     }
 
     let user_id = auth.user_id;
-    let content_filter = ContentFilter::for_user(&state.db, user_id)
+    let content_filter = ContentFilter::cached_for_user(&state.db, user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
     let visibility = content_filter.to_visibility();
