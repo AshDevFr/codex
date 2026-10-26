@@ -25,6 +25,7 @@ import type {
   PreviewScanResponse,
   SeriesStrategy,
 } from "@/types";
+import { withContentKeys } from "@/utils/contentKeys";
 
 interface PreviewScanPanelProps {
   path: string;
@@ -159,11 +160,11 @@ function PreviewResults({ data }: PreviewResultsProps) {
       ) : (
         <ScrollArea h={300} type="auto">
           <Stack gap="xs">
-            {detectedSeries.map((series, index) => (
-              <SeriesPreviewCard
-                key={`${series.name}-${index}`}
-                series={series}
-              />
+            {withContentKeys(
+              detectedSeries,
+              (series) => series.path ?? series.name,
+            ).map(({ key, item: series }) => (
+              <SeriesPreviewCard key={key} series={series} />
             ))}
           </Stack>
         </ScrollArea>

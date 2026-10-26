@@ -13,6 +13,7 @@ import {
 import { useDebouncedCallback } from "@mantine/hooks";
 import { IconSearch, IconX } from "@tabler/icons-react";
 import { useCallback, useState } from "react";
+import { withContentKeys } from "@/utils/contentKeys";
 
 export interface SearchResult {
   /** CFI location of the match */
@@ -183,27 +184,29 @@ export function EpubSearch({
                 <Text size="xs" c="dimmed">
                   {results.length} result{results.length !== 1 ? "s" : ""} found
                 </Text>
-                {results.map((result, index) => (
-                  <Box
-                    key={`${result.cfi}-${index}`}
-                    p="sm"
-                    style={{
-                      borderRadius: "var(--mantine-radius-sm)",
-                      border: "1px solid var(--mantine-color-dark-4)",
-                      cursor: "pointer",
-                    }}
-                    onClick={() => handleResultClick(result.cfi)}
-                  >
-                    {result.chapter && (
-                      <Text size="xs" c="dimmed" mb={4}>
-                        {result.chapter}
+                {withContentKeys(results, (result) => result.cfi).map(
+                  ({ key, item: result }) => (
+                    <Box
+                      key={key}
+                      p="sm"
+                      style={{
+                        borderRadius: "var(--mantine-radius-sm)",
+                        border: "1px solid var(--mantine-color-dark-4)",
+                        cursor: "pointer",
+                      }}
+                      onClick={() => handleResultClick(result.cfi)}
+                    >
+                      {result.chapter && (
+                        <Text size="xs" c="dimmed" mb={4}>
+                          {result.chapter}
+                        </Text>
+                      )}
+                      <Text size="sm" lineClamp={3}>
+                        {highlightText(result.excerpt, query)}
                       </Text>
-                    )}
-                    <Text size="sm" lineClamp={3}>
-                      {highlightText(result.excerpt, query)}
-                    </Text>
-                  </Box>
-                ))}
+                    </Box>
+                  ),
+                )}
               </Stack>
             ) : (
               <Text c="dimmed" size="sm" ta="center" py="xl">

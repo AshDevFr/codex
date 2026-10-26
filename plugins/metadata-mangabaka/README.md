@@ -53,11 +53,11 @@ Or run directly with npx (no installation required).
 
 ### npx Options
 
-| Configuration | Arguments | Description |
-|--------------|-----------|-------------|
-| Latest version | `-y @ashdev/codex-plugin-metadata-mangabaka` | Always uses latest |
-| Pinned version | `-y @ashdev/codex-plugin-metadata-mangabaka@1.0.0` | Recommended for production |
-| Fast startup | `-y --prefer-offline @ashdev/codex-plugin-metadata-mangabaka@1.0.0` | Skips version check if cached |
+| Configuration  | Arguments                                                           | Description                   |
+| -------------- | ------------------------------------------------------------------- | ----------------------------- |
+| Latest version | `-y @ashdev/codex-plugin-metadata-mangabaka`                        | Always uses latest            |
+| Pinned version | `-y @ashdev/codex-plugin-metadata-mangabaka@1.0.0`                  | Recommended for production    |
+| Fast startup   | `-y --prefer-offline @ashdev/codex-plugin-metadata-mangabaka@1.0.0` | Skips version check if cached |
 
 **Flags:**
 - `-y`: Auto-confirms installation (required for containers)
@@ -107,10 +107,10 @@ The plugin requires a MangaBaka API key. Configure it in the Codex UI or via the
 
 This plugin receives credentials via the `initialize` message, so you must set the **Credential Delivery** option appropriately:
 
-| Method | Value | Description |
-|--------|-------|-------------|
+| Method             | Value          | Description                                                           |
+| ------------------ | -------------- | --------------------------------------------------------------------- |
 | Initialize Message | `init_message` | Credentials passed in the JSON-RPC `initialize` request (recommended) |
-| Both | `both` | Credentials passed as both environment variables and in `initialize` |
+| Both               | `both`         | Credentials passed as both environment variables and in `initialize`  |
 
 **Note:** The `env` (environment variables only) method will **not work** with this plugin because it reads credentials from the `onInitialize` callback, not from environment variables.
 
@@ -118,11 +118,11 @@ This plugin receives credentials via the `initialize` message, so you must set t
 
 The plugin supports optional parameters to customize behavior:
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `timeout` | number | `60` | HTTP request timeout in seconds for each MangaBaka API call |
-| `sort_by` | string | `relevance_desc` | Sort order for search results. Valid values: `relevance_desc`, `popularity_asc` (recommended; surfaces well-known series first), `popularity_desc`, `title_asc`, `title_desc`, `created_at_desc`, `created_at_asc` |
-| `base_url` | string | `https://api.mangabaka.org` | Override the API base URL (rarely needed) |
+| Parameter  | Type   | Default                     | Description                                                                                                                                                                                                        |
+| ---------- | ------ | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `timeout`  | number | `60`                        | HTTP request timeout in seconds for each MangaBaka API call                                                                                                                                                        |
+| `sort_by`  | string | `relevance_desc`            | Sort order for search results. Valid values: `relevance_desc`, `popularity_asc` (recommended; surfaces well-known series first), `popularity_desc`, `title_asc`, `title_desc`, `created_at_desc`, `created_at_asc` |
+| `base_url` | string | `https://api.mangabaka.org` | Override the API base URL (rarely needed)                                                                                                                                                                          |
 
 Example parameters configuration:
 

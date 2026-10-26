@@ -28,6 +28,7 @@ import type {
   MetadataPreviewResponse,
 } from "@/api/plugins";
 import { pluginActionsApi } from "@/api/plugins";
+import { withContentKeys } from "@/utils/contentKeys";
 
 export interface MetadataPreviewProps {
   /** Series or Book ID */
@@ -529,9 +530,12 @@ function ValueDisplay({
         }>;
         return (
           <Group gap={4} wrap="wrap">
-            {ratings.slice(0, 3).map((rating, idx) => (
+            {withContentKeys(
+              ratings.slice(0, 3),
+              (rating) => `${rating.source}:${rating.score}`,
+            ).map(({ key, item: rating }) => (
               <Badge
-                key={`${rating.source || "rating"}-${idx}`}
+                key={key}
                 size="xs"
                 variant={highlight ? "filled" : "light"}
               >
@@ -556,9 +560,12 @@ function ValueDisplay({
         }>;
         return (
           <Group gap={4} wrap="wrap">
-            {extIds.slice(0, 5).map((item, idx) => (
+            {withContentKeys(
+              extIds.slice(0, 5),
+              (item) => `${item.source}:${item.externalId}`,
+            ).map(({ key, item }) => (
               <Badge
-                key={`${item.source}-${idx}`}
+                key={key}
                 size="xs"
                 variant={highlight ? "filled" : "light"}
                 color="blue"
@@ -584,8 +591,11 @@ function ValueDisplay({
         const altTitles = value as Array<{ label: string; title: string }>;
         return (
           <Group gap={4} wrap="wrap">
-            {altTitles.slice(0, 3).map((item, idx) => (
-              <Tooltip key={`${item.label}-${idx}`} label={item.label}>
+            {withContentKeys(
+              altTitles.slice(0, 3),
+              (item) => `${item.label}:${item.title}`,
+            ).map(({ key, item }) => (
+              <Tooltip key={key} label={item.label}>
                 <Badge size="xs" variant={highlight ? "filled" : "light"}>
                   {item.title.length > 20
                     ? `${item.title.slice(0, 20)}...`
@@ -611,9 +621,12 @@ function ValueDisplay({
         }>;
         return (
           <Group gap={4} wrap="wrap">
-            {authors.slice(0, 5).map((author, idx) => (
+            {withContentKeys(
+              authors.slice(0, 5),
+              (author) => `${author.role}:${author.name}`,
+            ).map(({ key, item: author }) => (
               <Tooltip
-                key={`${author.name}-${idx}`}
+                key={key}
                 label={`${author.role}${author.sortName ? ` | Sort: ${author.sortName}` : ""}`}
               >
                 <Badge size="xs" variant={highlight ? "filled" : "light"}>
@@ -634,12 +647,11 @@ function ValueDisplay({
       const items = value as Array<{ label?: string; url?: string }>;
       return (
         <Group gap={4} wrap="wrap">
-          {items.slice(0, 3).map((item, idx) => (
-            <Badge
-              key={`${item.label || item.url || "link"}-${idx}`}
-              size="xs"
-              variant={highlight ? "filled" : "light"}
-            >
+          {withContentKeys(
+            items.slice(0, 3),
+            (item) => `${item.label}:${item.url}`,
+          ).map(({ key, item }) => (
+            <Badge key={key} size="xs" variant={highlight ? "filled" : "light"}>
               {item.label || item.url || "Link"}
             </Badge>
           ))}
@@ -654,13 +666,8 @@ function ValueDisplay({
     // Handle simple arrays (strings)
     return (
       <Group gap={4} wrap="wrap">
-        {value.slice(0, 5).map((item, idx) => (
-          <Badge
-            // biome-ignore lint/suspicious/noArrayIndexKey: items may have duplicate values
-            key={`${item}-${idx}`}
-            size="xs"
-            variant={highlight ? "filled" : "light"}
-          >
+        {withContentKeys(value.slice(0, 5), String).map(({ key, item }) => (
+          <Badge key={key} size="xs" variant={highlight ? "filled" : "light"}>
             {String(item)}
           </Badge>
         ))}

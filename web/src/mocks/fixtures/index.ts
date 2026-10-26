@@ -17,4 +17,4 @@ export const fixtures = {
   page: pageSvgUrl,
 };
 
-export { sampleCbzUrl, sampleEpubUrl, samplePdfUrl, coverSvgUrl, pageSvgUrl };
+export { coverSvgUrl, pageSvgUrl, sampleCbzUrl, sampleEpubUrl, samplePdfUrl };

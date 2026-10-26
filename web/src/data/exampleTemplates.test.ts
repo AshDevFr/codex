@@ -40,47 +40,51 @@ describe("exampleTemplates", () => {
       expect(result.errors).toHaveLength(0);
     });
 
-    it.each(
-      EXAMPLE_TEMPLATES,
-    )("template '$name' should have valid syntax", (template) => {
-      const result = validateTemplate(template.template);
-      expect(result.valid).toBe(true);
-    });
+    it.each(EXAMPLE_TEMPLATES)(
+      "template '$name' should have valid syntax",
+      (template) => {
+        const result = validateTemplate(template.template);
+        expect(result.valid).toBe(true);
+      },
+    );
   });
 
   describe("template rendering", () => {
-    it.each(
-      EXAMPLE_TEMPLATES,
-    )("template '$name' should render with its sample data", (template) => {
-      const result = renderTemplate(template.template, {
-        custom_metadata: template.sampleData,
-      });
-      expect(result.success).toBe(true);
-      expect(result.output).toBeDefined();
-    });
+    it.each(EXAMPLE_TEMPLATES)(
+      "template '$name' should render with its sample data",
+      (template) => {
+        const result = renderTemplate(template.template, {
+          custom_metadata: template.sampleData,
+        });
+        expect(result.success).toBe(true);
+        expect(result.output).toBeDefined();
+      },
+    );
 
-    it.each(
-      EXAMPLE_TEMPLATES,
-    )("template '$name' should handle empty custom_metadata gracefully", (template) => {
-      const result = renderTemplate(template.template, {
-        custom_metadata: null,
-      });
-      expect(result.success).toBe(true);
-      // Output should be empty or just whitespace when no data
-      expect(result.output.trim()).toBe("");
-    });
+    it.each(EXAMPLE_TEMPLATES)(
+      "template '$name' should handle empty custom_metadata gracefully",
+      (template) => {
+        const result = renderTemplate(template.template, {
+          custom_metadata: null,
+        });
+        expect(result.success).toBe(true);
+        // Output should be empty or just whitespace when no data
+        expect(result.output.trim()).toBe("");
+      },
+    );
 
-    it.each(
-      EXAMPLE_TEMPLATES,
-    )("template '$name' should handle empty object gracefully", (template) => {
-      const result = renderTemplate(template.template, {
-        custom_metadata: {},
-      });
-      expect(result.success).toBe(true);
-      // Output should render without errors - may have headers for some templates
-      // since Handlebars treats empty objects as truthy
-      expect(typeof result.output).toBe("string");
-    });
+    it.each(EXAMPLE_TEMPLATES)(
+      "template '$name' should handle empty object gracefully",
+      (template) => {
+        const result = renderTemplate(template.template, {
+          custom_metadata: {},
+        });
+        expect(result.success).toBe(true);
+        // Output should render without errors - may have headers for some templates
+        // since Handlebars treats empty objects as truthy
+        expect(typeof result.output).toBe("string");
+      },
+    );
   });
 
   describe("getTemplateById", () => {

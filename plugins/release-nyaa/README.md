@@ -31,7 +31,7 @@ None. The plugin only reads public Nyaa.si RSS feeds.
 6. Set the **Uploaders** config field (see [Uploader Subscriptions](#uploader-subscriptions) below) and save again.
 7. Click **Test Connection** to verify the plugin works.
 
-After saving, the host materializes one row per entry in **Settings → Release tracking** — that's where you flip rows on/off, override the poll interval, or hit *Poll now*. Removing an entry from the list and re-saving auto-prunes the corresponding row.
+After saving, the host materializes one row per entry in **Settings → Release tracking** — that's where you flip rows on/off, override the poll interval, or hit _Poll now_. Removing an entry from the list and re-saving auto-prunes the corresponding row.
 
 ### Tracking & Aliases
 
@@ -39,28 +39,28 @@ The plugin matches Nyaa releases to tracked series by alias, since uploaders rar
 
 ### npx Options
 
-| Configuration | Arguments | Description |
-|--------------|-----------|-------------|
-| Latest version | `-y @ashdev/codex-plugin-release-nyaa` | Always uses latest |
-| Pinned version | `-y @ashdev/codex-plugin-release-nyaa@1.19.0` | Recommended for production |
-| Fast startup | `-y --prefer-offline @ashdev/codex-plugin-release-nyaa@1.19.0` | Skips version check if cached |
+| Configuration  | Arguments                                                      | Description                   |
+| -------------- | -------------------------------------------------------------- | ----------------------------- |
+| Latest version | `-y @ashdev/codex-plugin-release-nyaa`                         | Always uses latest            |
+| Pinned version | `-y @ashdev/codex-plugin-release-nyaa@1.19.0`                  | Recommended for production    |
+| Fast startup   | `-y --prefer-offline @ashdev/codex-plugin-release-nyaa@1.19.0` | Skips version check if cached |
 
 ## Configuration
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `uploaders` | string-array (or legacy CSV) | `[]` | List of trusted uploader handles or queries. See below. |
-| `requestTimeoutMs` | number | `10000` | How long to wait for a single Nyaa RSS fetch before giving up, in milliseconds. |
-| `baseUrl` | string | `https://nyaa.si` | Override the Nyaa base URL. Useful for mirrors or for tests. |
+| Parameter          | Type                         | Default           | Description                                                                     |
+| ------------------ | ---------------------------- | ----------------- | ------------------------------------------------------------------------------- |
+| `uploaders`        | string-array (or legacy CSV) | `[]`              | List of trusted uploader handles or queries. See below.                         |
+| `requestTimeoutMs` | number                       | `10000`           | How long to wait for a single Nyaa RSS fetch before giving up, in milliseconds. |
+| `baseUrl`          | string                       | `https://nyaa.si` | Override the Nyaa base URL. Useful for mirrors or for tests.                    |
 
 ### Uploader Subscriptions
 
 Each entry in `uploaders` is one of:
 
-| Form | Example | Meaning |
-|------|---------|---------|
-| `username` | `tsuna69` | A Nyaa user feed |
-| `q:<query>` | `q:LuminousScans` | A plain site-wide search |
+| Form          | Example              | Meaning                                                                                                               |
+| ------------- | -------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `username`    | `tsuna69`            | A Nyaa user feed                                                                                                      |
+| `q:<query>`   | `q:LuminousScans`    | A plain site-wide search                                                                                              |
 | `q:?<params>` | `q:?c=3_1&q=Berserk` | URL-style search with the allowlisted keys `q`, `c`, `f`, `u` (e.g. category `3_1` = Literature → English-translated) |
 
 JSON arrays are preferred; comma-separated strings are still accepted for backwards compatibility.

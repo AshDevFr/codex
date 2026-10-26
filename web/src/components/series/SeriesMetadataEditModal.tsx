@@ -1,18 +1,15 @@
 import {
   ActionIcon,
-  Box,
   Button,
   Center,
   Group,
   Loader,
   Modal,
-  Select,
   SimpleGrid,
   Stack,
   Tabs,
   TagsInput,
   Text,
-  TextInput,
   Tooltip,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
@@ -25,10 +22,8 @@ import {
   IconLock,
   IconLockOpen,
   IconPhoto,
-  IconPlus,
   IconShare,
   IconTag,
-  IconTrash,
   IconTypography,
   IconUsers,
 } from "@tabler/icons-react";
@@ -43,6 +38,7 @@ import {
 } from "@/api/seriesMetadata";
 import { sharingTagsApi } from "@/api/sharingTags";
 import { tagsApi } from "@/api/tags";
+import { AuthorListEditor } from "@/components/forms/AuthorListEditor";
 import { CoverEditor } from "@/components/forms/CoverEditor";
 import { CustomMetadataEditor } from "@/components/forms/CustomMetadataEditor";
 import {
@@ -56,8 +52,7 @@ import {
 import { extractSourceFromUrl } from "@/components/series/ExternalLinks";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useAllGenres, useAllTags } from "@/hooks/useReferenceData";
-import type { BookAuthor, BookAuthorRole } from "@/types/book-metadata";
-import { AUTHOR_ROLE_DISPLAY } from "@/types/book-metadata";
+import type { BookAuthor } from "@/types/book-metadata";
 
 export interface SeriesMetadataEditModalProps {
   opened: boolean;
@@ -706,10 +701,6 @@ export function SeriesMetadataEditModal({
   );
 
   // Authors tab
-  const AUTHOR_ROLE_OPTIONS = Object.entries(AUTHOR_ROLE_DISPLAY).map(
-    ([value, label]) => ({ value, label }),
-  );
-
   const renderAuthorsTab = () => (
     <Stack gap="md">
       <Group justify="space-between">
@@ -742,75 +733,11 @@ export function SeriesMetadataEditModal({
         </Tooltip>
       </Group>
 
-      {formState.authors.map((author, index) => (
-        <Group
-          key={`${author.role}-${index}`}
-          gap="xs"
-          wrap="nowrap"
-          align="flex-end"
-        >
-          <Select
-            label={index === 0 ? "Role" : undefined}
-            data={AUTHOR_ROLE_OPTIONS}
-            value={author.role}
-            onChange={(value) => {
-              if (value) {
-                const newAuthors = [...formState.authors];
-                newAuthors[index] = {
-                  ...newAuthors[index],
-                  role: value as BookAuthorRole,
-                };
-                updateField("authors", newAuthors);
-              }
-            }}
-            style={{ flex: 1 }}
-            comboboxProps={{ zIndex: 1100 }}
-          />
-          <TextInput
-            label={index === 0 ? "Name" : undefined}
-            placeholder="Author name"
-            value={author.name}
-            onChange={(e) => {
-              const newAuthors = [...formState.authors];
-              newAuthors[index] = {
-                ...newAuthors[index],
-                name: e.target.value,
-              };
-              updateField("authors", newAuthors);
-            }}
-            style={{ flex: 2 }}
-          />
-          <ActionIcon
-            variant="subtle"
-            color="red"
-            onClick={() => {
-              const newAuthors = formState.authors.filter(
-                (_, i) => i !== index,
-              );
-              updateField("authors", newAuthors);
-            }}
-            aria-label="Remove author"
-          >
-            <IconTrash size={18} />
-          </ActionIcon>
-        </Group>
-      ))}
-
-      <Box>
-        <Button
-          variant="subtle"
-          leftSection={<IconPlus size={16} />}
-          onClick={() => {
-            updateField("authors", [
-              ...formState.authors,
-              { name: "", role: "author" as BookAuthorRole },
-            ]);
-          }}
-          size="sm"
-        >
-          Add Author
-        </Button>
-      </Box>
+      <AuthorListEditor
+        authors={formState.authors}
+        onChange={(authors) => updateField("authors", authors)}
+        gap="md"
+      />
     </Stack>
   );
 

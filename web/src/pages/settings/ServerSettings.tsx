@@ -57,6 +57,7 @@ function formatSettingKey(key: string): React.ReactNode {
     if (i < separators.length) {
       const sep = separators[i];
       nodes.push(
+        // biome-ignore lint/suspicious/noArrayIndexKey: pieces of one fixed string; position is the identity
         <Fragment key={`sep-${i}-${sep}`}>
           {sep}
           <wbr />

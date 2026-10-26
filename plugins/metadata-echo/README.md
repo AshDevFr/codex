@@ -36,11 +36,11 @@ Or run directly with npx (no installation required).
 
 ### npx Options
 
-| Configuration | Arguments | Description |
-|--------------|-----------|-------------|
-| Latest version | `-y @ashdev/codex-plugin-metadata-echo` | Always uses latest |
-| Pinned version | `-y @ashdev/codex-plugin-metadata-echo@1.0.0` | Recommended for production |
-| Fast startup | `-y --prefer-offline @ashdev/codex-plugin-metadata-echo@1.0.0` | Skips version check if cached |
+| Configuration  | Arguments                                                      | Description                   |
+| -------------- | -------------------------------------------------------------- | ----------------------------- |
+| Latest version | `-y @ashdev/codex-plugin-metadata-echo`                        | Always uses latest            |
+| Pinned version | `-y @ashdev/codex-plugin-metadata-echo@1.0.0`                  | Recommended for production    |
+| Fast startup   | `-y --prefer-offline @ashdev/codex-plugin-metadata-echo@1.0.0` | Skips version check if cached |
 
 **Flags:**
 - `-y`: Auto-confirms installation (required for containers)
@@ -114,10 +114,7 @@ Returns a match based on the normalized title:
 Use this plugin as a template for building your own metadata plugins:
 
 ```typescript
-import {
-  createMetadataPlugin,
-  type MetadataProvider,
-} from "@ashdev/codex-plugin-sdk";
+import { createMetadataPlugin, type MetadataProvider } from "@ashdev/codex-plugin-sdk";
 
 const provider: MetadataProvider = {
   async search(params) {

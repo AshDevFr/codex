@@ -10,7 +10,7 @@ incremental series feed. **Notification-only** — Codex does not download anyth
   matched to your Codex catalog by provider IDs (MangaBaka, AniList, MAL,
   MangaUpdates, Kitsu, Shikimori, Anime-Planet, Anime News Network). Because
   some providers occasionally share/merge IDs across distinct series, each
-  shared ID *votes*: an agreeing ID adds its weight (MangaBaka 3, AniList 2,
+  shared ID _votes_: an agreeing ID adds its weight (MangaBaka 3, AniList 2,
   rest 1), a disagreeing one subtracts it, and a series matches only when
   agreement wins. So a trusted disagreement (different MangaBaka IDs) overrides
   a sloppy agreement (a shared MAL ID), and genuinely ambiguous ties are
@@ -38,6 +38,7 @@ gallery as "Tsundoku Releases"), or configure it manually:
 
 - **Command:** `npx`
 - **Args:**
+
   ```
   -y
   @ashdev/codex-plugin-release-tsundoku
@@ -60,12 +61,12 @@ providers, in match-priority order:
 
 ## Configuration
 
-| Field              | Required | Default | Description                                                              |
-| ------------------ | -------- | ------- | ------------------------------------------------------------------------ |
-| `baseUrl`          | yes      | —       | Tsundoku instance base URL. The plugin appends `/api/v1/series/feed`.    |
-| `defaultLanguage`  | no       | `en`    | ISO 639-1 tag stamped on every announcement (the feed carries none).     |
-| `pageLimit`        | no       | `100`   | Items per feed page (1–500).                                             |
-| `requestTimeoutMs` | no       | `10000` | Per-page fetch timeout in milliseconds.                                   |
+| Field              | Required | Default | Description                                                           |
+| ------------------ | -------- | ------- | --------------------------------------------------------------------- |
+| `baseUrl`          | yes      | —       | Tsundoku instance base URL. The plugin appends `/api/v1/series/feed`. |
+| `defaultLanguage`  | no       | `en`    | ISO 639-1 tag stamped on every announcement (the feed carries none).  |
+| `pageLimit`        | no       | `100`   | Items per feed page (1–500).                                          |
+| `requestTimeoutMs` | no       | `10000` | Per-page fetch timeout in milliseconds.                               |
 
 ## How It Works
 

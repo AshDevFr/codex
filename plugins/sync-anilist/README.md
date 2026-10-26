@@ -70,11 +70,11 @@ Without OAuth configured, users can still connect by pasting a personal access t
 
 ### npx Options
 
-| Configuration | Arguments | Description |
-|--------------|-----------|-------------|
-| Latest version | `-y @ashdev/codex-plugin-sync-anilist` | Always uses latest |
-| Pinned version | `-y @ashdev/codex-plugin-sync-anilist@1.9.3` | Recommended for production |
-| Fast startup | `-y --prefer-offline @ashdev/codex-plugin-sync-anilist@1.9.3` | Skips version check if cached |
+| Configuration  | Arguments                                                     | Description                   |
+| -------------- | ------------------------------------------------------------- | ----------------------------- |
+| Latest version | `-y @ashdev/codex-plugin-sync-anilist`                        | Always uses latest            |
+| Pinned version | `-y @ashdev/codex-plugin-sync-anilist@1.9.3`                  | Recommended for production    |
+| Fast startup   | `-y --prefer-offline @ashdev/codex-plugin-sync-anilist@1.9.3` | Skips version check if cached |
 
 ## Configuration
 
@@ -82,22 +82,22 @@ Without OAuth configured, users can still connect by pasting a personal access t
 
 These settings are managed in the **Sync Settings** section of the plugin settings modal. They control which data the Codex server sends to the plugin and are shared across all sync plugins.
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| Include completed series | On | Include series where all local books are read |
-| Include in-progress series | On | Include series where at least one book has been started |
-| Count partially-read books | Off | Whether partially-read books count toward the progress number |
-| Sync ratings & notes | On | Include user ratings and notes in sync |
+| Setting                    | Default | Description                                                   |
+| -------------------------- | ------- | ------------------------------------------------------------- |
+| Include completed series   | On      | Include series where all local books are read                 |
+| Include in-progress series | On      | Include series where at least one book has been started       |
+| Count partially-read books | Off     | Whether partially-read books count toward the progress number |
+| Sync ratings & notes       | On      | Include user ratings and notes in sync                        |
 
 ### Plugin-Specific Settings
 
 These settings are specific to the AniList plugin and appear under **Plugin Settings** in the settings modal.
 
-| Setting | Type | Default | Description |
-|---------|------|---------|-------------|
-| Progress Unit | string | `volumes` | Whether each Codex book counts as a "volume" or "chapter" on AniList. Use "volumes" to avoid misleading "Read chapter X" activity on AniList. |
-| Auto-Pause After Days | number | `0` (disabled) | Number of days without reading activity before an in-progress series is set to Paused on AniList |
-| Auto-Drop After Days | number | `0` (disabled) | Number of days without reading activity before an in-progress series is set to Dropped on AniList |
+| Setting               | Type   | Default        | Description                                                                                                                                   |
+| --------------------- | ------ | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Progress Unit         | string | `volumes`      | Whether each Codex book counts as a "volume" or "chapter" on AniList. Use "volumes" to avoid misleading "Read chapter X" activity on AniList. |
+| Auto-Pause After Days | number | `0` (disabled) | Number of days without reading activity before an in-progress series is set to Paused on AniList                                              |
+| Auto-Drop After Days  | number | `0` (disabled) | Number of days without reading activity before an in-progress series is set to Dropped on AniList                                             |
 
 ## Using the Plugin
 
@@ -115,11 +115,11 @@ The plugin matches Codex series to AniList entries using external IDs stored in 
 
 You can configure which direction data flows in **Settings** > **Integrations** > **Settings**:
 
-| Mode | Description |
-|------|-------------|
+| Mode                      | Description                                                         |
+| ------------------------- | ------------------------------------------------------------------- |
 | **Pull & Push** (default) | Import progress from AniList, then export Codex progress to AniList |
-| **Pull Only** | Import progress from AniList without writing anything back |
-| **Push Only** | Export Codex progress to AniList without importing |
+| **Pull Only**             | Import progress from AniList without writing anything back          |
+| **Push Only**             | Export Codex progress to AniList without importing                  |
 
 ### How Sync Works
 
@@ -132,11 +132,11 @@ When sync runs in **Pull & Push** mode, it executes two phases in order:
 
 Codex uses a **highest progress wins** strategy. There is no manual conflict resolution — instead, progress can only move forward:
 
-| Scenario | Result |
-|----------|--------|
-| AniList ahead (e.g., 5 vols read) and Codex behind (3 vols read) | Pull marks books 4–5 as read in Codex. Push sends 5 to AniList. Both agree. |
-| Codex ahead (5 vols read) and AniList behind (3 vols read) | Pull tries to mark first 3 as read — already completed, skipped. Push sends 5 to AniList. **Codex wins.** |
-| Both changed differently | Pull applies remote progress first (additive only), then Push sends local state to AniList. Effectively **Codex wins** because push runs last. |
+| Scenario                                                         | Result                                                                                                                                         |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| AniList ahead (e.g., 5 vols read) and Codex behind (3 vols read) | Pull marks books 4–5 as read in Codex. Push sends 5 to AniList. Both agree.                                                                    |
+| Codex ahead (5 vols read) and AniList behind (3 vols read)       | Pull tries to mark first 3 as read — already completed, skipped. Push sends 5 to AniList. **Codex wins.**                                      |
+| Both changed differently                                         | Pull applies remote progress first (additive only), then Push sends local state to AniList. Effectively **Codex wins** because push runs last. |
 
 Key behaviors:
 
@@ -163,13 +163,13 @@ When **Sync Ratings & Notes** is enabled in plugin settings:
 
 You can configure automatic status changes for series you haven't read in a while:
 
-| Configuration | Behavior |
-|--------------|----------|
-| Pause=5, Drop=0 | Not read in 5 days -> Paused |
-| Pause=5, Drop=7 | Not read in 5 days -> Paused; not read in 7 days -> Dropped |
+| Configuration   | Behavior                                                                    |
+| --------------- | --------------------------------------------------------------------------- |
+| Pause=5, Drop=0 | Not read in 5 days -> Paused                                                |
+| Pause=5, Drop=7 | Not read in 5 days -> Paused; not read in 7 days -> Dropped                 |
 | Pause=5, Drop=3 | Not read in 3 days -> Dropped (drop fires first since threshold is shorter) |
-| Pause=0, Drop=4 | Not read in 4 days -> Dropped (no pause step) |
-| Pause=0, Drop=0 | Disabled (default) |
+| Pause=0, Drop=4 | Not read in 4 days -> Dropped (no pause step)                               |
+| Pause=0, Drop=0 | Disabled (default)                                                          |
 
 Key behaviors:
 

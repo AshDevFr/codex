@@ -41,11 +41,11 @@ available, files fall back to the OS temp dir.
 
 ## Configuration
 
-| Key               | Default | Description                                                        |
-| ----------------- | ------- | ------------------------------------------------------------------ |
-| `pullCount`       | `3`     | How many deterministic entries `pullProgress` returns (1-50).      |
-| `recordPayloads`  | `true`  | Write request/response files for debugging.                        |
-| `maxPayloadFiles` | `500`   | Maximum recorded files to keep; oldest are pruned.                 |
+| Key               | Default | Description                                                   |
+| ----------------- | ------- | ------------------------------------------------------------- |
+| `pullCount`       | `3`     | How many deterministic entries `pullProgress` returns (1-50). |
+| `recordPayloads`  | `true`  | Write request/response files for debugging.                   |
+| `maxPayloadFiles` | `500`   | Maximum recorded files to keep; oldest are pruned.            |
 
 ## Development
 

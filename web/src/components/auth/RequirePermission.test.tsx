@@ -46,14 +46,14 @@ describe("RequirePermission", () => {
     } as never);
   });
 
-  it.each([
-    "admin",
-    "maintainer",
-  ] as const)("shows the page to a %s", (role) => {
-    signIn(role);
-    renderAt("/settings/metrics");
-    expect(screen.getByText("Metrics page")).toBeInTheDocument();
-  });
+  it.each(["admin", "maintainer"] as const)(
+    "shows the page to a %s",
+    (role) => {
+      signIn(role);
+      renderAt("/settings/metrics");
+      expect(screen.getByText("Metrics page")).toBeInTheDocument();
+    },
+  );
 
   it("sends a reader home", () => {
     signIn("reader");

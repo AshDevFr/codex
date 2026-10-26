@@ -304,113 +304,109 @@ describe("LibraryModal (Add Mode)", () => {
     });
   });
 
-  it(
-    "should create library with valid inputs",
-    { timeout: 15000 },
-    async () => {
-      const user = userEvent.setup();
-      const mockLibrary = createMockLibrary();
+  it("should create library with valid inputs", {
+    timeout: 15000,
+  }, async () => {
+    const user = userEvent.setup();
+    const mockLibrary = createMockLibrary();
 
-      vi.mocked(librariesApi.create).mockResolvedValueOnce(mockLibrary);
+    vi.mocked(librariesApi.create).mockResolvedValueOnce(mockLibrary);
 
-      renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
+    renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
 
-      // Wait for modal and find form fields
-      const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
-      const modalContent = within(modal);
-      const nameInput = await modalContent.findByPlaceholderText(
-        "Enter library name",
-        {},
-        { timeout: 3000 },
-      );
+    // Wait for modal and find form fields
+    const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
+    const modalContent = within(modal);
+    const nameInput = await modalContent.findByPlaceholderText(
+      "Enter library name",
+      {},
+      { timeout: 3000 },
+    );
 
-      // Fill in form
-      await user.clear(nameInput);
-      await user.type(nameInput, "Test Library");
+    // Fill in form
+    await user.clear(nameInput);
+    await user.type(nameInput, "Test Library");
 
-      // Set path directly (simulating browse selection)
-      const browseButton = screen.getByText("Browse");
-      await user.click(browseButton);
+    // Set path directly (simulating browse selection)
+    const browseButton = screen.getByText("Browse");
+    await user.click(browseButton);
 
-      const driveButton = await screen.findByText("Home Directory");
-      await user.click(driveButton);
+    const driveButton = await screen.findByText("Home Directory");
+    await user.click(driveButton);
 
-      const selectButton = await screen.findByText("Select This Folder");
-      await user.click(selectButton);
+    const selectButton = await screen.findByText("Select This Folder");
+    await user.click(selectButton);
 
-      // Submit form
-      await waitFor(() => {
-        const createButton = screen.getByText("Create Library");
-        expect(createButton).not.toBeDisabled();
-      });
-
+    // Submit form
+    await waitFor(() => {
       const createButton = screen.getByText("Create Library");
-      await user.click(createButton);
+      expect(createButton).not.toBeDisabled();
+    });
 
-      await waitFor(() => {
-        expect(librariesApi.create).toHaveBeenCalledWith(
-          expect.objectContaining({
-            name: "Test Library",
-            path: "/home/user",
-            scanningConfig: expect.objectContaining({
-              enabled: false,
-              scanMode: "normal",
-            }),
+    const createButton = screen.getByText("Create Library");
+    await user.click(createButton);
+
+    await waitFor(() => {
+      expect(librariesApi.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: "Test Library",
+          path: "/home/user",
+          scanningConfig: expect.objectContaining({
+            enabled: false,
+            scanMode: "normal",
           }),
-        );
-      });
-    },
-  );
-
-  it(
-    "should call onClose with created library on successful creation",
-    { timeout: 15000 },
-    async () => {
-      const user = userEvent.setup();
-      const mockLibrary = createMockLibrary({ id: "123" });
-
-      vi.mocked(librariesApi.create).mockResolvedValueOnce(mockLibrary);
-
-      renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
-
-      // Wait for modal and find form fields
-      const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
-      const modalContent = within(modal);
-      const nameInput = await modalContent.findByPlaceholderText(
-        "Enter library name",
-        {},
-        { timeout: 3000 },
+        }),
       );
+    });
+  });
 
-      // Fill in form
-      await user.clear(nameInput);
-      await user.type(nameInput, "Test Library");
+  it("should call onClose with created library on successful creation", {
+    timeout: 15000,
+  }, async () => {
+    const user = userEvent.setup();
+    const mockLibrary = createMockLibrary({ id: "123" });
 
-      // Set path
-      const browseButton = screen.getByText("Browse");
-      await user.click(browseButton);
+    vi.mocked(librariesApi.create).mockResolvedValueOnce(mockLibrary);
 
-      const driveButton = await screen.findByText("Home Directory");
-      await user.click(driveButton);
+    renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
 
-      const selectButton = await screen.findByText("Select This Folder");
-      await user.click(selectButton);
+    // Wait for modal and find form fields
+    const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
+    const modalContent = within(modal);
+    const nameInput = await modalContent.findByPlaceholderText(
+      "Enter library name",
+      {},
+      { timeout: 3000 },
+    );
 
-      // Submit form
-      await waitFor(() => {
-        const createButton = screen.getByText("Create Library");
-        expect(createButton).not.toBeDisabled();
-      });
+    // Fill in form
+    await user.clear(nameInput);
+    await user.type(nameInput, "Test Library");
 
+    // Set path
+    const browseButton = screen.getByText("Browse");
+    await user.click(browseButton);
+
+    const driveButton = await screen.findByText("Home Directory");
+    await user.click(driveButton);
+
+    const selectButton = await screen.findByText("Select This Folder");
+    await user.click(selectButton);
+
+    // Submit form
+    await waitFor(() => {
       const createButton = screen.getByText("Create Library");
-      await user.click(createButton);
+      expect(createButton).not.toBeDisabled();
+    });
 
-      // Wait for the mutation to complete and onClose to be called with the created library
-      await waitFor(() => {
-        expect(mockOnClose).toHaveBeenCalledWith(mockLibrary);
-      });
-    },
-  );
+    const createButton = screen.getByText("Create Library");
+    await user.click(createButton);
+
+    // Wait for the mutation to complete and onClose to be called with the created library
+    await waitFor(() => {
+      expect(mockOnClose).toHaveBeenCalledWith(mockLibrary);
+    });
+  });
 
   it("should show validation error when name is missing", async () => {
     renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
@@ -544,155 +540,151 @@ describe("LibraryModal (Add Mode)", () => {
     expect(screen.queryByPlaceholderText("0 0 * * *")).not.toBeInTheDocument();
   });
 
-  it(
-    "should create library with cron schedule when auto scan is enabled",
-    { timeout: 15000 },
-    async () => {
-      const user = userEvent.setup();
-      const mockLibrary = createMockLibrary();
+  it("should create library with cron schedule when auto scan is enabled", {
+    timeout: 15000,
+  }, async () => {
+    const user = userEvent.setup();
+    const mockLibrary = createMockLibrary();
 
-      vi.mocked(librariesApi.create).mockResolvedValueOnce(mockLibrary);
+    vi.mocked(librariesApi.create).mockResolvedValueOnce(mockLibrary);
 
-      renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
+    renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
 
-      // Wait for modal and find form fields
-      const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
-      const modalContent = within(modal);
-      const nameInput = await modalContent.findByPlaceholderText(
-        "Enter library name",
-        {},
-        { timeout: 3000 },
-      );
+    // Wait for modal and find form fields
+    const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
+    const modalContent = within(modal);
+    const nameInput = await modalContent.findByPlaceholderText(
+      "Enter library name",
+      {},
+      { timeout: 3000 },
+    );
 
-      // Fill in form
-      await user.clear(nameInput);
-      await user.type(nameInput, "Test Library");
+    // Fill in form
+    await user.clear(nameInput);
+    await user.type(nameInput, "Test Library");
 
-      // Set path
-      const browseButton = screen.getByText("Browse");
-      await user.click(browseButton);
+    // Set path
+    const browseButton = screen.getByText("Browse");
+    await user.click(browseButton);
 
-      const driveButton = await screen.findByText("Home Directory");
-      await user.click(driveButton);
+    const driveButton = await screen.findByText("Home Directory");
+    await user.click(driveButton);
 
-      const selectButton = await screen.findByText("Select This Folder");
-      await user.click(selectButton);
+    const selectButton = await screen.findByText("Select This Folder");
+    await user.click(selectButton);
 
-      // Navigate to the Scanning tab
-      const scanningTab = await screen.findByRole("tab", { name: /scanning/i });
-      await user.click(scanningTab);
+    // Navigate to the Scanning tab
+    const scanningTab = await screen.findByRole("tab", { name: /scanning/i });
+    await user.click(scanningTab);
 
-      // Wait for the Scanning tab content to load
-      await waitFor(() => {
-        expect(screen.getByText("Scan Strategy")).toBeInTheDocument();
-      });
+    // Wait for the Scanning tab content to load
+    await waitFor(() => {
+      expect(screen.getByText("Scan Strategy")).toBeInTheDocument();
+    });
 
-      // Find and click on the Select to open the dropdown
-      const selectInput = screen.getByText("Manual - Trigger scans on demand");
-      await user.click(selectInput);
+    // Find and click on the Select to open the dropdown
+    const selectInput = screen.getByText("Manual - Trigger scans on demand");
+    await user.click(selectInput);
 
-      // Wait for and click the auto option
-      const autoOption = await screen.findByText(
-        "Automatic - Scheduled scanning",
-      );
-      await user.click(autoOption);
+    // Wait for and click the auto option
+    const autoOption = await screen.findByText(
+      "Automatic - Scheduled scanning",
+    );
+    await user.click(autoOption);
 
-      // Wait for cron input and verify it has default value
-      const cronInput = await screen.findByPlaceholderText("0 0 * * *");
-      expect(cronInput).toBeInTheDocument();
-      expect(cronInput).toHaveValue("0 0 * * *");
+    // Wait for cron input and verify it has default value
+    const cronInput = await screen.findByPlaceholderText("0 0 * * *");
+    expect(cronInput).toBeInTheDocument();
+    expect(cronInput).toHaveValue("0 0 * * *");
 
-      // Submit form
-      await waitFor(() => {
-        const createButton = screen.getByText("Create Library");
-        expect(createButton).not.toBeDisabled();
-      });
-
+    // Submit form
+    await waitFor(() => {
       const createButton = screen.getByText("Create Library");
-      await user.click(createButton);
+      expect(createButton).not.toBeDisabled();
+    });
 
-      await waitFor(() => {
-        expect(librariesApi.create).toHaveBeenCalledWith(
-          expect.objectContaining({
-            name: "Test Library",
-            path: "/home/user",
-            scanningConfig: expect.objectContaining({
-              enabled: true,
-              cronSchedule: "0 0 * * *",
-              scanMode: "normal",
-            }),
+    const createButton = screen.getByText("Create Library");
+    await user.click(createButton);
+
+    await waitFor(() => {
+      expect(librariesApi.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: "Test Library",
+          path: "/home/user",
+          scanningConfig: expect.objectContaining({
+            enabled: true,
+            cronSchedule: "0 0 * * *",
+            scanMode: "normal",
           }),
-        );
-      });
-    },
-  );
-
-  it(
-    "should validate cron schedule is required when auto scan is enabled",
-    { timeout: 15000 },
-    async () => {
-      const user = userEvent.setup();
-      renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
-
-      // Wait for modal
-      const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
-      const modalContent = within(modal);
-      const nameInput = await modalContent.findByPlaceholderText(
-        "Enter library name",
-        {},
-        { timeout: 3000 },
+        }),
       );
+    });
+  });
 
-      // Fill in name and path
-      await user.clear(nameInput);
-      await user.type(nameInput, "Test Library");
+  it("should validate cron schedule is required when auto scan is enabled", {
+    timeout: 15000,
+  }, async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
 
-      const browseButton = screen.getByText("Browse");
-      await user.click(browseButton);
+    // Wait for modal
+    const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
+    const modalContent = within(modal);
+    const nameInput = await modalContent.findByPlaceholderText(
+      "Enter library name",
+      {},
+      { timeout: 3000 },
+    );
 
-      const driveButton = await screen.findByText("Home Directory");
-      await user.click(driveButton);
+    // Fill in name and path
+    await user.clear(nameInput);
+    await user.type(nameInput, "Test Library");
 
-      const selectButton = await screen.findByText("Select This Folder");
-      await user.click(selectButton);
+    const browseButton = screen.getByText("Browse");
+    await user.click(browseButton);
 
-      // Navigate to the Scanning tab
-      const scanningTab = await screen.findByRole("tab", { name: /scanning/i });
-      await user.click(scanningTab);
+    const driveButton = await screen.findByText("Home Directory");
+    await user.click(driveButton);
 
-      // Wait for the Scanning tab content to load and find the select
-      await waitFor(() => {
-        expect(screen.getByText("Scan Strategy")).toBeInTheDocument();
-      });
+    const selectButton = await screen.findByText("Select This Folder");
+    await user.click(selectButton);
 
-      // Find and click on the Select to open the dropdown
-      const selectInput = screen.getByText("Manual - Trigger scans on demand");
-      await user.click(selectInput);
+    // Navigate to the Scanning tab
+    const scanningTab = await screen.findByRole("tab", { name: /scanning/i });
+    await user.click(scanningTab);
 
-      // Wait for and click the auto option
-      const autoOption = await screen.findByText(
-        "Automatic - Scheduled scanning",
-      );
-      await user.click(autoOption);
+    // Wait for the Scanning tab content to load and find the select
+    await waitFor(() => {
+      expect(screen.getByText("Scan Strategy")).toBeInTheDocument();
+    });
 
-      // Wait for cron input to appear and clear it
-      const cronInput = await screen.findByPlaceholderText("0 0 * * *");
-      expect(cronInput).toBeInTheDocument();
-      await user.clear(cronInput);
+    // Find and click on the Select to open the dropdown
+    const selectInput = screen.getByText("Manual - Trigger scans on demand");
+    await user.click(selectInput);
 
-      // Try to submit - should show validation error
-      const createButton = screen.getByText("Create Library");
-      await user.click(createButton);
+    // Wait for and click the auto option
+    const autoOption = await screen.findByText(
+      "Automatic - Scheduled scanning",
+    );
+    await user.click(autoOption);
 
-      // The form validation happens in handleSubmit and shows a notification
-      // The library should not be created because cron schedule is required
-      // Short wait to give time for any async calls to happen
-      await new Promise((resolve) => setTimeout(resolve, 100));
+    // Wait for cron input to appear and clear it
+    const cronInput = await screen.findByPlaceholderText("0 0 * * *");
+    expect(cronInput).toBeInTheDocument();
+    await user.clear(cronInput);
 
-      // Verify that the API was not called (validation prevented submission)
-      expect(librariesApi.create).not.toHaveBeenCalled();
-    },
-  );
+    // Try to submit - should show validation error
+    const createButton = screen.getByText("Create Library");
+    await user.click(createButton);
+
+    // The form validation happens in handleSubmit and shows a notification
+    // The library should not be created because cron schedule is required
+    // Short wait to give time for any async calls to happen
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    // Verify that the API was not called (validation prevented submission)
+    expect(librariesApi.create).not.toHaveBeenCalled();
+  });
 
   it("should have all formats selected by default", async () => {
     renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
@@ -776,93 +768,91 @@ describe("LibraryModal (Add Mode)", () => {
     });
   });
 
-  it(
-    "should submit with selected formats when some are deselected",
-    { timeout: 15000 },
-    async () => {
-      const user = userEvent.setup();
-      const mockLibrary = createMockLibrary();
+  it("should submit with selected formats when some are deselected", {
+    timeout: 15000,
+  }, async () => {
+    const user = userEvent.setup();
+    const mockLibrary = createMockLibrary();
 
-      vi.mocked(librariesApi.create).mockResolvedValueOnce(mockLibrary);
+    vi.mocked(librariesApi.create).mockResolvedValueOnce(mockLibrary);
 
-      renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
+    renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
 
-      // Wait for modal and find form fields
-      const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
-      const modalContent = within(modal);
-      const nameInput = await modalContent.findByPlaceholderText(
-        "Enter library name",
-        {},
-        { timeout: 3000 },
-      );
+    // Wait for modal and find form fields
+    const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
+    const modalContent = within(modal);
+    const nameInput = await modalContent.findByPlaceholderText(
+      "Enter library name",
+      {},
+      { timeout: 3000 },
+    );
 
-      // Fill in form
-      await user.clear(nameInput);
-      await user.type(nameInput, "Test Library");
+    // Fill in form
+    await user.clear(nameInput);
+    await user.type(nameInput, "Test Library");
 
-      // Set path
-      const browseButton = screen.getByText("Browse");
-      await user.click(browseButton);
+    // Set path
+    const browseButton = screen.getByText("Browse");
+    await user.click(browseButton);
 
-      const driveButton = await screen.findByText("Home Directory");
-      await user.click(driveButton);
+    const driveButton = await screen.findByText("Home Directory");
+    await user.click(driveButton);
 
-      const selectButton = await screen.findByText("Select This Folder");
-      await user.click(selectButton);
+    const selectButton = await screen.findByText("Select This Folder");
+    await user.click(selectButton);
 
-      // Open formats dropdown
-      const formatsInput = modalContent.getByLabelText("Allowed Formats");
-      await user.click(formatsInput);
+    // Open formats dropdown
+    const formatsInput = modalContent.getByLabelText("Allowed Formats");
+    await user.click(formatsInput);
 
-      // Wait for dropdown to be visible
-      await waitFor(() => {
-        expect(
-          screen.getAllByText("CBR (Comic Book RAR)").length,
-        ).toBeGreaterThan(0);
-      });
+    // Wait for dropdown to be visible
+    await waitFor(() => {
+      expect(
+        screen.getAllByText("CBR (Comic Book RAR)").length,
+      ).toBeGreaterThan(0);
+    });
 
-      // Find close buttons within pills (Mantine uses CloseButton component)
-      // Use document.body to query since Mantine renders in portals
-      // Pills are ordered: CBZ (0), CBR (1), EPUB (2), PDF (3)
-      let closeButtons = document.querySelectorAll(".mantine-Pill-remove");
+    // Find close buttons within pills (Mantine uses CloseButton component)
+    // Use document.body to query since Mantine renders in portals
+    // Pills are ordered: CBZ (0), CBR (1), EPUB (2), PDF (3)
+    let closeButtons = document.querySelectorAll(".mantine-Pill-remove");
 
-      // Remove CBR first (index 1)
-      if (closeButtons.length >= 2) {
-        await user.click(closeButtons[1]);
-      }
+    // Remove CBR first (index 1)
+    if (closeButtons.length >= 2) {
+      await user.click(closeButtons[1]);
+    }
 
-      // After removing CBR, re-query for buttons since DOM has changed
-      // Now pills are: CBZ (0), EPUB (1), PDF (2)
-      closeButtons = document.querySelectorAll(".mantine-Pill-remove");
+    // After removing CBR, re-query for buttons since DOM has changed
+    // Now pills are: CBZ (0), EPUB (1), PDF (2)
+    closeButtons = document.querySelectorAll(".mantine-Pill-remove");
 
-      // Remove PDF (now at index 2)
-      if (closeButtons.length >= 3) {
-        await user.click(closeButtons[2]);
-      }
+    // Remove PDF (now at index 2)
+    if (closeButtons.length >= 3) {
+      await user.click(closeButtons[2]);
+    }
 
-      // Close dropdown
-      await user.keyboard("{Escape}");
+    // Close dropdown
+    await user.keyboard("{Escape}");
 
-      // Submit form
-      await waitFor(() => {
-        const createButton = screen.getByText("Create Library");
-        expect(createButton).not.toBeDisabled();
-      });
-
+    // Submit form
+    await waitFor(() => {
       const createButton = screen.getByText("Create Library");
-      await user.click(createButton);
+      expect(createButton).not.toBeDisabled();
+    });
 
-      await waitFor(() => {
-        expect(librariesApi.create).toHaveBeenCalledWith(
-          expect.objectContaining({
-            name: "Test Library",
-            path: "/home/user",
-            allowedFormats: ["CBZ", "EPUB"],
-          }),
-        );
-      });
-    },
-  );
+    const createButton = screen.getByText("Create Library");
+    await user.click(createButton);
+
+    await waitFor(() => {
+      expect(librariesApi.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: "Test Library",
+          path: "/home/user",
+          allowedFormats: ["CBZ", "EPUB"],
+        }),
+      );
+    });
+  });
 
   it("should reset to all formats when modal closes", async () => {
     const user = userEvent.setup();
@@ -1022,169 +1012,161 @@ describe("LibraryModal (Add Mode)", () => {
       });
     });
 
-    it(
-      "should include strategy in create request with default values",
-      { timeout: 15000 },
-      async () => {
-        const user = userEvent.setup();
-        const mockLibrary = createMockLibrary();
+    it("should include strategy in create request with default values", {
+      timeout: 15000,
+    }, async () => {
+      const user = userEvent.setup();
+      const mockLibrary = createMockLibrary();
 
-        vi.mocked(librariesApi.create).mockResolvedValueOnce(mockLibrary);
+      vi.mocked(librariesApi.create).mockResolvedValueOnce(mockLibrary);
 
-        renderWithProviders(
-          <LibraryModal opened={true} onClose={mockOnClose} />,
-        );
+      renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
 
-        // Wait for modal
-        const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
-        const modalContent = within(modal);
-        const nameInput = await modalContent.findByPlaceholderText(
-          "Enter library name",
-          {},
-          { timeout: 3000 },
-        );
+      // Wait for modal
+      const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
+      const modalContent = within(modal);
+      const nameInput = await modalContent.findByPlaceholderText(
+        "Enter library name",
+        {},
+        { timeout: 3000 },
+      );
 
-        // Fill in required fields
-        await user.clear(nameInput);
-        await user.type(nameInput, "Test Library");
+      // Fill in required fields
+      await user.clear(nameInput);
+      await user.type(nameInput, "Test Library");
 
-        // Set path
-        const browseButton = screen.getByText("Browse");
-        await user.click(browseButton);
+      // Set path
+      const browseButton = screen.getByText("Browse");
+      await user.click(browseButton);
 
-        const driveButton = await screen.findByText("Home Directory");
-        await user.click(driveButton);
+      const driveButton = await screen.findByText("Home Directory");
+      await user.click(driveButton);
 
-        const selectButton = await screen.findByText("Select This Folder");
-        await user.click(selectButton);
+      const selectButton = await screen.findByText("Select This Folder");
+      await user.click(selectButton);
 
-        // Submit form without changing strategy (defaults should be used)
-        await waitFor(() => {
-          const createButton = screen.getByText("Create Library");
-          expect(createButton).not.toBeDisabled();
-        });
-
+      // Submit form without changing strategy (defaults should be used)
+      await waitFor(() => {
         const createButton = screen.getByText("Create Library");
-        await user.click(createButton);
+        expect(createButton).not.toBeDisabled();
+      });
 
-        await waitFor(() => {
-          expect(librariesApi.create).toHaveBeenCalledWith(
-            expect.objectContaining({
-              name: "Test Library",
-              path: "/home/user",
-              seriesStrategy: "series_volume",
-              bookStrategy: "filename",
-            }),
-          );
-        });
-      },
-    );
+      const createButton = screen.getByText("Create Library");
+      await user.click(createButton);
 
-    it(
-      "should include selected strategy in create request",
-      { timeout: 15000 },
-      async () => {
-        const user = userEvent.setup();
-        const mockLibrary = createMockLibrary({
-          name: "Manga Library",
-          path: "/home/user/Manga",
-          seriesStrategy: "series_volume_chapter",
-          bookStrategy: "smart",
-          defaultReadingDirection: "rtl",
-        });
-
-        vi.mocked(librariesApi.create).mockResolvedValueOnce(mockLibrary);
-
-        renderWithProviders(
-          <LibraryModal opened={true} onClose={mockOnClose} />,
+      await waitFor(() => {
+        expect(librariesApi.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            name: "Test Library",
+            path: "/home/user",
+            seriesStrategy: "series_volume",
+            bookStrategy: "filename",
+          }),
         );
+      });
+    });
 
-        // Wait for modal
-        const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
-        const modalContent = within(modal);
-        const nameInput = await modalContent.findByPlaceholderText(
-          "Enter library name",
-          {},
-          { timeout: 3000 },
-        );
+    it("should include selected strategy in create request", {
+      timeout: 15000,
+    }, async () => {
+      const user = userEvent.setup();
+      const mockLibrary = createMockLibrary({
+        name: "Manga Library",
+        path: "/home/user/Manga",
+        seriesStrategy: "series_volume_chapter",
+        bookStrategy: "smart",
+        defaultReadingDirection: "rtl",
+      });
 
-        // Fill in required fields
-        await user.clear(nameInput);
-        await user.type(nameInput, "Manga Library");
+      vi.mocked(librariesApi.create).mockResolvedValueOnce(mockLibrary);
 
-        // Set path
-        const browseButton = screen.getByText("Browse");
-        await user.click(browseButton);
+      renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
 
-        const driveButton = await screen.findByText("Home Directory");
-        await user.click(driveButton);
+      // Wait for modal
+      const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
+      const modalContent = within(modal);
+      const nameInput = await modalContent.findByPlaceholderText(
+        "Enter library name",
+        {},
+        { timeout: 3000 },
+      );
 
-        const selectButton = await screen.findByText("Select This Folder");
-        await user.click(selectButton);
+      // Fill in required fields
+      await user.clear(nameInput);
+      await user.type(nameInput, "Manga Library");
 
-        // Go to Strategy tab and change strategy
-        const strategyTab = screen.getByRole("tab", { name: /strategy/i });
-        await user.click(strategyTab);
+      // Set path
+      const browseButton = screen.getByText("Browse");
+      await user.click(browseButton);
 
-        await waitFor(() => {
-          expect(
-            screen.getByText("Series Detection Strategy"),
-          ).toBeInTheDocument();
-        });
+      const driveButton = await screen.findByText("Home Directory");
+      await user.click(driveButton);
 
-        // Change series strategy to series_volume_chapter
-        const seriesStrategySelect = screen
-          .getByText("Series Detection Strategy")
-          .closest("div")
-          ?.parentElement?.querySelector('input[type="text"]');
-        if (seriesStrategySelect) {
-          await user.click(seriesStrategySelect.parentElement as Element);
-        }
+      const selectButton = await screen.findByText("Select This Folder");
+      await user.click(selectButton);
 
-        await waitFor(() => {
-          expect(screen.getByText("Series-Volume-Chapter")).toBeInTheDocument();
-        });
-        await user.click(screen.getByText("Series-Volume-Chapter"));
+      // Go to Strategy tab and change strategy
+      const strategyTab = screen.getByRole("tab", { name: /strategy/i });
+      await user.click(strategyTab);
 
-        // Change book strategy to smart
-        const bookStrategySelect = screen
-          .getByText("Book Metadata Strategy")
-          .closest("div")
-          ?.parentElement?.querySelector('input[type="text"]');
-        if (bookStrategySelect) {
-          await user.click(bookStrategySelect.parentElement as Element);
-        }
+      await waitFor(() => {
+        expect(
+          screen.getByText("Series Detection Strategy"),
+        ).toBeInTheDocument();
+      });
 
-        await waitFor(() => {
-          // There may be multiple "Smart Detection" texts on the page
-          // (one for BookStrategy, one for NumberStrategy)
-          const smartOptions = screen.getAllByText("Smart Detection");
-          expect(smartOptions.length).toBeGreaterThan(0);
-        });
-        // Click the first one (from the BookStrategy dropdown)
+      // Change series strategy to series_volume_chapter
+      const seriesStrategySelect = screen
+        .getByText("Series Detection Strategy")
+        .closest("div")
+        ?.parentElement?.querySelector('input[type="text"]');
+      if (seriesStrategySelect) {
+        await user.click(seriesStrategySelect.parentElement as Element);
+      }
+
+      await waitFor(() => {
+        expect(screen.getByText("Series-Volume-Chapter")).toBeInTheDocument();
+      });
+      await user.click(screen.getByText("Series-Volume-Chapter"));
+
+      // Change book strategy to smart
+      const bookStrategySelect = screen
+        .getByText("Book Metadata Strategy")
+        .closest("div")
+        ?.parentElement?.querySelector('input[type="text"]');
+      if (bookStrategySelect) {
+        await user.click(bookStrategySelect.parentElement as Element);
+      }
+
+      await waitFor(() => {
+        // There may be multiple "Smart Detection" texts on the page
+        // (one for BookStrategy, one for NumberStrategy)
         const smartOptions = screen.getAllByText("Smart Detection");
-        await user.click(smartOptions[0]);
+        expect(smartOptions.length).toBeGreaterThan(0);
+      });
+      // Click the first one (from the BookStrategy dropdown)
+      const smartOptions = screen.getAllByText("Smart Detection");
+      await user.click(smartOptions[0]);
 
-        // Submit form
-        await waitFor(() => {
-          const createButton = screen.getByText("Create Library");
-          expect(createButton).not.toBeDisabled();
-        });
-
+      // Submit form
+      await waitFor(() => {
         const createButton = screen.getByText("Create Library");
-        await user.click(createButton);
+        expect(createButton).not.toBeDisabled();
+      });
 
-        await waitFor(() => {
-          expect(librariesApi.create).toHaveBeenCalledWith(
-            expect.objectContaining({
-              name: "Manga Library",
-              seriesStrategy: "series_volume_chapter",
-              bookStrategy: "smart",
-            }),
-          );
-        });
-      },
-    );
+      const createButton = screen.getByText("Create Library");
+      await user.click(createButton);
+
+      await waitFor(() => {
+        expect(librariesApi.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            name: "Manga Library",
+            seriesStrategy: "series_volume_chapter",
+            bookStrategy: "smart",
+          }),
+        );
+      });
+    });
 
     it("should show preview scan panel in Strategy tab", async () => {
       const user = userEvent.setup();

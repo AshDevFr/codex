@@ -66,19 +66,19 @@ Without OAuth configured, users can still connect by pasting a personal access t
 
 ### npx Options
 
-| Configuration | Arguments | Description |
-|--------------|-----------|-------------|
-| Latest version | `-y @ashdev/codex-plugin-recommendations-anilist` | Always uses latest |
-| Pinned version | `-y @ashdev/codex-plugin-recommendations-anilist@1.9.3` | Recommended for production |
-| Fast startup | `-y --prefer-offline @ashdev/codex-plugin-recommendations-anilist@1.9.3` | Skips version check if cached |
+| Configuration  | Arguments                                                                | Description                   |
+| -------------- | ------------------------------------------------------------------------ | ----------------------------- |
+| Latest version | `-y @ashdev/codex-plugin-recommendations-anilist`                        | Always uses latest            |
+| Pinned version | `-y @ashdev/codex-plugin-recommendations-anilist@1.9.3`                  | Recommended for production    |
+| Fast startup   | `-y --prefer-offline @ashdev/codex-plugin-recommendations-anilist@1.9.3` | Skips version check if cached |
 
 ## Configuration
 
 ### Plugin Config
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `maxRecommendations` | number | `20` | Maximum number of recommendations to generate (1-50) |
+| Parameter            | Type   | Default | Description                                          |
+| -------------------- | ------ | ------- | ---------------------------------------------------- |
+| `maxRecommendations` | number | `20`    | Maximum number of recommendations to generate (1-50) |
 
 ## Using the Plugin
 

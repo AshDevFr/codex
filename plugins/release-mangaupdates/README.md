@@ -30,7 +30,7 @@ None. The plugin only reads public per-series RSS feeds.
 5. Click **Save**
 6. Click **Test Connection** to verify the plugin works
 
-On first start the plugin auto-registers a single source row (`MangaUpdates Releases`) in **Settings → Release tracking**, where you can disable it, change the poll interval, or hit *Poll now*.
+On first start the plugin auto-registers a single source row (`MangaUpdates Releases`) in **Settings → Release tracking**, where you can disable it, change the poll interval, or hit _Poll now_.
 
 ### Linking Series to MangaUpdates
 
@@ -41,18 +41,18 @@ For a tracked series to receive announcements, it needs a `mangaupdates` externa
 
 ### npx Options
 
-| Configuration | Arguments | Description |
-|--------------|-----------|-------------|
-| Latest version | `-y @ashdev/codex-plugin-release-mangaupdates` | Always uses latest |
-| Pinned version | `-y @ashdev/codex-plugin-release-mangaupdates@1.19.0` | Recommended for production |
-| Fast startup | `-y --prefer-offline @ashdev/codex-plugin-release-mangaupdates@1.19.0` | Skips version check if cached |
+| Configuration  | Arguments                                                              | Description                   |
+| -------------- | ---------------------------------------------------------------------- | ----------------------------- |
+| Latest version | `-y @ashdev/codex-plugin-release-mangaupdates`                         | Always uses latest            |
+| Pinned version | `-y @ashdev/codex-plugin-release-mangaupdates@1.19.0`                  | Recommended for production    |
+| Fast startup   | `-y --prefer-offline @ashdev/codex-plugin-release-mangaupdates@1.19.0` | Skips version check if cached |
 
 ## Configuration
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `blockedGroups` | string (CSV) | `""` | Comma-separated scanlation group names to exclude from announcements (case-insensitive, exact match). Per-series overrides may further extend this list. |
-| `requestTimeoutMs` | number | `10000` | How long to wait for a single RSS fetch before giving up, in milliseconds. |
+| Parameter          | Type         | Default | Description                                                                                                                                              |
+| ------------------ | ------------ | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `blockedGroups`    | string (CSV) | `""`    | Comma-separated scanlation group names to exclude from announcements (case-insensitive, exact match). Per-series overrides may further extend this list. |
+| `requestTimeoutMs` | number       | `10000` | How long to wait for a single RSS fetch before giving up, in milliseconds.                                                                               |
 
 Per-series language preferences live on each series' tracking config and override the server default (`release_tracking.default_languages`).
 

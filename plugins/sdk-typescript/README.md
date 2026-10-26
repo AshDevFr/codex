@@ -102,8 +102,8 @@ createMetadataPlugin({ manifest, provider });
 
 Plugins declare capabilities in their manifest. Each capability has a corresponding interface:
 
-| Capability | Interface | Description |
-|------------|-----------|-------------|
+| Capability         | Interface          | Description                           |
+| ------------------ | ------------------ | ------------------------------------- |
 | `metadataProvider` | `MetadataProvider` | Search and fetch metadata for content |
 
 The `metadataProvider` capability is an array of content types your plugin supports:

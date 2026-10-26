@@ -22,21 +22,15 @@ import {
   IconLock,
   IconLockOpen,
   IconMinus,
-  IconPlus,
   IconTag,
-  IconTrash,
 } from "@tabler/icons-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { bulkMetadataApi } from "@/api/bulkMetadata";
+import { AuthorListEditor } from "@/components/forms/AuthorListEditor";
 import { CustomMetadataEditor } from "@/components/forms/CustomMetadataEditor";
 import { useAllGenres, useAllTags } from "@/hooks/useReferenceData";
-import {
-  AUTHOR_ROLE_DISPLAY,
-  BOOK_TYPE_DISPLAY,
-  type BookAuthor,
-  type BookAuthorRole,
-} from "@/types/book-metadata";
+import { BOOK_TYPE_DISPLAY, type BookAuthor } from "@/types/book-metadata";
 
 // =============================================================================
 // Types
@@ -74,10 +68,6 @@ const READING_DIRECTION_OPTIONS = [
 ];
 
 const BOOK_TYPE_OPTIONS = Object.entries(BOOK_TYPE_DISPLAY).map(
-  ([value, label]) => ({ value, label }),
-);
-
-const AUTHOR_ROLE_OPTIONS = Object.entries(AUTHOR_ROLE_DISPLAY).map(
   ([value, label]) => ({ value, label }),
 );
 
@@ -1098,20 +1088,6 @@ function AuthorsEditor({
   onChange: (authors: BookAuthor[]) => void;
   touched?: boolean;
 }) {
-  const updateAuthor = (index: number, updates: Partial<BookAuthor>) => {
-    const newAuthors = [...authors];
-    newAuthors[index] = { ...newAuthors[index], ...updates };
-    onChange(newAuthors);
-  };
-
-  const removeAuthor = (index: number) => {
-    onChange(authors.filter((_, i) => i !== index));
-  };
-
-  const addAuthor = () => {
-    onChange([...authors, { name: "", role: "author" as BookAuthorRole }]);
-  };
-
   return (
     <Box mt="sm">
       <Group gap={4} mb="xs">
@@ -1128,57 +1104,7 @@ function AuthorsEditor({
         This will replace all authors on the selected items.
       </Text>
 
-      <Stack gap="xs">
-        {authors.map((author, index) => (
-          <Group
-            key={`${author.role}-${index}`}
-            gap="xs"
-            wrap="nowrap"
-            align="flex-end"
-          >
-            <Select
-              label={index === 0 ? "Role" : undefined}
-              data={AUTHOR_ROLE_OPTIONS}
-              value={author.role}
-              onChange={(value) => {
-                if (value) {
-                  updateAuthor(index, { role: value as BookAuthorRole });
-                }
-              }}
-              style={{ flex: 1 }}
-              comboboxProps={{ zIndex: 1100 }}
-            />
-            <TextInput
-              label={index === 0 ? "Name" : undefined}
-              placeholder="Author name"
-              value={author.name}
-              onChange={(e) => {
-                updateAuthor(index, { name: e.target.value });
-              }}
-              style={{ flex: 2 }}
-            />
-            <ActionIcon
-              variant="subtle"
-              color="red"
-              onClick={() => removeAuthor(index)}
-              aria-label="Remove author"
-            >
-              <IconTrash size={18} />
-            </ActionIcon>
-          </Group>
-        ))}
-      </Stack>
-
-      <Box mt="xs">
-        <Button
-          variant="subtle"
-          leftSection={<IconPlus size={16} />}
-          onClick={addAuthor}
-          size="sm"
-        >
-          Add Author
-        </Button>
-      </Box>
+      <AuthorListEditor authors={authors} onChange={onChange} />
     </Box>
   );
 }

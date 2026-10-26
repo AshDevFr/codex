@@ -325,20 +325,21 @@ describe("PluginsSettings - health status badges", () => {
     { status: "unknown" },
   ];
 
-  it.each(healthStatuses)("renders a badge with text '$status'", async ({
-    status,
-  }) => {
-    const plugin = createMockPlugin({
-      healthStatus: status,
-    });
-    mockGetAll.mockResolvedValue({ plugins: [plugin], total: 1 });
+  it.each(healthStatuses)(
+    "renders a badge with text '$status'",
+    async ({ status }) => {
+      const plugin = createMockPlugin({
+        healthStatus: status,
+      });
+      mockGetAll.mockResolvedValue({ plugins: [plugin], total: 1 });
 
-    renderWithProviders(<PluginsSettings />);
+      renderWithProviders(<PluginsSettings />);
 
-    await waitFor(() => {
-      expect(screen.getByText(status)).toBeInTheDocument();
-    });
-  });
+      await waitFor(() => {
+        expect(screen.getByText(status)).toBeInTheDocument();
+      });
+    },
+  );
 });
 
 // ===========================================================================

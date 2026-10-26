@@ -10,16 +10,16 @@ Manga recommendations for [Codex](https://github.com/AshDevFr/codex), powered by
 
 All per-user, all optional, all with sensible defaults.
 
-| Setting                      | What it does                                                             |
-| ---------------------------- | ------------------------------------------------------------------------ |
-| Content Ratings              | Limit results to `safe`, `suggestive`, `erotica`, or `pornographic`       |
-| Included / Excluded Types    | Keep or drop `manga`, `manhwa`, `manhua`, `novel`, `oel`                  |
-| Excluded Genres              | Drop results carrying any of these genres                                 |
-| Excluded Tags                | Drop results carrying any of these tags, **by name**                      |
-| Minimum Rating               | Only recommend series rated at least this highly on MangaBaka             |
-| Similarity vs. Reader Overlap | Balance the two signals, 0 to 1. Defaults to 0.5, treating them equally  |
-| Reader Overlap Seeds         | How many favourites to look up reader overlap for. 0 turns the signal off |
-| Exclude Same Author          | Hide, rather than de-rank, series by an author you already read           |
+| Setting                       | What it does                                                              |
+| ----------------------------- | ------------------------------------------------------------------------- |
+| Content Ratings               | Limit results to `safe`, `suggestive`, `erotica`, or `pornographic`       |
+| Included / Excluded Types     | Keep or drop `manga`, `manhwa`, `manhua`, `novel`, `oel`                  |
+| Excluded Genres               | Drop results carrying any of these genres                                 |
+| Excluded Tags                 | Drop results carrying any of these tags, **by name**                      |
+| Minimum Rating                | Only recommend series rated at least this highly on MangaBaka             |
+| Similarity vs. Reader Overlap | Balance the two signals, 0 to 1. Defaults to 0.5, treating them equally   |
+| Reader Overlap Seeds          | How many favourites to look up reader overlap for. 0 turns the signal off |
+| Exclude Same Author           | Hide, rather than de-rank, series by an author you already read           |
 
 Multi-value settings are comma-separated, for example `safe,suggestive`.
 
@@ -35,10 +35,10 @@ the run. The underlying API requires numeric tag IDs; the plugin looks them up s
 
 The plugin combines two signals from MangaBaka's public API:
 
-| Signal                  | Endpoint                                  | What it gives you                                          |
-| ----------------------- | ----------------------------------------- | ---------------------------------------------------------- |
-| Content similarity      | `GET /v1/series/mix`                      | Series whose tag profile matches your library as a whole    |
-| Collaborative filtering | `GET /v1/series/{id}/readers-also-like`   | Series that readers of your favourites also enjoy           |
+| Signal                  | Endpoint                                | What it gives you                                        |
+| ----------------------- | --------------------------------------- | -------------------------------------------------------- |
+| Content similarity      | `GET /v1/series/mix`                    | Series whose tag profile matches your library as a whole |
+| Collaborative filtering | `GET /v1/series/{id}/readers-also-like` | Series that readers of your favourites also enjoy        |
 
 Codex sends a curated set of seed titles (your highest-rated series first, then your most recent
 reads). `/mix` folds every seed's tag vector into a single probe, so the whole seed set costs one
@@ -67,7 +67,7 @@ and nothing else. The plugin therefore:
   or whose title matches a seed's once normalised;
 - collapses each remaining franchise to its single strongest entry, which catches franchises you
   hold no seed for;
-- de-ranks (but keeps) series sharing an author with a seed, since an author's *unrelated* other
+- de-ranks (but keeps) series sharing an author with a seed, since an author's _unrelated_ other
   work is often exactly what you want next.
 
 This is deliberately aggressive. On a library dominated by one franchise you will get fewer

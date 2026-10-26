@@ -31,9 +31,9 @@ npm run build
 
 Register the plugin in Codex with optional configuration:
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `maxResults` | number | 10 | Maximum search results to return (1-50) |
+| Option       | Type   | Default | Description                             |
+| ------------ | ------ | ------- | --------------------------------------- |
+| `maxResults` | number | 10      | Maximum search results to return (1-50) |
 
 ### Example Configuration
 
@@ -48,12 +48,12 @@ plugins:
 
 The plugin uses the following Open Library API endpoints:
 
-| Endpoint | Usage |
-|----------|-------|
-| `/isbn/{isbn}.json` | Direct ISBN lookup (edition data) |
-| `/works/{id}.json` | Work details (description, subjects) |
-| `/authors/{id}.json` | Author name resolution |
-| `/search.json` | Title/author search |
+| Endpoint             | Usage                                |
+| -------------------- | ------------------------------------ |
+| `/isbn/{isbn}.json`  | Direct ISBN lookup (edition data)    |
+| `/works/{id}.json`   | Work details (description, subjects) |
+| `/authors/{id}.json` | Author name resolution               |
+| `/search.json`       | Title/author search                  |
 
 ### Cover Image URLs
 
@@ -66,21 +66,21 @@ https://covers.openlibrary.org/b/id/{cover_id}-{S|M|L}.jpg
 
 ## Field Mapping
 
-| Open Library | Codex Field | Notes |
-|--------------|-------------|-------|
-| `title` | `title` | |
-| `subtitle` | `subtitle` | |
-| `authors[].name` | `authors` | Resolved to full names with role="author" |
-| `publishers[0]` | `publisher` | First publisher |
-| `publish_date` | `year` | Parsed to extract year |
-| `isbn_13` / `isbn_10` | `isbns` | All ISBNs, preferring ISBN-13 |
-| `subjects` | `subjects` | Combined from edition and work |
-| `description` | `summary` | From edition or work |
-| `first_publish_date` | `originalYear` | From work data |
-| `languages[0]` | `language` | Converted to BCP47 format |
-| `key` | `externalId` | Work or edition key |
-| `covers[0]` | `covers` | S/M/L URLs generated |
-| `ratings_average` | `rating` | Normalized 0-100 scale |
+| Open Library          | Codex Field    | Notes                                     |
+| --------------------- | -------------- | ----------------------------------------- |
+| `title`               | `title`        |                                           |
+| `subtitle`            | `subtitle`     |                                           |
+| `authors[].name`      | `authors`      | Resolved to full names with role="author" |
+| `publishers[0]`       | `publisher`    | First publisher                           |
+| `publish_date`        | `year`         | Parsed to extract year                    |
+| `isbn_13` / `isbn_10` | `isbns`        | All ISBNs, preferring ISBN-13             |
+| `subjects`            | `subjects`     | Combined from edition and work            |
+| `description`         | `summary`      | From edition or work                      |
+| `first_publish_date`  | `originalYear` | From work data                            |
+| `languages[0]`        | `language`     | Converted to BCP47 format                 |
+| `key`                 | `externalId`   | Work or edition key                       |
+| `covers[0]`           | `covers`       | S/M/L URLs generated                      |
+| `ratings_average`     | `rating`       | Normalized 0-100 scale                    |
 
 ## Supported Content Types
 
@@ -130,7 +130,7 @@ Open Library recommends limiting requests to 100 per 5 minutes. The plugin inclu
 ```typescript
 // Plugin will fetch: https://openlibrary.org/isbn/9780553418026.json
 const results = await plugin.searchBooks({
-  isbn: "978-0-553-41802-6"
+  isbn: "978-0-553-41802-6",
 });
 ```
 
@@ -140,7 +140,7 @@ const results = await plugin.searchBooks({
 // Plugin will search: https://openlibrary.org/search.json?q=The+Martian&author=Andy+Weir
 const results = await plugin.searchBooks({
   query: "The Martian",
-  author: "Andy Weir"
+  author: "Andy Weir",
 });
 ```
 
@@ -149,7 +149,7 @@ const results = await plugin.searchBooks({
 ```typescript
 // Fetches edition, work, and author data
 const metadata = await plugin.getBook({
-  externalId: "/works/OL17091769W"
+  externalId: "/works/OL17091769W",
 });
 ```
 

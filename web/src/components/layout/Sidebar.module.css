@@ -75,7 +75,8 @@
 /* Icon two-state. Opacity carries the inactive/active distinction (color
    alone wasn't enough against the tinted active background). Active rows
    tint the icon to the filled primary so it visibly pops. */
-.navStack :global(.mantine-NavLink-root)
+.navStack
+  :global(.mantine-NavLink-root)
   :global(.mantine-NavLink-section)[data-position="left"] {
   opacity: 0.6;
   transition:

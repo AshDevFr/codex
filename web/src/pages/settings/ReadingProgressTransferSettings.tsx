@@ -35,6 +35,7 @@ import {
   useExportReadingProgress,
   useImportReadingProgress,
 } from "@/hooks/useReadingProgressTransfer";
+import { withContentKeys } from "@/utils/contentKeys";
 
 type ApiErrorLike = Error & {
   response?: {
@@ -199,12 +200,14 @@ function ReportTable({ report }: { report: ImportReadingProgressResponse }) {
           </Table.Tr>
         </Table.Thead>
         <Table.Tbody>
-          {report.series.map((series, index) => (
+          {withContentKeys(
+            report.series,
+            (series) => `${series.libraryRelativePath}:${series.name}`,
+          ).map(({ key, item: series }) => (
             // A split exports same-named series from several libraries, so
-            // path and name alone are not unique.
-            <Table.Tr
-              key={`${index}-${series.libraryRelativePath}-${series.name}`}
-            >
+            // path and name alone are not unique; withContentKeys suffixes
+            // the repeats.
+            <Table.Tr key={key}>
               <Table.Td>
                 <Text size="sm" fw={500}>
                   {series.name}

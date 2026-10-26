@@ -72,11 +72,11 @@ export default defineConfig({
   plugins: [react(), tsconfigPaths()],
   test: {
     globals: true,
-    environment: 'jsdom',
-    setupFiles: './src/test/setup.ts',
+    environment: "jsdom",
+    setupFiles: "./src/test/setup.ts",
     coverage: {
-      provider: 'v8',
-      reporter: ['text', 'json', 'html'],
+      provider: "v8",
+      reporter: ["text", "json", "html"],
     },
   },
 });
@@ -159,10 +159,10 @@ it('should fetch and display data', async () => {
 #### 4. Testing Zustand Stores
 
 ```typescript
-it('should update auth state', () => {
-  const mockUser = { id: '1', username: 'test' };
+it("should update auth state", () => {
+  const mockUser = { id: "1", username: "test" };
 
-  useAuthStore.getState().setAuth(mockUser, 'token');
+  useAuthStore.getState().setAuth(mockUser, "token");
 
   const state = useAuthStore.getState();
   expect(state.user).toEqual(mockUser);
@@ -173,17 +173,17 @@ it('should update auth state', () => {
 #### 5. Testing API Clients
 
 ```typescript
-vi.mock('@/api/auth');
+vi.mock("@/api/auth");
 
-it('should call API on submit', async () => {
+it("should call API on submit", async () => {
   vi.mocked(authApi.login).mockResolvedValueOnce(mockResponse);
 
   // ... render and interact
 
   await waitFor(() => {
     expect(authApi.login).toHaveBeenCalledWith({
-      username: 'testuser',
-      password: 'password123',
+      username: "testuser",
+      password: "password123",
     });
   });
 });
@@ -210,7 +210,7 @@ expect(screen.getByText('Text')).toBeInTheDocument();
 ### Store Tests
 
 ```typescript
-describe('authStore', () => {
+describe("authStore", () => {
   beforeEach(() => {
     useAuthStore.setState({
       user: null,
@@ -220,12 +220,14 @@ describe('authStore', () => {
     localStorage.clear();
   });
 
-  it('should set auth state', () => {
-    const mockUser = { /* ... */ };
-    useAuthStore.getState().setAuth(mockUser, 'token');
+  it("should set auth state", () => {
+    const mockUser = {
+      /* ... */
+    };
+    useAuthStore.getState().setAuth(mockUser, "token");
 
     expect(useAuthStore.getState().isAuthenticated).toBe(true);
-    expect(localStorage.getItem('jwt_token')).toBe('token');
+    expect(localStorage.getItem("jwt_token")).toBe("token");
   });
 });
 ```
@@ -289,7 +291,7 @@ expect(component.state.count).toBe(5);
 
 ✅ Good:
 ```typescript
-expect(screen.getByText('Count: 5')).toBeInTheDocument();
+expect(screen.getByText("Count: 5")).toBeInTheDocument();
 ```
 
 ### 2. Use Semantic Queries
@@ -312,8 +314,8 @@ beforeEach(() => {
 ### 4. Mock External Dependencies
 
 ```typescript
-vi.mock('@/api/auth');
-vi.mock('@/api/libraries');
+vi.mock("@/api/auth");
+vi.mock("@/api/libraries");
 ```
 
 ### 5. Test Loading and Error States
@@ -411,15 +413,15 @@ Always use `waitFor` or `findBy` queries:
 
 ```typescript
 // ❌ May fail
-expect(screen.getByText('Loaded')).toBeInTheDocument();
+expect(screen.getByText("Loaded")).toBeInTheDocument();
 
 // ✅ Correct
 await waitFor(() => {
-  expect(screen.getByText('Loaded')).toBeInTheDocument();
+  expect(screen.getByText("Loaded")).toBeInTheDocument();
 });
 
 // ✅ Alternative
-const element = await screen.findByText('Loaded');
+const element = await screen.findByText("Loaded");
 expect(element).toBeInTheDocument();
 ```
 
