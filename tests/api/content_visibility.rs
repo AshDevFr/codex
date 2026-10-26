@@ -682,3 +682,67 @@ async fn library_counts_only_include_visible_content() {
     assert_eq!(body["seriesCount"], 1, "{body}");
     assert_eq!(body["bookCount"], 1, "{body}");
 }
+
+// ============================================================================
+// Lists
+// ============================================================================
+
+/// The ids in a response, wherever they appear.
+fn mentions(body: &[u8], id: Uuid) -> bool {
+    String::from_utf8_lossy(body).contains(&id.to_string())
+}
+
+/// Assert a list response mentions the visible item and neither hidden one.
+fn assert_list(label: &str, body: &[u8], pick: impl Fn(&Item) -> Uuid, world: &World) {
+    assert!(
+        mentions(body, pick(&world.visible)),
+        "{label}: visible item missing"
+    );
+    assert!(
+        !mentions(body, pick(&world.hidden)),
+        "{label}: hidden item listed"
+    );
+    assert!(
+        !mentions(body, pick(&world.secret)),
+        "{label}: secret item listed"
+    );
+}
+
+#[tokio::test]
+async fn komga_lists_leave_out_hidden_content() {
+    use serde_json::json;
+    let world = World::new().await;
+    let series = |i: &Item| i.series_id;
+    let book = |i: &Item| i.book_id;
+
+    for uri in [
+        "/komga/api/v1/series?size=100",
+        "/komga/api/v1/series/new?size=100",
+        "/komga/api/v1/series/updated?size=100",
+    ] {
+        let (status, body) = world.get(uri).await;
+        assert_eq!(status, StatusCode::OK, "{uri}");
+        assert_list(uri, &body, series, &world);
+    }
+
+    let (status, body) = world
+        .send(
+            "POST",
+            "/komga/api/v1/series/list?size=100",
+            Some(json!({})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_list(
+        "POST series/list",
+        body.to_string().as_bytes(),
+        series,
+        &world,
+    );
+
+    let (status, body) = world
+        .send("POST", "/komga/api/v1/books/list?size=100", Some(json!({})))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_list("POST books/list", body.to_string().as_bytes(), book, &world);
+}

@@ -41,6 +41,8 @@ pub struct BookQueryOptions<'a> {
     pub page: u64,
     /// Page size
     pub page_size: u64,
+    /// Only books in series this lets through (`None` for no visibility constraint)
+    pub visibility: Option<&'a crate::repositories::SeriesVisibility>,
 }
 
 /// Release date filter for querying books by their metadata release date
@@ -163,6 +165,7 @@ impl BookRepository {
         if let Some(series_id) = options.series_id {
             query = query.filter(books::Column::SeriesId.eq(series_id));
         }
+        query = crate::repositories::visibility::apply_book_visibility(query, options.visibility);
 
         if !options.include_deleted {
             query = query.filter(books::Column::Deleted.eq(false));

@@ -146,6 +146,7 @@ pub async fn list_series(
     let page = query.page.max(0) as u64;
     let size = query.size.clamp(1, 500) as u64;
 
+    let visibility = crate::visibility::user_visibility(&state.db, auth.user_id).await?;
     // Build query options for database-level filtering, sorting, and pagination
     let options = SeriesQueryOptions {
         library_id: query.library_id,
@@ -154,6 +155,7 @@ pub async fn list_series(
         sort: parse_komga_series_sort_param(query.sort.as_deref()),
         page,
         page_size: size,
+        visibility: visibility.as_ref(),
     };
 
     let (series_list, total) = SeriesRepository::query(&state.db, options)
@@ -250,9 +252,11 @@ pub async fn search_series(
     // If readStatus filter is present, we need to fetch all results and filter in-memory
     // because readStatus depends on book counts which require DTO building
     if read_status.is_some() {
+        let visibility = crate::visibility::user_visibility(&state.db, auth.user_id).await?;
         return search_series_with_read_status_filter(
             &state,
             user_id,
+            visibility.as_ref(),
             page,
             size,
             library_id,
@@ -265,6 +269,7 @@ pub async fn search_series(
         .await;
     }
 
+    let visibility = crate::visibility::user_visibility(&state.db, auth.user_id).await?;
     // No readStatus filter - use efficient database-level sorting and pagination
     let options = SeriesQueryOptions {
         library_id,
@@ -273,6 +278,7 @@ pub async fn search_series(
         sort: parse_komga_series_sort_param(query.sort.as_deref()),
         page,
         page_size: size,
+        visibility: visibility.as_ref(),
     };
 
     let (series_list, total) = SeriesRepository::query(&state.db, options)
@@ -300,6 +306,7 @@ pub async fn search_series(
 async fn search_series_with_read_status_filter(
     state: &Arc<AuthState>,
     user_id: Option<Uuid>,
+    visibility: Option<&codex_db::repositories::SeriesVisibility>,
     page: u64,
     size: u64,
     library_id: Option<Uuid>,
@@ -317,6 +324,7 @@ async fn search_series_with_read_status_filter(
         sort: parse_komga_series_sort_param(sort_param),
         page: 0,
         page_size: i64::MAX as u64, // Fetch all for filtering (i64::MAX avoids SQLite/PG integer overflow)
+        visibility,
     };
 
     let (series_list, _) = SeriesRepository::query(&state.db, options)
@@ -406,6 +414,7 @@ pub async fn get_series_new(
     let page = query.page.max(0) as u64;
     let size = query.size.clamp(1, 500) as u64;
 
+    let visibility = crate::visibility::user_visibility(&state.db, auth.user_id).await?;
     // Use composable query with DateAdded sort descending
     let options = SeriesQueryOptions {
         library_id: query.library_id,
@@ -417,6 +426,7 @@ pub async fn get_series_new(
         }),
         page,
         page_size: size,
+        visibility: visibility.as_ref(),
     };
 
     let (series_list, total) = SeriesRepository::query(&state.db, options)
@@ -482,6 +492,7 @@ pub async fn get_series_updated(
     let page = query.page.max(0) as u64;
     let size = query.size.clamp(1, 500) as u64;
 
+    let visibility = crate::visibility::user_visibility(&state.db, auth.user_id).await?;
     // Use composable query with DateUpdated sort descending
     let options = SeriesQueryOptions {
         library_id: query.library_id,
@@ -493,6 +504,7 @@ pub async fn get_series_updated(
         }),
         page,
         page_size: size,
+        visibility: visibility.as_ref(),
     };
 
     let (series_list, total) = SeriesRepository::query(&state.db, options)
