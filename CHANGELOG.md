@@ -7,6 +7,47 @@ release. A patch release may fix an API bug; it may not add an operation, a para
 field, or a new behaviour on an existing route. A client may therefore treat the release a feature
 first appears under in the 🔌 API sections below as a floor it can rely on.
 
+## [2.8.0] - 2026-10-26
+
+### 🔌 API (breaking)
+
+- *(api)* [**breaking**] Make server metrics admin-only
+
+### 🔌 API
+
+- *(api)* Reject an OIDC login whose access group sync fails
+- *(api)* Stop by-id endpoints serving content a reader cannot see
+- *(api)* Hide libraries a reader cannot see
+- *(api)* Filter the Komga series and book lists
+- *(api)* Keep hidden content out of lists, search and statistics
+- *(api)* Stop event streams and KOReader sync reaching hidden content
+- *(api)* Let maintainers read server metrics again
+
+### 🚀 Features
+
+- Let one access group be the default that new users join
+- Let access groups allow or deny libraries, genres and tags
+- Show admins what a user can see, and why
+
+### 🐛 Bug Fixes
+
+- *(db)* Keep a group membership's source when it is added again
+
+### 📚 Documentation
+
+- Format the web code with biome, the only formatter it has
+
+### ⚡ Performance
+
+- *(metrics)* Stop scanning pages for the inventory gauges
+- *(metrics)* Estimate the page count in the inventory endpoint
+- Reuse a user's content filter for 30 seconds
+
+### 🧪 Testing
+
+- Drop unused fields from the content visibility fixture
+- *(api)* Fail when a handler takes a content id without a visibility check
+
 ## [2.7.0] - 2026-10-18
 
 ### 🚀 Features
