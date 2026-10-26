@@ -11,6 +11,7 @@ import {
 } from "react-router-dom";
 import { onRateLimitNotification } from "@/api/client";
 import { setupApi } from "@/api/setup";
+import { AdminRoute } from "@/components/auth/AdminRoute";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useEntityEvents } from "@/hooks/useEntityEvents";
 import { BookDetail } from "@/pages/BookDetail";
@@ -545,9 +546,11 @@ function App() {
           path="/settings/metrics"
           element={
             <ProtectedRoute>
-              <AppLayout>
-                <MetricsSettings />
-              </AppLayout>
+              <AdminRoute>
+                <AppLayout>
+                  <MetricsSettings />
+                </AppLayout>
+              </AdminRoute>
             </ProtectedRoute>
           }
         />

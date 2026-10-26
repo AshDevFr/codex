@@ -9,7 +9,7 @@ use super::super::dto::{
     InventoryMetricsQuery, LibraryMetricsDto, MetricsDto, PluginMethodMetricsDto, PluginMetricsDto,
     PluginMetricsResponse, PluginMetricsSummaryDto,
 };
-use crate::{AppState, error::ApiError, extractors::AuthContext, permissions::Permission};
+use crate::{AppState, error::ApiError, extractors::AuthContext};
 use codex_db::repositories::MetricsRepository;
 
 /// Get inventory metrics (library/book counts)
@@ -30,7 +30,7 @@ use codex_db::repositories::MetricsRepository;
     params(InventoryMetricsQuery),
     responses(
         (status = 200, description = "Inventory metrics retrieved successfully", body = MetricsDto),
-        (status = 403, description = "Permission denied, `exact=true` requested without admin access, or the account has content restrictions"),
+        (status = 403, description = "Admin only"),
     ),
     security(
         ("jwt_bearer" = []),
@@ -43,24 +43,9 @@ pub async fn get_inventory_metrics(
     auth: AuthContext,
     Query(query): Query<InventoryMetricsQuery>,
 ) -> Result<Json<MetricsDto>, ApiError> {
-    // Check permission - metrics are considered system-level library information
-    auth.require_permission(&Permission::LibrariesRead)?;
-    // Refuse rather than fall back to the estimate, so a caller that asked for
-    // an exact count never receives an estimate believing it is exact.
-    if query.exact {
-        auth.require_admin()?;
-    }
-    // Library-wide totals and per-library counts would reveal how much content
-    // a restricted reader cannot see, so they get none.
-    if crate::visibility::content_filter(&state.db, auth.user_id)
-        .await?
-        .has_restrictions
-    {
-        return Err(ApiError::Forbidden(
-            "Library statistics are not available to accounts with content restrictions"
-                .to_string(),
-        ));
-    }
+    // Server metrics (user count, database size, every library's totals) are
+    // for admins, like the Settings > Metrics page that shows them.
+    auth.require_admin()?;
 
     // Gather all metrics in parallel
     let (
@@ -157,7 +142,7 @@ pub async fn get_inventory_metrics(
     path = "/api/v1/metrics/plugins",
     responses(
         (status = 200, description = "Plugin metrics retrieved successfully", body = PluginMetricsResponse),
-        (status = 403, description = "Permission denied"),
+        (status = 403, description = "Admin only"),
     ),
     security(
         ("jwt_bearer" = []),
@@ -169,7 +154,7 @@ pub async fn get_plugin_metrics(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
 ) -> Result<Json<PluginMetricsResponse>, ApiError> {
-    auth.require_permission(&Permission::LibrariesRead)?;
+    auth.require_admin()?;
 
     let summary = state.plugin_metrics_service.get_summary().await;
     let plugin_snapshots = state.plugin_metrics_service.get_all_metrics().await;

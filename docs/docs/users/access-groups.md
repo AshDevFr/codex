@@ -208,7 +208,7 @@ curl "http://localhost:8080/api/v1/users/{user_id}/visibility-preview?seriesId={
 
 A restricted reader gets the same view everywhere: the web app, the native API, OPDS 1.2 and 2.0 feeds, the [Komga-compatible API](../third-party-apps), KOReader sync, and live updates (new or changed series and books are not announced for content they cannot see). Hidden content answers exactly like content that does not exist: it is missing from lists, search, genre and tag lists and library counts, and opening it by id returns "not found".
 
-Server-wide statistics (**Settings** > **Metrics**) are not available to accounts with content restrictions, since they describe the whole library.
+Server-wide statistics (**Settings** > **Metrics**) are admin-only, since they describe the whole server.
 
 Restriction changes take effect on the next request. When Codex runs as several server processes, the others pick them up within 30 seconds. New series from a scan are covered by deny rules within 30 seconds of the scan, and by allow rules immediately (a new series is hidden until a rule allows it).
 

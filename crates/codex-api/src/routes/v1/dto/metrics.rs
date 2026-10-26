@@ -48,8 +48,8 @@ pub struct MetricsDto {
 #[serde(rename_all = "camelCase")]
 #[into_params(rename_all = "camelCase")]
 pub struct InventoryMetricsQuery {
-    /// Count pages exactly instead of estimating. Admin only: on PostgreSQL an
-    /// exact count is a full scan of the largest table.
+    /// Count pages exactly instead of estimating. On PostgreSQL an exact count
+    /// is a full scan of the largest table.
     #[serde(default)]
     pub exact: bool,
 }

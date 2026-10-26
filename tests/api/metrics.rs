@@ -169,8 +169,10 @@ async fn test_get_metrics_without_auth() {
     assert_eq!(error.error, "Unauthorized");
 }
 
+/// Inventory metrics describe the whole server (user count, database size,
+/// every library's totals), so only admins may read them.
 #[tokio::test]
-async fn test_get_metrics_with_readonly_user() {
+async fn test_get_metrics_is_refused_to_readonly_user() {
     let (db, _temp_dir) = setup_test_db().await;
 
     // Create a library
@@ -183,12 +185,9 @@ async fn test_get_metrics_with_readonly_user() {
     let app = create_test_router(state).await;
 
     let request = get_request_with_auth("/api/v1/metrics/inventory", &token);
-    let (status, response): (StatusCode, Option<MetricsDto>) =
-        make_json_request(app, request).await;
+    let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
 
-    assert_eq!(status, StatusCode::OK);
-    let metrics = response.unwrap();
-    assert_eq!(metrics.library_count, 1);
+    assert_eq!(status, StatusCode::FORBIDDEN);
 }
 
 #[tokio::test]
@@ -414,7 +413,7 @@ async fn test_get_metrics_exact_page_count_requires_admin() {
 }
 
 #[tokio::test]
-async fn test_get_metrics_exact_false_is_allowed_for_readonly_user() {
+async fn test_get_metrics_exact_false_is_refused_to_readonly_user() {
     let (db, _temp_dir) = setup_test_db().await;
 
     let state = create_test_auth_state(db.clone()).await;
@@ -422,7 +421,7 @@ async fn test_get_metrics_exact_false_is_allowed_for_readonly_user() {
     let app = create_test_router(state).await;
 
     let request = get_request_with_auth("/api/v1/metrics/inventory?exact=false", &token);
-    let (status, _): (StatusCode, Option<MetricsDto>) = make_json_request(app, request).await;
+    let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
 
-    assert_eq!(status, StatusCode::OK);
+    assert_eq!(status, StatusCode::FORBIDDEN);
 }

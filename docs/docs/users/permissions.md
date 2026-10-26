@@ -171,7 +171,7 @@ Shared groupings of series (collections) and books (read lists). See [Collection
 
 | Permission | Description |
 |------------|-------------|
-| `system-health` | View health status and metrics |
+| `system-health` | View health status (server metrics are admin-only) |
 | `system-admin` | Full administrative access, server settings |
 
 ## Effective Permissions
