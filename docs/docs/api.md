@@ -644,7 +644,7 @@ kebab-case (the colon form `libraries:read` is also accepted in requests):
 | `libraries-read` | View libraries |
 | `libraries-write` | Create/update libraries |
 | `libraries-delete` | Delete libraries |
-| `series-read` | View series, want-to-read, recommendations, exports |
+| `series-read` | View series, own ratings, want-to-read, recommendations, exports |
 | `series-write` | Update series |
 | `series-delete` | Delete series |
 | `books-read` | View books |
@@ -659,6 +659,8 @@ kebab-case (the colon form `libraries:read` is also accepted in requests):
 | `pages-read` | View page images |
 | `progress-read` | View reading progress, history, and stats |
 | `progress-write` | Update progress, mark read/unread, record sessions |
+| `ratings-write` | Set and delete your own series ratings |
+| `want-to-read-write` | Add to, reorder, and remove from your want-to-read queue |
 | `users-read` | View users (admin) |
 | `users-write` | Manage users (admin) |
 | `users-delete` | Delete users (admin) |
@@ -675,6 +677,9 @@ Reading progress endpoints are gated on the progress permissions, not the
 book permissions: a key needs `progress-write` to update progress or mark
 books read, and `progress-read` alone is enough for a stats-only
 integration against `/api/v1/reading-stats`.
+
+The same split applies to your ratings and want-to-read queue: `series-read`
+reads them, while changing them needs `ratings-write` or `want-to-read-write`.
 
 See [Permissions & Roles](./users/permissions) for the full model.
 

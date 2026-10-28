@@ -16629,7 +16629,7 @@ export interface components {
             totalSizeHuman: string;
         };
         /** @enum {string} */
-        Permission: "libraries-read" | "libraries-write" | "libraries-delete" | "series-read" | "series-write" | "series-delete" | "books-read" | "books-write" | "books-delete" | "collections-read" | "collections-write" | "collections-delete" | "read-lists-read" | "read-lists-write" | "read-lists-delete" | "pages-read" | "progress-read" | "progress-write" | "users-read" | "users-write" | "users-delete" | "api-keys-read" | "api-keys-write" | "api-keys-delete" | "tasks-read" | "tasks-write" | "plugins-manage" | "system-health" | "system-admin";
+        Permission: "libraries-read" | "libraries-write" | "libraries-delete" | "series-read" | "series-write" | "series-delete" | "books-read" | "books-write" | "books-delete" | "collections-read" | "collections-write" | "collections-delete" | "read-lists-read" | "read-lists-write" | "read-lists-delete" | "pages-read" | "progress-read" | "progress-write" | "ratings-write" | "want-to-read-write" | "users-read" | "users-write" | "users-delete" | "api-keys-read" | "api-keys-write" | "api-keys-delete" | "tasks-read" | "tasks-write" | "plugins-manage" | "system-health" | "system-admin";
         /** @description A plugin action available for a specific scope */
         PluginActionDto: {
             /** @description Action type (e.g., "metadata_search", "metadata_get") */

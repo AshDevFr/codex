@@ -103,7 +103,7 @@ pub async fn add_want_to_read(
     auth: AuthContext,
     Json(request): Json<AddWantToReadRequest>,
 ) -> Result<(StatusCode, Json<WantToReadEntryDto>), ApiError> {
-    auth.require_permission(&Permission::SeriesRead)?;
+    auth.require_permission(&Permission::WantToReadWrite)?;
 
     let entry = match (request.series_id, request.book_id) {
         (Some(series_id), None) => {
@@ -154,7 +154,7 @@ pub async fn bulk_add_want_to_read(
     auth: AuthContext,
     Json(request): Json<BulkAddWantToReadRequest>,
 ) -> Result<Json<BulkAddWantToReadResponse>, ApiError> {
-    auth.require_permission(&Permission::SeriesRead)?;
+    auth.require_permission(&Permission::WantToReadWrite)?;
 
     let mut added = 0;
     let mut already_present = 0;
@@ -235,7 +235,7 @@ pub async fn reorder_want_to_read(
     auth: AuthContext,
     Json(request): Json<ReorderWantToReadRequest>,
 ) -> Result<StatusCode, ApiError> {
-    auth.require_permission(&Permission::SeriesRead)?;
+    auth.require_permission(&Permission::WantToReadWrite)?;
 
     WantToReadRepository::reorder(&state.db, auth.user_id, &request.entry_ids)
         .await
@@ -262,7 +262,7 @@ pub async fn remove_want_to_read_series(
     auth: AuthContext,
     Path(series_id): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {
-    auth.require_permission(&Permission::SeriesRead)?;
+    auth.require_permission(&Permission::WantToReadWrite)?;
     crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     WantToReadRepository::remove_series(&state.db, auth.user_id, series_id)
@@ -290,7 +290,7 @@ pub async fn remove_want_to_read_book(
     auth: AuthContext,
     Path(book_id): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {
-    auth.require_permission(&Permission::SeriesRead)?;
+    auth.require_permission(&Permission::WantToReadWrite)?;
     crate::visibility::ensure_book_id_visible(&state.db, auth.user_id, book_id).await?;
 
     WantToReadRepository::remove_book(&state.db, auth.user_id, book_id)

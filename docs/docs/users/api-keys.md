@@ -152,6 +152,8 @@ Permissions for e-reader apps, OPDS clients, and KOReader sync:
 
 `progress-read` and `progress-write` are needed for apps that sync reading progress (e.g., KOReader).
 
+Add `ratings-write` or `want-to-read-write` for apps that rate series or manage your want-to-read queue. `series-read` alone lets an app see them but not change them.
+
 ### Automation Script
 
 For scripts that trigger scans and monitor progress:

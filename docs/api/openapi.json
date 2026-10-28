@@ -38641,6 +38641,8 @@
           "pages-read",
           "progress-read",
           "progress-write",
+          "ratings-write",
+          "want-to-read-write",
           "users-read",
           "users-write",
           "users-delete",

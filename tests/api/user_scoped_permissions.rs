@@ -1,7 +1,9 @@
 //! Permission-gating matrix for the user-scoped content endpoints.
 //!
 //! Want-to-read, recommendations, and series exports are user-scoped, but
-//! they all expose series metadata, so they require `series:read`. Filter
+//! they all expose series metadata, so they require `series:read`. Changing
+//! the want-to-read queue additionally needs `want-to-read:write`, pinned in
+//! `personal_series_state_permissions`. Filter
 //! presets, user preferences, and the export field catalog stay auth-only:
 //! they are UI state and static data with no library content in them.
 //! These tests pin those gates with API keys carrying exactly one
@@ -219,7 +221,11 @@ async fn series_read_key_uses_the_series_surfaces() {
         Some(json!({"seriesId": series_id})),
     )
     .await;
-    assert_eq!(status, StatusCode::CREATED, "series:read adds want-to-read");
+    assert_eq!(
+        status,
+        StatusCode::FORBIDDEN,
+        "series:read reads the want-to-read queue but cannot change it"
+    );
 
     let status = status_of(app.clone(), "GET", "/api/v1/want-to-read", key, None).await;
     assert_eq!(status, StatusCode::OK, "series:read lists want-to-read");

@@ -5095,7 +5095,7 @@ pub async fn set_series_rating(
     Path(series_id): Path<Uuid>,
     Json(request): Json<SetUserRatingRequest>,
 ) -> Result<Json<UserSeriesRatingDto>, ApiError> {
-    require_permission!(auth, Permission::SeriesRead)?;
+    require_permission!(auth, Permission::RatingsWrite)?;
     crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Validate rating range
@@ -5154,7 +5154,7 @@ pub async fn delete_series_rating(
     auth: AuthContext,
     Path(series_id): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {
-    require_permission!(auth, Permission::SeriesRead)?;
+    require_permission!(auth, Permission::RatingsWrite)?;
     crate::visibility::ensure_series_visible(&state.db, auth.user_id, series_id).await?;
 
     // Verify series exists

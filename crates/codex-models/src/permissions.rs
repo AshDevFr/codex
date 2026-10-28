@@ -108,6 +108,12 @@ pub enum Permission {
     ProgressRead,
     ProgressWrite,
 
+    // A user's own ratings and want-to-read queue. Reading them needs only
+    // `SeriesRead`; changing them needs these, so a key scoped to read-only
+    // cannot touch them.
+    RatingsWrite,
+    WantToReadWrite,
+
     // Users (admin only)
     UsersRead,
     UsersWrite,
@@ -153,6 +159,8 @@ impl Permission {
             Permission::PagesRead => "pages:read",
             Permission::ProgressRead => "progress:read",
             Permission::ProgressWrite => "progress:write",
+            Permission::RatingsWrite => "ratings:write",
+            Permission::WantToReadWrite => "want-to-read:write",
             Permission::UsersRead => "users:read",
             Permission::UsersWrite => "users:write",
             Permission::UsersDelete => "users:delete",
@@ -225,6 +233,8 @@ pub const ALL_PERMISSIONS_LIST: &[Permission] = &[
     Permission::PagesRead,
     Permission::ProgressRead,
     Permission::ProgressWrite,
+    Permission::RatingsWrite,
+    Permission::WantToReadWrite,
     Permission::UsersRead,
     Permission::UsersWrite,
     Permission::UsersDelete,
@@ -261,6 +271,8 @@ impl FromStr for Permission {
             "pages:read" => Ok(Permission::PagesRead),
             "progress:read" => Ok(Permission::ProgressRead),
             "progress:write" => Ok(Permission::ProgressWrite),
+            "ratings:write" => Ok(Permission::RatingsWrite),
+            "want-to-read:write" => Ok(Permission::WantToReadWrite),
             "users:read" => Ok(Permission::UsersRead),
             "users:write" => Ok(Permission::UsersWrite),
             "users:delete" => Ok(Permission::UsersDelete),
@@ -310,6 +322,7 @@ lazy_static::lazy_static! {
     /// Reader can:
     /// - Browse libraries, series, and books
     /// - Read pages/content
+    /// - Rate series and manage their want-to-read queue
     /// - Manage their own API keys
     /// - View system health
     pub static ref READER_PERMISSIONS: HashSet<Permission> = {
@@ -322,6 +335,9 @@ lazy_static::lazy_static! {
         // Progress tracking
         set.insert(Permission::ProgressRead);
         set.insert(Permission::ProgressWrite);
+        // Own ratings and want-to-read queue
+        set.insert(Permission::RatingsWrite);
+        set.insert(Permission::WantToReadWrite);
         // Browse shared collections and read lists (management is gated separately)
         set.insert(Permission::CollectionsRead);
         set.insert(Permission::ReadListsRead);
@@ -449,6 +465,22 @@ mod tests {
             Permission::parse_lenient("system-health").unwrap(),
             Permission::SystemHealth
         );
+        // A multi-word resource in every format.
+        for wire in ["want-to-read-write", "want-to-read:write"] {
+            assert_eq!(
+                Permission::parse_lenient(wire).unwrap(),
+                Permission::WantToReadWrite,
+                "{wire}"
+            );
+        }
+        assert_eq!(
+            Permission::parse_lenient("ratings:write").unwrap(),
+            Permission::RatingsWrite
+        );
+        assert_eq!(
+            Permission::WantToReadWrite.canonical_name(),
+            "want-to-read-write"
+        );
         assert!(Permission::parse_lenient("not-a-permission").is_err());
         assert!(Permission::parse_lenient("").is_err());
     }
@@ -528,6 +560,9 @@ mod tests {
         // Reader can track reading progress
         assert!(READER_PERMISSIONS.contains(&Permission::ProgressRead));
         assert!(READER_PERMISSIONS.contains(&Permission::ProgressWrite));
+        // Reader can rate series and manage their want-to-read queue
+        assert!(READER_PERMISSIONS.contains(&Permission::RatingsWrite));
+        assert!(READER_PERMISSIONS.contains(&Permission::WantToReadWrite));
         // Reader can browse shared collections and read lists
         assert!(READER_PERMISSIONS.contains(&Permission::CollectionsRead));
         assert!(READER_PERMISSIONS.contains(&Permission::ReadListsRead));
@@ -542,7 +577,7 @@ mod tests {
         assert!(!READER_PERMISSIONS.contains(&Permission::UsersRead));
         assert!(!READER_PERMISSIONS.contains(&Permission::SystemAdmin));
 
-        assert_eq!(READER_PERMISSIONS.len(), 12);
+        assert_eq!(READER_PERMISSIONS.len(), 14);
     }
 
     #[test]
@@ -574,7 +609,7 @@ mod tests {
         assert!(!MAINTAINER_PERMISSIONS.contains(&Permission::UsersRead));
         assert!(!MAINTAINER_PERMISSIONS.contains(&Permission::SystemAdmin));
 
-        assert_eq!(MAINTAINER_PERMISSIONS.len(), 23);
+        assert_eq!(MAINTAINER_PERMISSIONS.len(), 25);
     }
 
     #[test]
@@ -598,7 +633,7 @@ mod tests {
         // Admin has system admin
         assert!(ADMIN_PERMISSIONS.contains(&Permission::SystemAdmin));
 
-        assert_eq!(ADMIN_PERMISSIONS.len(), 29); // All permissions
+        assert_eq!(ADMIN_PERMISSIONS.len(), 31); // All permissions
     }
 
     // ============== UserRole tests ==============

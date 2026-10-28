@@ -35,6 +35,10 @@ export const PERMISSIONS = {
   PROGRESS_READ: "progress-read",
   PROGRESS_WRITE: "progress-write",
 
+  // Own ratings and want-to-read queue (reading them needs only SERIES_READ)
+  RATINGS_WRITE: "ratings-write",
+  WANT_TO_READ_WRITE: "want-to-read-write",
+
   // Users (admin only)
   USERS_READ: "users-read",
   USERS_WRITE: "users-write",
@@ -127,6 +131,23 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
         value: PERMISSIONS.PROGRESS_WRITE,
         label: "Write Progress",
         description: "Update reading progress and history",
+      },
+    ],
+  },
+  {
+    label: "Ratings & Want to Read",
+    description:
+      "Change your own ratings and queue (viewing them only needs Read Series)",
+    permissions: [
+      {
+        value: PERMISSIONS.RATINGS_WRITE,
+        label: "Write Ratings",
+        description: "Set and delete your series ratings and notes",
+      },
+      {
+        value: PERMISSIONS.WANT_TO_READ_WRITE,
+        label: "Write Want to Read",
+        description: "Add to, reorder, and remove from your want-to-read queue",
       },
     ],
   },
@@ -284,6 +305,8 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     PERMISSIONS.PAGES_READ,
     PERMISSIONS.PROGRESS_READ,
     PERMISSIONS.PROGRESS_WRITE,
+    PERMISSIONS.RATINGS_WRITE,
+    PERMISSIONS.WANT_TO_READ_WRITE,
     PERMISSIONS.COLLECTIONS_READ,
     PERMISSIONS.READLISTS_READ,
     PERMISSIONS.API_KEYS_READ,
@@ -299,6 +322,8 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     PERMISSIONS.PAGES_READ,
     PERMISSIONS.PROGRESS_READ,
     PERMISSIONS.PROGRESS_WRITE,
+    PERMISSIONS.RATINGS_WRITE,
+    PERMISSIONS.WANT_TO_READ_WRITE,
     PERMISSIONS.COLLECTIONS_READ,
     PERMISSIONS.READLISTS_READ,
     PERMISSIONS.API_KEYS_READ,

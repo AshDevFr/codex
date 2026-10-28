@@ -31,13 +31,15 @@ The default role for new users. Readers can:
 - Browse libraries, series, and books
 - Read books and view pages
 - Track reading progress
+- Rate series and manage their want-to-read queue
 - Browse collections and read lists
 - Manage their own API keys
 - Check system health
 
-**Permissions (12 total):**
+**Permissions (14 total):**
 - `libraries-read`, `series-read`, `books-read`, `pages-read`
 - `progress-read`, `progress-write`
+- `ratings-write`, `want-to-read-write`
 - `collections-read`, `read-lists-read`
 - `api-keys-read`, `api-keys-write`, `api-keys-delete`
 - `system-health`
@@ -53,7 +55,7 @@ For users who manage content but not system settings. Maintainers can do everyth
 - Create, edit, and delete collections and read lists
 - View and manage background tasks
 
-**Additional Permissions (11 more, 23 total):**
+**Additional Permissions (11 more, 25 total):**
 - `libraries-write`
 - `series-write`, `series-delete`
 - `books-write`, `books-delete`
@@ -72,7 +74,7 @@ Full system access for server administrators. Admins can do everything Maintaine
 - Manage sharing tags and content restrictions
 - See all content: [access groups](./access-groups) and [sharing tags](./sharing-tags) never restrict an admin
 
-**Additional Permissions (6 more, 29 total):**
+**Additional Permissions (6 more, 31 total):**
 - `libraries-delete`
 - `users-read`, `users-write`, `users-delete`
 - `plugins-manage`
@@ -96,7 +98,7 @@ stores the kebab-case names.
 
 | Permission | Description |
 |------------|-------------|
-| `series-read` | View series and metadata; browse the want-to-read queue, recommendations, and series exports |
+| `series-read` | View series and metadata, your own ratings and want-to-read queue, recommendations, and series exports |
 | `series-write` | Update series metadata, manage covers |
 | `series-delete` | Delete series |
 
@@ -118,6 +120,18 @@ call `/api/v1/reading-stats` and read progress and history, and nothing else.
 |------------|-------------|
 | `progress-read` | View reading progress, read history, and reading stats |
 | `progress-write` | Update progress, mark books/series read or unread, record reading sessions, clear history |
+
+### Rating & Want-to-Read Permissions
+
+Your ratings and want-to-read queue are your own data. Reading them only
+needs `series-read`, since they show up alongside series and books anyway;
+changing them needs its own permission, so a key you scope to read-only
+cannot overwrite your ratings or reshuffle your queue.
+
+| Permission | Description |
+|------------|-------------|
+| `ratings-write` | Set, change, and delete your own series ratings and rating notes |
+| `want-to-read-write` | Add series and books to your want-to-read queue, reorder it, and remove entries |
 
 ### Collection & Read List Permissions
 
