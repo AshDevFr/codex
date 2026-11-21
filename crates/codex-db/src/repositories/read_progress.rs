@@ -2208,6 +2208,82 @@ mod tests {
         );
     }
 
+    /// Position writes are stamped with the server's clock and the session's
+    /// end with the client's, so the last write of a sitting routinely lands a
+    /// few seconds after the session it belongs to. Requiring it to fall inside
+    /// the span left one redundant row behind per sitting.
+    #[tokio::test]
+    async fn absorbing_tolerates_a_write_stamped_just_after_the_session_ended() {
+        let db = setup_test_db().await;
+        let user = create_test_user(&db).await;
+        let book = create_test_book(&db).await;
+
+        let device = DeviceContext::session_reporting_client("browser-1");
+        ReadProgressRepository::upsert_with_device(&db, user.id, book.id, 20, false, &device)
+            .await
+            .unwrap();
+
+        // The client's clock put the end four seconds before the server
+        // recorded the final position write.
+        let ended = Utc::now() - chrono::Duration::seconds(4);
+        ReadProgressRepository::record_session(
+            &db,
+            measured_session(
+                user.id,
+                book.id,
+                "browser-1",
+                20,
+                ended - chrono::Duration::minutes(10),
+                ended,
+            ),
+        )
+        .await
+        .unwrap();
+
+        let sessions = sessions_for(&db, user.id, book.id).await;
+        assert_eq!(sessions.len(), 1, "one sitting must leave one session");
+        assert_eq!(sessions[0].active_duration_ms, Some(60_000));
+    }
+
+    /// Finishing a book is reported as a position write of its own. When the
+    /// sweep removes it, the finish has to survive on the measured session, or
+    /// the book reads as unfinished.
+    #[tokio::test]
+    async fn absorbing_a_completion_keeps_the_book_finished() {
+        let db = setup_test_db().await;
+        let user = create_test_user(&db).await;
+        let book = create_test_book(&db).await;
+
+        let device = DeviceContext::session_reporting_client("browser-1");
+        ReadProgressRepository::upsert_with_device(&db, user.id, book.id, 100, true, &device)
+            .await
+            .unwrap();
+
+        let ended = Utc::now() - chrono::Duration::seconds(1);
+        ReadProgressRepository::record_session(
+            &db,
+            measured_session(
+                user.id,
+                book.id,
+                "browser-1",
+                100,
+                ended - chrono::Duration::minutes(10),
+                ended,
+            ),
+        )
+        .await
+        .unwrap();
+
+        let sessions = sessions_for(&db, user.id, book.id).await;
+        assert_eq!(sessions.len(), 1, "the completion write is redundant");
+        assert_eq!(sessions[0].kind, SessionKind::Completed.as_str());
+        let progress = ReadProgressRepository::get_by_user_and_book(&db, user.id, book.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(progress.completed, "the book must still read as finished");
+    }
+
     /// What marking a very long series costs.
     ///
     /// Sized from a real library whose longest series runs to 800 volumes.
