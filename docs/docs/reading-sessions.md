@@ -116,6 +116,14 @@ Anything larger than the session's own span is clamped to that span. Omit the
 field entirely if you cannot measure it honestly. Omitting it is recorded as
 "unknown", which is correct; sending `0` would be a claim.
 
+On the dashboard's day, week and month charts, a session's time is spread over
+every period it spans, in proportion to how much of its span fell in each: an
+hour read either side of midnight is an hour on each day, not two hours on the
+first. A period also never shows more reading time than its sessions were open,
+so two devices reporting the same half hour count as half an hour. Neither rule
+repairs an inflated `activeDurationMs`; a session that claims a whole day of
+reading still shows up as most of a day.
+
 ### Counting pages
 
 `pagesRead` is the number of pages actually turned during the sitting, not the

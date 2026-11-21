@@ -40709,16 +40709,19 @@
             "example": "2026-06-01"
           },
           "duration": {
-            "$ref": "#/components/schemas/DurationBreakdownDto"
+            "$ref": "#/components/schemas/DurationBreakdownDto",
+            "description": "Reading time within this bucket. A sitting spanning several buckets\ncontributes to each in proportion to how much of it fell there, and a\nbucket never holds more time than its sittings were open, so a day can\ncarry time from a sitting that began the day before."
           },
           "pagesRead": {
             "type": "integer",
             "format": "int64",
+            "description": "Pages read in sittings that began in this bucket.",
             "example": 120
           },
           "sessions": {
             "type": "integer",
             "format": "int64",
+            "description": "Sittings that began in this bucket.",
             "example": 4
           }
         }

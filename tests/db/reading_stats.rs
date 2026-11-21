@@ -364,6 +364,71 @@ async fn exercise_empty_log(db: &DatabaseConnection) {
     );
 }
 
+/// Reading time is spread across the buckets a sitting spans and capped by how
+/// long sittings were open. That work happens in Rust over timestamps read back
+/// from a raw query, so the decode on each engine is what is under test here.
+async fn exercise_time_split(db: &DatabaseConnection) {
+    let user = persist_user(db, "night-owl").await;
+    let book = persist_book(db, "Berserk", "cbz").await;
+
+    // Two hours from 23:00 on the 3rd: one hour belongs to each day.
+    seed(
+        db,
+        user,
+        book,
+        "phone",
+        "progress",
+        "measured",
+        120,
+        10,
+        at(3, 23),
+    )
+    .await;
+    // Two devices claiming the same half hour on the 10th.
+    seed(
+        db,
+        user,
+        book,
+        "tablet",
+        "progress",
+        "measured",
+        30,
+        5,
+        at(10, 9),
+    )
+    .await;
+    seed(
+        db,
+        user,
+        book,
+        "komic",
+        "progress",
+        "inferred",
+        30,
+        5,
+        at(10, 9),
+    )
+    .await;
+
+    let daily = ReadingStatsRepository::by_period(db, user, june(), StatsGranularity::Day, 0)
+        .await
+        .expect("the time split must decode on this engine");
+
+    assert_eq!(daily.len(), 3);
+    assert_eq!(daily[0].bucket, "2026-06-03");
+    assert_eq!(daily[0].duration.measured_ms, 60 * MINUTE_MS);
+    assert_eq!(daily[0].sessions, 1);
+    assert_eq!(daily[1].bucket, "2026-06-04");
+    assert_eq!(daily[1].duration.measured_ms, 60 * MINUTE_MS);
+    assert_eq!(daily[1].sessions, 0, "the sitting began the day before");
+    assert_eq!(daily[2].bucket, "2026-06-10");
+    assert_eq!(
+        daily[2].duration.total_ms(),
+        30 * MINUTE_MS,
+        "overlapping reports cannot exceed the time that passed"
+    );
+}
+
 #[tokio::test]
 async fn reading_stats_sqlite() {
     let (db, _t) = setup_test_db().await;
@@ -380,6 +445,13 @@ async fn reading_stats_user_isolation_sqlite() {
 async fn reading_stats_empty_log_sqlite() {
     let (db, _t) = setup_test_db().await;
     exercise_empty_log(&db).await;
+    exercise_time_split(&db).await;
+}
+
+#[tokio::test]
+async fn reading_stats_time_split_sqlite() {
+    let (db, _t) = setup_test_db().await;
+    exercise_time_split(&db).await;
 }
 
 /// Every exercise against PostgreSQL, in one test on purpose.
@@ -404,4 +476,5 @@ async fn reading_stats_postgres() {
     exercise_reading_stats(&db).await;
     exercise_user_isolation(&db).await;
     exercise_empty_log(&db).await;
+    exercise_time_split(&db).await;
 }
