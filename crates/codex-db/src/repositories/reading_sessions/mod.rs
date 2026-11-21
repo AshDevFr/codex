@@ -520,10 +520,21 @@ impl ReadingSessionRepository {
     /// Scoped to the same device and pass, and to rows that carry no time of
     /// their own, so this can only ever remove the client's own redundant
     /// writes. Anything measured or reconstructed is left alone.
+    ///
+    /// The span is allowed to run [`COALESCE_WINDOW_MINUTES`] past the
+    /// session's end. Position writes are stamped with the server's clock and
+    /// the session's end with the client's, so the final write of a sitting,
+    /// and the completion that closes it, routinely land a few seconds after
+    /// the session they belong to. Matching the span exactly left one of them
+    /// behind for nearly every sitting. The window is the one
+    /// [`Self::trailing_measured_session`] already applies to a write that
+    /// arrives after the session, so the outcome no longer depends on which of
+    /// the two reached the server first.
     async fn supersede_position_only<C: ConnectionTrait>(
         db: &C,
         measured: &reading_sessions::Model,
     ) -> Result<u64> {
+        let covered_until = measured.client_ended_at + Duration::minutes(COALESCE_WINDOW_MINUTES);
         let covered = ReadingSessions::find()
             .filter(reading_sessions::Column::UserId.eq(measured.user_id))
             .filter(reading_sessions::Column::BookId.eq(measured.book_id))
@@ -533,7 +544,7 @@ impl ReadingSessionRepository {
             .filter(reading_sessions::Column::DurationSource.eq(DurationSource::Unknown.as_str()))
             .filter(reading_sessions::Column::ActiveDurationMs.is_null())
             .filter(reading_sessions::Column::ClientEndedAt.gte(measured.client_started_at))
-            .filter(reading_sessions::Column::ClientEndedAt.lte(measured.client_ended_at))
+            .filter(reading_sessions::Column::ClientEndedAt.lte(covered_until))
             .all(db)
             .await?;
 
@@ -575,6 +586,18 @@ impl ReadingSessionRepository {
             && let Some(progression) = covered.iter().rev().find_map(|s| s.r2_progression.clone())
         {
             active.r2_progression = Set(Some(progression));
+            changed = true;
+        }
+
+        // A finish is a transition the fold has to see. Deleting the write
+        // that carried it without moving it onto the surviving row would
+        // leave the book reading as unfinished.
+        if measured.kind != SessionKind::Completed.as_str()
+            && covered
+                .iter()
+                .any(|s| s.kind == SessionKind::Completed.as_str())
+        {
+            active.kind = Set(SessionKind::Completed.as_str().to_string());
             changed = true;
         }
 
