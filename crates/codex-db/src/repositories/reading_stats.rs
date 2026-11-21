@@ -4,6 +4,12 @@
 //! table a single user touches, and pulling a year of sessions into the process
 //! to sum them would scale with reading rather than with the size of the answer.
 //!
+//! The one exception is reading *time* in the per-period series, see
+//! [`ReadingStatsRepository::by_period`]. A sitting's time has to be spread over
+//! every bucket it spans and capped by how long sittings were actually open,
+//! and neither can be written once for both engines. Only rows that carry a
+//! duration are fetched, and only the four columns the split needs.
+//!
 //! # Honesty about where the numbers came from
 //!
 //! Reading time arrives two ways. Clients that measure it report it directly.
@@ -17,14 +23,16 @@
 
 #![allow(dead_code)]
 
+use crate::entities::reading_sessions::DurationSource;
 use crate::entities::{read_completions, reading_sessions};
 use anyhow::Result;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Datelike, Duration, NaiveDate, NaiveTime, Utc};
 use sea_orm::{
     ColumnTrait, ConnectionTrait, DatabaseBackend, EntityTrait, FromQueryResult, PaginatorTrait,
     QueryFilter, Statement, TransactionTrait, Value,
 };
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use uuid::Uuid;
 
 /// How finely to bucket a time series.
@@ -84,6 +92,30 @@ impl StatsGranularity {
                     Self::Month => format!("to_char(date_trunc('month', {local}), 'YYYY-MM-DD')"),
                 }
             }
+        }
+    }
+}
+
+impl StatsGranularity {
+    /// The first day of the bucket holding `day`, matching what
+    /// [`Self::bucket_expr`] renders in SQL: the day itself, its week's Monday,
+    /// or the first of its month.
+    fn bucket_start(self, day: NaiveDate) -> NaiveDate {
+        match self {
+            Self::Day => day,
+            Self::Week => day - Duration::days(i64::from(day.weekday().num_days_from_monday())),
+            Self::Month => day.with_day(1).unwrap_or(day),
+        }
+    }
+
+    /// The first day of the bucket after the one starting on `start`.
+    fn next_bucket(self, start: NaiveDate) -> NaiveDate {
+        match self {
+            Self::Day => start + Duration::days(1),
+            Self::Week => start + Duration::days(7),
+            Self::Month => start
+                .checked_add_months(chrono::Months::new(1))
+                .unwrap_or(start + Duration::days(31)),
         }
     }
 }
@@ -167,7 +199,10 @@ pub struct ReadingSummary {
 pub struct ReadingPeriod {
     /// ISO date of the bucket's start.
     pub bucket: String,
+    /// Time read inside this bucket, split and capped as described on
+    /// [`ReadingStatsRepository::by_period`].
     pub duration: DurationBreakdown,
+    /// Counted in the bucket the sitting began in, like `sessions`.
     pub pages_read: i64,
     pub sessions: i64,
     pub books_finished: i64,
@@ -336,11 +371,143 @@ struct SummaryRow {
 #[derive(Debug, FromQueryResult)]
 struct PeriodRow {
     bucket: String,
-    measured_ms: i64,
-    inferred_ms: i64,
     pages_read: i64,
     sessions: i64,
     books_finished: i64,
+}
+
+/// A sitting that carries reading time, as the period split needs it.
+#[derive(Debug, FromQueryResult)]
+struct TimedSessionRow {
+    duration_source: String,
+    active_duration_ms: i64,
+    client_started_at: DateTime<Utc>,
+    client_ended_at: DateTime<Utc>,
+}
+
+/// Reading time gathered into one bucket, before the overlap cap.
+#[derive(Debug, Default)]
+struct BucketTime {
+    measured_ms: i64,
+    inferred_ms: i64,
+    /// The part of each contributing sitting that fell inside the bucket.
+    spans: Vec<(DateTime<Utc>, DateTime<Utc>)>,
+}
+
+impl BucketTime {
+    /// The bucket's time, capped at how long its sittings were open.
+    ///
+    /// A sitting's active time never exceeds its own span (both the client
+    /// endpoint and the server-side inference guarantee that), so the union of
+    /// the spans in a bucket bounds how much reading can have happened in it.
+    /// Exceeding it means several sittings claimed the same minutes: two
+    /// devices reporting one read, or a background sync inferred as reading.
+    /// The surplus is removed in proportion, so neither source is favoured.
+    fn capped(mut self) -> DurationBreakdown {
+        let total = self.measured_ms + self.inferred_ms;
+        let open_ms = union_ms(&mut self.spans);
+        if total <= open_ms {
+            return DurationBreakdown {
+                measured_ms: self.measured_ms,
+                inferred_ms: self.inferred_ms,
+            };
+        }
+        let measured_ms = proportion(self.measured_ms, open_ms, total);
+        DurationBreakdown {
+            measured_ms,
+            inferred_ms: open_ms - measured_ms,
+        }
+    }
+}
+
+/// `value * numerator / denominator` without overflowing on long spans.
+fn proportion(value: i64, numerator: i64, denominator: i64) -> i64 {
+    if denominator <= 0 {
+        return 0;
+    }
+    (i128::from(value) * i128::from(numerator) / i128::from(denominator)) as i64
+}
+
+/// Total milliseconds covered by a set of intervals, counting overlaps once.
+fn union_ms(spans: &mut [(DateTime<Utc>, DateTime<Utc>)]) -> i64 {
+    spans.sort_unstable_by_key(|(start, _)| *start);
+    let mut covered = 0;
+    let mut current: Option<(DateTime<Utc>, DateTime<Utc>)> = None;
+    for &(start, end) in spans.iter() {
+        current = match current {
+            Some((open, close)) if start <= close => Some((open, close.max(end))),
+            Some((open, close)) => {
+                covered += (close - open).num_milliseconds();
+                Some((start, end))
+            }
+            None => Some((start, end)),
+        };
+    }
+    if let Some((open, close)) = current {
+        covered += (close - open).num_milliseconds();
+    }
+    covered
+}
+
+/// Spread each sitting's time over the buckets it spans, then cap each bucket.
+///
+/// Time is shared out in proportion to how much of the sitting's wall-clock
+/// span fell in each bucket, the only assumption available when a client
+/// reports a total rather than a timeline. The last bucket takes the rounding
+/// remainder so splitting never loses or invents a millisecond.
+fn distribute_time(
+    rows: &[TimedSessionRow],
+    granularity: StatsGranularity,
+    tz_offset_minutes: i32,
+) -> BTreeMap<NaiveDate, DurationBreakdown> {
+    let offset = Duration::minutes(i64::from(tz_offset_minutes));
+    let instant = |day: NaiveDate| day.and_time(NaiveTime::MIN).and_utc() - offset;
+
+    let mut buckets: BTreeMap<NaiveDate, BucketTime> = BTreeMap::new();
+    for row in rows {
+        let (started, ended) = (row.client_started_at, row.client_ended_at);
+        let span_ms = (ended - started).num_milliseconds();
+        let mut remaining = row.active_duration_ms;
+        let mut bucket = granularity.bucket_start((started + offset).date_naive());
+
+        loop {
+            let next = granularity.next_bucket(bucket);
+            let (bucket_from, bucket_to) = (instant(bucket), instant(next));
+            let (from, to) = (started.max(bucket_from), ended.min(bucket_to).max(started));
+            // A sitting that ends inside this bucket (or has no span at all)
+            // gives it everything left, so the division below only ever runs
+            // with a positive span.
+            let last = ended <= bucket_to;
+            let share = if last {
+                remaining
+            } else {
+                proportion(
+                    row.active_duration_ms,
+                    (to - from).num_milliseconds(),
+                    span_ms,
+                )
+            };
+            remaining -= share;
+
+            let entry = buckets.entry(bucket).or_default();
+            if row.duration_source == DurationSource::Inferred.as_str() {
+                entry.inferred_ms += share;
+            } else {
+                entry.measured_ms += share;
+            }
+            entry.spans.push((from, to));
+
+            if last {
+                break;
+            }
+            bucket = next;
+        }
+    }
+
+    buckets
+        .into_iter()
+        .map(|(day, time)| (day, time.capped()))
+        .collect()
 }
 
 #[derive(Debug, FromQueryResult)]
@@ -434,6 +601,13 @@ impl ReadingStatsRepository {
     /// `tz_offset_minutes` is the viewer's offset east of UTC, and decides
     /// where one bucket ends and the next begins: days are the viewer's days,
     /// not UTC's. Pass `0` for UTC buckets.
+    ///
+    /// Sittings, pages and completions belong to the bucket a sitting started
+    /// in. Reading time does not: a sitting across midnight is read on both
+    /// days, so its time is spread over every bucket it spans, and a bucket is
+    /// capped at how long its sittings were open so overlapping reports cannot
+    /// add up to more time than passed. A bucket can therefore carry time and
+    /// no sittings. See [`distribute_time`].
     pub async fn by_period<C: ConnectionTrait>(
         db: &C,
         user_id: Uuid,
@@ -445,8 +619,6 @@ impl ReadingStatsRepository {
         let bucket = granularity.bucket_expr(backend, tz_offset_minutes);
         let sql = format!(
             "SELECT {bucket} AS bucket, \
-                    {MEASURED_SUM} AS measured_ms, \
-                    {INFERRED_SUM} AS inferred_ms, \
                     {PAGES_SUM} AS pages_read, \
                     COUNT(*) AS sessions, \
                     {COMPLETIONS_SUM} AS books_finished \
@@ -465,19 +637,55 @@ impl ReadingStatsRepository {
         .all(db)
         .await?;
 
-        Ok(rows
+        let timed = TimedSessionRow::find_by_statement(Statement::from_sql_and_values(
+            backend,
+            format!(
+                "SELECT rs.duration_source, rs.active_duration_ms, \
+                        rs.client_started_at, rs.client_ended_at \
+                 FROM reading_sessions rs \
+                 WHERE rs.user_id = $1 AND {READING_KINDS} \
+                   AND rs.client_started_at >= $2 AND rs.client_started_at < $3 \
+                   AND rs.duration_source IN ('measured', 'inferred') \
+                   AND rs.active_duration_ms > 0"
+            ),
+            window_params(user_id, window),
+        ))
+        .all(db)
+        .await?;
+
+        // ISO date keys sort chronologically as strings, so the map is the
+        // series in order.
+        let mut periods: BTreeMap<String, ReadingPeriod> = rows
             .into_iter()
-            .map(|r| ReadingPeriod {
-                bucket: r.bucket,
-                duration: DurationBreakdown {
-                    measured_ms: r.measured_ms,
-                    inferred_ms: r.inferred_ms,
-                },
-                pages_read: r.pages_read,
-                sessions: r.sessions,
-                books_finished: r.books_finished,
+            .map(|r| {
+                (
+                    r.bucket.clone(),
+                    ReadingPeriod {
+                        bucket: r.bucket,
+                        duration: DurationBreakdown::default(),
+                        pages_read: r.pages_read,
+                        sessions: r.sessions,
+                        books_finished: r.books_finished,
+                    },
+                )
             })
-            .collect())
+            .collect();
+
+        for (day, duration) in distribute_time(&timed, granularity, tz_offset_minutes) {
+            let bucket = day.format("%Y-%m-%d").to_string();
+            periods
+                .entry(bucket.clone())
+                .or_insert_with(|| ReadingPeriod {
+                    bucket,
+                    duration: DurationBreakdown::default(),
+                    pages_read: 0,
+                    sessions: 0,
+                    books_finished: 0,
+                })
+                .duration = duration;
+        }
+
+        Ok(periods.into_values().collect())
     }
 
     /// Totals per device, most-read first.
@@ -925,6 +1133,8 @@ mod tests {
         source: DurationSource,
         pages: Option<i32>,
         started: DateTime<Utc>,
+        /// Defaults to half an hour after `started`.
+        ended: Option<DateTime<Utc>>,
         pass: i32,
     }
 
@@ -938,6 +1148,7 @@ mod tests {
                 source: DurationSource::Measured,
                 pages: Some(10),
                 started,
+                ended: None,
                 pass: 1,
             }
         }
@@ -977,6 +1188,11 @@ mod tests {
             self.pass = pass;
             self
         }
+
+        fn ending(mut self, ended: DateTime<Utc>) -> Self {
+            self.ended = Some(ended);
+            self
+        }
     }
 
     async fn insert(db: &DatabaseConnection, user_id: Uuid, book_id: Uuid, spec: SessionSpec) {
@@ -995,8 +1211,8 @@ mod tests {
             duration_source: Set(spec.source.as_str().to_string()),
             pages_read: Set(spec.pages),
             client_started_at: Set(spec.started),
-            client_ended_at: Set(spec.started + Duration::minutes(30)),
-            server_recorded_at: Set(spec.started + Duration::minutes(30)),
+            client_ended_at: Set(spec.ended.unwrap_or(spec.started + Duration::minutes(30))),
+            server_recorded_at: Set(spec.ended.unwrap_or(spec.started + Duration::minutes(30))),
         }
         .insert(db)
         .await
@@ -1592,6 +1808,216 @@ mod tests {
 
         assert_eq!(periods.len(), 1, "both fall in the same week");
         assert_eq!(periods[0].bucket, "2026-06-01", "the week's Monday");
+    }
+
+    async fn daily(
+        db: &DatabaseConnection,
+        user_id: Uuid,
+        tz_offset_minutes: i32,
+    ) -> Vec<ReadingPeriod> {
+        ReadingStatsRepository::by_period(
+            db,
+            user_id,
+            whole_of_june(),
+            StatsGranularity::Day,
+            tz_offset_minutes,
+        )
+        .await
+        .unwrap()
+    }
+
+    /// A sitting is read across the hours it spans, so its time belongs to
+    /// every day it touches. Filing all of it under the day it started let a
+    /// single long session push one day past 24 hours.
+    #[tokio::test]
+    async fn a_sitting_across_midnight_is_split_between_the_two_days() {
+        let db = setup_test_db().await;
+        let user = create_user(&db, "reader").await;
+        let book = create_book(&db, "Berserk", "cbz").await;
+
+        insert(
+            &db,
+            user.id,
+            book.id,
+            SessionSpec::measured("phone", 120, at(3, 23)).ending(at(4, 1)),
+        )
+        .await;
+
+        let periods = daily(&db, user.id, 0).await;
+
+        assert_eq!(periods.len(), 2);
+        assert_eq!(periods[0].bucket, "2026-06-03");
+        assert_eq!(periods[0].duration.measured_ms, 60 * MINUTE_MS);
+        assert_eq!(periods[1].bucket, "2026-06-04");
+        assert_eq!(periods[1].duration.measured_ms, 60 * MINUTE_MS);
+        // Only time is spread. The sitting itself, and the pages it reported,
+        // still belong to the day it began.
+        assert_eq!(periods[0].sessions, 1);
+        assert_eq!(periods[0].pages_read, 10);
+        assert_eq!(periods[1].sessions, 0);
+        assert_eq!(periods[1].pages_read, 0);
+    }
+
+    /// The split happens at the viewer's midnight, not UTC's.
+    #[tokio::test]
+    async fn the_split_follows_the_viewers_midnight() {
+        let db = setup_test_db().await;
+        let user = create_user(&db, "reader").await;
+        let book = create_book(&db, "Berserk", "cbz").await;
+
+        // 06:00 to 08:00 UTC on the 4th is 23:00 on the 3rd to 01:00 on the
+        // 4th at UTC-7. In UTC it never crosses a day at all.
+        insert(
+            &db,
+            user.id,
+            book.id,
+            SessionSpec::measured("phone", 120, at(4, 6)).ending(at(4, 8)),
+        )
+        .await;
+
+        let periods = daily(&db, user.id, -420).await;
+
+        assert_eq!(periods.len(), 2);
+        assert_eq!(periods[0].bucket, "2026-06-03");
+        assert_eq!(periods[0].duration.measured_ms, 60 * MINUTE_MS);
+        assert_eq!(periods[1].bucket, "2026-06-04");
+        assert_eq!(periods[1].duration.measured_ms, 60 * MINUTE_MS);
+    }
+
+    /// A week boundary splits a sitting the same way a day boundary does.
+    #[tokio::test]
+    async fn a_sitting_across_a_week_boundary_is_split_between_the_weeks() {
+        let db = setup_test_db().await;
+        let user = create_user(&db, "reader").await;
+        let book = create_book(&db, "Berserk", "cbz").await;
+
+        // 2026-06-07 is a Sunday; the next week starts Monday the 8th.
+        insert(
+            &db,
+            user.id,
+            book.id,
+            SessionSpec::measured("phone", 120, at(7, 23)).ending(at(8, 1)),
+        )
+        .await;
+
+        let periods = ReadingStatsRepository::by_period(
+            &db,
+            user.id,
+            whole_of_june(),
+            StatsGranularity::Week,
+            0,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(periods.len(), 2);
+        assert_eq!(periods[0].bucket, "2026-06-01");
+        assert_eq!(periods[0].duration.measured_ms, 60 * MINUTE_MS);
+        assert_eq!(periods[1].bucket, "2026-06-08");
+        assert_eq!(periods[1].duration.measured_ms, 60 * MINUTE_MS);
+    }
+
+    /// Two devices reporting the same half hour cannot make it an hour: a
+    /// bucket never holds more reading than the time its sittings were open.
+    /// What survives is shared out in proportion, so neither source is
+    /// favoured.
+    #[tokio::test]
+    async fn overlapping_sittings_cannot_add_up_to_more_time_than_passed() {
+        let db = setup_test_db().await;
+        let user = create_user(&db, "reader").await;
+        let book = create_book(&db, "Berserk", "cbz").await;
+
+        insert(
+            &db,
+            user.id,
+            book.id,
+            SessionSpec::measured("tablet", 30, at(3, 9)).ending(at(3, 9) + Duration::minutes(30)),
+        )
+        .await;
+        insert(
+            &db,
+            user.id,
+            book.id,
+            SessionSpec::inferred("komic", 30, at(3, 9)).ending(at(3, 9) + Duration::minutes(30)),
+        )
+        .await;
+
+        let periods = daily(&db, user.id, 0).await;
+
+        assert_eq!(periods.len(), 1);
+        assert_eq!(periods[0].duration.total_ms(), 30 * MINUTE_MS);
+        assert_eq!(periods[0].duration.measured_ms, 15 * MINUTE_MS);
+        assert_eq!(periods[0].duration.inferred_ms, 15 * MINUTE_MS);
+        assert_eq!(periods[0].sessions, 2, "both sittings still happened");
+    }
+
+    /// Sittings that merely share a day, without overlapping, keep every
+    /// minute.
+    #[tokio::test]
+    async fn sittings_that_do_not_overlap_are_not_capped() {
+        let db = setup_test_db().await;
+        let user = create_user(&db, "reader").await;
+        let book = create_book(&db, "Berserk", "cbz").await;
+
+        insert(
+            &db,
+            user.id,
+            book.id,
+            SessionSpec::measured("tablet", 30, at(3, 9)).ending(at(3, 9) + Duration::minutes(30)),
+        )
+        .await;
+        insert(
+            &db,
+            user.id,
+            book.id,
+            SessionSpec::inferred("komic", 30, at(3, 10)).ending(at(3, 10) + Duration::minutes(30)),
+        )
+        .await;
+
+        let periods = daily(&db, user.id, 0).await;
+
+        assert_eq!(periods[0].duration.measured_ms, 30 * MINUTE_MS);
+        assert_eq!(periods[0].duration.inferred_ms, 30 * MINUTE_MS);
+    }
+
+    /// The shape that produced a 24h42m day in production: a client reported a
+    /// sitting that stayed open for a whole day, on an evening that already
+    /// had other reading in it. No day may hold more than a day.
+    #[tokio::test]
+    async fn a_day_never_holds_more_than_a_day_of_reading() {
+        let db = setup_test_db().await;
+        let user = create_user(&db, "reader").await;
+        let book = create_book(&db, "Berserk", "cbz").await;
+
+        let started = Utc.with_ymd_and_hms(2026, 6, 4, 22, 21, 0).unwrap();
+        insert(
+            &db,
+            user.id,
+            book.id,
+            SessionSpec::measured("phone", 12, at(4, 20)).ending(at(4, 20) + Duration::minutes(12)),
+        )
+        .await;
+        insert(
+            &db,
+            user.id,
+            book.id,
+            SessionSpec::measured("tablet", 1449, started)
+                .ending(started + Duration::minutes(1450)),
+        )
+        .await;
+
+        let periods = daily(&db, user.id, 0).await;
+
+        for period in &periods {
+            assert!(
+                period.duration.total_ms() <= 24 * 60 * MINUTE_MS,
+                "{} holds {} minutes",
+                period.bucket,
+                period.duration.total_ms() / MINUTE_MS
+            );
+        }
+        let total: i64 = periods.iter().map(|p| p.duration.total_ms()).sum();
+        assert_eq!(total, (12 + 1449) * MINUTE_MS, "splitting loses nothing");
     }
 
     // ----------------------------------------------------------------

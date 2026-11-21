@@ -165,9 +165,15 @@ pub struct ReadingPeriodDto {
     /// ISO date of the bucket's start. Weeks start on Monday.
     #[schema(example = "2026-06-01")]
     pub bucket: String,
+    /// Reading time within this bucket. A sitting spanning several buckets
+    /// contributes to each in proportion to how much of it fell there, and a
+    /// bucket never holds more time than its sittings were open, so a day can
+    /// carry time from a sitting that began the day before.
     pub duration: DurationBreakdownDto,
+    /// Pages read in sittings that began in this bucket.
     #[schema(example = 120)]
     pub pages_read: i64,
+    /// Sittings that began in this bucket.
     #[schema(example = 4)]
     pub sessions: i64,
     #[schema(example = 1)]

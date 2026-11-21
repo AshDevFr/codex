@@ -17809,14 +17809,22 @@ export interface components {
              * @example 2026-06-01
              */
             bucket: string;
+            /**
+             * @description Reading time within this bucket. A sitting spanning several buckets
+             *     contributes to each in proportion to how much of it fell there, and a
+             *     bucket never holds more time than its sittings were open, so a day can
+             *     carry time from a sitting that began the day before.
+             */
             duration: components["schemas"]["DurationBreakdownDto"];
             /**
              * Format: int64
+             * @description Pages read in sittings that began in this bucket.
              * @example 120
              */
             pagesRead: number;
             /**
              * Format: int64
+             * @description Sittings that began in this bucket.
              * @example 4
              */
             sessions: number;
