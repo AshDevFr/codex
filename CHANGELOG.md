@@ -7,6 +7,12 @@ release. A patch release may fix an API bug; it may not add an operation, a para
 field, or a new behaviour on an existing route. A client may therefore treat the release a feature
 first appears under in the 🔌 API sections below as a floor it can rely on.
 
+## [2.9.2] - 2026-11-22
+
+### 🐛 Bug Fixes
+
+- *(ci)* Build aarch64-apple-darwin on macos-15 runners
+
 ## [2.9.1] - 2026-11-22
 
 ### 🐛 Bug Fixes
