@@ -7,6 +7,13 @@ release. A patch release may fix an API bug; it may not add an operation, a para
 field, or a new behaviour on an existing route. A client may therefore treat the release a feature
 first appears under in the 🔌 API sections below as a floor it can rely on.
 
+## [2.9.1] - 2026-11-22
+
+### 🐛 Bug Fixes
+
+- *(stats)* Spread reading time across periods and cap overlaps
+- *(sessions)* Absorb position writes that land just after a measured session
+
 ## [2.9.0] - 2026-10-28
 
 ### 🔌 API (breaking)
